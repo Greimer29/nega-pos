@@ -1,0 +1,32 @@
+{
+  "name": "nega-pos",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "npx pnpm@9.15.4 -r lint",
+    "lint:fix": "npx pnpm@9.15.4 -r lint:fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npx pnpm@9.15.4 -r typecheck",
+    "dev:db": "docker compose up -d mysql",
+    "dev:api": "npx pnpm@9.15.4 --filter api dev",
+    "dev:web": "npx pnpm@9.15.4 --filter web dev",
+    "dev:setup": "powershell -ExecutionPolicy Bypass -File scripts/dev-setup.ps1",
+    "dev:reset-db": "powershell -ExecutionPolicy Bypass -File scripts/reset-database.ps1",
+    "build:desktop": "npx pnpm@9.15.4 --filter web build && npx pnpm@9.15.4 --filter desktop dist",
+    "dev:desktop": "npx pnpm@9.15.4 --filter web build && npx pnpm@9.15.4 --filter desktop dev"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^10.0.1",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.21.0"
+  }
+}

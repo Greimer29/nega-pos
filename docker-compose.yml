@@ -1,0 +1,71 @@
+# MySQL + API local — credenciales alineadas con apps/api/.env.example
+#
+# Uso:
+#   docker compose up -d          # MySQL + API
+#   docker compose up -d mysql    # Solo MySQL (API con pnpm dev:api en el host)
+#
+# La web sigue en el host: pnpm dev:web  →  http://localhost:5173
+# API en Docker:                         →  http://localhost:3333
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: nega-pos-mysql
+    restart: unless-stopped
+    ports:
+      - '3306:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: nega_pos
+      MYSQL_USER: nega_pos
+      MYSQL_PASSWORD: nega_pos
+    volumes:
+      - nega_pos_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-unega_pos', '-pnega_pos']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: nega-pos-api
+    restart: unless-stopped
+    ports:
+      - '3333:3333'
+    env_file:
+      - apps/api/.env
+    environment:
+      NODE_ENV: production
+      PORT: 3333
+      HOST: 0.0.0.0
+      APP_URL: http://localhost:3333
+      DB_HOST: mysql
+      DB_PORT: 3306
+      FRONTEND_URL: http://localhost:5173
+      DESKTOP_APP_ORIGIN: http://127.0.0.1:51740
+    volumes:
+      - api_uploads:/app/storage/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ['sh', '-c', 'node ace migration:run --force && node bin/server.js']
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3333/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+
+volumes:
+  nega_pos_mysql_data:
+  api_uploads:

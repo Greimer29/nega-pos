@@ -1,0 +1,30 @@
+# Reglas de trabajo para el agente de Cursor — Proyecto Nega POS
+
+Antes de ejecutar CUALQUIER tarea, lee obligatoriamente, en este orden:
+
+1. `docs/PROJECT_CONTEXT.md` — contexto del proyecto, stack, estructura, convenciones
+2. `docs/AGENT_RULES.md` — reglas operativas, qué NO hacer, especificidades de Adonis 6
+3. `docs/MES_01_APP_GESTION.md` — alcance del ciclo activo (este es el único alcance vigente)
+
+Si la tarea toca el modelo de datos (migraciones, modelos, lógica de inventario, lógica de pedidos):
+
+4. `docs/DATA_MODEL.md` — entidades, atributos, relaciones, reglas de dominio
+
+## Reglas críticas (no negociables)
+
+Si la tarea pedida NO está descrita en `docs/MES_01_APP_GESTION.md`, **detente y pregunta** antes de implementar. Nunca expandas alcance por tu cuenta. Si el humano confirma que la solicitud debe quedar registrada para más adelante, anótala en `docs/BACKLOG.md` siguiendo la plantilla, NO la implementes.
+- Si encuentras una contradicción entre documentos, **detente y pregunta**. No interpretes ni elijas un lado.
+- Usa sintaxis de **AdonisJS 6**, no de versiones anteriores. Si dudas, consulta https://docs.adonisjs.com.
+- Validación en backend con **Vine**, no Zod. Zod solo en frontend.
+- Nunca instales paquetes nuevos sin aprobación explícita.
+- Nunca hagas force push a `main`.
+- Nunca mergees PRs solo; el merge lo hace el humano.
+
+## Antes de empezar una tarea, confirma en el prompt:
+
+- En qué archivo de `docs/` está descrita la tarea (con sección o línea si aplica).
+- Qué entidades del modelo de datos toca.
+- Si la tarea requiere migración nueva o usa una existente.
+- Cuál es el criterio de aceptación.
+
+Si alguno de estos puntos está borroso, pregunta antes de escribir código.

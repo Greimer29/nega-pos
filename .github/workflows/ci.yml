@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: nega_pos
+          MYSQL_USER: nega_pos
+          MYSQL_PASSWORD: nega_pos
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -unega_pos -pnega_pos"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      APP_KEY: ci-app-key-must-be-at-least-32-characters-long
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: nega_pos
+      DB_PASSWORD: nega_pos
+      DB_DATABASE: nega_pos_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate AdonisJS codegen
+        run: pnpm --filter api exec node ace build --ignore-ts-errors
+
+      - name: Configure API env
+        run: |
+          cp apps/api/.env.example apps/api/.env
+          sed -i "s/^APP_KEY=.*/APP_KEY=${APP_KEY}/" apps/api/.env
+
+      - name: Configure Web env
+        run: cp apps/web/.env.example apps/web/.env
+
+      - name: Create test database
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y mysql-client
+          mysql -h 127.0.0.1 -P 3306 -uroot -proot -e "
+            CREATE DATABASE IF NOT EXISTS nega_pos_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+            GRANT ALL PRIVILEGES ON nega_pos_test.* TO 'nega_pos'@'%';
+            FLUSH PRIVILEGES;
+          "
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build API
+        run: pnpm --filter api build
+
+      - name: Build Web
+        run: pnpm --filter web build
+
+      - name: Run API functional tests
+        run: pnpm --filter api exec node ace test --suite=functional
+        env:
+          DB_DATABASE: nega_pos_test

@@ -1,0 +1,14 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/api/Dockerfile"
+
+[deploy]
+preDeployCommand = "node ace migration:run --force"
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+
+# Invoice uploads (Sprint 2+): persistent storage requires a Railway Volume.
+# Volumes are NOT declared in this file — attach via dashboard or CLI:
+#   railway volume add --mount-path /data/uploads
+# Then set STORAGE_LOCAL_PATH=/data/uploads on the service (see docs/RAILWAY_DEPLOY.md).

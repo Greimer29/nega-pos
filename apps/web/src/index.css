@@ -1,0 +1,350 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground min-h-svh antialiased;
+  }
+}
+
+@keyframes login-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(3rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-form-enter {
+  animation: login-fade-up 0.5s ease-out both;
+}
+
+.purchases-hub-card {
+  border-color: var(--border);
+  box-shadow: none;
+  transition: box-shadow 0.3s ease-out;
+}
+
+.purchases-hub-card--active {
+  box-shadow:
+    0 4px 6px color-mix(in oklch, var(--foreground) 4%, transparent),
+    0 10px 28px color-mix(in oklch, var(--foreground) 10%, transparent);
+}
+
+@keyframes purchases-hub-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes purchases-hub-panel-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+.purchases-hub-panel--enter {
+  animation: purchases-hub-panel-in 0.3s ease-out both;
+}
+
+.purchases-hub-panel--exit {
+  animation: purchases-hub-panel-out 0.22s ease-in both;
+}
+
+.settings-hub-panel--enter {
+  animation: purchases-hub-panel-in 0.3s ease-out both;
+}
+
+.settings-hub-panel--exit {
+  animation: purchases-hub-panel-out 0.22s ease-in both;
+}
+
+.report-metric-card {
+  transition:
+    box-shadow 0.55s cubic-bezier(0.33, 0, 0.2, 1),
+    border-color 0.55s cubic-bezier(0.33, 0, 0.2, 1),
+    transform 0.55s cubic-bezier(0.33, 0, 0.2, 1);
+}
+
+.report-metric-card:hover {
+  border-color: rgb(163 163 163);
+  box-shadow:
+    0 2px 8px rgb(0 0 0 / 0.03),
+    0 8px 24px rgb(0 0 0 / 0.06);
+  transform: translateY(-1px);
+}
+
+.report-metric-card:active {
+  transform: translateY(0);
+  transition-duration: 0.2s;
+}
+
+.login-brand-panel {
+  background: linear-gradient(145deg, rgb(8 8 8) 0%, rgb(18 18 22) 45%, rgb(10 10 14) 100%);
+}
+
+.login-brand-glow {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 80%, rgb(99 102 241 / 0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 20%, rgb(168 85 247 / 0.12) 0%, transparent 55%);
+}
+
+.login-form-panel {
+  background-color: rgb(12 12 14);
+  color: rgb(250 250 250);
+}
+
+@media (min-width: 1024px) {
+  .login-form-panel {
+    background-color: rgb(16 16 18);
+    border-left: 1px solid rgb(255 255 255 / 0.06);
+  }
+}
+
+@keyframes report-hero-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes report-hero-logo-focus {
+  from {
+    opacity: 0.12;
+    filter: blur(16px);
+    transform: translate(10px, -50%) scale(1.04);
+  }
+
+  to {
+    opacity: 0.55;
+    filter: blur(0);
+    transform: translate(0, -50%) scale(1);
+  }
+}
+
+@keyframes report-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.report-hero-kpi {
+  animation: report-hero-enter 0.9s cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+
+.report-hero-kpi-logo {
+  mix-blend-mode: screen;
+  animation: report-hero-logo-focus 1.75s cubic-bezier(0.33, 0, 0.2, 1) both;
+  animation-delay: 0.18s;
+}
+
+.report-content-enter {
+  animation: report-content-enter 0.75s cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+
+.login-glass-card {
+  height: 550px;
+  border-color: rgb(255 255 255 / 0.18);
+  background: rgb(0 0 0 / 0.35);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.35);
+}
+
+.login-input {
+  border-color: rgb(255 255 255 / 0.1);
+  background-color: rgb(255 255 255 / 0.03) !important;
+  color: rgb(250 250 250);
+  box-shadow: none;
+}
+
+.login-input::placeholder {
+  color: rgb(163 163 163);
+}
+
+.login-input:focus-visible {
+  border-color: rgb(99 102 241 / 0.5);
+  --tw-ring-color: rgb(99 102 241 / 0.2);
+}
+
+.login-input:-webkit-autofill,
+.login-input:-webkit-autofill:hover,
+.login-input:-webkit-autofill:focus,
+.login-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px rgb(20 20 22) inset !important;
+  -webkit-text-fill-color: rgb(250 250 250) !important;
+  caret-color: rgb(250 250 250);
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+.login-select {
+  border-color: rgb(255 255 255 / 0.14);
+  background-color: rgb(255 255 255 / 0.04);
+  color: rgb(250 250 250);
+  box-shadow: none;
+}
+
+.login-select:focus-visible {
+  border-color: rgb(255 255 255 / 0.35);
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.15);
+}
+
+.login-select option {
+  background-color: rgb(18 18 18);
+  color: rgb(250 250 250);
+}
+
+@layer utilities {
+  .scrollbar-subtle {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 22%, transparent) transparent;
+  }
+
+  .scrollbar-subtle:hover {
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 40%, transparent) transparent;
+  }
+
+  .scrollbar-subtle::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  .scrollbar-subtle::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-subtle::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--muted-foreground) 18%, transparent);
+    border-radius: 999px;
+  }
+
+  .scrollbar-subtle:hover::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--muted-foreground) 38%, transparent);
+  }
+}

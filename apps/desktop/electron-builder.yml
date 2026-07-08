@@ -1,0 +1,31 @@
+appId: com.negapos.app
+productName: Nega POS
+icon: resources/app-icon.ico
+directories:
+  output: release-nega-pos
+files:
+  - dist/**/*
+  - package.json
+  - resources/app-icon.ico
+extraResources:
+  - from: ../web/dist
+    to: web-dist
+    filter:
+      - '**/*'
+  - from: api-url.json
+    to: api-url.json
+extraFiles:
+  - from: api-url.json
+    to: api-url.json
+afterPack: scripts/after-pack.cjs
+win:
+  target: nsis
+  icon: resources/app-icon.ico
+  signAndEditExecutable: false
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  installerIcon: resources/app-icon.ico
+  uninstallerIcon: resources/app-icon.ico

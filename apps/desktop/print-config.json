@@ -1,0 +1,74 @@
+{
+  "business": {
+    "name": "NEGA POS",
+    "subtitle": "",
+    "footer": "Gracias por su compra"
+  },
+  "formats": [
+    {
+      "id": "builtin-invoice",
+      "name": "Factura / Recibo (predeterminado)",
+      "documentKind": "invoice",
+      "paperWidthMm": 78,
+      "bodyHtml": "{{business.header}}\n<div class=\"divider\"></div>\n<div class=\"center bold\">FACTURA</div>\n<div class=\"center\">{{sale.code}}</div>\n<div class=\"center muted\">{{sale.date}}</div>\n<div class=\"divider\"></div>\n<div>Cliente: {{sale.client}}</div>\n<div>Pago: {{sale.payment_type}}</div>\n<div class=\"divider\"></div>\n{{sale.lines}}\n<div class=\"divider\"></div>\n<div class=\"line-row bold\">\n  <span>TOTAL USD</span>\n  <span>{{sale.total}}</span>\n</div>\n{{business.footer}}",
+      "isBuiltin": true
+    },
+    {
+      "id": "builtin-delivery-note",
+      "name": "Nota de despacho (predeterminado)",
+      "documentKind": "deliveryNote",
+      "paperWidthMm": 78,
+      "bodyHtml": "{{business.header}}\n<div class=\"divider\"></div>\n<div class=\"center bold\">NOTA DE DESPACHO</div>\n<div class=\"center\">{{sale.code}}</div>\n<div class=\"center muted\">{{sale.date}}</div>\n<div class=\"divider\"></div>\n<div>Cliente: {{sale.client}}</div>\n<div>Estado pedido: {{sale.order_status}}</div>\n<div class=\"divider\"></div>\n<div class=\"bold\">Productos a despachar</div>\n{{sale.delivery_lines}}\n<div class=\"divider\"></div>\n<div class=\"signature\">Recibido conforme</div>",
+      "isBuiltin": true
+    },
+    {
+      "id": "builtin-comanda",
+      "name": "Comanda (predeterminado)",
+      "documentKind": "comanda",
+      "paperWidthMm": 78,
+      "bodyHtml": "\n<div class=\"center bold\">NEGA POS</div>\n<div class=\"center muted\">Correlativo de comanda: {{sale.code}}</div>\n<div class=\"center muted\">Fecha: {{sale.date}}</div>\n<div class=\"center muted\">------------------------------</div>\n{{comanda.lines}}\n",
+      "isBuiltin": true
+    }
+  ],
+  "documents": {
+    "invoice": {
+      "enabled": true,
+      "deviceName": "POS-80C",
+      "paperWidthMm": 78,
+      "formatId": "builtin-invoice"
+    },
+    "deliveryNote": {
+      "enabled": true,
+      "deviceName": "POS-80C",
+      "paperWidthMm": 78,
+      "formatId": "builtin-delivery-note"
+    },
+    "comanda": {
+      "enabled": false,
+      "deviceName": "",
+      "paperWidthMm": 78,
+      "formatId": "builtin-comanda"
+    }
+  },
+  "behavior": {
+    "printInvoiceOnConfirm": true,
+    "printDeliveryNoteOnConfirm": false,
+    "printComandaOnConfirm": true,
+    "printComandaFormula": false
+  },
+  "categoryRouting": {
+    "comanda": {
+      "enabled": true,
+      "rules": [
+        {
+          "category": "Uniforme",
+          "deviceName": "POS-80C"
+        },
+        {
+          "category": "Camisa",
+          "deviceName": "L4260 Series(Network)"
+        }
+      ]
+    }
+  }
+}

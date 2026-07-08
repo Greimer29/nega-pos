@@ -1,0 +1,14 @@
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+**/dist
+**/build
+**/.adonisjs
+.git
+.github
+.cursor
+apps/api/tests
+apps/api/bin/test.ts
+*.md
+!docs/RAILWAY_DEPLOY.md

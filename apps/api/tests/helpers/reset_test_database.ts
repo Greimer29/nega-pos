@@ -1,0 +1,41 @@
+import db from '@adonisjs/lucid/services/db'
+
+/**
+ * Clears transactional tables in FK-safe order for functional tests.
+ * Use in group.each.setup() so suites do not leak rows into one another.
+ */
+export async function resetTestDatabase() {
+  await db.from('sale_lines').delete()
+  await db.from('sales').delete()
+  await db.from('customer_payments').delete()
+  await db.from('supplier_payments').delete()
+  await db.from('order_lines').delete()
+  await db.from('order_materials').delete()
+  await db.from('formula_materials').delete()
+  await db.from('formulas').delete()
+  await db.from('product_inventory_movements').delete()
+  await db.from('inventory_movements').delete()
+  await db.from('purchase_items').delete()
+  await db.from('purchases').delete()
+  await db.from('expenses').delete()
+  await db.from('machine_expenses').delete()
+  await db.from('orders').delete()
+  await db.from('catalog_products').delete()
+  await db.from('materials').delete()
+  await db.from('machines').delete()
+  await db.from('customers').delete()
+  await db.from('accounts').delete()
+  await db.from('counters').delete()
+  await db.from('suppliers').delete()
+  await db.from('app_settings').delete()
+  await db.from('users').delete()
+
+  await db.from('currencies').where('code', 'USD').update({
+    rate_per_usd: '1.0000',
+    is_active: true,
+  })
+  await db.from('currencies').where('code', 'VES').update({
+    rate_per_usd: '1.0000',
+    is_active: true,
+  })
+}
