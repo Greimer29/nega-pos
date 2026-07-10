@@ -2,7 +2,10 @@
 
 Sistema de punto de venta y gestión comercial (inventario, ventas, compras, clientes, reportes).
 
-Documentación del proyecto en [`docs/`](./docs/). Reglas para el agente en [`.cursorrules`](./.cursorrules).
+**Documentación técnica:** [`DOCUMENTACION_OFICIAL.md`](./DOCUMENTACION_OFICIAL.md)  
+**Reglas para el agente:** [`.cursorrules`](./.cursorrules)
+
+> La carpeta `docs/` está descontinuada; no usar como referencia.
 
 ## Requisitos
 
@@ -33,10 +36,10 @@ pnpm dev:web
 ```
 nega-pos/
 ├── apps/
-│   ├── api/     # AdonisJS 6 + MySQL
-│   ├── web/     # React 18 + Vite
+│   ├── api/     # AdonisJS 7 + MySQL
+│   ├── web/     # React 19 + Vite
 │   └── desktop/ # Electron (opcional)
-├── docs/
+├── DOCUMENTACION_OFICIAL.md
 └── package.json # Workspaces pnpm
 ```
 
@@ -48,7 +51,7 @@ Copy-Item apps\web\.env.example apps\web\.env
 # Editar apps\api\.env — APP_KEY, MySQL, ADMIN_*
 ```
 
-Ver [`docs/LOCAL_DEV.md`](./docs/LOCAL_DEV.md).
+Detalle en `DOCUMENTACION_OFICIAL.md` (sección 5) y en `apps/api/.env.example`.
 
 ### API — MySQL local
 
@@ -71,4 +74,4 @@ Login local por defecto: `admin@negapos.local` / valor de `ADMIN_PASSWORD` en `a
 
 ### Deploy en Railway
 
-Ver [`docs/RAILWAY_DEPLOY.md`](./docs/RAILWAY_DEPLOY.md).
+Configuración histórica en `docs/RAILWAY_DEPLOY.md` (descontinuado). Para deploy actual, consultar `DOCUMENTACION_OFICIAL.md` y la configuración en el repositorio (`apps/api/Dockerfile`, `docker-compose.yml`).

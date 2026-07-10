@@ -159,15 +159,15 @@ test.group('Expenses and settings API', (group) => {
       .put('/api/v1/settings/general')
       .loginAs(user)
       .json({
-        trade_name: 'Mi Taller',
+        trade_name: 'Mi Negocio',
         tagline: 'Uniformes escolares',
         ticket_footer: '¡Gracias!',
-        legal_name: 'Mi Taller C.A.',
+        legal_name: 'Mi Negocio C.A.',
         rif: 'J-12345678-9',
         address: 'Av. Principal',
         phone: '0414-0000000',
-        email: 'info@mitaller.local',
-        website: 'https://mitaller.local',
+        email: 'info@minegocio.local',
+        website: 'https://minegocio.local',
         use_custom_palette: true,
         palette: {
           primary: '#112233',
@@ -180,7 +180,7 @@ test.group('Expenses and settings API', (group) => {
     putResponse.assertBodyContains({
       data: {
         business_profile: {
-          trade_name: 'Mi Taller',
+          trade_name: 'Mi Negocio',
           tagline: 'Uniformes escolares',
           rif: 'J-12345678-9',
           use_custom_palette: true,
@@ -195,7 +195,7 @@ test.group('Expenses and settings API', (group) => {
 
     const getResponse = await client.get('/api/v1/settings/general').loginAs(user)
     getResponse.assertStatus(200)
-    assert.equal(getResponse.body().data.business_profile.trade_name, 'Mi Taller')
+    assert.equal(getResponse.body().data.business_profile.trade_name, 'Mi Negocio')
   })
 
   test('POST/GET/DELETE /api/v1/settings/general/logo', async ({ client }) => {

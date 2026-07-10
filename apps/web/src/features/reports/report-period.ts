@@ -1,7 +1,13 @@
-import { currentMonthIso, formatFecha, todayIso } from '@/features/reports/constants'
+import {
+  currentMonthIso,
+  currentYearIso,
+  currentYearRange,
+  formatFecha,
+  todayIso,
+} from '@/features/reports/constants'
 import type { AccountStatementParams } from '@/features/reports/types'
 
-export type ReportPeriodMode = 'month' | 'day' | 'range'
+export type ReportPeriodMode = 'month' | 'day' | 'range' | 'year'
 
 export type ReportPeriodState = {
   mode: ReportPeriodMode
@@ -13,12 +19,13 @@ export type ReportPeriodState = {
 
 export function defaultReportPeriodState(): ReportPeriodState {
   const today = todayIso()
+  const { from, to } = currentYearRange()
   return {
-    mode: 'month',
+    mode: 'year',
     month: currentMonthIso(),
     date: today,
-    from: today,
-    to: today,
+    from,
+    to,
   }
 }
 
@@ -27,6 +34,13 @@ export function periodStateToAccountParams(
 ): Pick<AccountStatementParams, 'month' | 'from' | 'to'> {
   if (state.mode === 'day' && state.date) {
     return { from: state.date, to: state.date }
+  }
+  if (state.mode === 'year') {
+    const { from, to } = currentYearRange()
+    return {
+      from: state.from || from,
+      to: state.to || to,
+    }
   }
   if (state.mode === 'range') {
     return { from: state.from || undefined, to: state.to || undefined }
@@ -37,21 +51,37 @@ export function periodStateToAccountParams(
 export function parsePeriodFromSearchParams(searchParams: URLSearchParams): ReportPeriodState {
   const day = searchParams.get('day') === '1'
   const date = searchParams.get('date') ?? ''
+  const year = searchParams.get('year') === '1'
   const range = searchParams.get('range') === '1'
   const from = searchParams.get('from') ?? ''
   const to = searchParams.get('to') ?? ''
   const month = searchParams.get('month') ?? currentMonthIso()
+  const today = todayIso()
 
   if (day && date) {
     return { mode: 'day', month, date, from: date, to: date }
   }
 
+  if (year) {
+    const yearRange = currentYearRange()
+    return {
+      mode: 'year',
+      month,
+      date: today,
+      from: from || yearRange.from,
+      to: to || yearRange.to,
+    }
+  }
+
   if (range) {
-    const today = todayIso()
     return { mode: 'range', month, date: today, from: from || today, to: to || today }
   }
 
-  return { mode: 'month', month, date: todayIso(), from: todayIso(), to: todayIso() }
+  if (searchParams.get('month')) {
+    return { mode: 'month', month, date: today, from: today, to: today }
+  }
+
+  return defaultReportPeriodState()
 }
 
 export function applyPeriodToSearchParams(
@@ -60,6 +90,7 @@ export function applyPeriodToSearchParams(
 ): URLSearchParams {
   params.delete('month')
   params.delete('range')
+  params.delete('year')
   params.delete('day')
   params.delete('date')
   params.delete('from')
@@ -71,6 +102,11 @@ export function applyPeriodToSearchParams(
     params.set('from', state.date)
     params.set('to', state.date)
     params.set('range', '1')
+  } else if (state.mode === 'year') {
+    const { from, to } = currentYearRange()
+    params.set('year', '1')
+    params.set('from', state.from || from)
+    params.set('to', state.to || to)
   } else if (state.mode === 'range') {
     params.set('range', '1')
     if (state.from) params.set('from', state.from)
@@ -85,6 +121,9 @@ export function applyPeriodToSearchParams(
 export function periodLabelFromState(state: ReportPeriodState): string {
   if (state.mode === 'day' && state.date) {
     return formatFecha(state.date)
+  }
+  if (state.mode === 'year') {
+    return `Año ${currentYearIso()}`
   }
   if (state.mode === 'range' && state.from && state.to) {
     return `${formatFecha(state.from)} — ${formatFecha(state.to)}`

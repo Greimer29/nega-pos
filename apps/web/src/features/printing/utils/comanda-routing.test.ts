@@ -62,7 +62,7 @@ describe('resolveLineCategory', () => {
 })
 
 describe('renderComandaLines', () => {
-  it('renders product code and quantity (and measure)', () => {
+  it('renders product code, name and quantity', () => {
     const html = renderComandaLines([
       line({
         id: 1,
@@ -77,11 +77,13 @@ describe('renderComandaLines', () => {
     ])
 
     expect(html).toContain('0000001')
+    expect(html).toContain('Hamburguesa')
     expect(html).toContain('2 UND')
     expect(html).toContain('0000002')
+    expect(html).toContain('Tela')
     expect(html).toContain('1,50 MTS')
     expect(html).not.toContain('USD')
-    expect(html).toContain('Cantidad solicitada')
+    expect(html).not.toContain('line-row')
   })
 })
 

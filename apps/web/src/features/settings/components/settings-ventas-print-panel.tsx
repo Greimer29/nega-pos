@@ -1,7 +1,6 @@
 import { Loader2, Printer, RefreshCw, Save } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -43,12 +42,7 @@ export function SettingsVentasPrintPanel() {
     <div className="flex flex-col gap-6">
       <PaymentMethodsConfigCard />
 
-      {!electronAvailable ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          La impresión térmica está disponible en la app de escritorio (Electron). Si abriste
-          localhost:5173 en Chrome o Edge, cerralo y usá la ventana <strong>Nega POS</strong>.
-        </div>
-      ) : (
+      {electronAvailable ? (
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-muted-foreground text-sm">
             {printers.length > 0
@@ -67,23 +61,10 @@ export function SettingsVentasPrintPanel() {
             Actualizar lista
           </Button>
         </div>
-      )}
+      ) : null}
 
       {message ? <p className="text-emerald-700 text-sm">{message}</p> : null}
       {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Datos del negocio en tickets</CardTitle>
-          <CardDescription>
-            Nombre, datos fiscales y logo se configuran en la pestaña{' '}
-            <Link to="/settings?tab=general" className="text-primary font-medium underline">
-              General
-            </Link>
-            . Aquí solo definís impresoras y formatos por documento.
-          </CardDescription>
-        </CardHeader>
-      </Card>
 
       {(['invoice', 'deliveryNote', 'comanda'] as const).map((kind) => (
         <Card key={kind}>

@@ -2,6 +2,8 @@
 
 Guía para trabajar **solo en local** (API + MySQL + web). Railway queda para pruebas de deploy al cerrar un sprint o antes de entregar al dueño.
 
+Para el producto **offline “todo en uno”** (MySQL + API + Electron embebidos, sin Docker en destino), ver [`OFFLINE_DEV_WORKFLOW.md`](./OFFLINE_DEV_WORKFLOW.md).
+
 ## Arquitectura local
 
 | Componente     | URL / puerto                                                |
@@ -182,7 +184,9 @@ Checklist deploy: `docs/RAILWAY_DEPLOY.md`.
 
 ## Desktop (Electron)
 
-App de escritorio Windows que empaqueta el build de `apps/web` y proxea `/api/*` a la API remota (Railway) en `http://127.0.0.1:51740`.
+App de escritorio Windows que empaqueta el build de `apps/web` y proxea `/api/*` a la API configurada en `api-url.json` (local o remota) en `http://127.0.0.1:51740`.
+
+Roadmap instalador full local: [`OFFLINE_DEV_WORKFLOW.md`](./OFFLINE_DEV_WORKFLOW.md).
 
 ### Requisitos
 

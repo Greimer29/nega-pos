@@ -92,7 +92,7 @@ export function CustomersPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Clientes</h1>
           <p className="text-muted-foreground text-sm">
-            Gestioná los clientes del taller y consultá su historial de pedidos.
+            Gestioná los clientes y consultá su historial de pedidos.
           </p>
         </div>
         <Button onClick={openCreateDialog}>

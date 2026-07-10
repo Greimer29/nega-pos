@@ -19,7 +19,7 @@ export function assertTestDatabaseIsolated() {
     throw new Error(
       [
         'Refusing to run tests against the dev database "nega_pos".',
-        'Tests must use "nega_pos_test" (see apps/api/.env.test and docs/LOCAL_DEV.md).',
+        'Tests must use "nega_pos_test" (see apps/api/.env.test and DOCUMENTACION_OFICIAL.md).',
       ].join(' ')
     )
   }

@@ -1,30 +1,37 @@
 # Reglas de trabajo para el agente de Cursor — Proyecto Nega POS
 
-Antes de ejecutar CUALQUIER tarea, lee obligatoriamente, en este orden:
+## Fuente de verdad
 
-1. `docs/PROJECT_CONTEXT.md` — contexto del proyecto, stack, estructura, convenciones
-2. `docs/AGENT_RULES.md` — reglas operativas, qué NO hacer, especificidades de Adonis 6
-3. `docs/MES_01_APP_GESTION.md` — alcance del ciclo activo (este es el único alcance vigente)
+La documentación vigente del proyecto es **única**:
 
-Si la tarea toca el modelo de datos (migraciones, modelos, lógica de inventario, lógica de pedidos):
+**`DOCUMENTACION_OFICIAL.md`** (raíz del repo)
 
-4. `docs/DATA_MODEL.md` — entidades, atributos, relaciones, reglas de dominio
+Antes de ejecutar CUALQUIER tarea, lee las secciones relevantes de ese archivo (arquitectura, modelo de datos, API, permisos, flujos).
+
+La carpeta **`docs/` está descontinuada** — no la uses como referencia, no la cites ni la actualices salvo que el humano lo pida explícitamente.
 
 ## Reglas críticas (no negociables)
 
-Si la tarea pedida NO está descrita en `docs/MES_01_APP_GESTION.md`, **detente y pregunta** antes de implementar. Nunca expandas alcance por tu cuenta. Si el humano confirma que la solicitud debe quedar registrada para más adelante, anótala en `docs/BACKLOG.md` siguiendo la plantilla, NO la implementes.
-- Si encuentras una contradicción entre documentos, **detente y pregunta**. No interpretes ni elijas un lado.
-- Usa sintaxis de **AdonisJS 6**, no de versiones anteriores. Si dudas, consulta https://docs.adonisjs.com.
+- **No expandas alcance** por tu cuenta. Si la tarea es ambigua o implica módulos no mencionados, detente y pregunta.
+- Usa sintaxis de **AdonisJS 6/7** (el proyecto usa `@adonisjs/core` ^7). Si dudas, consulta https://docs.adonisjs.com.
 - Validación en backend con **Vine**, no Zod. Zod solo en frontend.
 - Nunca instales paquetes nuevos sin aprobación explícita.
 - Nunca hagas force push a `main`.
 - Nunca mergees PRs solo; el merge lo hace el humano.
+- Cualquier cambio de schema → **migración nueva**; nunca edites migraciones ya commitadas.
 
-## Antes de empezar una tarea, confirma en el prompt:
+## Antes de empezar una tarea, confirma:
 
-- En qué archivo de `docs/` está descrita la tarea (con sección o línea si aplica).
-- Qué entidades del modelo de datos toca.
-- Si la tarea requiere migración nueva o usa una existente.
+- Qué módulos del código toca (según `DOCUMENTACION_OFICIAL.md` o el código fuente).
+- Qué entidades del modelo de datos involucra.
+- Si requiere migración nueva o usa tablas existentes.
 - Cuál es el criterio de aceptación.
 
 Si alguno de estos puntos está borroso, pregunta antes de escribir código.
+
+## Durante el desarrollo
+
+- Import maps en API: `#controllers/...`, `#models/...`, `#services/...`.
+- Tablas en `snake_case` plural; modelos Lucid en `PascalCase` singular.
+- Permisos: catálogo en `apps/api/app/permissions/catalog.ts` (espejo web en `apps/web/src/features/permissions/catalog.ts`).
+- Tests API usan BD `nega_pos_test` (`apps/api/.env.test`), nunca `nega_pos` de desarrollo.

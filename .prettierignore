@@ -3,5 +3,8 @@ dist
 build
 .adonisjs
 coverage
+dist-offline
+vendor
+QA_REPORT.md
 pnpm-lock.yaml
 *.min.js

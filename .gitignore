@@ -6,36 +6,51 @@ dist/
 build/
 .adonisjs/
 tmp/
+out/
 
 # Electron / electron-builder
 apps/desktop/release*/
 apps/desktop/dist/
 *.blockmap
 
-# Environment
+# Bundle offline / binarios vendor (generados o descargados localmente)
+dist-offline/
+vendor/
+
+# Reportes y temporales generados
+QA_REPORT.md
+tmp-*.txt
+
+# Environment (secretos — nunca commitear)
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
+!.env.test
 
 # Logs
 *.log
 npm-debug.log*
 pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# OS / IDE
+# OS
 .DS_Store
 Thumbs.db
+Desktop.ini
+
+# IDE / editor
 .idea/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json.example
+.cursor/
 
 # Test / coverage
 coverage/
 .nyc_output/
 
-# Storage (local dev uploads)
+# Storage (uploads locales de desarrollo)
 storage/uploads/
 apps/api/storage/uploads/
 apps/api/storage/uploads-test/
@@ -43,15 +58,13 @@ apps/api/storage/uploads-test/
 # TypeScript
 *.tsbuildinfo
 
-# Misc
+# Cache / tooling
 .cache/
 .turbo/
+.eslintcache
 
-# SSH / private keys (never commit)
+# SSH / claves privadas (nunca commitear)
 *.pem
 *.key
 id_rsa*
 *.ppk
-*.pub
-28086003gapg
-28086003gapg.pub

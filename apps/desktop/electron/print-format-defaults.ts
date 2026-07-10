@@ -30,14 +30,11 @@ export const DEFAULT_INVOICE_BODY_HTML = `{{business.header}}
 <div class="center muted">{{sale.date}}</div>
 <div class="divider"></div>
 <div>Cliente: {{sale.client}}</div>
-<div>Pago: {{sale.payment_type}}</div>
+{{sale.payment_details}}
 <div class="divider"></div>
 {{sale.lines}}
 <div class="divider"></div>
-<div class="line-row bold">
-  <span>TOTAL USD</span>
-  <span>{{sale.total}}</span>
-</div>
+{{sale.totals_summary}}
 {{business.footer}}`
 
 export const DEFAULT_DELIVERY_NOTE_BODY_HTML = `{{business.header}}
@@ -54,13 +51,34 @@ export const DEFAULT_DELIVERY_NOTE_BODY_HTML = `{{business.header}}
 <div class="divider"></div>
 <div class="signature">Recibido conforme</div>`
 
-export const DEFAULT_COMANDA_BODY_HTML = `
-<div class="center bold">NEGA POS</div>
+export const DEFAULT_COMANDA_BODY_HTML = `<div class="center bold">NEGA POS</div>
 <div class="center muted">Correlativo de comanda: {{sale.code}}</div>
 <div class="center muted">Fecha: {{sale.date}}</div>
 <div class="center muted">------------------------------</div>
-{{comanda.lines}}
-`
+{{comanda.lines}}`
+
+export function migrateBuiltinBodyHtml(
+  id: string,
+  bodyHtml: string,
+  defaultBodyHtml: string
+): string {
+  if (id !== BUILTIN_INVOICE_FORMAT_ID) {
+    return bodyHtml
+  }
+
+  if (
+    bodyHtml.includes('{{sale.payment_type}}') &&
+    !bodyHtml.includes('{{sale.payment_details}}')
+  ) {
+    return defaultBodyHtml
+  }
+
+  if (bodyHtml.includes('TOTAL USD') && !bodyHtml.includes('{{sale.totals_summary}}')) {
+    return defaultBodyHtml
+  }
+
+  return bodyHtml
+}
 
 export function createBuiltinFormats(): Array<{
   id: string
@@ -124,7 +142,9 @@ export function normalizeFormats(
           ? 'comanda'
           : 'invoice'
     const existingBuiltin = byId.get(id)
-    const bodyHtml = String(raw.bodyHtml ?? existingBuiltin?.bodyHtml ?? '').trim()
+    const rawBodyHtml = String(raw.bodyHtml ?? existingBuiltin?.bodyHtml ?? '').trim()
+    const defaultBodyHtml = existingBuiltin?.bodyHtml ?? DEFAULT_INVOICE_BODY_HTML
+    const bodyHtml = migrateBuiltinBodyHtml(id, rawBodyHtml || defaultBodyHtml, defaultBodyHtml)
     const name = String(raw.name ?? existingBuiltin?.name ?? 'Formato sin nombre').trim()
 
     byId.set(id, {
@@ -132,7 +152,7 @@ export function normalizeFormats(
       name: name || 'Formato sin nombre',
       documentKind,
       paperWidthMm: resolvePaperWidthMm(raw.paperWidthMm),
-      bodyHtml: bodyHtml || (existingBuiltin?.bodyHtml ?? DEFAULT_INVOICE_BODY_HTML),
+      bodyHtml,
       isBuiltin:
         id === BUILTIN_INVOICE_FORMAT_ID ||
         id === BUILTIN_DELIVERY_NOTE_FORMAT_ID ||

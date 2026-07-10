@@ -9,6 +9,20 @@ import {
 import { DEFAULT_TICKET_PAPER_WIDTH_MM } from './print-format-defaults'
 
 const PRINT_CONFIG_FILE = 'print-config.json'
+/** Resolución típica de impresoras térmicas 80 mm (203 DPI). */
+const THERMAL_DPI = 203
+
+function mmToMicrons(mm: number): number {
+  return Math.round(mm * 1000)
+}
+
+function cssPxToMicrons(px: number): number {
+  return Math.round((px * 25400) / 96)
+}
+
+function mmToThermalPx(mm: number): number {
+  return Math.round((mm / 25.4) * THERMAL_DPI)
+}
 
 function getConfigWritePath(): string {
   if (app.isPackaged) {
@@ -91,10 +105,12 @@ export async function printHtml(options: PrintHtmlOptions): Promise<void> {
     throw new Error('No hay impresora configurada para este documento.')
   }
 
+  const paperWidthPx = mmToThermalPx(paperWidthMm)
+
   const printWindow = new BrowserWindow({
     show: false,
-    width: 400,
-    height: 600,
+    width: paperWidthPx,
+    height: 1200,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -105,6 +121,17 @@ export async function printHtml(options: PrintHtmlOptions): Promise<void> {
     const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
     await printWindow.loadURL(dataUrl)
 
+    await printWindow.webContents.executeJavaScript(`
+      new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    `)
+
+    const contentHeightPx = (await printWindow.webContents.executeJavaScript(
+      `Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)`
+    )) as number
+
+    const pageWidthMicrons = mmToMicrons(paperWidthMm)
+    const pageHeightMicrons = Math.max(cssPxToMicrons(contentHeightPx) + 2000, 50000)
+
     await new Promise<void>((resolve, reject) => {
       printWindow.webContents.print(
         {
@@ -112,9 +139,11 @@ export async function printHtml(options: PrintHtmlOptions): Promise<void> {
           deviceName,
           printBackground: true,
           margins: { marginType: 'none' },
+          scaleFactor: 100,
+          dpi: { horizontal: THERMAL_DPI, vertical: THERMAL_DPI },
           pageSize: {
-            width: paperWidthMm * 1000,
-            height: 297000,
+            width: pageWidthMicrons,
+            height: pageHeightMicrons,
           },
         },
         (success, failureReason) => {

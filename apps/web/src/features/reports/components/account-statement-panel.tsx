@@ -7,7 +7,7 @@ import { ReportFiltersToolbar } from '@/features/reports/components/report-filte
 import { ReportFlowChart } from '@/features/reports/components/report-flow-chart'
 import { ReportKpiGrid } from '@/features/reports/components/report-kpi-grid'
 import { formatFecha } from '@/features/reports/constants'
-import { defaultReportPeriodState } from '@/features/reports/report-period'
+import { defaultReportPeriodState, periodLabelFromState, periodStateToAccountParams } from '@/features/reports/report-period'
 import { buildReportSearchParams } from '@/features/reports/report-search-params'
 import { reportUi } from '@/features/reports/report-ui'
 import { useAccountStatementQuery } from '@/features/reports/hooks/use-reports'
@@ -32,12 +32,7 @@ export function AccountStatementPanel() {
       .filter(([, enabled]) => enabled)
       .map(([key]) => key)
 
-    const periodParams =
-      period.mode === 'day' && period.date
-        ? { from: period.date, to: period.date }
-        : period.mode === 'range'
-          ? { from: period.from || undefined, to: period.to || undefined }
-          : { month: period.month }
+    const periodParams = periodStateToAccountParams(period)
 
     return {
       ...periodParams,
@@ -63,11 +58,7 @@ export function AccountStatementPanel() {
 
   const periodLabel = data
     ? `${formatFecha(data.period.from)} — ${formatFecha(data.period.to)}`
-    : period.mode === 'day' && period.date
-      ? formatFecha(period.date)
-      : period.mode === 'range' && period.from && period.to
-        ? `${formatFecha(period.from)} — ${formatFecha(period.to)}`
-        : monthLabel(period.month)
+    : periodLabelFromState(period)
 
   return (
     <div className="space-y-5">
@@ -132,10 +123,4 @@ export function AccountStatementPanel() {
       )}
     </div>
   )
-}
-
-function monthLabel(isoMonth: string) {
-  const [year, month] = isoMonth.split('-')
-  const date = new Date(Number(year), Number(month) - 1, 1)
-  return date.toLocaleDateString('es-VE', { month: 'long', year: 'numeric' })
 }

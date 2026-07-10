@@ -15,9 +15,56 @@ describe('renderSaleDocument', () => {
     expect(rendered.html).toContain('0000000001')
     expect(rendered.html).toContain('Camisa escolar')
     expect(rendered.html).toContain('Tela al corte')
-    expect(rendered.html).toContain('25.00')
+    expect(rendered.html).toContain('10.00 x 2')
+    expect(rendered.html).toContain('20.00 USD')
+    expect(rendered.html).toContain('Método de pago:')
     expect(rendered.html).toContain('FACTURA')
     expect(rendered.html).toContain('<!DOCTYPE html>')
+  })
+
+  it('renders invoice payment conversion when rate and total_bs are present', () => {
+    const rendered = renderSaleDocument(
+      'invoice',
+      {
+        ...sale,
+        total_bs: '912.50',
+        usd_rate: '36.5000',
+        payment_method: { code: 'cash_bs', name: 'Efectivo Bs', currency_code: 'VES' },
+      },
+      config
+    )
+
+    expect(rendered.html).toContain('Método de pago: Efectivo Bs')
+    expect(rendered.html).toContain('Tasa:')
+    expect(rendered.html).toContain('Bs/USD')
+    expect(rendered.html).toContain('Total VES:')
+  })
+
+  it('renders invoice totals with total and paid amounts', () => {
+    const rendered = renderSaleDocument('invoice', sale, config)
+
+    expect(rendered.html).toContain('Total:')
+    expect(rendered.html).toContain('Pagado:')
+    expect(rendered.html).toContain('25.00 USD')
+  })
+
+  it('renders credit invoice with zero paid', () => {
+    const rendered = renderSaleDocument(
+      'invoice',
+      {
+        ...sale,
+        payment_type: 'CREDIT',
+        amount_paid_usd: '0.0000',
+        balance_usd: '25.0000',
+        payment_method: null,
+        payment_method_code: null,
+      },
+      config
+    )
+
+    expect(rendered.html).toContain('Forma de pago: Crédito')
+    expect(rendered.html).toContain('Pagado:')
+    expect(rendered.html).toContain('0.00 USD')
   })
 
   it('renders delivery note HTML with client and order context', () => {
@@ -35,14 +82,13 @@ describe('renderSaleDocument', () => {
     expect(rendered.html).not.toContain('USD')
   })
 
-  it('renders partial delivery note with only selected lines and area label', () => {
+  it('renders partial delivery note with only selected lines', () => {
     const partialLines = [sale.lines![0]]
     const rendered = renderSaleDocument('deliveryNote', sale, config, {
       lines: partialLines,
       categoryLabel: 'Uniforme',
     })
 
-    expect(rendered.html).toContain('Área: Uniforme')
     expect(rendered.html).toContain('Camisa escolar')
     expect(rendered.html).not.toContain('Pantalón')
     expect(rendered.html).not.toContain('USD')
@@ -52,7 +98,7 @@ describe('renderSaleDocument', () => {
     const rendered = renderSaleDocument('comanda', sale, config)
 
     expect(rendered.html).toContain('0000001')
-    expect(rendered.html).toContain('Cantidad solicitada')
+    expect(rendered.html).toContain('Camisa escolar')
     expect(rendered.html).toContain('2 UND')
     expect(rendered.html).toContain('1,50 MTS')
     expect(rendered.html).not.toContain('FACTURA')
@@ -60,6 +106,7 @@ describe('renderSaleDocument', () => {
     expect(rendered.html).not.toContain('Producto sin formula')
     expect(rendered.html).toContain('NEGA POS')
     expect(rendered.html).toContain('Correlativo de comanda')
+    expect(rendered.html).not.toContain('Cantidad solicitada')
   })
 
   it('renders comanda formula when option is enabled (sorted + fallback)', () => {

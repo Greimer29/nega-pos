@@ -52,7 +52,7 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    command: ['sh', '-c', 'node ace migration:run --force && node bin/server.js']
+    command: ['sh', '-c', 'node ace migration:run --force && node ace db:seed --files database/seeders/main/index_seeder && node bin/server.js']
     healthcheck:
       test:
         [

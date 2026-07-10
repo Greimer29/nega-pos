@@ -180,7 +180,7 @@ test.group('Machines API', (group) => {
 
   test('POST /api/v1/machines/:id/expenses creates expense', async ({ client }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const supplier = await Supplier.create({ name: 'Taller X', active: true })
+    const supplier = await Supplier.create({ name: 'Proveedor X', active: true })
     const machine = await Machine.create({
       name: 'Collaretera',
       type: 'COVERSTITCH',

@@ -99,7 +99,7 @@ export function MachinesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Máquinas</h1>
           <p className="text-muted-foreground text-sm">
-            Gestioná las máquinas del taller y su estado operativo.
+            Gestioná las máquinas y equipos y su estado operativo.
           </p>
         </div>
         <Button onClick={openCreateDialog}>

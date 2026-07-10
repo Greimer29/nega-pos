@@ -366,7 +366,13 @@ export default class SaleService {
       await sale.load('paymentMethod')
       await sale.load('customer')
       await sale.load('saleLines', (q) => {
-        q.preload('catalogProduct').preload('material').orderBy('id', 'asc')
+        q.preload('catalogProduct', (cp) =>
+          cp.preload('formula', (f) =>
+            f.preload('materials', (fm) => fm.preload('material'))
+          )
+        )
+          .preload('material')
+          .orderBy('id', 'asc')
       })
 
       return sale

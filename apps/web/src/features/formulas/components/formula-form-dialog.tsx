@@ -212,65 +212,61 @@ export function FormulaFormDialog({
             ) : materialRows.length === 0 ? (
               <p className="text-muted-foreground text-sm">Sin materiales. Agregá al menos uno.</p>
             ) : (
-              materialRows.map((row, index) => (
-                <div key={index} className="flex items-end gap-2">
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <select
-                      className="border-input bg-background flex h-9 w-full rounded-md border px-3 text-sm"
-                      value={row.material_id}
+              materialRows.map((row, index) => {
+                const material = materials.find((m) => m.id === row.material_id)
+                const unit = material?.unit ?? 'UND'
+                const decimals = inventoryQuantityDecimals(unit)
+                const min = decimals === 0 ? 1 : 0.001
+
+                return (
+                  <div key={index} className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <select
+                        className="border-input bg-background flex h-9 w-full rounded-md border px-3 text-sm"
+                        value={row.material_id}
+                        onChange={(e) =>
+                          setMaterialRows((rows) =>
+                            rows.map((r, i) =>
+                              i === index ? { ...r, material_id: Number(e.target.value) } : r
+                            )
+                          )
+                        }
+                      >
+                        {materials.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.code} — {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <span className="text-muted-foreground w-10 shrink-0 text-center text-xs font-semibold">
+                      {inventoryUnitAbrev(unit)}
+                    </span>
+                    <DecimalInput
+                      className="w-24 shrink-0"
+                      decimals={decimals}
+                      min={min}
+                      value={row.quantity}
                       onChange={(e) =>
                         setMaterialRows((rows) =>
                           rows.map((r, i) =>
-                            i === index ? { ...r, material_id: Number(e.target.value) } : r
+                            i === index ? { ...r, quantity: e.target.value } : r
                           )
                         )
                       }
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={() => removeMaterialRow(index)}
                     >
-                      {materials.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.code} — {m.name}
-                        </option>
-                      ))}
-                    </select>
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
-                  <div className="w-24 space-y-1">
-                    {(() => {
-                      const material = materials.find((m) => m.id === row.material_id)
-                      const unit = material?.unit ?? 'UND'
-                      const decimals = inventoryQuantityDecimals(unit)
-                      const min = decimals === 0 ? 1 : 0.001
-
-                      return (
-                        <>
-                          <DecimalInput
-                            decimals={decimals}
-                            min={min}
-                            value={row.quantity}
-                            onChange={(e) =>
-                              setMaterialRows((rows) =>
-                                rows.map((r, i) =>
-                                  i === index ? { ...r, quantity: e.target.value } : r
-                                )
-                              )
-                            }
-                          />
-                          <p className="text-center text-xs text-muted-foreground">
-                            {inventoryUnitAbrev(unit)}
-                          </p>
-                        </>
-                      )
-                    })()}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeMaterialRow(index)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              ))
+                )
+              })
             )}
             <Button type="button" variant="outline" size="sm" onClick={addMaterialRow}>
               <Plus className="size-4" />

@@ -55,7 +55,7 @@ export function SettingsGeneralPanel() {
               id="trade-name"
               value={profile.trade_name}
               disabled={!canEdit}
-              placeholder="Ej. Taller y confecciones El Uniforme"
+              placeholder="Ej. Comercial El Uniforme"
               onChange={(event) =>
                 setProfile((current) => ({ ...current, trade_name: event.target.value }))
               }

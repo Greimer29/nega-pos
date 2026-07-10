@@ -97,6 +97,7 @@ export function SettingsFormatosPanel() {
   }
 
   function setActiveFormat(kind: PrintDocumentKind, formatId: string) {
+    setPreviewFormatId(formatId)
     setConfig((current) => ({
       ...current,
       documents: {
@@ -119,7 +120,10 @@ export function SettingsFormatosPanel() {
   }
 
   const previewFormat =
-    config.formats.find((format) => format.id === previewFormatId) ?? config.formats[0] ?? null
+    config.formats.find((format) => format.id === previewFormatId) ??
+    config.formats.find((format) => format.id === config.documents.invoice.formatId) ??
+    config.formats[0] ??
+    null
 
   const previewConfig: Pick<PrintConfig, 'business' | 'formats' | 'documents'> = previewFormat
     ? {
@@ -164,30 +168,44 @@ export function SettingsFormatosPanel() {
         <CardHeader>
           <CardTitle className="text-base">Formato activo por documento</CardTitle>
           <CardDescription>
-            Elegí qué plantilla se usa al imprimir cada tipo de ticket en caja.
+            Elegí qué plantilla se usa al imprimir cada tipo de ticket en caja. La vista previa se
+            actualiza al cambiar un formato o al pulsar el ícono de ojo en la tabla.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          {(['invoice', 'deliveryNote', 'comanda'] as const).map((kind) => (
-            <div key={kind} className="space-y-2">
-              <label className="text-sm font-medium" htmlFor={`active-format-${kind}`}>
-                {PRINT_DOCUMENT_LABELS[kind]}
-              </label>
-              <select
-                id={`active-format-${kind}`}
-                className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-                value={config.documents[kind].formatId}
-                disabled={!canEdit}
-                onChange={(event) => setActiveFormat(kind, event.target.value)}
-              >
-                {formatsForDocumentKind(config.formats, kind).map((format) => (
-                  <option key={format.id} value={format.id}>
-                    {format.name}
-                  </option>
-                ))}
-              </select>
+        <CardContent className="grid items-start gap-6 lg:grid-cols-2">
+          <div className="space-y-4">
+            {(['invoice', 'deliveryNote', 'comanda'] as const).map((kind) => (
+              <div key={kind} className="space-y-2">
+                <label className="text-sm font-medium" htmlFor={`active-format-${kind}`}>
+                  {PRINT_DOCUMENT_LABELS[kind]}
+                </label>
+                <select
+                  id={`active-format-${kind}`}
+                  className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+                  value={config.documents[kind].formatId}
+                  disabled={!canEdit}
+                  onChange={(event) => setActiveFormat(kind, event.target.value)}
+                >
+                  {formatsForDocumentKind(config.formats, kind).map((format) => (
+                    <option key={format.id} value={format.id}>
+                      {format.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+
+          {previewFormat ? (
+            <div className="min-w-0 space-y-2 lg:sticky lg:top-4">
+              <p className="text-sm font-medium">Vista previa — {previewFormat.name}</p>
+              <DocumentPreview
+                kind={previewFormat.documentKind}
+                sale={sampleSale}
+                config={previewConfig}
+              />
             </div>
-          ))}
+          ) : null}
         </CardContent>
       </Card>
 
@@ -301,21 +319,6 @@ export function SettingsFormatosPanel() {
           </div>
         </CardContent>
       </Card>
-
-      {previewFormat ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Vista previa — {previewFormat.name}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DocumentPreview
-              kind={previewFormat.documentKind}
-              sale={sampleSale}
-              config={previewConfig}
-            />
-          </CardContent>
-        </Card>
-      ) : null}
 
       {canEdit ? (
         <Button type="button" disabled={saving} onClick={() => void handleSave()}>

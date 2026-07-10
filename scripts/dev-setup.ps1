@@ -50,8 +50,8 @@ if ($LASTEXITCODE -ne 0) {
   Write-Warning 'No se pudo crear nega_pos_test via Docker. Ejecuta scripts/setup-mysql-local.sql como root si fallan los tests.'
 }
 
-Write-Host '==> Seed admin...' -ForegroundColor Cyan
-node ace db:seed --files database/seeders/admin_user_seeder
+Write-Host '==> Seed (monedas, métodos de pago, categorías, admin)...' -ForegroundColor Cyan
+node ace db:seed
 
 Set-Location $Root
 Write-Host ''

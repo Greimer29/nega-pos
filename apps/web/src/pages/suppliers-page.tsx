@@ -96,7 +96,7 @@ export function SuppliersPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Proveedores</h1>
-          <p className="text-muted-foreground text-sm">Gestioná los proveedores del taller.</p>
+          <p className="text-muted-foreground text-sm">Gestioná los proveedores.</p>
         </div>
         <Button onClick={openCreateDialog}>
           <Plus />

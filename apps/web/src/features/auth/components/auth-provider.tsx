@@ -8,6 +8,7 @@ import {
 import axios from 'axios'
 import { AuthContext } from '@/features/auth/auth-context'
 import * as authService from '@/features/auth/services/auth-service'
+import { clearVentasCartDraft } from '@/features/ventas/utils/ventas-cart-draft'
 import { canAccess, type PermissionKey } from '@/features/permissions/catalog'
 import { refreshCsrfToken, setUnauthorizedHandler } from '@/lib/api'
 import { queryClient } from '@/lib/query-client'
@@ -164,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await authService.logout()
     } finally {
+      clearVentasCartDraft()
       setSessionBootstrapError(false)
       queryClient.clear()
       setUser(null)

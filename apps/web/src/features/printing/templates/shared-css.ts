@@ -7,12 +7,14 @@ function ticketContentStyles(selector: string, paperWidthMm: number): string {
       padding: 8px;
       width: ${paperWidthMm}mm;
       max-width: 100%;
-      font-family: Consolas, "Courier New", monospace;
-      font-size: 11px;
-      line-height: 1.35;
-      color: #111;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+      color: #000;
       background: #fff;
       box-sizing: border-box;
+      -webkit-font-smoothing: none;
+      font-smooth: never;
     }
     ${selector} * { box-sizing: border-box; }
     ${selector} .center { text-align: center; }
@@ -52,9 +54,60 @@ function ticketContentStyles(selector: string, paperWidthMm: number): string {
       margin: 8px 0;
       padding-bottom: 6px;
       border-bottom: 1px dashed #ccc;
+      width: 100%;
+      overflow: hidden;
     }
     ${selector} .comanda-item:last-child {
       border-bottom: none;
+    }
+    ${selector} .comanda-code,
+    ${selector} .comanda-name,
+    ${selector} .comanda-qty {
+      width: 100%;
+      text-align: left;
+      word-break: break-word;
+      margin: 2px 0;
+    }
+    ${selector} .comanda-formula-line {
+      padding-left: 8px;
+      margin: 1px 0;
+      word-break: break-word;
+    }
+    ${selector} .invoice-line {
+      margin: 6px 0;
+    }
+    ${selector} .invoice-line-name {
+      margin-bottom: 2px;
+      word-break: break-word;
+    }
+    ${selector} .invoice-line-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    ${selector} .invoice-line-table td {
+      vertical-align: top;
+      word-break: break-word;
+    }
+    ${selector} .invoice-line-table td.right {
+      text-align: right;
+      white-space: nowrap;
+      width: 38%;
+    }
+    ${selector} .invoice-totals-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      margin-top: 4px;
+    }
+    ${selector} .invoice-totals-table td {
+      vertical-align: top;
+      padding: 2px 0;
+    }
+    ${selector} .invoice-totals-table td.right {
+      text-align: right;
+      white-space: nowrap;
+      width: 45%;
     }
   `
 }
@@ -63,6 +116,15 @@ export function ticketStyles(paperWidthMm = DEFAULT_TICKET_PAPER_WIDTH_MM): stri
   return `
     @page { size: ${paperWidthMm}mm auto; margin: 0; }
     * { box-sizing: border-box; }
+    @media print {
+      body {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      body .muted {
+        color: #000;
+      }
+    }
     ${ticketContentStyles('body', paperWidthMm)}
   `
 }

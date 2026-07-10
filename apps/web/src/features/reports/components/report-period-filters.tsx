@@ -1,7 +1,7 @@
 import { CalendarRange } from 'lucide-react'
 import { useRef, type ReactNode } from 'react'
 import { Input } from '@/components/ui/input'
-import { currentMonthIso, previousMonthIso, todayIso } from '@/features/reports/constants'
+import { currentMonthIso, currentYearRange, previousMonthIso, todayIso } from '@/features/reports/constants'
 import type { ReportPeriodMode, ReportPeriodState } from '@/features/reports/report-period'
 import { reportUi } from '@/features/reports/report-ui'
 import { cn } from '@/lib/utils'
@@ -68,6 +68,16 @@ export function ReportPeriodFilters({ value, onChange, className }: ReportPeriod
     })
   }
 
+  function applyCurrentYear() {
+    const { from, to } = currentYearRange()
+    onChange({
+      ...value,
+      mode: 'year',
+      from,
+      to,
+    })
+  }
+
   return (
     <div className={cn('flex flex-wrap items-center gap-2', className)}>
       <div className={reportUi.pillTrack}>
@@ -79,6 +89,9 @@ export function ReportPeriodFilters({ value, onChange, className }: ReportPeriod
           onClick={applyPreviousMonth}
         >
           Mes anterior
+        </PeriodPill>
+        <PeriodPill active={value.mode === 'year'} onClick={applyCurrentYear}>
+          Anual
         </PeriodPill>
         <PeriodPill active={value.mode === 'day'} onClick={() => setMode('day')}>
           Día

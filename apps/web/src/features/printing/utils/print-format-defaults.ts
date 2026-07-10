@@ -31,14 +31,11 @@ export const DEFAULT_INVOICE_BODY_HTML = `{{business.header}}
 <div class="center muted">{{sale.date}}</div>
 <div class="divider"></div>
 <div>Cliente: {{sale.client}}</div>
-<div>Pago: {{sale.payment_type}}</div>
+{{sale.payment_details}}
 <div class="divider"></div>
 {{sale.lines}}
 <div class="divider"></div>
-<div class="line-row bold">
-  <span>TOTAL USD</span>
-  <span>{{sale.total}}</span>
-</div>
+{{sale.totals_summary}}
 {{business.footer}}`
 
 export const DEFAULT_DELIVERY_NOTE_BODY_HTML = `{{business.header}}
@@ -46,7 +43,6 @@ export const DEFAULT_DELIVERY_NOTE_BODY_HTML = `{{business.header}}
 <div class="center bold">NOTA DE DESPACHO</div>
 <div class="center">{{sale.code}}</div>
 <div class="center muted">{{sale.date}}</div>
-{{area.label}}
 <div class="divider"></div>
 <div>Cliente: {{sale.client}}</div>
 <div>Estado pedido: {{sale.order_status}}</div>
@@ -56,13 +52,35 @@ export const DEFAULT_DELIVERY_NOTE_BODY_HTML = `{{business.header}}
 <div class="divider"></div>
 <div class="signature">Recibido conforme</div>`
 
-export const DEFAULT_COMANDA_BODY_HTML = `
-<div class="center bold">NEGA POS</div>
+export const DEFAULT_COMANDA_BODY_HTML = `<div class="center bold">NEGA POS</div>
 <div class="center muted">Correlativo de comanda: {{sale.code}}</div>
 <div class="center muted">Fecha: {{sale.date}}</div>
 <div class="center muted">------------------------------</div>
-{{comanda.lines}}
-`
+{{comanda.lines}}`
+
+/** Migra plantillas builtin guardadas con placeholders obsoletos. */
+export function migrateBuiltinBodyHtml(
+  id: string,
+  bodyHtml: string,
+  defaultBodyHtml: string
+): string {
+  if (id !== BUILTIN_INVOICE_FORMAT_ID) {
+    return bodyHtml
+  }
+
+  if (
+    bodyHtml.includes('{{sale.payment_type}}') &&
+    !bodyHtml.includes('{{sale.payment_details}}')
+  ) {
+    return defaultBodyHtml
+  }
+
+  if (bodyHtml.includes('TOTAL USD') && !bodyHtml.includes('{{sale.totals_summary}}')) {
+    return defaultBodyHtml
+  }
+
+  return bodyHtml
+}
 
 export const FORMAT_PLACEHOLDER_HELP = [
   '{{business.header}} — nombre y subtítulo del negocio',
@@ -81,10 +99,14 @@ export const FORMAT_PLACEHOLDER_HELP = [
   '{{sale.date}} — fecha de la venta',
   '{{sale.client}} — nombre del cliente',
   '{{sale.payment_type}} — contado o crédito',
+  '{{sale.payment_method}} — nombre del método de pago',
+  '{{sale.payment_details}} — método de pago, tasa y total en moneda local',
   '{{sale.order_status}} — estado del pedido',
   '{{sale.lines}} — detalle de productos (factura / nota)',
   '{{sale.delivery_lines}} — detalle de productos (nota de despacho, sin precios)',
   '{{sale.total}} — total en USD',
+  '{{sale.amount_paid}} — monto pagado en USD',
+  '{{sale.totals_summary}} — total y pagado (factura)',
   '{{area.label}} — área/categoría (comanda parcial)',
   '{{comanda.lines}} — producto, cantidad y medida (comanda)',
 ].join('\n')

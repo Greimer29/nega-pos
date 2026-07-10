@@ -1,5 +1,6 @@
 import type { Sale, SaleLine } from '@/features/ventas/types'
 import type { PrintBusinessConfig } from '@/features/printing/types'
+import { paymentMethodLabel } from '@/features/ventas/constants'
 import { inventoryQuantityDecimals, inventoryUnitAbrev } from '@/lib/inventory-units'
 
 export function escapeHtml(value: string): string {
@@ -87,6 +88,66 @@ export function renderBusinessFiscal(business: PrintBusinessConfig): string {
   return lines.join('')
 }
 
+function formatLineQuantity(qty: number, measure?: string): string {
+  const decimals = measure ? inventoryQuantityDecimals(measure) : 0
+  return qty.toLocaleString('es-VE', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+}
+
+function formatMoneyBs(value: string | number | null | undefined): string {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return '0,00'
+  return amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+export function renderSalePaymentDetails(sale: Sale): string {
+  if (sale.payment_type === 'CREDIT') {
+    const lines = ['<div>Forma de pago: Crédito</div>']
+    if (sale.credit_due_date) {
+      lines.push(`<div>Vence: ${escapeHtml(formatSaleDate(sale.credit_due_date))}</div>`)
+    }
+    return lines.join('')
+  }
+
+  const methodName = paymentMethodLabel(sale.payment_method)
+  const lines = [`<div>Método de pago: ${escapeHtml(methodName)}</div>`]
+
+  const rate = sale.usd_rate ? Number(sale.usd_rate) : null
+  const totalBs = sale.total_bs ? Number(sale.total_bs) : null
+  const currencyCode = sale.payment_method?.currency_code?.trim()
+
+  if (rate && rate > 0) {
+    lines.push(`<div>Tasa: ${escapeHtml(formatMoneyBs(rate))} Bs/USD</div>`)
+  }
+
+  if (totalBs !== null && Number.isFinite(totalBs) && totalBs > 0) {
+    const currencyLabel = currencyCode && currencyCode !== 'USD' ? currencyCode : 'Bs'
+    lines.push(`<div>Total ${escapeHtml(currencyLabel)}: ${escapeHtml(formatMoneyBs(totalBs))}</div>`)
+  }
+
+  return lines.join('')
+}
+
+export function renderSaleTotalsSummary(sale: Sale): string {
+  const total = formatMoneyUsd(sale.total_usd)
+  const paid = formatMoneyUsd(sale.amount_paid_usd)
+
+  return `
+    <table class="invoice-totals-table" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td class="bold">Total:</td>
+        <td class="right bold">${escapeHtml(total)} USD</td>
+      </tr>
+      <tr>
+        <td>Pagado:</td>
+        <td class="right">${escapeHtml(paid)} USD</td>
+      </tr>
+    </table>
+  `
+}
+
 export function renderSaleLines(sale: Sale, linesOverride?: Sale['lines']): string {
   const lines = linesOverride ?? sale.lines ?? []
   if (lines.length === 0) {
@@ -97,15 +158,21 @@ export function renderSaleLines(sale: Sale, linesOverride?: Sale['lines']): stri
     .map((line) => {
       const name = line.catalog_product?.name ?? line.material?.name ?? line.description
       const qty = Number(line.quantity)
-      const unit = Number(line.unit_price_usd)
+      const unitPrice = Number(line.unit_price_usd)
       const subtotal = Number(line.subtotal_usd)
+      const measure = resolveLineMeasure(line)
+      const qtyLabel = formatLineQuantity(qty, measure)
 
       return `
-        <div class="line-row">
-          <div class="line-name">${escapeHtml(name)}</div>
-          <div class="line-qty">${qty} x ${formatMoneyUsd(unit)}</div>
+        <div class="invoice-line">
+          <div class="invoice-line-name bold">${escapeHtml(name)}</div>
+          <table class="invoice-line-table" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td>${escapeHtml(formatMoneyUsd(unitPrice))} x ${escapeHtml(qtyLabel)}</td>
+              <td class="right">${escapeHtml(formatMoneyUsd(subtotal))} USD</td>
+            </tr>
+          </table>
         </div>
-        <div class="line-row right">${formatMoneyUsd(subtotal)} USD</div>
       `
     })
     .join('')
@@ -161,20 +228,20 @@ export function renderComandaLines(
                 const materialQty = Number(item.quantity) * qty
                 const materialQtyText = formatComandaQuantity(materialQty, materialUnit)
 
-                return `<div class="muted" style="padding-left:12px">- ${escapeHtml(materialName)} ${escapeHtml(materialQtyText)}</div>`
+                return `<div class="comanda-formula-line muted">- ${escapeHtml(materialName)} ${escapeHtml(materialQtyText)}</div>`
               })
               .join('')
           : hasPrintFormula
-            ? `<div class="muted" style="padding-left:12px">- Producto sin formula</div>`
+            ? `<div class="comanda-formula-line muted">- Producto sin formula</div>`
             : ''
+
+      const name = line.catalog_product?.name ?? line.material?.name ?? line.description
 
       return `
         <div class="comanda-item">
-          ${productCode ? `<div class="center">${escapeHtml(productCode)}</div>` : ''}
-          <div class="line-row">
-            <div class="line-name">Cantidad solicitada</div>
-            <div class="line-qty right bold">${escapeHtml(formattedQty)}</div>
-          </div>
+          ${productCode ? `<div class="comanda-code bold">${escapeHtml(productCode)}</div>` : ''}
+          <div class="comanda-name">${escapeHtml(name)}</div>
+          <div class="comanda-qty bold">${escapeHtml(formattedQty)}</div>
           ${formulaBlock}
         </div>
       `

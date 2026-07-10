@@ -12,6 +12,8 @@ import {
   renderComandaLines,
   renderDeliveryNoteLines,
   renderSaleLines,
+  renderSalePaymentDetails,
+  renderSaleTotalsSummary,
   saleClientLabel,
 } from '@/features/printing/templates/format-utils'
 
@@ -64,10 +66,13 @@ function buildPlaceholderMap(
     'sale.client': escapeHtml(saleClientLabel(sale)),
     'sale.payment_type': escapeHtml(paymentTypeLabel(sale.payment_type)),
     'sale.payment_method': escapeHtml(paymentMethodLabel(sale.payment_method)),
+    'sale.payment_details': renderSalePaymentDetails(sale),
     'sale.order_status': escapeHtml(sale.order_status),
     'sale.lines': renderSaleLines(sale, lines),
     'sale.delivery_lines': renderDeliveryNoteLines(sale, lines),
     'sale.total': formatMoneyUsd(sale.total_usd),
+    'sale.amount_paid': formatMoneyUsd(sale.amount_paid_usd),
+    'sale.totals_summary': renderSaleTotalsSummary(sale),
     'area.label': renderAreaLabel(comandaOptions?.categoryLabel),
     'comanda.lines': renderComandaLines(lines ?? sale.lines ?? [], {
       printFormula: comandaOptions?.printFormula ?? false,

@@ -5,7 +5,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -137,12 +136,24 @@ export function FormatFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
         <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>{isEditing ? 'Editar formato' : 'Nuevo formato'}</DialogTitle>
-            <DialogDescription>
-              Editá el HTML del ticket usando placeholders. Los cambios se guardan al confirmar en
-              la pestaña Formatos.
-            </DialogDescription>
+          <DialogHeader className="gap-4">
+            <div className="flex flex-col gap-3 pr-8 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-col gap-1.5 text-center sm:text-left">
+                <DialogTitle>{isEditing ? 'Editar formato' : 'Nuevo formato'}</DialogTitle>
+                <DialogDescription>
+                  Editá el HTML del ticket usando placeholders. Los cambios se guardan al confirmar en
+                  la pestaña Formatos.
+                </DialogDescription>
+              </div>
+              <div className="flex flex-col-reverse gap-2 sm:shrink-0 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                  Cancelar
+                </Button>
+                {canEdit ? (
+                  <Button type="submit">Aplicar cambios</Button>
+                ) : null}
+              </div>
+            </div>
           </DialogHeader>
 
           <div className="grid gap-6 py-4 lg:grid-cols-2">
@@ -212,15 +223,6 @@ export function FormatFormDialog({
               ) : null}
             </div>
           </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            {canEdit ? (
-              <Button type="submit">Aplicar cambios</Button>
-            ) : null}
-          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

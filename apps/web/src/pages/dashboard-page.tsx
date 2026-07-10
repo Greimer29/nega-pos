@@ -91,7 +91,7 @@ export function DashboardPage() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Dashboard</h1>
-          <p className="text-sm text-neutral-500">Resumen del taller — {todayLabel()}</p>
+          <p className="text-sm text-neutral-500">Resumen del día — {todayLabel()}</p>
         </div>
         <Button variant="outline" size="sm" asChild title="Cierre diario">
           <Link to="/dashboard/cierre-diario">

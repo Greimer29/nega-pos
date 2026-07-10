@@ -8,6 +8,7 @@ import {
   DEFAULT_DELIVERY_NOTE_BODY_HTML,
   DEFAULT_INVOICE_BODY_HTML,
   DEFAULT_TICKET_PAPER_WIDTH_MM,
+  migrateBuiltinBodyHtml,
   resolvePaperWidthMm,
 } from '@/features/printing/utils/print-format-defaults'
 
@@ -129,7 +130,9 @@ export function normalizeFormats(input: PrintFormatRecord[] | undefined): PrintF
           ? 'comanda'
           : 'invoice'
     const existingBuiltin = byId.get(id)
-    const bodyHtml = String(raw.bodyHtml ?? existingBuiltin?.bodyHtml ?? '').trim()
+    const rawBodyHtml = String(raw.bodyHtml ?? existingBuiltin?.bodyHtml ?? '').trim()
+    const defaultBodyHtml = existingBuiltin?.bodyHtml ?? DEFAULT_INVOICE_BODY_HTML
+    const bodyHtml = migrateBuiltinBodyHtml(id, rawBodyHtml || defaultBodyHtml, defaultBodyHtml)
     const name = String(raw.name ?? existingBuiltin?.name ?? 'Formato sin nombre').trim()
 
     byId.set(id, {
@@ -137,7 +140,7 @@ export function normalizeFormats(input: PrintFormatRecord[] | undefined): PrintF
       name: name || 'Formato sin nombre',
       documentKind,
       paperWidthMm: resolvePaperWidthMm(raw.paperWidthMm),
-      bodyHtml: bodyHtml || (existingBuiltin?.bodyHtml ?? DEFAULT_INVOICE_BODY_HTML),
+      bodyHtml,
       isBuiltin:
         id === BUILTIN_INVOICE_FORMAT_ID ||
         id === BUILTIN_DELIVERY_NOTE_FORMAT_ID ||

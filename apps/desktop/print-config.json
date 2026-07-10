@@ -1,6 +1,6 @@
 {
   "business": {
-    "name": "NEGA POS",
+    "name": "",
     "subtitle": "",
     "footer": "Gracias por su compra"
   },
@@ -10,7 +10,7 @@
       "name": "Factura / Recibo (predeterminado)",
       "documentKind": "invoice",
       "paperWidthMm": 78,
-      "bodyHtml": "{{business.header}}\n<div class=\"divider\"></div>\n<div class=\"center bold\">FACTURA</div>\n<div class=\"center\">{{sale.code}}</div>\n<div class=\"center muted\">{{sale.date}}</div>\n<div class=\"divider\"></div>\n<div>Cliente: {{sale.client}}</div>\n<div>Pago: {{sale.payment_type}}</div>\n<div class=\"divider\"></div>\n{{sale.lines}}\n<div class=\"divider\"></div>\n<div class=\"line-row bold\">\n  <span>TOTAL USD</span>\n  <span>{{sale.total}}</span>\n</div>\n{{business.footer}}",
+      "bodyHtml": "{{business.header}}\n<div class=\"divider\"></div>\n<div class=\"center bold\">FACTURA</div>\n<div class=\"center\">{{sale.code}}</div>\n<div class=\"center muted\">{{sale.date}}</div>\n<div class=\"divider\"></div>\n<div>Cliente: {{sale.client}}</div>\n{{sale.payment_details}}\n<div class=\"divider\"></div>\n{{sale.lines}}\n<div class=\"divider\"></div>\n{{sale.totals_summary}}\n{{business.footer}}",
       "isBuiltin": true
     },
     {
@@ -26,14 +26,14 @@
       "name": "Comanda (predeterminado)",
       "documentKind": "comanda",
       "paperWidthMm": 78,
-      "bodyHtml": "\n<div class=\"center bold\">NEGA POS</div>\n<div class=\"center muted\">Correlativo de comanda: {{sale.code}}</div>\n<div class=\"center muted\">Fecha: {{sale.date}}</div>\n<div class=\"center muted\">------------------------------</div>\n{{comanda.lines}}\n",
+      "bodyHtml": "<div class=\"center bold\">NEGA POS</div>\n<div class=\"center muted\">Correlativo de comanda: {{sale.code}}</div>\n<div class=\"center muted\">Fecha: {{sale.date}}</div>\n<div class=\"center muted\">------------------------------</div>\n{{comanda.lines}}",
       "isBuiltin": true
     }
   ],
   "documents": {
     "invoice": {
       "enabled": true,
-      "deviceName": "POS-80C",
+      "deviceName": "L4260 Series(Network)",
       "paperWidthMm": 78,
       "formatId": "builtin-invoice"
     },
@@ -44,8 +44,8 @@
       "formatId": "builtin-delivery-note"
     },
     "comanda": {
-      "enabled": false,
-      "deviceName": "",
+      "enabled": true,
+      "deviceName": "POS-80C",
       "paperWidthMm": 78,
       "formatId": "builtin-comanda"
     }
@@ -54,7 +54,7 @@
     "printInvoiceOnConfirm": true,
     "printDeliveryNoteOnConfirm": false,
     "printComandaOnConfirm": true,
-    "printComandaFormula": false
+    "printComandaFormula": true
   },
   "categoryRouting": {
     "comanda": {
@@ -66,7 +66,7 @@
         },
         {
           "category": "Camisa",
-          "deviceName": "L4260 Series(Network)"
+          "deviceName": "POS ALMACEN"
         }
       ]
     }

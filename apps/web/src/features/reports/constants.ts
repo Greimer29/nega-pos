@@ -51,3 +51,12 @@ export function todayIso() {
   const d = String(now.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
 }
+
+export function currentYearIso() {
+  return String(new Date().getFullYear())
+}
+
+export function currentYearRange() {
+  const year = currentYearIso()
+  return { from: `${year}-01-01`, to: `${year}-12-31` }
+}

@@ -35,6 +35,12 @@ import { useCatalogProductsQuery } from '@/features/ventas/hooks/use-catalog'
 import type { CatalogProduct } from '@/features/ventas/types'
 import { cartHasStockIssues } from '@/features/ventas/utils/product-stock'
 import {
+  clearVentasCartDraft,
+  isVentasCartDraftEmpty,
+  loadVentasCartDraft,
+  saveVentasCartDraft,
+} from '@/features/ventas/utils/ventas-cart-draft'
+import {
   formatPrintErrors,
   printSaleDocumentsOnConfirm,
 } from '@/features/printing/services/printing-service'
@@ -65,18 +71,29 @@ function VentasCreateView() {
   const { can } = useAuth()
   const canConfirmSale = can('ventas.confirm')
   const canCreditSale = can('ventas.credit')
+  const [initialDraft] = useState(() => loadVentasCartDraft())
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [category, setCategory] = useState('')
   const [page, setPage] = useState(1)
-  const [customerId, setCustomerId] = useState<number | ''>('')
-  const [clientName, setClientName] = useState('')
-  const [customerCreditDays, setCustomerCreditDays] = useState<number | null>(null)
-  const [paymentType, setPaymentType] = useState<'CASH' | 'CREDIT'>('CASH')
-  const [billingMethod, setBillingMethod] = useState<BillingMethod>('FAST')
-  const [cart, setCart] = useState<CartLine[]>([])
-  const [sourceSaleId, setSourceSaleId] = useState<number | null>(null)
-  const [sourceSaleLabel, setSourceSaleLabel] = useState<string | null>(null)
+  const [customerId, setCustomerId] = useState<number | ''>(() => initialDraft?.customerId ?? '')
+  const [clientName, setClientName] = useState(() => initialDraft?.clientName ?? '')
+  const [customerCreditDays, setCustomerCreditDays] = useState<number | null>(
+    () => initialDraft?.customerCreditDays ?? null
+  )
+  const [paymentType, setPaymentType] = useState<'CASH' | 'CREDIT'>(
+    () => initialDraft?.paymentType ?? 'CASH'
+  )
+  const [billingMethod, setBillingMethod] = useState<BillingMethod>(
+    () => initialDraft?.billingMethod ?? 'FAST'
+  )
+  const [cart, setCart] = useState<CartLine[]>(() => initialDraft?.cart ?? [])
+  const [sourceSaleId, setSourceSaleId] = useState<number | null>(
+    () => initialDraft?.sourceSaleId ?? null
+  )
+  const [sourceSaleLabel, setSourceSaleLabel] = useState<string | null>(
+    () => initialDraft?.sourceSaleLabel ?? null
+  )
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false)
   const [customerPickOpen, setCustomerPickOpen] = useState(false)
   const [loadDraftOpen, setLoadDraftOpen] = useState(false)
@@ -116,6 +133,41 @@ function VentasCreateView() {
     }, 300)
     return () => window.clearTimeout(timer)
   }, [searchInput])
+
+  useEffect(() => {
+    if (initialDraft && !isVentasCartDraftEmpty(initialDraft)) {
+      setSuccessMessage('Se restauró el borrador de venta de esta sesión.')
+    }
+  }, [initialDraft])
+
+  useEffect(() => {
+    const draft = {
+      cart,
+      customerId,
+      clientName,
+      customerCreditDays,
+      paymentType,
+      billingMethod,
+      sourceSaleId,
+      sourceSaleLabel,
+    }
+
+    if (isVentasCartDraftEmpty(draft)) {
+      clearVentasCartDraft()
+      return
+    }
+
+    saveVentasCartDraft(draft)
+  }, [
+    cart,
+    customerId,
+    clientName,
+    customerCreditDays,
+    paymentType,
+    billingMethod,
+    sourceSaleId,
+    sourceSaleLabel,
+  ])
 
   const products = catalogData?.catalog_products ?? []
   const catalogMeta = catalogData?.meta
@@ -303,9 +355,13 @@ function VentasCreateView() {
       payload: {
         payment_type: paymentType,
         billing_mode: billingMethod,
-        payment_method_code: paymentMethodCode,
+        ...(paymentType === 'CASH' && paymentMethodCode
+          ? { payment_method_code: paymentMethodCode }
+          : {}),
       },
     })
+
+    clearVentasCartDraft()
 
     try {
       const fullSale = await getSale(sale.id)
@@ -390,6 +446,15 @@ function VentasCreateView() {
     }
   }
 
+  const confirmButtonLabel =
+    billingMethod === 'FAST'
+      ? paymentType === 'CREDIT'
+        ? 'Confirmar venta a crédito'
+        : 'Confirmar venta'
+      : paymentType === 'CREDIT'
+        ? 'Confirmar pedido a crédito'
+        : 'Confirmar pedido'
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="grid min-h-0 flex-1 items-stretch gap-6 xl:grid-cols-3">
@@ -403,6 +468,7 @@ function VentasCreateView() {
             onClear={() => {
               setCart([])
               resetLoadedDraft()
+              clearVentasCartDraft()
             }}
             onRemoveLine={(key) => removeFromCart(Number(key))}
             onUpdateQuantity={(key, qty) => updateCartQty(Number(key), qty)}
@@ -532,7 +598,7 @@ function VentasCreateView() {
                   onClick={() => void confirmOrder()}
                 >
                   {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
-                  {billingMethod === 'FAST' ? 'Confirmar venta' : 'Confirmar pedido'}
+                  {confirmButtonLabel}
                 </Button>
               ) : (
                 <p className="text-muted-foreground text-center text-sm">
