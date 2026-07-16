@@ -1,11 +1,39 @@
 import AppSetting from '#models/app_setting'
 import Currency from '#models/currency'
+import {
+  DEFAULT_BASE_CURRENCY,
+  KEY_BASE_CURRENCY,
+} from '#services/currency_service'
 import { DateTime } from 'luxon'
 
 const KEY_EXCHANGE_RATE = 'current_usd_rate'
 const KEY_PROFIT_MARGIN = 'default_profit_margin_percent'
 
 export default class AppSettingsService {
+  async getBaseCurrencyCode(): Promise<string> {
+    const row = await AppSetting.find(KEY_BASE_CURRENCY)
+    const code = row?.value?.trim().toUpperCase()
+    return code && code.length === 3 ? code : DEFAULT_BASE_CURRENCY
+  }
+
+  async setBaseCurrencyCode(code: string): Promise<string> {
+    const normalized = code.trim().toUpperCase()
+    const currency = await Currency.find(normalized)
+    if (!currency || !currency.isActive) {
+      throw new Error(`La moneda ${normalized} no está activa`)
+    }
+
+    await AppSetting.updateOrCreate(
+      { key: KEY_BASE_CURRENCY },
+      { value: normalized, updatedAt: DateTime.now() }
+    )
+
+    currency.ratePerUsd = '1.0000'
+    await currency.save()
+
+    return normalized
+  }
+
   async getExchangeRate(): Promise<number | null> {
     const ves = await Currency.find('VES')
     if (ves?.isActive) {

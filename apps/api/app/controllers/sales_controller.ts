@@ -49,9 +49,13 @@ export default class SalesController {
     })
   }
 
-  async store({ request, serialize }: HttpContext) {
+  async store({ request, auth, serialize }: HttpContext) {
     const payload = await request.validateUsing(createSaleValidator)
-    const sale = await this.service.crear(payload)
+    const sale = await this.service.crear(
+      payload.confirm
+        ? { ...payload, sold_by_user_id: Number(auth.getUserOrFail().id) }
+        : payload
+    )
 
     return serialize({
       sale: serializeSale(sale),
@@ -73,9 +77,13 @@ export default class SalesController {
     return serialize(result)
   }
 
-  async confirm({ params, request, serialize }: HttpContext) {
+  async confirm({ params, request, auth, serialize }: HttpContext) {
     const payload = await request.validateUsing(confirmSaleValidator)
-    const sale = await this.service.confirmar(parseRouteId(params.id, 'factura'), payload)
+    const user = auth.getUserOrFail()
+    const sale = await this.service.confirmar(parseRouteId(params.id, 'factura'), {
+      ...payload,
+      sold_by_user_id: Number(user.id),
+    })
 
     return serialize({
       sale: serializeSale(sale),

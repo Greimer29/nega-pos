@@ -35,6 +35,7 @@ export function serializeCustomerResumen(customer: Customer) {
     type: customer.type,
     active: Boolean(customer.active),
     creditDays: customer.creditDays,
+    document: customer.document,
   }
 }
 

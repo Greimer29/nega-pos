@@ -10,6 +10,7 @@ import InventoryMovement from '#models/inventory_movement'
 import FormulaService from '#services/formula_service'
 import OrderService from '#services/order_service'
 import ProductCodeService from '#services/product_code_service'
+import CategoryService from '#services/category_service'
 import type { CostWarning } from '#types/cost_warning'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
@@ -190,6 +191,7 @@ export default class MaterialService {
   private formulaService = new FormulaService()
   private orderService = new OrderService()
   private productCodeService = new ProductCodeService()
+  private categoryService = new CategoryService()
   async calcularStock(materialId: number, trx?: TransactionClientContract): Promise<number> {
     if (!trx) {
       await this.obtener(materialId)
@@ -348,6 +350,7 @@ export default class MaterialService {
   }
 
   async crear(input: MaterialInput): Promise<Material> {
+    await this.categoryService.assertCategoriaActiva(input.category)
     const data = this.prepareInput(input)
     await this.productCodeService.assertUnique(data.code)
 
@@ -355,6 +358,7 @@ export default class MaterialService {
   }
 
   async actualizar(id: number, input: MaterialInput): Promise<MaterialUpdateResult> {
+    await this.categoryService.assertCategoriaActiva(input.category)
     const material = await this.obtener(id)
     const data = this.prepareInput(input)
     let costWarnings: CostWarning[] = []

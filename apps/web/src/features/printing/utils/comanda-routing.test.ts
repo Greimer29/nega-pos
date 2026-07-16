@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_PRINT_CONFIG } from '@/features/printing/types'
 import { renderComandaLines } from '@/features/printing/templates/format-utils'
 import {
-  MATERIALS_CATEGORY,
   UNCATEGORIZED_CATEGORY,
   groupSaleLinesByComandaPrinter,
   resolveLineCategory,
@@ -58,6 +57,18 @@ describe('resolveLineCategory', () => {
         })
       )
     ).toBe('Uniforme')
+  })
+
+  it('uses uncategorized bucket for loose material lines (no separate printer route)', () => {
+    expect(
+      resolveLineCategory(
+        line({
+          id: 2,
+          material_id: 5,
+          material: { id: 5, name: 'Hilo', code: 'H1', unit: 'ROL' },
+        })
+      )
+    ).toBe(UNCATEGORIZED_CATEGORY)
   })
 })
 

@@ -46,8 +46,13 @@ export type CategoryDeliveryRule = CategoryComandaRule
 /** @deprecated Use CategoryComandaRouting */
 export type CategoryDeliveryRouting = CategoryComandaRouting
 
+export type PrintTicketConfig = {
+  station_label: string
+}
+
 export type PrintConfig = {
   business: PrintBusinessConfig
+  ticket: PrintTicketConfig
   formats: PrintFormatRecord[]
   documents: {
     invoice: PrintDocumentSettings
@@ -86,6 +91,9 @@ export const DEFAULT_PRINT_CONFIG: PrintConfig = {
     email: '',
     website: '',
     hasLogo: false,
+  },
+  ticket: {
+    station_label: '',
   },
   formats: createBuiltinFormats(),
   documents: {

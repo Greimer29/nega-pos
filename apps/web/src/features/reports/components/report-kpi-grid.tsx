@@ -41,7 +41,7 @@ type ReportKpiGridProps = {
 
 
 export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
-  const { displayCurrency, formatFromUsd } = useDisplayCurrency()
+  const { displayCurrency, formatFromUsd, baseCurrencyCode } = useDisplayCurrency()
   const netUsd = Number(summary.netUsd)
   const isPositive = netUsd >= 0
   const formatUsd = (amountUsd: string) => formatReportDisplayAmount(amountUsd, formatFromUsd)
@@ -51,6 +51,7 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
       <HeroKpiCard
         netLabel={formatUsd(summary.netUsd)}
         currency={displayCurrency}
+        baseCurrencyCode={baseCurrencyCode}
         isPositive={isPositive}
       />
 
@@ -91,10 +92,12 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
 function HeroKpiCard({
   netLabel,
   currency,
+  baseCurrencyCode,
   isPositive,
 }: {
   netLabel: string
   currency: string
+  baseCurrencyCode: string
   isPositive: boolean
 }) {
 
@@ -182,9 +185,8 @@ function HeroKpiCard({
 
           <p className="mt-3 max-w-md text-xs leading-relaxed text-neutral-400">
 
-            Consolidación en USD con visualización en {currency}. Todos los movimientos se
-
-            convierten con las tasas configuradas.
+            Consolidación en {baseCurrencyCode} con visualización en {currency}. Todos los
+            movimientos se convierten con las tasas configuradas.
 
           </p>
 
@@ -204,7 +206,7 @@ function HeroKpiCard({
 
           )}
 
-          Base de consolidación: USD ({currencySymbol('USD')})
+          Base de consolidación: {baseCurrencyCode} ({currencySymbol(baseCurrencyCode)})
 
         </div>
 

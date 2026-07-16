@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { applyBusinessPalette } from '@/features/branding/apply-business-palette'
 import { businessProfileQueryKey } from '@/features/branding/business-theme-provider'
-import { useAuth } from '@/features/auth/hooks/use-auth'
+import { useCanEditSettings } from '@/features/settings/hooks/use-can-edit-settings'
 import {
   deleteBusinessLogo,
   fetchBusinessProfile,
@@ -20,8 +20,7 @@ import { getPrintConfig, isPrintingAvailable, savePrintConfig } from '@/features
 import { businessProfileToPrintBusiness } from '@/features/branding/business-theme-provider'
 
 export function useGeneralSettingsPanel() {
-  const { can } = useAuth()
-  const canEdit = can('settings.edit')
+  const canEdit = useCanEditSettings()
   const queryClient = useQueryClient()
 
   const [profile, setProfile] = useState<BusinessProfile>(DEFAULT_BUSINESS_PROFILE)
@@ -87,8 +86,6 @@ export function useGeneralSettingsPanel() {
   }
 
   async function handleSave() {
-    if (!canEdit) return
-
     setSaving(true)
     setMessage(null)
     setError(null)
@@ -122,8 +119,6 @@ export function useGeneralSettingsPanel() {
   }
 
   async function handleLogoUpload(file: File) {
-    if (!canEdit) return
-
     setUploadingLogo(true)
     setMessage(null)
     setError(null)
@@ -143,7 +138,7 @@ export function useGeneralSettingsPanel() {
   }
 
   async function handleLogoDelete() {
-    if (!canEdit || !profile.has_logo) return
+    if (!profile.has_logo) return
     if (!window.confirm('¿Eliminar el logo del negocio?')) return
 
     setUploadingLogo(true)

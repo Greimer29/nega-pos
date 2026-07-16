@@ -181,13 +181,19 @@ export function resolvePagePermission(pathname: string): PermissionKey | null {
   return null
 }
 
+function normalizeRole(role: string | undefined): string | undefined {
+  if (!role) return undefined
+  return role.trim().toUpperCase()
+}
+
 export function canAccess(
   role: string | undefined,
   permissions: string[] | undefined,
   permission: PermissionKey
 ): boolean {
-  if (!role) return false
-  if (role === 'ADMIN') return true
+  const normalizedRole = normalizeRole(role)
+  if (!normalizedRole) return false
+  if (normalizedRole === 'ADMIN') return true
   if (permissions?.includes('*')) return true
   return permissions?.includes(permission) ?? false
 }

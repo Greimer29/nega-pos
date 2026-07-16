@@ -3,6 +3,7 @@ import { ArrowLeft, Loader2, Plus } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { MaterialDeleteDialog } from '@/features/materials/components/material-delete-dialog'
 import { MaterialFiltersBar } from '@/features/materials/components/material-filters-bar'
 import { MaterialFormDialog } from '@/features/materials/components/material-form-dialog'
@@ -39,6 +40,7 @@ export function MaterialsPage() {
   const [actionError, setActionError] = useState<string | null>(null)
 
   const deleteMutation = useDeleteMaterialMutation()
+  const { data: categories = [] } = useActiveCategoriesQuery()
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -177,6 +179,7 @@ export function MaterialsPage() {
                 setSortBy(value)
                 setPage(1)
               }}
+              categories={categories}
             />
 
             {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}

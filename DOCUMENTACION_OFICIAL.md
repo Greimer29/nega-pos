@@ -275,12 +275,14 @@ Credenciales alineadas con `apps/api/.env.example`: usuario `nega_pos`, BD `nega
 | Tabla | Campos clave |
 |-------|--------------|
 | `accounts` | `name`, `description`, `is_active` |
-| `currencies` | `code` (PK), `name`, `rate_per_usd`, `is_active` |
+| `currencies` | `code` (PK), `name`, `rate_per_usd` (unidades por 1 unidad de moneda base), `is_active` |
 | `payment_methods` | `code`, `name`, `is_active`, `sort_order` |
-| `app_settings` | `key` (PK), valor JSON para tasa, margen, general |
-| `customer_payments` | `customer_id`, `order_id?`, `sale_id?`, `amount_usd`, `payment_method_code`, `account_id` |
-| `supplier_payments` | `supplier_id`, `purchase_id?`, `amount_usd`, … |
-| `expenses` | `account_id`, `date`, `description`, `amount_usd`, `currency_code` |
+| `app_settings` | `key` (PK); incluye `base_currency_code` (default/cutover `XAU`), tasa VES legacy, margen, general |
+| `customer_payments` | `customer_id`, `order_id?`, `sale_id?`, `amount_usd` (monto en moneda base), `payment_method_code`, `account_id` |
+| `supplier_payments` | `supplier_id`, `purchase_id?`, `amount_usd` (monto en moneda base), … |
+| `expenses` | `account_id`, `date`, `description`, `amount_usd` (monto en moneda base), `currency_code` |
+
+**Moneda base del sistema:** configurable (`GET/PUT /api/v1/currencies/base`, permiso `settings.edit`). Tras el cutover la base es **XAU (Oro)** con semántica *unidades de moneda por 1 unidad de base* (`XAU.rate=1`, `USD.rate=100` → 1 XAU = 100 USD). Las columnas `*_usd` **conservan el nombre** pero almacenan montos en la moneda base. Conversión: `base = monto / tasa`, `monto = base * tasa`.
 
 #### Catálogo
 
@@ -328,7 +330,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 | Tabla | Campos clave |
 |-------|--------------|
 | `sales` | `code`, `customer_id?`, `guest_name`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), totales |
-| `sale_lines` | `catalog_product_id?`, `material_id?`, `description`, cantidades y precios |
+| `sale_lines` | `catalog_product_id?`, `material_id?`, `description`, `kitchen_note?` (indicaciones de cocina para comanda), cantidades y precios |
 
 #### Máquinas
 
@@ -631,6 +633,8 @@ catalog_products ──< product_inventory_movements
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
 | GET | `/api/v1/currencies` | `settings.view` | `CurrenciesController.index` |
+| GET | `/api/v1/currencies/base` | `settings.view` | `CurrenciesController.getBaseCurrency` |
+| PUT | `/api/v1/currencies/base` | `settings.edit` | `CurrenciesController.updateBaseCurrency` |
 | POST | `/api/v1/currencies` | `settings.edit` | `CurrenciesController.store` |
 | PUT | `/api/v1/currencies/:code` | `settings.edit` | `CurrenciesController.update` |
 | DELETE | `/api/v1/currencies/:code` | `settings.edit` | `CurrenciesController.destroy` |
@@ -764,6 +768,7 @@ Cada feature encapsula servicios API (axios), hooks TanStack Query, componentes 
 - **Motor de plantillas:** `format-template-engine.ts` con placeholders (`{{sale.lines}}`, `{{business.header}}`, etc.).
 - **Plantillas builtin:** factura, nota de despacho, comanda (sincronizadas con `print-config.json`).
 - **Comportamiento** (`behavior` en config): imprimir al confirmar venta, comanda por fórmula, routing por categoría (`categoryRouting`).
+- **Notas de cocina:** `sale_lines.kitchen_note` (texto multilínea) se imprime solo en comanda debajo del producto (un renglón por línea del texto); no aparece en factura. Independiente de “imprimir fórmula”.
 
 ---
 

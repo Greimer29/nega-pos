@@ -63,7 +63,7 @@ async function seedMaterial(overrides: Partial<Material> = {}) {
   return Material.create({
     code: 'TEL-REC',
     name: 'Tela receta',
-    category: 'FABRIC',
+    category: 'Uniforme',
     unit: 'ROL',
     minimumStock: '1',
     active: true,

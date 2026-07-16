@@ -12,10 +12,14 @@ import {
 import type { CatalogListParams, CatalogProductInput } from '@/features/ventas/types'
 import { invalidateStockMovement } from '@/lib/query-invalidation'
 
-export function useCatalogProductsQuery(params: CatalogListParams = {}) {
+export function useCatalogProductsQuery(
+  params: CatalogListParams = {},
+  options?: { enabled?: boolean }
+) {
   return useQuery({
     queryKey: ['catalog-products', params],
     queryFn: () => listCatalogProducts(params),
+    enabled: options?.enabled ?? true,
   })
 }
 

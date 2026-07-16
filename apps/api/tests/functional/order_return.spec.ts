@@ -66,7 +66,7 @@ test.group('Order devolución venta API', (group) => {
     const material = await Material.create({
       code: 'TEL-DEV',
       name: 'Tela devolución',
-      category: 'FABRIC',
+      category: 'Uniforme',
       unit: 'ROL',
       minimumStock: '1',
       active: true,
@@ -221,7 +221,7 @@ test.group('Order devolución venta API', (group) => {
     const material = await Material.create({
       code: 'TEL-MIX',
       name: 'Tela mixta',
-      category: 'FABRIC',
+      category: 'Uniforme',
       unit: 'ROL',
       minimumStock: '1',
       active: true,
@@ -306,7 +306,7 @@ test.group('Order devolución venta API', (group) => {
     const material = await Material.create({
       code: 'TEL-PARCIAL',
       name: 'Tela parcial',
-      category: 'FABRIC',
+      category: 'Uniforme',
       unit: 'ROL',
       minimumStock: '1',
       active: true,

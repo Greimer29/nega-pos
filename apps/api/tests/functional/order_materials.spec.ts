@@ -51,7 +51,7 @@ async function seedMaterial() {
   return Material.create({
     code: 'TEL-001',
     name: 'Jersey',
-    category: 'FABRIC',
+    category: 'Uniforme',
     unit: 'ROL',
     minimumStock: '5',
     active: true,
@@ -94,7 +94,7 @@ test.group('OrderMaterial model', (group) => {
     const materialB = await Material.create({
       code: 'HIL-001',
       name: 'Hilo poliéster',
-      category: 'THREAD',
+      category: 'Camisa',
       unit: 'UND',
       minimumStock: '2',
       active: true,

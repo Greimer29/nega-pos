@@ -116,14 +116,26 @@ export function userHasPermission(
   permissions: string[] | null | undefined,
   permission: PermissionKey
 ): boolean {
-  if (role === 'ADMIN') return true
+  const normalizedRole = role.trim().toUpperCase()
+  if (normalizedRole === 'ADMIN') return true
   return sanitizePermissions(permissions).includes(permission)
+}
+
+export function userHasAnyPermission(
+  role: string,
+  permissions: string[] | null | undefined,
+  required: PermissionKey[]
+): boolean {
+  const normalizedRole = role.trim().toUpperCase()
+  if (normalizedRole === 'ADMIN') return true
+  return required.some((permission) => userHasPermission(role, permissions, permission))
 }
 
 export function effectivePermissions(
   role: string,
   permissions: string[] | null | undefined
 ): PermissionKey[] | ['*'] {
-  if (role === 'ADMIN') return ['*']
+  const normalizedRole = role.trim().toUpperCase()
+  if (normalizedRole === 'ADMIN') return ['*']
   return sanitizePermissions(permissions)
 }

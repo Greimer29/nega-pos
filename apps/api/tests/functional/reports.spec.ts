@@ -1,5 +1,6 @@
 import User from '#models/user'
 import Account from '#models/account'
+import AppSetting from '#models/app_setting'
 import CatalogProduct from '#models/catalog_product'
 import Customer from '#models/customer'
 import CustomerPayment from '#models/customer_payment'
@@ -38,12 +39,20 @@ async function resetDatabase() {
   await db.from('suppliers').delete()
   await db.from('accounts').delete()
   await db.from('users').delete()
-  await db.from('currencies').where('code', 'USD').update({
+  await AppSetting.updateOrCreate(
+    { key: 'base_currency_code' },
+    { value: 'XAU', updatedAt: DateTime.now() }
+  )
+  await db.from('currencies').where('code', 'XAU').update({
     rate_per_usd: '1.0000',
     is_active: true,
   })
+  await db.from('currencies').where('code', 'USD').update({
+    rate_per_usd: '100.0000',
+    is_active: true,
+  })
   await db.from('currencies').where('code', 'VES').update({
-    rate_per_usd: '1.0000',
+    rate_per_usd: '100.0000',
     is_active: true,
   })
 }

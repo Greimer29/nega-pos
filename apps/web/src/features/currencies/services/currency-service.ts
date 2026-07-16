@@ -1,4 +1,5 @@
 import type {
+  BaseCurrencyResponse,
   Currency,
   CurrencyInput,
   CurrencyListResponse,
@@ -12,6 +13,18 @@ export async function listCurrencies(activeOnly = false) {
     params: { active: activeOnly || undefined },
   })
   return data.data.currencies
+}
+
+export async function getBaseCurrencyCode() {
+  const { data } = await api.get<BaseCurrencyResponse>('/currencies/base')
+  return data.data.base_currency_code
+}
+
+export async function updateBaseCurrencyCode(code: string) {
+  const { data } = await api.put<BaseCurrencyResponse>('/currencies/base', {
+    base_currency_code: code,
+  })
+  return data.data.base_currency_code
 }
 
 export async function createCurrency(payload: CurrencyInput) {

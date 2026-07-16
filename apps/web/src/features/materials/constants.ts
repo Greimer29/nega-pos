@@ -3,34 +3,14 @@ import {
   type InventoryUnit,
 } from '@/lib/inventory-units'
 
-export const MATERIAL_CATEGORIAS = [
-  'FABRIC',
-  'THREAD',
-  'BUTTON',
-  'ELASTIC',
-  'LABEL',
-  'BAG',
-  'OTHER',
-] as const
-
 export const MATERIAL_UNITES = INVENTORY_UNITS
 
-export type MaterialCategoria = (typeof MATERIAL_CATEGORIAS)[number]
+export type MaterialCategoria = string
 export type MaterialUnidad = InventoryUnit
 
 export type MaterialStatusFilter = 'active' | 'inactive' | 'out_of_stock'
 
 export type MaterialSortBy = 'name' | 'most_purchased' | 'most_used' | 'most_flow'
-
-export const CATEGORIA_LABELS: Record<MaterialCategoria, string> = {
-  FABRIC: 'Telas',
-  THREAD: 'Hilos',
-  BUTTON: 'Botones',
-  ELASTIC: 'Elásticas',
-  LABEL: 'Etiquetas',
-  BAG: 'Envolturas',
-  OTHER: 'Otro',
-}
 
 export const UNIT_ABREV: Record<MaterialUnidad, string> = {
   UND: 'UND',
@@ -40,17 +20,6 @@ export const UNIT_ABREV: Record<MaterialUnidad, string> = {
   SET: 'SET',
   MTS: 'MTS',
   KG: 'KG',
-}
-
-/** Unidad sugerida al crear o cambiar categoría (el usuario puede cambiarla). */
-export const DEFAULT_UNIT_BY_CATEGORY: Record<MaterialCategoria, MaterialUnidad> = {
-  FABRIC: 'MTS',
-  THREAD: 'ROL',
-  BUTTON: 'UND',
-  ELASTIC: 'MTS',
-  LABEL: 'UND',
-  BAG: 'UND',
-  OTHER: 'UND',
 }
 
 export function materialStockDisponible(material: {

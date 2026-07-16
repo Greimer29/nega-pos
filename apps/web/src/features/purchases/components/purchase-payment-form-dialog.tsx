@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { AccountSelect } from '@/features/accounts/components/account-select'
+import { useBaseCurrencyQuery } from '@/features/currencies/hooks/use-currencies'
 import { useCreateSupplierPaymentMutation } from '@/features/suppliers/hooks/use-suppliers'
 import { getApiErrorMessage } from '@/lib/api-error'
 
@@ -42,6 +43,7 @@ export function PurchasePaymentFormDialog({
   const [error, setError] = useState<string | null>(null)
 
   const paymentMutation = useCreateSupplierPaymentMutation()
+  const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -54,7 +56,9 @@ export function PurchasePaymentFormDialog({
     }
 
     if (maxAmountUsd !== undefined && amountNum > maxAmountUsd + 0.0001) {
-      setError(`El monto no puede superar el saldo pendiente (${maxAmountUsd.toFixed(2)} USD).`)
+      setError(
+        `El monto no puede superar el saldo pendiente (${maxAmountUsd.toFixed(4)} ${baseCurrencyCode}).`
+      )
       return
     }
 
@@ -92,13 +96,18 @@ export function PurchasePaymentFormDialog({
 
         <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
           <div className="space-y-2">
-            <Label htmlFor="payment-amount">Monto (USD) *</Label>
+            <Label htmlFor="payment-amount">Monto ({baseCurrencyCode}) *</Label>
             <MoneyInput
               id="payment-amount"
-              min="0.01"
+              min="0"
+              decimals={2}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder={maxAmountUsd !== undefined ? `Máx. ${maxAmountUsd.toFixed(2)}` : undefined}
+              placeholder={
+                maxAmountUsd !== undefined
+                  ? `Máx. ${maxAmountUsd.toFixed(2)}`
+                  : undefined
+              }
             />
           </div>
 

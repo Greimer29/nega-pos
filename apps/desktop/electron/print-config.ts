@@ -40,6 +40,9 @@ export type PrintConfig = {
     subtitle: string
     footer: string
   }
+  ticket: {
+    station_label: string
+  }
   formats: PrintFormatRecord[]
   documents: {
     invoice: PrintDocumentSettings
@@ -72,6 +75,9 @@ export const DEFAULT_PRINT_CONFIG: PrintConfig = {
     name: '',
     subtitle: '',
     footer: 'Gracias por su compra',
+  },
+  ticket: {
+    station_label: '',
   },
   formats: createBuiltinFormats(),
   documents: {
@@ -121,6 +127,10 @@ export function normalizePrintConfig(input: LegacyPrintConfig | null | undefined
     base.business.footer = String(input.business.footer ?? base.business.footer).trim()
   }
 
+  if (input.ticket) {
+    base.ticket.station_label = String(input.ticket.station_label ?? '').trim()
+  }
+
   base.formats = normalizeFormats(input.formats)
 
   for (const kind of ['invoice', 'deliveryNote', 'comanda'] as const) {
@@ -148,7 +158,12 @@ export function normalizePrintConfig(input: LegacyPrintConfig | null | undefined
     for (const rule of comandaRouting.rules ?? []) {
       const category = String(rule.category ?? '').trim()
       const deviceName = String(rule.deviceName ?? '').trim()
-      if (!category || !deviceName || seen.has(category)) {
+      if (
+        !category ||
+        !deviceName ||
+        seen.has(category) ||
+        category.toLocaleLowerCase('es-VE') === 'materiales'
+      ) {
         continue
       }
       seen.add(category)

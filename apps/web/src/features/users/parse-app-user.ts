@@ -9,6 +9,13 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>
 }
 
+function parseRole(value: unknown): AppUserRole {
+  const normalized = String(value ?? 'OPERATOR')
+    .trim()
+    .toUpperCase()
+  return normalized === 'ADMIN' ? 'ADMIN' : 'OPERATOR'
+}
+
 function parsePermissions(role: AppUserRole, value: unknown): AppUser['permissions'] {
   if (role === 'ADMIN') {
     return ['*']
@@ -30,7 +37,7 @@ export function parseAppUser(raw: unknown): AppUser {
   }
 
   const attrs = asRecord(record.$attributes) ?? asRecord(record.attributes) ?? record
-  const role = String(attrs.role ?? record.role ?? 'OPERATOR') as AppUserRole
+  const role = parseRole(attrs.role ?? record.role)
   const rawId = attrs.id ?? record.id
   const parsedId = rawId === undefined || rawId === null ? 0 : Number(rawId)
 

@@ -10,15 +10,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  CATEGORIA_LABELS,
-  DEFAULT_UNIT_BY_CATEGORY,
-  MATERIAL_CATEGORIAS,
   MATERIAL_UNITES,
   UNIT_ABREV,
   materialImageUrl,
   materialStockDisponible,
 } from '@/features/materials/constants'
 import { StockBadge } from '@/features/materials/components/stock-badge'
+import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import {
   useCreateMaterialMutation,
   useDeleteMaterialImageMutation,
@@ -35,7 +33,7 @@ const materialSchema = z.object({
   code: z.string().trim().min(1, 'El código es obligatorio').max(30),
   name: z.string().trim().min(1, 'El producto es obligatorio').max(150),
   description: z.string().trim().optional(),
-  category: z.enum(MATERIAL_CATEGORIAS),
+  category: z.string().trim().min(1, 'Seleccioná una categoría'),
   unit: z.enum(MATERIAL_UNITES),
   stock_minimo: z.coerce.number().min(0).optional(),
   location: z.string().trim().max(100).optional(),
@@ -56,13 +54,13 @@ export type MaterialFormProps = {
   purchaseFlow?: boolean
 }
 
-function emptyValues(): MaterialFormInput {
+function emptyValues(defaultCategory = ''): MaterialFormInput {
   return {
     code: '',
     name: '',
     description: '',
-    category: 'FABRIC',
-    unit: DEFAULT_UNIT_BY_CATEGORY.FABRIC,
+    category: defaultCategory,
+    unit: 'UND',
     stock_minimo: 1,
     location: '',
     supplier_habitual_id: '',
@@ -123,6 +121,7 @@ export function MaterialForm({
   const uploadImageMutation = useUploadMaterialImageMutation()
   const deleteImageMutation = useDeleteMaterialImageMutation()
   const { data: suppliersData } = useSuppliersQuery({ page: 1, perPage: 100, active: true })
+  const { data: categories = [] } = useActiveCategoriesQuery()
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null)
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null)
   const [imageError, setImageError] = useState<string | null>(null)
@@ -151,34 +150,26 @@ export function MaterialForm({
     handleSubmit,
     reset,
     setError,
-    setValue,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<MaterialFormInput, unknown, MaterialFormValues>({
     resolver: zodResolver(materialSchema),
     defaultValues: emptyValues(),
   })
 
-  const watchedCategory = watch('category')
-
-  useEffect(() => {
-    if (isEditing) {
-      return
-    }
-    setValue('unit', DEFAULT_UNIT_BY_CATEGORY[watchedCategory])
-  }, [isEditing, watchedCategory, setValue])
-
   useEffect(() => {
     if (isEditing && material) {
       reset(toFormValues(material))
       setImageError(null)
       clearPendingImage()
-    } else if (!isEditing) {
-      reset(emptyValues())
+      return
+    }
+
+    if (!isEditing) {
+      reset(emptyValues(categories[0]?.name ?? ''))
       setImageError(null)
       clearPendingImage()
     }
-  }, [isEditing, material, reset])
+  }, [isEditing, material, categories, reset])
 
   async function handleSelectImage(file: File) {
     setImageError(null)
@@ -338,12 +329,19 @@ export function MaterialForm({
             className="border-input bg-background flex h-9 w-full rounded-md border px-3 text-sm"
             {...register('category')}
           >
-            {MATERIAL_CATEGORIAS.map((cat) => (
-              <option key={cat} value={cat}>
-                {CATEGORIA_LABELS[cat]}
-              </option>
-            ))}
+            {categories.length === 0 ? (
+              <option value="">Sin categorías activas</option>
+            ) : (
+              categories.map((item) => (
+                <option key={item.id} value={item.name}>
+                  {item.name}
+                </option>
+              ))
+            )}
           </select>
+          {errors.category ? (
+            <p className="text-destructive text-xs">{errors.category.message}</p>
+          ) : null}
         </div>
         <div className="space-y-2">
           <Label htmlFor="unit">Unidad *</Label>

@@ -65,7 +65,7 @@ async function seedMaterial(overrides: Partial<Material> = {}) {
   return Material.create({
     code: '5810',
     name: 'Atlética negra',
-    category: 'FABRIC',
+    category: 'Uniforme',
     unit: 'ROL',
     minimumStock: '1',
     active: true,

@@ -1,5 +1,5 @@
 export const MONETARY_REGISTRATION_USD_MESSAGE =
-  'Monto en VES o Bs debe ser modificado a $'
+  'El monto debe registrarse en la moneda base del sistema'
 
 export const MONETARY_REGISTRATION_USD_HINT =
-  'Los registros monetarios se guardan en dólares (USD).'
+  'Los registros monetarios (gastos, cargos) se guardan en la moneda base del sistema.'

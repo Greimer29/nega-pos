@@ -60,10 +60,10 @@ export function CategoriesConfigCard() {
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
             <FolderTree className="size-4" />
-            Categorías de productos
+            Categorías
           </CardTitle>
           <CardDescription>
-            Creá, editá o eliminá categorías para organizar el catálogo de productos.
+            Creá, editá o eliminá categorías para organizar productos del catálogo y materiales.
           </CardDescription>
         </div>
         <Button size="sm" onClick={openCreate}>

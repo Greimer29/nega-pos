@@ -54,7 +54,6 @@ export function SettingsGeneralPanel() {
             <Input
               id="trade-name"
               value={profile.trade_name}
-              disabled={!canEdit}
               placeholder="Ej. Comercial El Uniforme"
               onChange={(event) =>
                 setProfile((current) => ({ ...current, trade_name: event.target.value }))
@@ -66,7 +65,6 @@ export function SettingsGeneralPanel() {
             <Input
               id="tagline"
               value={profile.tagline}
-              disabled={!canEdit}
               className="bg-white"
               onChange={(event) =>
                 setProfile((current) => ({ ...current, tagline: event.target.value }))
@@ -91,7 +89,6 @@ export function SettingsGeneralPanel() {
             <label className="flex items-center gap-2 text-sm">
               <Checkbox
                 checked={profile.use_custom_palette}
-                disabled={!canEdit}
                 onChange={(event) =>
                   setProfile((current) => ({
                     ...current,
@@ -114,7 +111,6 @@ export function SettingsGeneralPanel() {
                       type="color"
                       className="size-10 cursor-pointer rounded border p-1"
                       value={profile.palette[key]}
-                      disabled={!canEdit || !profile.use_custom_palette}
                       onChange={(event) =>
                         setProfile((current) => ({
                           ...current,
@@ -124,7 +120,6 @@ export function SettingsGeneralPanel() {
                     />
                     <Input
                       value={profile.palette[key]}
-                      disabled={!canEdit || !profile.use_custom_palette}
                       onChange={(event) =>
                         setProfile((current) => ({
                           ...current,
@@ -166,7 +161,6 @@ export function SettingsGeneralPanel() {
               <Input
                 id="legal-name"
                 value={profile.legal_name}
-                disabled={!canEdit}
                 onChange={(event) =>
                   setProfile((current) => ({ ...current, legal_name: event.target.value }))
                 }
@@ -177,7 +171,6 @@ export function SettingsGeneralPanel() {
               <Input
                 id="rif"
                 value={profile.rif}
-                disabled={!canEdit}
                 placeholder="J-12345678-9"
                 onChange={(event) =>
                   setProfile((current) => ({ ...current, rif: event.target.value }))
@@ -189,7 +182,6 @@ export function SettingsGeneralPanel() {
               <Input
                 id="phone"
                 value={profile.phone}
-                disabled={!canEdit}
                 onChange={(event) =>
                   setProfile((current) => ({ ...current, phone: event.target.value }))
                 }
@@ -200,7 +192,6 @@ export function SettingsGeneralPanel() {
               <Input
                 id="address"
                 value={profile.address}
-                disabled={!canEdit}
                 onChange={(event) =>
                   setProfile((current) => ({ ...current, address: event.target.value }))
                 }
@@ -211,7 +202,6 @@ export function SettingsGeneralPanel() {
               <Input
                 id="ticket-footer"
                 value={profile.ticket_footer}
-                disabled={!canEdit}
                 onChange={(event) =>
                   setProfile((current) => ({ ...current, ticket_footer: event.target.value }))
                 }
@@ -283,7 +273,7 @@ export function SettingsGeneralPanel() {
         </Button>
       ) : (
         <p className="text-muted-foreground text-sm">
-          Solo lectura — no tenés permiso para editar (`settings.edit`).
+          Solo lectura — no tenés permiso para editar la configuración.
         </p>
       )}
     </div>

@@ -56,7 +56,7 @@ test.group('Material availability with committed stock', (group) => {
     const material = await Material.create({
       code: 'TEL-COM',
       name: 'Tela comprometida',
-      category: 'FABRIC',
+      category: 'Uniforme',
       unit: 'ROL',
       minimumStock: '1',
       active: true,

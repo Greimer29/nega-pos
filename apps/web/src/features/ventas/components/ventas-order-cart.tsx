@@ -2,7 +2,7 @@ import { PublicImage } from '@/components/public-image'
 import type { ProductSaleUnit } from '@/features/ventas/constants'
 import type { BillingMethod } from '@/features/ventas/constants'
 import type { ReactNode } from 'react'
-import { LayoutGrid, Package, Trash2, X } from 'lucide-react'
+import { LayoutGrid, MessageSquareText, Package, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DecimalInput } from '@/components/decimal-input'
 import { DisplayMoney, DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
@@ -22,6 +22,11 @@ export type VentasCartLine = {
   imageUrl?: string | null
   imageTone?: 'orange' | 'violet' | 'amber' | 'sky'
   metaLabel?: string
+  hasFormula?: boolean
+  hasCustomFormula?: boolean
+  kitchenNote?: string | null
+  onAdjustFormula?: () => void
+  onEditKitchenNote?: () => void
 }
 
 type VentasOrderCartProps = {
@@ -153,36 +158,75 @@ export function VentasOrderCart({
                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                     {line.metaLabel ? <span>{line.metaLabel}</span> : null}
                     {onUpdateQuantity ? (
-                      <div className="flex items-center gap-1">
-                        <span>Cantidad:</span>
-                        {(() => {
-                          const unit = line.saleUnit ?? 'UND'
-                          const decimals = inventoryQuantityDecimals(unit)
-                          const isIntegerUnit = decimals === 0
-                          return (
-                            <DecimalInput
-                              min={isIntegerUnit ? 1 : 0.01}
-                              step={isIntegerUnit ? 1 : 0.01}
-                              decimals={decimals}
-                              className={cn(
-                                'h-7 px-2 text-xs',
-                                isIntegerUnit ? 'w-12' : 'w-16'
-                              )}
-                              value={line.quantity}
-                              onChange={(e) =>
-                                onUpdateQuantity(
-                                  line.key,
-                                  parseDecimalInput(e.target.value, decimals) ?? 0
-                                )
-                              }
-                            />
-                          )
-                        })()}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <span>Cantidad:</span>
+                          {(() => {
+                            const unit = line.saleUnit ?? 'UND'
+                            const decimals = inventoryQuantityDecimals(unit)
+                            const isIntegerUnit = decimals === 0
+                            return (
+                              <DecimalInput
+                                min={isIntegerUnit ? 1 : 0.01}
+                                step={isIntegerUnit ? 1 : 0.01}
+                                decimals={decimals}
+                                className={cn(
+                                  'h-7 px-2 text-xs',
+                                  isIntegerUnit ? 'w-12' : 'w-16'
+                                )}
+                                value={line.quantity}
+                                onChange={(e) =>
+                                  onUpdateQuantity(
+                                    line.key,
+                                    parseDecimalInput(e.target.value, decimals) ?? 0
+                                  )
+                                }
+                              />
+                            )
+                          })()}
+                        </div>
+                        {line.hasFormula && line.onAdjustFormula ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              'size-7',
+                              line.hasCustomFormula && 'text-violet-600 hover:text-violet-700'
+                            )}
+                            title="Ajustar materiales de esta venta"
+                            onClick={line.onAdjustFormula}
+                            aria-label="Ajustar materiales de esta venta"
+                          >
+                            <SlidersHorizontal className="size-3.5" />
+                          </Button>
+                        ) : null}
+                        {line.onEditKitchenNote ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              'size-7',
+                              line.kitchenNote?.trim() && 'text-amber-700 hover:text-amber-800'
+                            )}
+                            title="Indicación para cocina"
+                            onClick={line.onEditKitchenNote}
+                            aria-label="Indicación para cocina"
+                          >
+                            <MessageSquareText className="size-3.5" />
+                          </Button>
+                        ) : null}
                       </div>
                     ) : (
                       <span>Cantidad: {line.quantity}</span>
                     )}
                   </div>
+                  {line.kitchenNote?.trim() ? (
+                    <p className="line-clamp-2 text-xs text-amber-800/90 whitespace-pre-line">
+                      {line.kitchenNote.trim()}
+                    </p>
+                  ) : null}
                   <p className="pt-1 text-right tabular-nums">
                     <CartLineSubtotal line={line} />
                   </p>

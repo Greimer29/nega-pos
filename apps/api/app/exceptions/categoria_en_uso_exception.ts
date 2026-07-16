@@ -5,6 +5,6 @@ export default class CategoriaEnUsoException extends Exception {
   static code = 'E_CATEGORIA_EN_USO'
 
   constructor(count: number) {
-    super(`No se puede eliminar: ${count} producto(s) usan esta categoría`)
+    super(`No se puede eliminar: ${count} producto(s) o material(es) usan esta categoría`)
   }
 }

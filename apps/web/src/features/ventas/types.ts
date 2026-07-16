@@ -106,6 +106,23 @@ export type CatalogFormulaResponse = {
   }
 }
 
+export type SaleLineFormulaMaterialInput = {
+  material_id: number
+  quantity_per_unit: number
+}
+
+export type SaleLineFormulaMaterial = {
+  material_id: number
+  quantity_per_unit: string
+  material?: {
+    id: number
+    code: string
+    name: string
+    unit?: string | null
+    last_purchase_price_usd?: string | null
+  }
+}
+
 export type SaleLine = {
   id: number
   catalog_product_id: number | null
@@ -116,6 +133,10 @@ export type SaleLine = {
   unit_price_usd: string
   subtotal_usd: string
   cost_usd?: string | null
+  kitchen_note?: string | null
+  formula_materials?: SaleLineFormulaMaterial[]
+  has_custom_formula?: boolean
+  effective_formula_materials?: SaleLineFormulaMaterial[]
   catalog_product?: {
     id: number
     name: string
@@ -161,7 +182,15 @@ export type Sale = {
   sold_at: string | null
   confirmed_at: string | null
   returned_at: string | null
-  customer?: { id: number; name: string; type: string; active: boolean; credit_days?: number | null } | null
+  customer?: {
+    id: number
+    name: string
+    type: string
+    active: boolean
+    credit_days?: number | null
+    document?: string | null
+  } | null
+  sold_by?: { id: number; name: string } | null
   lines?: SaleLine[]
   created_at: string
   updated_at: string
@@ -175,11 +204,14 @@ export type CreateSaleInput = {
   billing_mode?: SaleBillingMode
   usd_rate?: number
   confirm?: boolean
+  sold_by_user_id?: number
   lines: {
     catalog_product_id?: number
     material_id?: number
     quantity: number
     unit_price_usd: number
+    kitchen_note?: string | null
+    formula_materials?: SaleLineFormulaMaterialInput[]
   }[]
 }
 

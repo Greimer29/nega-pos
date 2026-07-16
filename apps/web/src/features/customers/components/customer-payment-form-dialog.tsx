@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { AccountSelect } from '@/features/accounts/components/account-select'
+import { useBaseCurrencyQuery } from '@/features/currencies/hooks/use-currencies'
 import { useCreateCustomerPaymentMutation } from '@/features/customers/hooks/use-customers'
 import { getApiErrorMessage } from '@/lib/api-error'
 
@@ -44,6 +45,7 @@ export function CustomerPaymentFormDialog({
   const [error, setError] = useState<string | null>(null)
 
   const paymentMutation = useCreateCustomerPaymentMutation()
+  const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -56,7 +58,9 @@ export function CustomerPaymentFormDialog({
     }
 
     if (maxAmountUsd !== undefined && amountNum > maxAmountUsd + 0.0001) {
-      setError(`El monto no puede superar el saldo pendiente (${maxAmountUsd.toFixed(2)} USD).`)
+      setError(
+        `El monto no puede superar el saldo pendiente (${maxAmountUsd.toFixed(4)} ${baseCurrencyCode}).`
+      )
       return
     }
 
@@ -95,7 +99,7 @@ export function CustomerPaymentFormDialog({
 
         <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
           <div className="space-y-2">
-            <Label htmlFor="customer-payment-amount">Monto (USD) *</Label>
+            <Label htmlFor="customer-payment-amount">Monto ({baseCurrencyCode}) *</Label>
             <MoneyInput
               id="customer-payment-amount"
               min="0.01"

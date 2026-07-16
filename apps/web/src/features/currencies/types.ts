@@ -22,7 +22,14 @@ export type CurrencyUpdateInput = {
 
 export type CurrencyListResponse = {
   data: {
+    base_currency_code?: string
     currencies: Currency[]
+  }
+}
+
+export type BaseCurrencyResponse = {
+  data: {
+    base_currency_code: string
   }
 }
 

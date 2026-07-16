@@ -17,13 +17,24 @@ import Material from '#models/material'
 import ProductInventoryMovement from '#models/product_inventory_movement'
 import Sale from '#models/sale'
 import SaleLine from '#models/sale_line'
+import SaleLineMaterial from '#models/sale_line_material'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
 import CurrencyService from '#services/currency_service'
 import MaterialService from '#services/material_service'
 import PaymentMethodService from '#services/payment_method_service'
 import ProductInventoryService from '#services/product_inventory_service'
 import SaleCodigoService from '#services/sale_code_service'
+import {
+  assertFormulaMaterialsAllowed,
+  normalizeFormulaMaterialsInput,
+  resolveEffectiveFormulaMaterials,
+  resolveSaleLineUnitPriceUsd,
+  sumEffectiveMaterialCostUsd,
+  type ResolvedSaleLineFormulaMaterial,
+  type SaleLineFormulaMaterialInput,
+} from '#services/sale_line_formula'
 import { formatCantidadMovimiento } from '#services/order_stock'
+import { formatSaleNativeTotal } from '#utils/currency_amount'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
@@ -39,6 +50,8 @@ export type SaleLineInput = {
   material_id?: number
   quantity: number
   unit_price_usd: number
+  kitchen_note?: string | null
+  formula_materials?: SaleLineFormulaMaterialInput[]
 }
 
 export type CreateSaleInput = {
@@ -50,6 +63,7 @@ export type CreateSaleInput = {
   usd_rate?: number | null
   lines: SaleLineInput[]
   confirm?: boolean
+  sold_by_user_id?: number | null
 }
 
 export type UpdateSaleInput = {
@@ -66,6 +80,7 @@ export type ConfirmSaleInput = {
   payment_type?: SalePaymentType
   payment_method_code?: string | null
   billing_mode?: SaleBillingMode
+  sold_by_user_id?: number | null
 }
 
 export type SaleReturnLineInput = {
@@ -92,6 +107,16 @@ type ResolvedLine = {
   unitPriceUsd: string
   subtotalUsd: string
   costUsd: string | null
+  kitchenNote: string | null
+  formulaMaterials: ResolvedSaleLineFormulaMaterial[] | null
+}
+
+function normalizeKitchenNote(value: string | null | undefined): string | null {
+  if (value === undefined || value === null) {
+    return null
+  }
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
 }
 
 const ORDER_STATUS_TRANSITIONS: Record<SaleOrderStatus, SaleOrderStatus[]> = {
@@ -162,6 +187,7 @@ export default class SaleService {
       .where('id', id)
       .preload('customer')
       .preload('paymentMethod')
+      .preload('soldBy')
       .preload('saleLines', (q) => {
         q.preload('catalogProduct', (cp) =>
           cp.preload('formula', (f) =>
@@ -169,6 +195,7 @@ export default class SaleService {
           )
         )
           .preload('material')
+          .preload('saleLineMaterials', (slm) => slm.preload('material'))
           .orderBy('id', 'asc')
       })
       .first()
@@ -188,6 +215,7 @@ export default class SaleService {
         payment_type: input.payment_type,
         payment_method_code: input.payment_method_code,
         billing_mode: input.billing_mode,
+        sold_by_user_id: input.sold_by_user_id,
       })
     }
 
@@ -204,7 +232,9 @@ export default class SaleService {
     return db.transaction(async (trx) => {
       const { totalUsd, resolvedLines } = await this.resolveLines(input.lines, trx)
       const totalBs =
-        input.usd_rate && input.usd_rate > 0 ? (totalUsd * input.usd_rate).toFixed(2) : null
+        input.usd_rate && input.usd_rate > 0
+          ? formatSaleNativeTotal(totalUsd, 'VES', input.usd_rate)
+          : null
 
       const sale = await Sale.create(
         {
@@ -240,6 +270,7 @@ export default class SaleService {
           )
         )
           .preload('material')
+          .preload('saleLineMaterials', (slm) => slm.preload('material'))
           .orderBy('id', 'asc')
       })
 
@@ -288,8 +319,11 @@ export default class SaleService {
       if (input.usd_rate !== undefined) {
         sale.usdRate = input.usd_rate ? input.usd_rate.toFixed(4) : null
         const total = Number(sale.totalUsd)
+        const currencyCode = sale.paymentMethod?.currencyCode ?? 'VES'
         sale.totalBs =
-          input.usd_rate && input.usd_rate > 0 ? (total * input.usd_rate).toFixed(2) : null
+          input.usd_rate && input.usd_rate > 0
+            ? formatSaleNativeTotal(total, currencyCode, input.usd_rate)
+            : null
       }
 
       sale.useTransaction(trx)
@@ -298,7 +332,7 @@ export default class SaleService {
       await sale.load('paymentMethod')
       await sale.load('customer')
       await sale.load('saleLines', (q) => {
-        q.preload('catalogProduct').preload('material').orderBy('id', 'asc')
+        q.preload('catalogProduct').preload('material').preload('saleLineMaterials', (slm) => slm.preload('material')).orderBy('id', 'asc')
       })
 
       return sale
@@ -326,6 +360,7 @@ export default class SaleService {
           q.preload('catalogProduct', (cp) =>
             cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
           )
+            .preload('saleLineMaterials', (slm) => slm.preload('material'))
         })
         .forUpdate()
         .first()
@@ -355,6 +390,9 @@ export default class SaleService {
       sale.soldAt = DateTime.now()
       sale.confirmedAt = DateTime.now()
       sale.orderStatus = billingMode === 'FAST' ? 'DELIVERED' : 'PENDING'
+      if (input.sold_by_user_id) {
+        sale.soldByUserId = input.sold_by_user_id
+      }
 
       await this.congelarCostoLineas(sale, trx)
       await this.descontarStock(sale, trx)
@@ -365,6 +403,7 @@ export default class SaleService {
 
       await sale.load('paymentMethod')
       await sale.load('customer')
+      await sale.load('soldBy')
       await sale.load('saleLines', (q) => {
         q.preload('catalogProduct', (cp) =>
           cp.preload('formula', (f) =>
@@ -372,6 +411,7 @@ export default class SaleService {
           )
         )
           .preload('material')
+          .preload('saleLineMaterials', (slm) => slm.preload('material'))
           .orderBy('id', 'asc')
       })
 
@@ -421,9 +461,11 @@ export default class SaleService {
       const sale = await Sale.query({ client: trx })
         .where('id', id)
         .preload('saleLines', (query) =>
-          query.preload('catalogProduct', (cp) =>
-            cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
-          )
+          query
+            .preload('catalogProduct', (cp) =>
+              cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
+            )
+            .preload('saleLineMaterials', (slm) => slm.preload('material'))
         )
         .forUpdate()
         .first()
@@ -534,18 +576,27 @@ export default class SaleService {
       }
 
       const quantity = line.quantity
-      const unitPrice = line.unit_price_usd
-      const subtotal = quantity * unitPrice
-      totalUsd += subtotal
+      let unitPrice = line.unit_price_usd
 
       if (hasCatalog) {
         const product = await CatalogProduct.query({ client: trx })
           .where('id', line.catalog_product_id!)
+          .preload('formula', (f) => f.preload('materials'))
           .first()
 
         if (!product) {
           throw new ProductoCatalogoNoEncontradoException()
         }
+
+        await assertFormulaMaterialsAllowed(product, line.formula_materials)
+        const formulaMaterials = normalizeFormulaMaterialsInput(line.formula_materials)
+
+        if (line.formula_materials !== undefined) {
+          unitPrice = await resolveSaleLineUnitPriceUsd(product, line.formula_materials, trx)
+        }
+
+        const subtotal = quantity * unitPrice
+        totalUsd += subtotal
 
         resolvedLines.push({
           catalogProductId: line.catalog_product_id!,
@@ -555,12 +606,23 @@ export default class SaleService {
           unitPriceUsd: unitPrice.toFixed(4),
           subtotalUsd: subtotal.toFixed(4),
           costUsd: product.costUsd,
+          kitchenNote: normalizeKitchenNote(line.kitchen_note),
+          formulaMaterials,
         })
-      } else {
+      } else if (hasMaterial) {
+        if (line.formula_materials !== undefined) {
+          throw new LineaVentaInvalidaException(
+            'Los materiales personalizados solo aplican a productos de catálogo con fórmula'
+          )
+        }
+
         const material = await Material.find(line.material_id!)
         if (!material) {
           throw new MaterialNoEncontradoException()
         }
+
+        const subtotal = quantity * unitPrice
+        totalUsd += subtotal
 
         resolvedLines.push({
           catalogProductId: null,
@@ -570,6 +632,8 @@ export default class SaleService {
           unitPriceUsd: unitPrice.toFixed(4),
           subtotalUsd: subtotal.toFixed(4),
           costUsd: material.lastPurchasePriceUsd,
+          kitchenNote: normalizeKitchenNote(line.kitchen_note),
+          formulaMaterials: null,
         })
       }
     }
@@ -583,7 +647,7 @@ export default class SaleService {
     trx: TransactionClientContract
   ) {
     for (const line of lines) {
-      await SaleLine.create(
+      const saleLine = await SaleLine.create(
         {
           saleId,
           catalogProductId: line.catalogProductId,
@@ -593,29 +657,53 @@ export default class SaleService {
           unitPriceUsd: line.unitPriceUsd,
           subtotalUsd: line.subtotalUsd,
           costUsd: line.costUsd,
+          kitchenNote: line.kitchenNote,
           returnedQuantity: '0.000',
         },
         { client: trx }
       )
+
+      if (line.formulaMaterials && line.formulaMaterials.length > 0) {
+        for (const item of line.formulaMaterials) {
+          await SaleLineMaterial.create(
+            {
+              saleLineId: saleLine.id,
+              materialId: item.materialId,
+              quantityPerUnit: item.quantityPerUnit,
+            },
+            { client: trx }
+          )
+        }
+      }
     }
   }
 
   private async congelarCostoLineas(sale: Sale, trx: TransactionClientContract) {
     for (const line of sale.saleLines) {
-      if (line.costUsd) {
-        continue
-      }
-
       if (line.catalogProductId) {
         const product =
           line.catalogProduct ??
           (await CatalogProduct.query({ client: trx })
             .where('id', Number(line.catalogProductId))
+            .preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
             .first())
 
-        if (product) {
+        if (product?.formulaId) {
+          const effectiveMaterials = resolveEffectiveFormulaMaterials(line, product)
+          if (effectiveMaterials.length > 0) {
+            line.costUsd = sumEffectiveMaterialCostUsd(effectiveMaterials)
+          } else if (product.costUsd) {
+            line.costUsd = product.costUsd
+          }
+        } else if (product?.costUsd && !line.costUsd) {
           line.costUsd = product.costUsd
         }
+      }
+
+      if (line.costUsd) {
+        line.useTransaction(trx)
+        await line.save()
+        continue
       }
 
       if (line.materialId && !line.costUsd) {
@@ -666,10 +754,10 @@ export default class SaleService {
         }
 
         if (product.formulaId) {
-          const formulaMaterials = product.formula?.materials ?? []
+          const formulaMaterials = resolveEffectiveFormulaMaterials(line, product)
           for (const formulaItem of formulaMaterials) {
-            const materialId = Number(formulaItem.materialId)
-            const consumo = quantity * Number(formulaItem.quantity)
+            const materialId = formulaItem.materialId
+            const consumo = quantity * formulaItem.quantityPerUnit
             if (consumo <= 0) {
               continue
             }
@@ -764,10 +852,11 @@ export default class SaleService {
     const method = await this.paymentMethodService.assertActivo(code)
     const currency = await this.currencyService.assertActiva(method.currencyCode)
     const rate = Number(currency.ratePerUsd)
+    const baseCode = await this.currencyService.getBaseCurrencyCode()
 
     sale.paymentMethodCode = method.code
     sale.usdRate = currency.ratePerUsd
-    sale.totalBs = rate > 0 ? (totalUsd * rate).toFixed(2) : null
+    sale.totalBs = formatSaleNativeTotal(totalUsd, method.currencyCode, rate, baseCode)
   }
 
   private async aplicarPagoAlConfirmar(
@@ -875,7 +964,7 @@ export default class SaleService {
       (line.catalogProductId
         ? await CatalogProduct.query({ client: trx })
             .where('id', Number(line.catalogProductId))
-            .preload('formula', (f) => f.preload('materials'))
+            .preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
             .first()
         : null)
 
@@ -883,15 +972,19 @@ export default class SaleService {
       return
     }
 
-    for (const formulaItem of product.formula?.materials ?? []) {
-      const consumo = quantity * Number(formulaItem.quantity)
+    if (!line.saleLineMaterials) {
+      await line.load('saleLineMaterials', (q) => q.preload('material'))
+    }
+
+    for (const formulaItem of resolveEffectiveFormulaMaterials(line, product)) {
+      const consumo = quantity * formulaItem.quantityPerUnit
       if (consumo <= 0) {
         continue
       }
 
       await InventoryMovement.create(
         {
-          materialId: Number(formulaItem.materialId),
+          materialId: formulaItem.materialId,
           type: 'REVERSAL_ADJUSTMENT',
           quantity: consumo.toFixed(3),
           note,

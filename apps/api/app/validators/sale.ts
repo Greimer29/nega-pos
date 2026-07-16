@@ -5,6 +5,15 @@ const saleLineSchema = vine.object({
   material_id: vine.number().min(1).optional(),
   quantity: vine.number().min(0.001),
   unit_price_usd: vine.number().min(0),
+  kitchen_note: vine.string().trim().maxLength(1000).nullable().optional(),
+  formula_materials: vine
+    .array(
+      vine.object({
+        material_id: vine.number().min(1),
+        quantity_per_unit: vine.number().min(0),
+      })
+    )
+    .optional(),
 })
 
 export const createSaleValidator = vine.create({

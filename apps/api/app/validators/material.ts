@@ -2,7 +2,6 @@ import { INVENTORY_UNITS } from '#constants/inventory_units'
 import { INVENTORY_ADJUSTMENT_MODES } from '#constants/inventory_adjustment'
 import vine from '@vinejs/vine'
 
-const categories = ['FABRIC', 'THREAD', 'BUTTON', 'ELASTIC', 'LABEL', 'BAG', 'OTHER'] as const
 const statusFilters = ['active', 'inactive', 'out_of_stock'] as const
 const sortByOptions = ['name', 'most_purchased', 'most_used', 'most_flow'] as const
 
@@ -10,7 +9,7 @@ const materialFields = {
   code: vine.string().trim().minLength(1).maxLength(30),
   name: vine.string().trim().minLength(1).maxLength(150),
   description: vine.string().trim().optional(),
-  category: vine.enum(categories),
+  category: vine.string().trim().minLength(1).maxLength(100),
   unit: vine.enum(INVENTORY_UNITS),
   minimum_stock: vine.number().min(0).optional(),
   location: vine.string().trim().maxLength(100).optional(),
@@ -31,7 +30,7 @@ export const listMaterialsValidator = vine.create({
   page: vine.number().min(1).optional(),
   per_page: vine.number().min(1).max(100).optional(),
   search: vine.string().trim().maxLength(150).optional(),
-  category: vine.enum(categories).optional(),
+  category: vine.string().trim().minLength(1).maxLength(100).optional(),
   active: vine.boolean().optional(),
   low_stock: vine.boolean().optional(),
   status: vine.enum(statusFilters).optional(),

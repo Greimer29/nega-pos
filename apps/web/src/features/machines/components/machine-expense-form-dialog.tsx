@@ -23,6 +23,7 @@ import {
 import { useCreateMachineExpenseMutation } from '@/features/machines/hooks/use-machines'
 import { AccountSelect } from '@/features/accounts/components/account-select'
 import { CurrencySelect } from '@/features/currencies/components/currency-select'
+import { useBaseCurrencyQuery } from '@/features/currencies/hooks/use-currencies'
 import { useSuppliersQuery } from '@/features/suppliers/hooks/use-suppliers'
 import { getApiErrorMessage } from '@/lib/api-error'
 
@@ -51,8 +52,9 @@ export function MachineExpenseFormDialog({
 }: MachineExpenseFormDialogProps) {
   const createExpenseMutation = useCreateMachineExpenseMutation()
   const { data: suppliersData } = useSuppliersQuery({ page: 1, perPage: 100, active: true })
+  const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
   const [accountId, setAccountId] = useState<number | null>(null)
-  const [currencyCode, setCurrencyCode] = useState('USD')
+  const [currencyCode, setCurrencyCode] = useState(baseCurrencyCode)
 
   const {
     register,
@@ -84,14 +86,14 @@ export function MachineExpenseFormDialog({
           supplier_id: values.supplier_id === '' ? undefined : Number(values.supplier_id),
           notes: values.notes?.trim() || undefined,
           account_id: accountId,
-          currency_code: 'USD',
+          currency_code: baseCurrencyCode,
         },
       })
 
       onOpenChange(false)
       reset()
       setAccountId(null)
-      setCurrencyCode('USD')
+      setCurrencyCode(baseCurrencyCode)
     } catch (error) {
       setError('root', { message: getApiErrorMessage(error) })
     }
@@ -141,7 +143,7 @@ export function MachineExpenseFormDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <CurrencySelect registrationOnly value={currencyCode} onChange={setCurrencyCode} />
             <div className="space-y-2">
-              <Label htmlFor="amount">Monto (USD $) *</Label>
+              <Label htmlFor="amount">Monto ({baseCurrencyCode}) *</Label>
               <MoneyInput id="amount" min="0" {...register('amount')} />
               {errors.amount ? <p className="text-destructive text-sm">{errors.amount.message}</p> : null}
             </div>

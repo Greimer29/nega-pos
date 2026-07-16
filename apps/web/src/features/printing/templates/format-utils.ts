@@ -1,6 +1,7 @@
 import type { Sale, SaleLine } from '@/features/ventas/types'
 import type { PrintBusinessConfig } from '@/features/printing/types'
 import { paymentMethodLabel } from '@/features/ventas/constants'
+import { formatNativeAmountNumber, nativeCurrencyDecimals } from '@/features/currencies/utils/currency-decimals'
 import { inventoryQuantityDecimals, inventoryUnitAbrev } from '@/lib/inventory-units'
 
 export function escapeHtml(value: string): string {
@@ -17,6 +18,32 @@ export function formatMoneyUsd(value: string | number): string {
   return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+function formatMoneyNative(value: number, currencyCode: string): string {
+  return formatNativeAmountNumber(value, currencyCode)
+}
+
+export function resolveSaleCurrencyCode(sale: Sale): string {
+  return sale.payment_method?.currency_code?.trim() || 'USD'
+}
+
+export function toNativeAmount(sale: Sale, baseAmount: number): number {
+  const totalBase = Number(sale.total_usd)
+  if (Math.abs(baseAmount - totalBase) < 0.00005 && sale.total_bs != null && sale.total_bs !== '') {
+    const snapshotted = Number(sale.total_bs)
+    if (Number.isFinite(snapshotted)) {
+      return snapshotted
+    }
+  }
+
+  const rate = Number(sale.usd_rate)
+  if (!Number.isFinite(rate) || rate <= 0) return baseAmount
+  return baseAmount * rate
+}
+
+export function formatNativeMoney(sale: Sale, usdAmount: string | number): string {
+  return formatMoneyNative(toNativeAmount(sale, Number(usdAmount)), resolveSaleCurrencyCode(sale))
+}
+
 export function formatSaleDate(value: string | null | undefined): string {
   if (!value) return '—'
   return new Date(value).toLocaleString('es-VE', {
@@ -25,8 +52,76 @@ export function formatSaleDate(value: string | null | undefined): string {
   })
 }
 
+export function formatSaleDateOnly(value: string | null | undefined): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+export function formatSaleTimeOnly(value: string | null | undefined): string {
+  if (!value) return '—'
+  return new Date(value).toLocaleTimeString('es-VE', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  })
+}
+
 export function saleClientLabel(sale: Sale): string {
   return sale.customer?.name ?? sale.guest_name ?? 'Cliente ocasional'
+}
+
+export function saleClientDocument(sale: Sale): string {
+  const document = sale.customer?.document?.trim()
+  return document || '—'
+}
+
+export function saleSellerLabel(sale: Sale): string {
+  return sale.sold_by?.name?.trim() || '—'
+}
+
+export function saleUserCode(sale: Sale): string {
+  const id = sale.sold_by?.id
+  if (!id) return '—'
+  return `C${String(id).padStart(2, '0')}`
+}
+
+export function saleSellerCode(sale: Sale): string {
+  const id = sale.sold_by?.id
+  if (!id) return '—'
+  return `T${String(id).padStart(2, '0')}`
+}
+
+export function renderBusinessHeaderRepeat(business: PrintBusinessConfig): string {
+  const legal = business.legalName?.trim() || business.name.trim()
+  const rif = business.rif?.trim()
+  if (!legal && !rif) {
+    return ''
+  }
+
+  return escapeHtml([legal, rif].filter(Boolean).join(' '))
+}
+
+function formatReceiptLineQuantity(qty: number, measure?: string): string {
+  const decimals = measure ? inventoryQuantityDecimals(measure) : 0
+  if (decimals === 0) {
+    return String(Math.round(qty))
+  }
+
+  return qty.toLocaleString('es-VE', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+}
+
+function formatReceiptAmountLabel(sale: Sale, usdAmount: string | number): string {
+  const currency = resolveSaleCurrencyCode(sale)
+  const amount = formatNativeMoney(sale, usdAmount)
+  return `${currency} ${amount}`
 }
 
 export function paymentTypeLabel(paymentType: Sale['payment_type']): string {
@@ -40,12 +135,12 @@ export function renderBusinessHeader(business: PrintBusinessConfig): string {
   }
 
   const subtitle = business.subtitle.trim()
-    ? `<div class="muted center">${escapeHtml(business.subtitle)}</div>`
+    ? `<div class="ph-hdr-subtitle">${escapeHtml(business.subtitle)}</div>`
     : ''
 
   return `
-    <div class="center">
-      ${name ? `<div class="title">${escapeHtml(name)}</div>` : ''}
+    <div class="ph-hdr">
+      ${name ? `<div class="ph-hdr-title">${escapeHtml(name)}</div>` : ''}
       ${subtitle}
     </div>
   `
@@ -56,29 +151,29 @@ export function renderBusinessLogo(business: PrintBusinessConfig): string {
     return ''
   }
 
-  return `<div class="center"><img src="${escapeHtml(business.logoUrl)}" alt="Logo" style="max-width:100%;max-height:64px;object-fit:contain;" /></div>`
+  return `<img src="${escapeHtml(business.logoUrl)}" alt="Logo" />`
 }
 
 export function renderBusinessFiscal(business: PrintBusinessConfig): string {
   const lines: string[] = []
 
   if (business.legalName?.trim()) {
-    lines.push(`<div class="center">${escapeHtml(business.legalName)}</div>`)
+    lines.push(`<div class="ph-fiscal-line">${escapeHtml(business.legalName)}</div>`)
   }
   if (business.rif?.trim()) {
-    lines.push(`<div class="center muted">RIF: ${escapeHtml(business.rif)}</div>`)
+    lines.push(`<div class="ph-fiscal-line ph-fiscal-muted">RIF: ${escapeHtml(business.rif)}</div>`)
   }
   if (business.address?.trim()) {
-    lines.push(`<div class="center muted">${escapeHtml(business.address)}</div>`)
+    lines.push(`<div class="ph-fiscal-line ph-fiscal-muted">${escapeHtml(business.address)}</div>`)
   }
   if (business.phone?.trim()) {
-    lines.push(`<div class="center muted">Tel: ${escapeHtml(business.phone)}</div>`)
+    lines.push(`<div class="ph-fiscal-line ph-fiscal-muted">Tel: ${escapeHtml(business.phone)}</div>`)
   }
   if (business.email?.trim()) {
-    lines.push(`<div class="center muted">${escapeHtml(business.email)}</div>`)
+    lines.push(`<div class="ph-fiscal-line ph-fiscal-muted">${escapeHtml(business.email)}</div>`)
   }
   if (business.website?.trim()) {
-    lines.push(`<div class="center muted">${escapeHtml(business.website)}</div>`)
+    lines.push(`<div class="ph-fiscal-line ph-fiscal-muted">${escapeHtml(business.website)}</div>`)
   }
 
   if (lines.length === 0) {
@@ -96,82 +191,111 @@ function formatLineQuantity(qty: number, measure?: string): string {
   })
 }
 
-function formatMoneyBs(value: string | number | null | undefined): string {
+function formatPaymentNativeAmount(value: string | number | null | undefined, currencyCode: string): string {
   const amount = Number(value)
-  if (!Number.isFinite(amount)) return '0,00'
-  return amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  if (!Number.isFinite(amount)) {
+    return formatNativeAmountNumber(0, currencyCode)
+  }
+
+  return formatNativeAmountNumber(amount, currencyCode)
 }
 
 export function renderSalePaymentDetails(sale: Sale): string {
   if (sale.payment_type === 'CREDIT') {
-    const lines = ['<div>Forma de pago: Crédito</div>']
+    const lines = ['<div class="ph-payment-line">Forma de pago: Crédito</div>']
     if (sale.credit_due_date) {
-      lines.push(`<div>Vence: ${escapeHtml(formatSaleDate(sale.credit_due_date))}</div>`)
+      lines.push(`<div class="ph-payment-line">Vence: ${escapeHtml(formatSaleDate(sale.credit_due_date))}</div>`)
     }
     return lines.join('')
   }
 
   const methodName = paymentMethodLabel(sale.payment_method)
-  const lines = [`<div>Método de pago: ${escapeHtml(methodName)}</div>`]
+  const lines = [`<div class="ph-payment-line">Método de pago: ${escapeHtml(methodName)}</div>`]
 
   const rate = sale.usd_rate ? Number(sale.usd_rate) : null
-  const totalBs = sale.total_bs ? Number(sale.total_bs) : null
-  const currencyCode = sale.payment_method?.currency_code?.trim()
+  const totalNative = sale.total_bs ? Number(sale.total_bs) : null
+  const currencyCode = sale.payment_method?.currency_code?.trim() ?? 'USD'
+  const rateDecimals = nativeCurrencyDecimals(currencyCode)
 
-  if (rate && rate > 0) {
-    lines.push(`<div>Tasa: ${escapeHtml(formatMoneyBs(rate))} Bs/USD</div>`)
+  if (rate && rate > 0 && currencyCode !== 'USD') {
+    lines.push(
+      `<div class="ph-payment-line">Tasa: ${escapeHtml(
+        rate.toLocaleString('es-VE', {
+          minimumFractionDigits: Math.min(2, rateDecimals),
+          maximumFractionDigits: rateDecimals,
+        })
+      )} ${escapeHtml(currencyCode)}</div>`
+    )
   }
 
-  if (totalBs !== null && Number.isFinite(totalBs) && totalBs > 0) {
-    const currencyLabel = currencyCode && currencyCode !== 'USD' ? currencyCode : 'Bs'
-    lines.push(`<div>Total ${escapeHtml(currencyLabel)}: ${escapeHtml(formatMoneyBs(totalBs))}</div>`)
+  if (totalNative !== null && Number.isFinite(totalNative)) {
+    lines.push(
+      `<div class="ph-payment-line">Total ${escapeHtml(currencyCode)}: ${escapeHtml(
+        formatPaymentNativeAmount(totalNative, currencyCode)
+      )}</div>`
+    )
   }
 
   return lines.join('')
 }
 
 export function renderSaleTotalsSummary(sale: Sale): string {
-  const total = formatMoneyUsd(sale.total_usd)
-  const paid = formatMoneyUsd(sale.amount_paid_usd)
+  const totalLabel = formatReceiptAmountLabel(sale, sale.total_usd)
+  const paidLabel = formatReceiptAmountLabel(sale, sale.amount_paid_usd)
+  const balanceLabel = formatReceiptAmountLabel(sale, sale.balance_usd)
+  const methodName = paymentMethodLabel(sale.payment_method)
+
+  const paymentRowValue = sale.payment_type === 'CREDIT' ? balanceLabel : paidLabel
 
   return `
-    <table class="invoice-totals-table" width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td class="bold">Total:</td>
-        <td class="right bold">${escapeHtml(total)} USD</td>
-      </tr>
-      <tr>
-        <td>Pagado:</td>
-        <td class="right">${escapeHtml(paid)} USD</td>
-      </tr>
-    </table>
+    <div class="inv-totals">
+      <div class="inv-total-line">
+        <span class="inv-total-label">TOTAL</span>
+        <span class="inv-total-value">${escapeHtml(totalLabel)}</span>
+      </div>
+      <div class="inv-total-line">
+        <span class="inv-total-label">PAGO</span>
+        <span class="inv-total-value">${escapeHtml(paymentRowValue)}</span>
+      </div>
+      ${
+        sale.payment_type === 'CREDIT'
+          ? `<div class="inv-total-line">
+          <span class="inv-total-label">CRÉDITO</span>
+          <span class="inv-total-value">${escapeHtml(balanceLabel)}</span>
+        </div>`
+          : `<div class="inv-total-line">
+          <span class="inv-total-label">PAGO ${escapeHtml(methodName.toUpperCase())}</span>
+          <span class="inv-total-value">${escapeHtml(paidLabel)}</span>
+        </div>`
+      }
+    </div>
   `
 }
 
 export function renderSaleLines(sale: Sale, linesOverride?: Sale['lines']): string {
   const lines = linesOverride ?? sale.lines ?? []
   if (lines.length === 0) {
-    return '<div class="muted center">Sin líneas</div>'
+    return '<div class="inv-empty">Sin líneas</div>'
   }
 
   return lines
     .map((line) => {
       const name = line.catalog_product?.name ?? line.material?.name ?? line.description
       const qty = Number(line.quantity)
-      const unitPrice = Number(line.unit_price_usd)
-      const subtotal = Number(line.subtotal_usd)
+      const unitPriceNative = formatNativeMoney(sale, line.unit_price_usd)
+      const subtotalLabel = formatReceiptAmountLabel(sale, line.subtotal_usd)
       const measure = resolveLineMeasure(line)
-      const qtyLabel = formatLineQuantity(qty, measure)
+      const qtyLabel = formatReceiptLineQuantity(qty, measure)
+
+      const detailLeft = `${qtyLabel} x ${unitPriceNative} ${measure}`
 
       return `
-        <div class="invoice-line">
-          <div class="invoice-line-name bold">${escapeHtml(name)}</div>
-          <table class="invoice-line-table" width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td>${escapeHtml(formatMoneyUsd(unitPrice))} x ${escapeHtml(qtyLabel)}</td>
-              <td class="right">${escapeHtml(formatMoneyUsd(subtotal))} USD</td>
-            </tr>
-          </table>
+        <div class="inv-line">
+          <div class="inv-line-name">${escapeHtml(name)}</div>
+          <div class="inv-line-detail">
+            <span class="inv-line-detail-left">${escapeHtml(detailLeft)}</span>
+            <span class="inv-line-detail-right">${escapeHtml(subtotalLabel)}</span>
+          </div>
         </div>
       `
     })
@@ -197,12 +321,43 @@ function formatComandaQuantity(quantity: number, measure: string): string {
   return `${formatted} ${measure}`
 }
 
+type ComandaFormulaRow = {
+  material?: {
+    id: number
+    code: string
+    name: string
+    unit?: string | null
+  }
+  quantityPerUnit: number
+}
+
+function resolveComandaFormulaRows(line: SaleLine): ComandaFormulaRow[] {
+  if (line.effective_formula_materials?.length) {
+    return line.effective_formula_materials.map((item) => ({
+      material: item.material,
+      quantityPerUnit: Number(item.quantity_per_unit),
+    }))
+  }
+
+  if (line.formula_materials?.length) {
+    return line.formula_materials.map((item) => ({
+      material: item.material,
+      quantityPerUnit: Number(item.quantity_per_unit),
+    }))
+  }
+
+  return (line.catalog_product?.formula?.materials ?? []).map((item) => ({
+    material: item.material,
+    quantityPerUnit: Number(item.quantity),
+  }))
+}
+
 export function renderComandaLines(
   lines: SaleLine[],
   options?: { printFormula?: boolean }
 ): string {
   if (lines.length === 0) {
-    return '<div class="muted center">Sin productos</div>'
+    return '<div class="cmd-empty">Sin productos</div>'
   }
 
   return lines
@@ -213,35 +368,42 @@ export function renderComandaLines(
       const formattedQty = formatComandaQuantity(qty, measure)
 
       const hasPrintFormula = options?.printFormula === true
-      const formulaMaterials = hasPrintFormula ? line.catalog_product?.formula?.materials ?? [] : []
+      const formulaMaterials = hasPrintFormula ? resolveComandaFormulaRows(line) : []
 
       const formulaBlock =
         hasPrintFormula && formulaMaterials.length > 0
           ? formulaMaterials
               .slice()
-              .sort((a, b) => (a.material?.name ?? '').localeCompare(b.material?.name ?? '', 'es'))
+              .sort((a, b) =>
+                (a.material?.name ?? '').localeCompare(b.material?.name ?? '', 'es')
+              )
               .map((item) => {
                 const materialName = item.material?.name ?? ''
                 const materialUnit = item.material?.unit ?? measure
-                // La fórmula define consumo por 1 unidad del producto.
-                // Para la comanda mostramos el consumo real según `quantity` de la línea.
-                const materialQty = Number(item.quantity) * qty
+                const materialQty = item.quantityPerUnit * qty
                 const materialQtyText = formatComandaQuantity(materialQty, materialUnit)
 
-                return `<div class="comanda-formula-line muted">- ${escapeHtml(materialName)} ${escapeHtml(materialQtyText)}</div>`
+                return `<div class="cmd-formula-line">- ${escapeHtml(materialName)} ${escapeHtml(materialQtyText)}</div>`
               })
               .join('')
           : hasPrintFormula
-            ? `<div class="comanda-formula-line muted">- Producto sin formula</div>`
+            ? `<div class="cmd-formula-line">- Producto sin formula</div>`
             : ''
 
       const name = line.catalog_product?.name ?? line.material?.name ?? line.description
+      const kitchenNoteBlock = (line.kitchen_note ?? '')
+        .split(/\r?\n/)
+        .map((row) => row.trim())
+        .filter((row) => row.length > 0)
+        .map((row) => `<div class="cmd-note">${escapeHtml(row)}</div>`)
+        .join('')
 
       return `
-        <div class="comanda-item">
-          ${productCode ? `<div class="comanda-code bold">${escapeHtml(productCode)}</div>` : ''}
-          <div class="comanda-name">${escapeHtml(name)}</div>
-          <div class="comanda-qty bold">${escapeHtml(formattedQty)}</div>
+        <div class="cmd-item">
+          ${productCode ? `<div class="cmd-code">${escapeHtml(productCode)}</div>` : ''}
+          <div class="cmd-name">${escapeHtml(name)}</div>
+          <div class="cmd-qty">${escapeHtml(formattedQty)}</div>
+          ${kitchenNoteBlock}
           ${formulaBlock}
         </div>
       `
@@ -252,7 +414,7 @@ export function renderComandaLines(
 export function renderDeliveryNoteLines(sale: Sale, linesOverride?: Sale['lines']): string {
   const lines = linesOverride ?? sale.lines ?? []
   if (lines.length === 0) {
-    return '<div class="muted center">Sin líneas</div>'
+    return '<div class="dn-empty">Sin líneas</div>'
   }
 
   return lines
@@ -266,11 +428,11 @@ export function renderDeliveryNoteLines(sale: Sale, linesOverride?: Sale['lines'
       const formattedQty = formatComandaQuantity(qty, measure)
 
       return `
-        <div class="delivery-line">
-          ${code ? `<div class="center">${escapeHtml(code)}</div>` : ''}
-          <div class="bold">${escapeHtml(name)}</div>
-          ${description ? `<div>${escapeHtml(description)}</div>` : ''}
-          <div class="center">${escapeHtml(formattedQty)}</div>
+        <div class="dn-line">
+          ${code ? `<div class="dn-code">${escapeHtml(code)}</div>` : ''}
+          <div class="dn-name dn-bold">${escapeHtml(name)}</div>
+          ${description ? `<div class="dn-desc">${escapeHtml(description)}</div>` : ''}
+          <div class="dn-qty">${escapeHtml(formattedQty)}</div>
         </div>
       `
     })

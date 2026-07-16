@@ -125,9 +125,10 @@ export function SettingsFormatosPanel() {
     config.formats[0] ??
     null
 
-  const previewConfig: Pick<PrintConfig, 'business' | 'formats' | 'documents'> = previewFormat
+  const previewConfig: Pick<PrintConfig, 'business' | 'formats' | 'documents' | 'ticket'> = previewFormat
     ? {
         business: config.business,
+        ticket: config.ticket,
         formats: config.formats,
         documents: {
           invoice: {
@@ -183,7 +184,6 @@ export function SettingsFormatosPanel() {
                   id={`active-format-${kind}`}
                   className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
                   value={config.documents[kind].formatId}
-                  disabled={!canEdit}
                   onChange={(event) => setActiveFormat(kind, event.target.value)}
                 >
                   {formatsForDocumentKind(config.formats, kind).map((format) => (
@@ -327,7 +327,7 @@ export function SettingsFormatosPanel() {
         </Button>
       ) : (
         <p className="text-muted-foreground text-sm">
-          Solo lectura — no tenés permiso para editar (`settings.edit`).
+          Solo lectura — no tenés permiso para editar la configuración.
         </p>
       )}
 

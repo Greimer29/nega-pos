@@ -15,6 +15,7 @@ import { useSalesQuery } from '@/features/ventas/hooks/use-sales'
 import { getCatalogProduct } from '@/features/ventas/services/catalog-service'
 import { getSale } from '@/features/ventas/services/sales-service'
 import type { CatalogProduct, Sale } from '@/features/ventas/types'
+import { createCartLineId, getBaseFormulaMaterialIds, hasAddedMaterialsBeyondBase, mapApiFormulaMaterialsToLine, type SaleLineFormulaMaterial } from '@/features/ventas/utils/sale-line-formula'
 import { getApiErrorMessage } from '@/lib/api-error'
 
 export type LoadedDraft = {
@@ -26,7 +27,14 @@ export type LoadedDraft = {
   guestName: string | null
   paymentType: 'CASH' | 'CREDIT'
   billingMethod: 'FAST' | 'ORDER'
-  cart: { product: CatalogProduct; quantity: number }[]
+  cart: {
+    id: string
+    product: CatalogProduct
+    quantity: number
+    formulaMaterials?: SaleLineFormulaMaterial[] | null
+    unitPriceUsd?: number
+    kitchenNote?: string | null
+  }[]
 }
 
 type VentasLoadDraftDialogProps = {
@@ -73,9 +81,22 @@ export function VentasLoadDraftDialog({ open, onOpenChange, onLoaded }: VentasLo
       for (const line of lines) {
         if (!line.catalog_product_id) continue
         const product = await getCatalogProduct(line.catalog_product_id)
+        const formulaMaterials = line.has_custom_formula
+          ? mapApiFormulaMaterialsToLine(line.formula_materials ?? [])
+          : null
+        const baseIds = getBaseFormulaMaterialIds(product)
+        const customMaterials = formulaMaterials ?? []
         cart.push({
+          id: createCartLineId(),
           product,
           quantity: Number(line.quantity),
+          formulaMaterials,
+          kitchenNote: line.kitchen_note?.trim() ? line.kitchen_note.trim() : null,
+          unitPriceUsd:
+            line.has_custom_formula &&
+            hasAddedMaterialsBeyondBase(baseIds, customMaterials)
+              ? Number(line.unit_price_usd)
+              : undefined,
         })
       }
 

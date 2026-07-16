@@ -2,6 +2,7 @@ import Purchase from '#models/purchase'
 import Material from '#models/material'
 import Supplier from '#models/supplier'
 import User from '#models/user'
+import Currency from '#models/currency'
 import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
@@ -58,7 +59,7 @@ async function seedMaterial() {
   return Material.create({
     code: '5810',
     name: 'Atlética negra',
-    category: 'FABRIC',
+    category: 'Uniforme',
     unit: 'ROL',
     minimumStock: '1',
     active: true,
@@ -319,5 +320,97 @@ test.group('Purchases API (borrador)', (group) => {
 
     const deleted = await Purchase.find(purchase.id)
     assert.isNull(deleted)
+  })
+
+  test('PUT /api/v1/purchases/:id persists entry_currency_code without changing global currency rate', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const supplier = await seedSupplier()
+
+    await db.from('currencies').where('code', 'VES').update({ rate_per_usd: '40.0000' })
+    const globalRateBefore = (await db.from('currencies').where('code', 'VES').first())!.rate_per_usd
+
+    const createResponse = await client
+      .post('/api/v1/purchases')
+      .loginAs(user)
+      .json({
+        supplier_id: Number(supplier.id),
+        date: '2026-05-20',
+        entry_currency_code: 'VES',
+        usd_rate: 37.5,
+      })
+
+    createResponse.assertStatus(200)
+    createResponse.assertBodyContains({
+      data: {
+        purchase: {
+          entryCurrencyCode: 'VES',
+          usdRate: '37.5000',
+        },
+      },
+    })
+
+    const purchaseId = (createResponse.body() as { data: { purchase: { id: number } } }).data.purchase
+      .id
+
+    const updateResponse = await client
+      .put(`/api/v1/purchases/${purchaseId}`)
+      .loginAs(user)
+      .json({
+        supplier_id: Number(supplier.id),
+        date: '2026-05-20',
+        entry_currency_code: 'VES',
+        usd_rate: 38.25,
+      })
+
+    updateResponse.assertStatus(200)
+    updateResponse.assertBodyContains({
+      data: {
+        purchase: {
+          entryCurrencyCode: 'VES',
+          usdRate: '38.2500',
+        },
+      },
+    })
+
+    const globalRateAfter = (await db.from('currencies').where('code', 'VES').first())!.rate_per_usd
+    assert.equal(globalRateAfter, globalRateBefore)
+  })
+
+  test('PUT /api/v1/purchases/:id rejects inactive entry currency', async ({ client }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const supplier = await seedSupplier()
+
+    await Currency.updateOrCreate(
+      { code: 'EUR' },
+      {
+        name: 'Euro',
+        ratePerUsd: '0.9200',
+        isActive: false,
+      }
+    )
+
+    const purchase = await Purchase.create({
+      supplierId: supplier.id,
+      date: DateTime.fromISO('2026-05-20'),
+      entryCurrencyCode: 'USD',
+      totalBs: '0.00',
+      totalUsd: '0.0000',
+      status: 'DRAFT',
+    })
+
+    const response = await client
+      .put(`/api/v1/purchases/${purchase.id}`)
+      .loginAs(user)
+      .json({
+        supplier_id: Number(supplier.id),
+        date: '2026-05-20',
+        entry_currency_code: 'EUR',
+        usd_rate: 0.92,
+      })
+
+    response.assertStatus(404)
   })
 })

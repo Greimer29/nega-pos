@@ -109,6 +109,8 @@ router
         router.delete('accounts/:id', [AccountsController, 'destroy'])
 
         router.get('currencies', [CurrenciesController, 'index'])
+        router.get('currencies/base', [CurrenciesController, 'getBaseCurrency'])
+        router.put('currencies/base', [CurrenciesController, 'updateBaseCurrency'])
         router.post('currencies', [CurrenciesController, 'store'])
         router.put('currencies/:code', [CurrenciesController, 'update'])
         router.delete('currencies/:code', [CurrenciesController, 'destroy'])

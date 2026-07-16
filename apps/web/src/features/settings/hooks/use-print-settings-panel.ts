@@ -6,6 +6,7 @@ import {
   printTestDocument,
   savePrintConfig,
 } from '@/features/printing/services/printing-service'
+import { sanitizeComandaRoutingRules } from '@/features/printing/utils/comanda-routing'
 import {
   DEFAULT_PRINT_CONFIG,
   PRINT_DOCUMENT_LABELS,
@@ -13,14 +14,13 @@ import {
   type PrintDocumentKind,
   type PrinterInfo,
 } from '@/features/printing/types'
-import { useAuth } from '@/features/auth/hooks/use-auth'
+import { useCanEditSettings } from '@/features/settings/hooks/use-can-edit-settings'
 import { businessProfileToPrintBusiness } from '@/features/branding/business-theme-provider'
 import { fetchBusinessProfile } from '@/features/settings/services/general-settings-service'
 import { getApiErrorMessage } from '@/lib/api-error'
 
 export function usePrintSettingsPanel() {
-  const { can } = useAuth()
-  const canEdit = can('settings.edit')
+  const canEdit = useCanEditSettings()
   const [electronAvailable, setElectronAvailable] = useState(false)
   const [refreshingPrinters, setRefreshingPrinters] = useState(false)
 
@@ -80,6 +80,13 @@ export function usePrintSettingsPanel() {
           setConfig({
             ...loadedConfig,
             business,
+            categoryRouting: {
+              ...loadedConfig.categoryRouting,
+              comanda: {
+                ...loadedConfig.categoryRouting.comanda,
+                rules: sanitizeComandaRoutingRules(loadedConfig.categoryRouting.comanda.rules),
+              },
+            },
           })
           setPrinters(loadedPrinters)
         }
@@ -137,14 +144,23 @@ export function usePrintSettingsPanel() {
   }
 
   async function handleSave() {
-    if (!canEdit) return
     setSaving(true)
     setMessage(null)
     setError(null)
     try {
       const profile = await fetchBusinessProfile()
       const business = businessProfileToPrintBusiness(profile)
-      const saved = await savePrintConfig({ ...config, business })
+      const saved = await savePrintConfig({
+        ...config,
+        business,
+        categoryRouting: {
+          ...config.categoryRouting,
+          comanda: {
+            ...config.categoryRouting.comanda,
+            rules: sanitizeComandaRoutingRules(config.categoryRouting.comanda.rules),
+          },
+        },
+      })
       setConfig(saved)
       setMessage('Configuración guardada.')
     } catch (saveError) {

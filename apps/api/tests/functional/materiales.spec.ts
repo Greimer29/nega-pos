@@ -6,6 +6,8 @@ import { formatCatalogProductCode } from '#utils/catalog_product_code'
 import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
+import { seedReferenceData } from '#tests/helpers/seed_reference_data'
+import { TEST_MATERIAL_CATEGORY } from '#tests/helpers/test_material_defaults'
 import { test } from '@japa/runner'
 
 const TEST_EMAIL = 'test-materials@negapos.local'
@@ -27,7 +29,7 @@ async function createMaterial(overrides: Partial<Material> = {}) {
   return Material.create({
     code: '5810',
     name: 'Atlética',
-    category: 'FABRIC',
+    category: TEST_MATERIAL_CATEGORY,
     unit: 'ROL',
     minimumStock: '1',
     active: true,
@@ -42,6 +44,7 @@ test.group('Materials API', (group) => {
 
   group.each.setup(async () => {
     await resetTestDatabase()
+    await seedReferenceData()
     await seedAdminUser()
   })
 
@@ -164,7 +167,7 @@ test.group('Materials API', (group) => {
     const response = await client.post('/api/v1/materials').loginAs(user).json({
       code: '5236',
       name: 'Duplicado',
-      category: 'THREAD',
+      category: TEST_MATERIAL_CATEGORY,
       unit: 'UND',
     })
 
@@ -195,7 +198,7 @@ test.group('Materials API', (group) => {
       .json({
         code: formatCatalogProductCode(Number(product.id)),
         name: 'Material conflicto',
-        category: 'THREAD',
+        category: TEST_MATERIAL_CATEGORY,
         unit: 'UND',
       })
 
@@ -229,7 +232,7 @@ test.group('Materials API', (group) => {
 
     const response = await client.post('/api/v1/catalog-products').loginAs(user).json({
       name: 'Producto conflicto',
-      category: 'Uniforme',
+      category: TEST_MATERIAL_CATEGORY,
       sale_price_usd: 10,
     })
 
@@ -251,7 +254,7 @@ test.group('Materials API', (group) => {
     await createMaterial({
       code: 'BBB-002',
       name: 'Hilo negro',
-      category: 'THREAD',
+      category: TEST_MATERIAL_CATEGORY,
       unit: 'UND',
     })
 
@@ -371,7 +374,7 @@ test.group('Materials API', (group) => {
     const response = await client.put(`/api/v1/materials/${material.id}`).loginAs(user).json({
       code: 'PRICE-1',
       name: material.name,
-      category: 'FABRIC',
+      category: TEST_MATERIAL_CATEGORY,
       unit: 'ROL',
       last_purchase_price_usd: 15,
     })
@@ -388,7 +391,7 @@ test.group('Materials API', (group) => {
     const response = await client.put(`/api/v1/materials/${material.id}`).loginAs(user).json({
       code: 'REF-1',
       name: material.name,
-      category: 'FABRIC',
+      category: TEST_MATERIAL_CATEGORY,
       unit: 'ROL',
       reference_sale_price_usd: 9.99,
       reference_cost_usd: 4.5,

@@ -525,7 +525,7 @@ export class PurchaseItemSchema extends BaseModel {
 }
 
 export class PurchaseSchema extends BaseModel {
-  static $columns = ['accountId', 'amountPaidUsd', 'balanceUsd', 'createdAt', 'creditDueDate', 'date', 'id', 'invoiceFile', 'invoiceNumber', 'isCredit', 'notes', 'receivedDate', 'status', 'supplierId', 'totalBs', 'totalUsd', 'updatedAt', 'usdRate', 'voidedAt'] as const
+  static $columns = ['accountId', 'amountPaidUsd', 'balanceUsd', 'createdAt', 'creditDueDate', 'date', 'entryCurrencyCode', 'id', 'invoiceFile', 'invoiceNumber', 'isCredit', 'notes', 'receivedDate', 'status', 'supplierId', 'totalBs', 'totalUsd', 'updatedAt', 'usdRate', 'voidedAt'] as const
   $columns = PurchaseSchema.$columns
   @column()
   declare accountId: bigint | number | null
@@ -539,6 +539,8 @@ export class PurchaseSchema extends BaseModel {
   declare creditDueDate: DateTime | null
   @column.date()
   declare date: DateTime
+  @column()
+  declare entryCurrencyCode: string | null
   @column({ isPrimary: true })
   declare id: bigint | number
   @column()
@@ -567,8 +569,25 @@ export class PurchaseSchema extends BaseModel {
   declare voidedAt: DateTime | null
 }
 
+export class SaleLineMaterialSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'materialId', 'quantityPerUnit', 'saleLineId', 'updatedAt'] as const
+  $columns = SaleLineMaterialSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: bigint | number
+  @column()
+  declare materialId: bigint | number
+  @column()
+  declare quantityPerUnit: string
+  @column()
+  declare saleLineId: bigint | number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
 export class SaleLineSchema extends BaseModel {
-  static $columns = ['catalogProductId', 'costUsd', 'createdAt', 'description', 'id', 'materialId', 'quantity', 'returnedQuantity', 'saleId', 'subtotalUsd', 'unitPriceUsd', 'updatedAt'] as const
+  static $columns = ['catalogProductId', 'costUsd', 'createdAt', 'description', 'id', 'kitchenNote', 'materialId', 'quantity', 'returnedQuantity', 'saleId', 'subtotalUsd', 'unitPriceUsd', 'updatedAt'] as const
   $columns = SaleLineSchema.$columns
   @column()
   declare catalogProductId: bigint | number | null
@@ -580,6 +599,8 @@ export class SaleLineSchema extends BaseModel {
   declare description: string
   @column({ isPrimary: true })
   declare id: bigint | number
+  @column()
+  declare kitchenNote: string | null
   @column()
   declare materialId: bigint | number | null
   @column()
@@ -597,7 +618,7 @@ export class SaleLineSchema extends BaseModel {
 }
 
 export class SaleSchema extends BaseModel {
-  static $columns = ['amountPaidUsd', 'balanceUsd', 'billingMode', 'code', 'confirmedAt', 'createdAt', 'creditDueDate', 'customerId', 'guestName', 'id', 'orderStatus', 'paymentMethodCode', 'paymentType', 'returnedAt', 'soldAt', 'status', 'totalBs', 'totalUsd', 'updatedAt', 'usdRate'] as const
+  static $columns = ['amountPaidUsd', 'balanceUsd', 'billingMode', 'code', 'confirmedAt', 'createdAt', 'creditDueDate', 'customerId', 'guestName', 'id', 'orderStatus', 'paymentMethodCode', 'paymentType', 'returnedAt', 'soldAt', 'soldByUserId', 'status', 'totalBs', 'totalUsd', 'updatedAt', 'usdRate'] as const
   $columns = SaleSchema.$columns
   @column()
   declare amountPaidUsd: string
@@ -629,6 +650,8 @@ export class SaleSchema extends BaseModel {
   declare returnedAt: DateTime | null
   @column.dateTime()
   declare soldAt: DateTime | null
+  @column()
+  declare soldByUserId: bigint | number | null
   @column()
   declare status: string
   @column()

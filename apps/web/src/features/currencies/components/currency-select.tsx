@@ -1,5 +1,8 @@
 import { useEffect } from 'react'
-import { useActiveCurrenciesQuery } from '@/features/currencies/hooks/use-currencies'
+import {
+  useActiveCurrenciesQuery,
+  useBaseCurrencyQuery,
+} from '@/features/currencies/hooks/use-currencies'
 import {
   MONETARY_REGISTRATION_USD_HINT,
   MONETARY_REGISTRATION_USD_MESSAGE,
@@ -14,7 +17,7 @@ type CurrencySelectProps = {
   onChange: (value: string) => void
   disabled?: boolean
   className?: string
-  /** Solo USD para altas/ediciones de montos. */
+  /** Solo moneda base para altas/ediciones de montos canónicos. */
   registrationOnly?: boolean
 }
 
@@ -28,15 +31,17 @@ export function CurrencySelect({
   registrationOnly = false,
 }: CurrencySelectProps) {
   const { data: currencies = [], isLoading } = useActiveCurrenciesQuery()
+  const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
 
   useEffect(() => {
-    if (registrationOnly && value !== 'USD') {
-      onChange('USD')
+    if (registrationOnly && value !== baseCurrencyCode) {
+      onChange(baseCurrencyCode)
     }
-  }, [registrationOnly, value, onChange])
+  }, [registrationOnly, value, onChange, baseCurrencyCode])
 
   if (registrationOnly) {
-    const legacyNonUsd = value !== 'USD'
+    const baseCurrency = currencies.find((c) => c.code === baseCurrencyCode)
+    const legacyNonBase = value !== baseCurrencyCode
 
     return (
       <div className={cn('space-y-2', className)}>
@@ -45,10 +50,11 @@ export function CurrencySelect({
           id={id}
           className="border-input bg-muted text-muted-foreground flex h-9 w-full items-center rounded-md border px-3 text-sm"
         >
-          USD — Dólar estadounidense ($)
+          {baseCurrencyCode}
+          {baseCurrency ? ` — ${baseCurrency.name}` : ''}
         </div>
         <p className="text-muted-foreground text-xs">{MONETARY_REGISTRATION_USD_HINT}</p>
-        {legacyNonUsd ? (
+        {legacyNonBase ? (
           <p className="text-destructive text-sm">{MONETARY_REGISTRATION_USD_MESSAGE}</p>
         ) : null}
       </div>

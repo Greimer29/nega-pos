@@ -8,7 +8,7 @@ import Machine from '#models/machine'
 import Supplier from '#models/supplier'
 import AccountService from '#services/account_service'
 import CurrencyService from '#services/currency_service'
-import { assertRegistroMonedaUsd } from '#utils/monetary_registration'
+import { assertRegistroMonedaBase } from '#utils/monetary_registration'
 import { sumMachineExpenseRowsUsd } from '#utils/machine_expense_totals'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
@@ -106,28 +106,30 @@ export default class MachineExpenseService {
   async crear(machineId: number, input: MachineExpenseInput): Promise<MachineExpense> {
     await this.assertMachineExiste(machineId)
     await this.assertSupplierExiste(input.supplier_id)
-    const currencyCode = (input.currency_code ?? 'USD').toUpperCase()
-    assertRegistroMonedaUsd(currencyCode)
+    const baseCode = await this.currencyService.getBaseCurrencyCode()
+    const currencyCode = (input.currency_code ?? baseCode).toUpperCase()
+    assertRegistroMonedaBase(currencyCode, baseCode)
     await this.currencyService.assertActiva(currencyCode)
     const accountId = await this.resolveAccountId(input.account_id)
 
     return MachineExpense.create({
       machineId,
       accountId: accountId ?? null,
-      ...this.prepareInput(input),
+      ...this.prepareInput(input, currencyCode),
     })
   }
 
   async actualizar(id: number, input: MachineExpenseInput): Promise<MachineExpense> {
     const expense = await this.obtener(id)
     await this.assertSupplierExiste(input.supplier_id)
-    const currencyCode = (input.currency_code ?? expense.currencyCode ?? 'USD').toUpperCase()
-    assertRegistroMonedaUsd(currencyCode)
+    const baseCode = await this.currencyService.getBaseCurrencyCode()
+    const currencyCode = (input.currency_code ?? expense.currencyCode ?? baseCode).toUpperCase()
+    assertRegistroMonedaBase(currencyCode, baseCode)
     await this.currencyService.assertActiva(currencyCode)
     const accountId = await this.resolveAccountId(input.account_id)
 
     expense.merge({
-      ...this.prepareInput(input),
+      ...this.prepareInput(input, currencyCode),
       ...(accountId !== undefined ? { accountId } : {}),
     })
     await expense.save()
@@ -188,14 +190,12 @@ export default class MachineExpenseService {
     return { bytes, contentType, filename }
   }
 
-  private prepareInput(input: MachineExpenseInput) {
-    const currencyCode = (input.currency_code ?? 'USD').toUpperCase()
-
+  private prepareInput(input: MachineExpenseInput, currencyCode: string) {
     return {
       date: DateTime.fromISO(input.date),
       category: input.category,
       description: input.description.trim(),
-      amount: input.amount.toFixed(2),
+      amount: input.amount.toFixed(4),
       currencyCode,
       supplierId: input.supplier_id ?? null,
       notes: input.notes?.trim() || null,

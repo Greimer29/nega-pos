@@ -8,21 +8,30 @@ describe('renderSaleDocument', () => {
   const sale = createSampleSale()
   const config = DEFAULT_PRINT_CONFIG
 
-  it('renders invoice HTML with sale code, lines and total', () => {
+  it('renders invoice HTML with receipt structure, lines and totals', () => {
     const rendered = renderSaleDocument('invoice', sale, config)
 
     expect(rendered.title).toContain('0000000001')
     expect(rendered.html).toContain('0000000001')
     expect(rendered.html).toContain('Camisa escolar')
     expect(rendered.html).toContain('Tela al corte')
-    expect(rendered.html).toContain('10.00 x 2')
-    expect(rendered.html).toContain('20.00 USD')
-    expect(rendered.html).toContain('Método de pago:')
-    expect(rendered.html).toContain('FACTURA')
+    expect(rendered.html).toContain('2 x 10,00 UND')
+    expect(rendered.html).toContain('USD 20,00')
+    expect(rendered.html).toContain('1,50 x 5,00 MTS')
+    expect(rendered.html).toContain('USD 5,00')
+    expect(rendered.html).toContain('RECIBO')
+    expect(rendered.html).toContain('TOTAL')
+    expect(rendered.html).toContain('MESERO:')
+    expect(rendered.html).toContain('USUA:')
+    expect(rendered.html).toContain('T01')
+    expect(rendered.html).toContain('C01')
+    expect(rendered.html).toContain('--------------------')
+    expect(rendered.html).toContain('J-12345678-9')
+    expect(rendered.html).toContain('<style>')
     expect(rendered.html).toContain('<!DOCTYPE html>')
   })
 
-  it('renders invoice payment conversion when rate and total_bs are present', () => {
+  it('renders invoice with native currency when rate and total_bs are present', () => {
     const rendered = renderSaleDocument(
       'invoice',
       {
@@ -34,21 +43,37 @@ describe('renderSaleDocument', () => {
       config
     )
 
-    expect(rendered.html).toContain('Método de pago: Efectivo Bs')
-    expect(rendered.html).toContain('Tasa:')
-    expect(rendered.html).toContain('Bs/USD')
-    expect(rendered.html).toContain('Total VES:')
+    expect(rendered.html).toContain('VES')
+    expect(rendered.html).toContain('PAGO EFECTIVO BS')
   })
 
-  it('renders invoice totals with total and paid amounts', () => {
+  it('renders invoice with fractional XAU totals', () => {
+    const rendered = renderSaleDocument(
+      'invoice',
+      {
+        ...sale,
+        total_usd: '50.0000',
+        amount_paid_usd: '50.0000',
+        balance_usd: '0.0000',
+        total_bs: '0.0200',
+        usd_rate: '0.0004',
+        payment_method: { code: 'gold_xau', name: 'Oro XAU', currency_code: 'XAU' },
+      },
+      config
+    )
+
+    expect(rendered.html).toContain('XAU 0,02')
+  })
+
+  it('renders invoice totals with subtotal and paid amounts', () => {
     const rendered = renderSaleDocument('invoice', sale, config)
 
-    expect(rendered.html).toContain('Total:')
-    expect(rendered.html).toContain('Pagado:')
-    expect(rendered.html).toContain('25.00 USD')
+    expect(rendered.html).toContain('TOTAL')
+    expect(rendered.html).toContain('PAGO')
+    expect(rendered.html).toContain('USD 25,00')
   })
 
-  it('renders credit invoice with zero paid', () => {
+  it('renders credit invoice with credit row', () => {
     const rendered = renderSaleDocument(
       'invoice',
       {
@@ -62,9 +87,17 @@ describe('renderSaleDocument', () => {
       config
     )
 
-    expect(rendered.html).toContain('Forma de pago: Crédito')
-    expect(rendered.html).toContain('Pagado:')
-    expect(rendered.html).toContain('0.00 USD')
+    expect(rendered.html).toContain('CRÉDITO')
+    expect(rendered.html).toContain('USD 25,00')
+  })
+
+  it('renders station label from print config', () => {
+    const rendered = renderSaleDocument('invoice', sale, {
+      ...config,
+      ticket: { station_label: 'CAJA1' },
+    })
+
+    expect(rendered.html).toContain('CAJA1')
   })
 
   it('renders delivery note HTML with client and order context', () => {
@@ -80,6 +113,7 @@ describe('renderSaleDocument', () => {
     expect(rendered.html).toContain('PENDING')
     expect(rendered.html).toContain('Recibido conforme')
     expect(rendered.html).not.toContain('USD')
+    expect(rendered.html).toContain('<style>')
   })
 
   it('renders partial delivery note with only selected lines', () => {
@@ -101,12 +135,44 @@ describe('renderSaleDocument', () => {
     expect(rendered.html).toContain('Camisa escolar')
     expect(rendered.html).toContain('2 UND')
     expect(rendered.html).toContain('1,50 MTS')
-    expect(rendered.html).not.toContain('FACTURA')
+    expect(rendered.html).not.toContain('RECIBO')
     expect(rendered.html).not.toContain('Cliente de ejemplo')
     expect(rendered.html).not.toContain('Producto sin formula')
     expect(rendered.html).toContain('NEGA POS')
     expect(rendered.html).toContain('Correlativo de comanda')
-    expect(rendered.html).not.toContain('Cantidad solicitada')
+    expect(rendered.html).toContain('<style>')
+  })
+
+  it('renders kitchen_note lines on comanda only', () => {
+    const note =
+      '1 sin cebolla, sin mayonesa, sin zanahoria\n2 sin mostaza\n1 sin cebolla'
+    const saleWithNote = {
+      ...sale,
+      lines: [
+        {
+          ...sale.lines![0],
+          quantity: '3',
+          kitchen_note: note,
+          catalog_product: {
+            ...(sale.lines![0].catalog_product ?? {}),
+            name: 'Combo de perros',
+          },
+        },
+      ],
+    }
+
+    const comanda = renderSaleDocument('comanda', saleWithNote, config)
+    expect(comanda.html).toContain('Combo de perros')
+    expect(comanda.html).toContain('3 UND')
+    expect(comanda.html).toContain('cmd-note')
+    expect(comanda.html).toContain('1 sin cebolla, sin mayonesa, sin zanahoria')
+    expect(comanda.html).toContain('2 sin mostaza')
+    expect(comanda.html).toContain('1 sin cebolla')
+
+    const invoice = renderSaleDocument('invoice', saleWithNote, config)
+    expect(invoice.html).toContain('Combo de perros')
+    expect(invoice.html).not.toContain('sin mayonesa')
+    expect(invoice.html).not.toContain('cmd-note')
   })
 
   it('renders comanda formula when option is enabled (sorted + fallback)', () => {
@@ -134,7 +200,6 @@ describe('renderSaleDocument', () => {
         },
         {
           ...sale.lines![1],
-          // sin fórmula: debe mostrar fallback
           catalog_product: { ...(sale.lines![1].catalog_product ?? {}) },
         },
       ],
@@ -144,23 +209,56 @@ describe('renderSaleDocument', () => {
       printFormula: true,
     })
 
-    // Código del producto (7 dígitos)
     expect(rendered.html).toContain('0000001')
 
-    // Materiales ordenados por nombre: "Pan..." antes que "Salch..."
     const panIndex = rendered.html.indexOf('Pan pequeño')
     const salchIndex = rendered.html.indexOf('Salchicha Brasilera')
     expect(panIndex).toBeGreaterThanOrEqual(0)
     expect(salchIndex).toBeGreaterThanOrEqual(0)
     expect(panIndex).toBeLessThan(salchIndex)
 
-    // Cantidad+unidad de materiales (sin moneda)
     expect(rendered.html).toContain('2 UND')
     expect(rendered.html).toContain('4 UND')
     expect(rendered.html).toContain('0,50 KG')
-
-    // Fallback si el producto no tiene fórmula
     expect(rendered.html).toContain('Producto sin formula')
+  })
+
+  it('renders comanda using effective_formula_materials override', () => {
+    const saleWithEffectiveFormula = {
+      ...sale,
+      lines: [
+        {
+          ...sale.lines![0],
+          quantity: '2',
+          effective_formula_materials: [
+            {
+              material_id: 3,
+              quantity_per_unit: '1.500',
+              material: { id: 3, code: 'M3', name: 'Hilo extra', unit: 'UND' },
+            },
+          ],
+          catalog_product: {
+            ...(sale.lines![0].catalog_product ?? {}),
+            formula: {
+              materials: [
+                {
+                  quantity: '0.25',
+                  material: { id: 1, code: 'M1', name: 'Salchicha Brasilera', unit: 'KG' },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    }
+
+    const rendered = renderSaleDocument('comanda', saleWithEffectiveFormula, config, {
+      printFormula: true,
+    })
+
+    expect(rendered.html).toContain('Hilo extra')
+    expect(rendered.html).toContain('3 UND')
+    expect(rendered.html).not.toContain('Salchicha Brasilera')
   })
 
   it('escapes HTML in business and product names', () => {
@@ -179,7 +277,7 @@ describe('renderSaleDocument', () => {
         ...config,
         business: {
           ...config.business,
-          name: 'Tienda & Co',
+          legalName: 'Tienda & Co',
         },
       }
     )
@@ -201,7 +299,8 @@ describe('renderFormatBody', () => {
         bodyHtml: '<div>{{sale.code}}</div><div>{{sale.total}}</div>',
       },
       sale,
-      DEFAULT_PRINT_CONFIG.business
+      DEFAULT_PRINT_CONFIG.business,
+      DEFAULT_PRINT_CONFIG.ticket
     )
 
     expect(body).toContain('0000000001')

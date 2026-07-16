@@ -10,6 +10,10 @@ export const updateProfitMarginValidator = vine.create({
   profit_margin_percent: vine.number().min(0),
 })
 
+export const updateBaseCurrencyValidator = vine.create({
+  base_currency_code: vine.string().trim().toUpperCase().fixedLength(3),
+})
+
 export const updateBusinessProfileValidator = vine.create({
   trade_name: vine.string().trim().minLength(1).maxLength(150),
   tagline: vine.string().trim().maxLength(200).optional(),

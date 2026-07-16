@@ -58,7 +58,7 @@ async function seedConfirmedPurchase() {
   const material = await Material.create({
     code: '5810',
     name: 'Atlética negra',
-    category: 'FABRIC',
+    category: 'Uniforme',
     unit: 'ROL',
     minimumStock: '1',
     active: true,
@@ -185,7 +185,7 @@ test.group('Purchases return API', (group) => {
     const material = await Material.create({
       code: '100',
       name: 'Tela',
-      category: 'FABRIC',
+      category: 'Uniforme',
       unit: 'ROL',
       minimumStock: '1',
       active: true,

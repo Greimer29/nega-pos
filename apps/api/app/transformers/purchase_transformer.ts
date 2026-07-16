@@ -14,6 +14,7 @@ function serializeMaterialResumen(material: Material) {
     id: Number(material.id),
     code: material.code,
     name: material.name,
+    category: material.category,
     unit: material.unit,
   }
 }
@@ -59,6 +60,7 @@ export default class PurchaseTransformer extends BaseTransformer<Purchase> {
       invoiceNumber: this.resource.invoiceNumber,
       tieneFactura: Boolean(this.resource.invoiceFile),
       usdRate: this.resource.usdRate,
+      entryCurrencyCode: this.resource.entryCurrencyCode,
       totalBs: this.resource.totalBs,
       totalUsd: this.resource.totalUsd,
       status: this.resource.status,

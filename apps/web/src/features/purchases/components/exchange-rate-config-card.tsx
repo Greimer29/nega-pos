@@ -4,12 +4,14 @@ import { DecimalInput } from '@/components/decimal-input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { useBaseCurrencyQuery } from '@/features/currencies/hooks/use-currencies'
 import { formatUsd } from '@/features/purchases/constants'
 import { useExchangeRateQuery, useUpdateExchangeRateMutation } from '@/features/purchases/hooks/use-settings'
 import { getApiErrorMessage } from '@/lib/api-error'
 
 export function ExchangeRateConfigCard() {
   const { data: currentRate, isLoading: loadingRate } = useExchangeRateQuery()
+  const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
   const updateRateMutation = useUpdateExchangeRateMutation()
   const [rateInput, setRateInput] = useState('')
   const [rateError, setRateError] = useState<string | null>(null)
@@ -42,8 +44,8 @@ export function ExchangeRateConfigCard() {
           Tasa de cambio
         </CardTitle>
         <CardDescription>
-          Bolívares por dólar (Bs/USD) para referencia en compras. Los montos se registran en $; esta
-          tasa no modifica registros ya confirmados.
+          Bolívares (VES) por 1 unidad de la moneda base ({baseCurrencyCode}). Sincroniza la tasa VES
+          del catálogo de monedas. Los montos canónicos se guardan en {baseCurrencyCode}.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -53,18 +55,20 @@ export function ExchangeRateConfigCard() {
           <p className="text-muted-foreground text-sm">
             Tasa actual:{' '}
             <span className="text-foreground font-medium tabular-nums">
-              {currentRate ? `Bs ${formatUsd(currentRate)}` : 'Sin configurar'}
+              {currentRate
+                ? `Bs ${formatUsd(currentRate)} / ${baseCurrencyCode}`
+                : 'Sin configurar'}
             </span>
           </p>
         )}
         <div className="flex max-w-sm flex-col gap-4 sm:flex-row sm:items-end">
           <div className="space-y-2 sm:flex-1">
-            <Label htmlFor="exchange-rate">Nueva tasa Bs/USD</Label>
+            <Label htmlFor="exchange-rate">Nueva tasa Bs/{baseCurrencyCode}</Label>
             <DecimalInput
               id="exchange-rate"
               decimals={4}
               min="0"
-              placeholder="Ej. 36.50"
+              placeholder="Ej. 4000"
               value={rateInput}
               onChange={(e) => setRateInput(e.target.value)}
             />

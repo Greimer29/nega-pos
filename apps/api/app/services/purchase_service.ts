@@ -21,6 +21,7 @@ import CompraCreditoSinVencimientoException from '#exceptions/compra_credito_sin
 import InventoryMovement from '#models/inventory_movement'
 import SupplierService from '#services/supplier_service'
 import AccountService from '#services/account_service'
+import CurrencyService from '#services/currency_service'
 import MaterialService from '#services/material_service'
 import FormulaService from '#services/formula_service'
 import OrderService from '#services/order_service'
@@ -40,6 +41,7 @@ export type PurchaseInput = {
   date_recepcion?: string
   invoice_number?: string
   usd_rate?: number
+  entry_currency_code?: string
   notes?: string
   account_id?: number | null
   is_credit?: boolean
@@ -99,6 +101,7 @@ export type ConfirmPurchaseResult = {
 export default class PurchaseService {
   private supplierService = new SupplierService()
   private accountService = new AccountService()
+  private currencyService = new CurrencyService()
   private materialService = new MaterialService()
   private formulaService = new FormulaService()
   private orderService = new OrderService()
@@ -191,7 +194,11 @@ export default class PurchaseService {
     if (input.supplier_id) {
       await this.supplierService.obtener(input.supplier_id)
     }
-    const data = await this.preparePurchaseInput(input)
+    const baseCode = await this.currencyService.getBaseCurrencyCode()
+    const data = await this.preparePurchaseInput(input, baseCode)
+    const entryCurrencyCode = await this.resolveEntryCurrencyCode(
+      input.entry_currency_code ?? (input.usd_rate !== undefined ? 'VES' : baseCode)
+    )
 
     return Purchase.create({
       supplierId: input.supplier_id ?? null,
@@ -199,7 +206,8 @@ export default class PurchaseService {
       date: data.date,
       receivedDate: data.receivedDate,
       invoiceNumber: data.invoiceNumber,
-      usdRate: data.usdRate,
+      entryCurrencyCode,
+      usdRate: entryCurrencyCode === baseCode ? null : data.usdRate,
       totalBs: '0.00',
       totalUsd: '0.0000',
       status: 'DRAFT',
@@ -216,7 +224,8 @@ export default class PurchaseService {
         await this.supplierService.obtener(input.supplier_id)
       }
     }
-    const data = await this.preparePurchaseInput(input)
+    const baseCode = await this.currencyService.getBaseCurrencyCode()
+    const data = await this.preparePurchaseInput(input, baseCode)
 
     purchase.merge({
       ...(data.supplierId !== undefined ? { supplierId: data.supplierId } : {}),
@@ -224,7 +233,8 @@ export default class PurchaseService {
       date: data.date,
       receivedDate: data.receivedDate,
       invoiceNumber: data.invoiceNumber,
-      usdRate: data.usdRate,
+      ...(data.entryCurrencyCode !== undefined ? { entryCurrencyCode: data.entryCurrencyCode } : {}),
+      ...(data.usdRate !== undefined ? { usdRate: data.usdRate } : {}),
       notes: data.notes,
       ...(data.isCredit !== undefined ? { isCredit: data.isCredit } : {}),
       ...(data.creditDueDate !== undefined ? { creditDueDate: data.creditDueDate } : {}),
@@ -332,6 +342,12 @@ export default class PurchaseService {
       }
       if (input.usd_rate !== undefined) {
         purchase.usdRate = this.formatTasaUsd(input.usd_rate)
+      }
+      if (input.entry_currency_code !== undefined) {
+        purchase.entryCurrencyCode = await this.resolveEntryCurrencyCode(input.entry_currency_code)
+        if (purchase.entryCurrencyCode === 'USD') {
+          purchase.usdRate = null
+        }
       }
       if (input.notes !== undefined) {
         purchase.notes = input.notes?.trim() || null
@@ -726,7 +742,9 @@ export default class PurchaseService {
     return 0
   }
 
-  private async preparePurchaseInput(input: PurchaseInput) {
+  private async preparePurchaseInput(input: PurchaseInput, baseCurrencyCode?: string) {
+    const baseCode = baseCurrencyCode ?? (await this.currencyService.getBaseCurrencyCode())
+
     let accountId: number | null | undefined
     if (input.account_id !== undefined) {
       if (input.account_id === null) {
@@ -737,17 +755,38 @@ export default class PurchaseService {
       }
     }
 
+    let entryCurrencyCode: string | undefined
+    if (input.entry_currency_code !== undefined) {
+      entryCurrencyCode = await this.resolveEntryCurrencyCode(input.entry_currency_code)
+    }
+
+    const resolvedEntryCurrency = entryCurrencyCode
+    let usdRate: string | null | undefined
+    if (input.usd_rate !== undefined) {
+      usdRate =
+        resolvedEntryCurrency === baseCode ? null : this.formatTasaUsd(input.usd_rate)
+    } else if (resolvedEntryCurrency === baseCode) {
+      usdRate = null
+    }
+
     return {
       ...(input.supplier_id !== undefined ? { supplierId: input.supplier_id ?? null } : {}),
       accountId,
       date: DateTime.fromISO(input.date),
       receivedDate: input.date_recepcion ? DateTime.fromISO(input.date_recepcion) : null,
       invoiceNumber: input.invoice_number?.trim() || null,
-      usdRate: input.usd_rate !== undefined ? this.formatTasaUsd(input.usd_rate) : null,
+      ...(entryCurrencyCode !== undefined ? { entryCurrencyCode } : {}),
+      ...(usdRate !== undefined ? { usdRate } : {}),
       notes: input.notes?.trim() || null,
       isCredit: input.is_credit,
       creditDueDate: input.credit_due_date ? DateTime.fromISO(input.credit_due_date) : null,
     }
+  }
+
+  private async resolveEntryCurrencyCode(code: string): Promise<string> {
+    const normalized = code.trim().toUpperCase()
+    await this.currencyService.assertActiva(normalized)
+    return normalized
   }
 
   private async defaultCreditDueDate(supplierId: number): Promise<string | null> {

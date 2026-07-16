@@ -2,6 +2,7 @@ import type Sale from '#models/sale'
 import type SaleLine from '#models/sale_line'
 import { serializeCustomerResumen } from '#transformers/customer_transformer'
 import { serializeFormulaDetail } from '#transformers/formula_transformer'
+import { serializeSaleLineFormulaFields } from '#transformers/sale_line_formula_transformer'
 
 function serializePaymentMethodSummary(sale: Sale) {
   const method = sale.paymentMethod
@@ -13,6 +14,18 @@ function serializePaymentMethodSummary(sale: Sale) {
     code: method.code,
     name: method.name,
     currency_code: method.currencyCode,
+  }
+}
+
+function serializeSoldBySummary(sale: Sale) {
+  const seller = sale.soldBy
+  if (!seller || !sale.soldByUserId) {
+    return null
+  }
+
+  return {
+    id: Number(seller.id),
+    name: seller.name,
   }
 }
 
@@ -38,6 +51,7 @@ export function serializeSale(sale: Sale) {
     confirmed_at: sale.confirmedAt?.toISO() ?? null,
     returned_at: sale.returnedAt?.toISO() ?? null,
     customer: sale.customer ? serializeCustomerResumen(sale.customer) : null,
+    sold_by: serializeSoldBySummary(sale),
     lines: sale.saleLines?.map(serializeSaleLine),
     created_at: sale.createdAt.toISO(),
     updated_at: sale.updatedAt.toISO(),
@@ -71,11 +85,13 @@ export function serializeSaleLine(line: SaleLine) {
     catalog_product_id: line.catalogProductId ? Number(line.catalogProductId) : null,
     material_id: line.materialId ? Number(line.materialId) : null,
     description: line.description,
+    kitchen_note: line.kitchenNote ?? null,
     quantity: line.quantity,
     returned_quantity: line.returnedQuantity ?? '0.000',
     unit_price_usd: line.unitPriceUsd,
     subtotal_usd: line.subtotalUsd,
     cost_usd: line.costUsd,
+    ...serializeSaleLineFormulaFields(line),
     catalog_product: line.catalogProduct
       ? {
           id: Number(line.catalogProduct.id),

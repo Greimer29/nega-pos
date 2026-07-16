@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button'
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { PublicImage } from '@/components/public-image'
 import {
-  CATEGORIA_LABELS,
   MATERIAL_STATUS_LABELS,
   MATERIAL_STATUS_STYLES,
   UNIT_ABREV,
@@ -84,7 +83,7 @@ export function MaterialProductCard({
 
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-xs font-medium">
-            {CATEGORIA_LABELS[material.category]}
+            {material.category}
           </span>
           <span
             className={cn(

@@ -22,9 +22,15 @@ type CategoryFormDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   category?: Category | null
+  readOnly?: boolean
 }
 
-export function CategoryFormDialog({ open, onOpenChange, category }: CategoryFormDialogProps) {
+export function CategoryFormDialog({
+  open,
+  onOpenChange,
+  category,
+  readOnly = false,
+}: CategoryFormDialogProps) {
   const isEditing = category != null
   const createMutation = useCreateCategoryMutation()
   const updateMutation = useUpdateCategoryMutation()
@@ -48,6 +54,7 @@ export function CategoryFormDialog({ open, onOpenChange, category }: CategoryFor
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
+    if (readOnly) return
     setError(null)
 
     if (!name.trim()) {
@@ -86,7 +93,7 @@ export function CategoryFormDialog({ open, onOpenChange, category }: CategoryFor
           <DialogHeader>
             <DialogTitle>{isEditing ? 'Editar categoría' : 'Nueva categoría'}</DialogTitle>
             <DialogDescription>
-              Las categorías se usan para clasificar productos del catálogo.
+              Las categorías se usan para clasificar productos del catálogo y materiales.
             </DialogDescription>
           </DialogHeader>
 
@@ -101,6 +108,7 @@ export function CategoryFormDialog({ open, onOpenChange, category }: CategoryFor
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ej. Uniforme"
                 autoFocus
+                disabled={readOnly}
               />
             </div>
 
@@ -112,6 +120,7 @@ export function CategoryFormDialog({ open, onOpenChange, category }: CategoryFor
                 min={0}
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value)}
+                disabled={readOnly}
               />
             </div>
           </div>
@@ -120,7 +129,7 @@ export function CategoryFormDialog({ open, onOpenChange, category }: CategoryFor
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || readOnly}>
               {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
               {isEditing ? 'Guardar' : 'Crear'}
             </Button>

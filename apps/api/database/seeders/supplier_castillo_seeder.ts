@@ -8,9 +8,9 @@ const CASTILLO_TELEFONO = '+584128332238'
 export default class extends BaseSeeder {
   async run() {
     await Supplier.updateOrCreate(
-      { name: 'El Castillo' },
+      { rif: CASTILLO_RIF },
       {
-        rif: CASTILLO_RIF,
+        name: 'El Castillo',
         phone: CASTILLO_TELEFONO,
         email: null,
         notes: 'Supplier principal — RIF de ejemplo para dev; reemplazar con el real del dueño',

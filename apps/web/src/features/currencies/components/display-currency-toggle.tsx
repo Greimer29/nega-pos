@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useDisplayCurrency } from '@/features/currencies/context/display-currency-context'
 import { cn } from '@/lib/utils'
 
@@ -7,13 +8,17 @@ type DisplayCurrencyToggleProps = {
 }
 
 export function DisplayCurrencyToggle({ className, size = 'sm' }: DisplayCurrencyToggleProps) {
-  const { currencies, displayCurrency, setDisplayCurrency, isLoading } = useDisplayCurrency()
+  const { currencies, displayCurrency, setDisplayCurrency, baseCurrencyCode, isLoading } =
+    useDisplayCurrency()
+
+  const options = useMemo(() => {
+    if (currencies.length > 0) return currencies
+    return [{ code: baseCurrencyCode, name: baseCurrencyCode }]
+  }, [currencies, baseCurrencyCode])
 
   if (isLoading && currencies.length === 0) {
     return null
   }
-
-  const options = currencies.length > 0 ? currencies : [{ code: 'USD', name: 'USD' }]
 
   return (
     <div

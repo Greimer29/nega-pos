@@ -1,12 +1,20 @@
 import type { BillingMethod } from '@/features/ventas/constants'
 import type { CatalogProduct } from '@/features/ventas/types'
+import {
+  createCartLineId,
+  type SaleLineFormulaMaterial,
+} from '@/features/ventas/utils/sale-line-formula'
 
 const STORAGE_KEY = 'nega-pos:ventas-cart-draft'
-const DRAFT_VERSION = 1
+const DRAFT_VERSION = 4
 
 export type VentasCartDraftLine = {
+  id: string
   product: CatalogProduct
   quantity: number
+  formulaMaterials?: SaleLineFormulaMaterial[] | null
+  unitPriceUsd?: number
+  kitchenNote?: string | null
 }
 
 export type VentasCartDraft = {
@@ -25,6 +33,54 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function normalizeFormulaMaterials(value: unknown): SaleLineFormulaMaterial[] | null | undefined {
+  if (value === null) {
+    return null
+  }
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+
+  const materials = value
+    .filter(
+      (item): item is SaleLineFormulaMaterial =>
+        isRecord(item) &&
+        typeof item.material_id === 'number' &&
+        typeof item.quantity_per_unit === 'number'
+    )
+    .map((item) => ({
+      material_id: item.material_id,
+      quantity_per_unit: item.quantity_per_unit,
+    }))
+
+  return materials.length > 0 ? materials : null
+}
+
+function normalizeCartLine(line: unknown): VentasCartDraftLine | null {
+  if (!isRecord(line) || !isRecord(line.product) || typeof line.product.id !== 'number') {
+    return null
+  }
+
+  if (typeof line.quantity !== 'number' || line.quantity <= 0) {
+    return null
+  }
+
+  return {
+    id: typeof line.id === 'string' && line.id.trim() ? line.id : createCartLineId(),
+    product: line.product as CatalogProduct,
+    quantity: line.quantity,
+    formulaMaterials: normalizeFormulaMaterials(line.formulaMaterials),
+    unitPriceUsd:
+      typeof line.unitPriceUsd === 'number' && Number.isFinite(line.unitPriceUsd)
+        ? line.unitPriceUsd
+        : undefined,
+    kitchenNote:
+      typeof line.kitchenNote === 'string' && line.kitchenNote.trim()
+        ? line.kitchenNote.trim()
+        : null,
+  }
+}
+
 export function loadVentasCartDraft(): VentasCartDraft | null {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY)
@@ -33,24 +89,23 @@ export function loadVentasCartDraft(): VentasCartDraft | null {
     }
 
     const parsed: unknown = JSON.parse(raw)
-    if (!isRecord(parsed) || parsed.version !== DRAFT_VERSION) {
+    if (!isRecord(parsed)) {
+      return null
+    }
+
+    if (
+      parsed.version !== DRAFT_VERSION &&
+      parsed.version !== 1 &&
+      parsed.version !== 2 &&
+      parsed.version !== 3
+    ) {
       return null
     }
 
     const cart = Array.isArray(parsed.cart) ? parsed.cart : []
     const normalizedCart = cart
-      .filter(
-        (line): line is VentasCartDraftLine =>
-          isRecord(line) &&
-          isRecord(line.product) &&
-          typeof line.product.id === 'number' &&
-          typeof line.quantity === 'number' &&
-          line.quantity > 0
-      )
-      .map((line) => ({
-        product: line.product as CatalogProduct,
-        quantity: line.quantity,
-      }))
+      .map((line) => normalizeCartLine(line))
+      .filter((line): line is VentasCartDraftLine => line !== null)
 
     return {
       version: DRAFT_VERSION,

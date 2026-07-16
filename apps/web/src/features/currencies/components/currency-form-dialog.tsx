@@ -23,9 +23,15 @@ type CurrencyFormDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   currency?: Currency | null
+  baseCurrencyCode?: string
 }
 
-export function CurrencyFormDialog({ open, onOpenChange, currency }: CurrencyFormDialogProps) {
+export function CurrencyFormDialog({
+  open,
+  onOpenChange,
+  currency,
+  baseCurrencyCode = 'XAU',
+}: CurrencyFormDialogProps) {
   const isEditing = currency != null
   const createMutation = useCreateCurrencyMutation()
   const updateMutation = useUpdateCurrencyMutation()
@@ -98,7 +104,7 @@ export function CurrencyFormDialog({ open, onOpenChange, currency }: CurrencyFor
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar moneda' : 'Nueva moneda'}</DialogTitle>
           <DialogDescription>
-            La tasa indica cuántas unidades de esta moneda equivalen a 1 USD.
+            La tasa indica cuántas unidades de esta moneda equivalen a 1 {baseCurrencyCode}.
           </DialogDescription>
         </DialogHeader>
 
@@ -127,7 +133,7 @@ export function CurrencyFormDialog({ open, onOpenChange, currency }: CurrencyFor
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="rate">Tasa (unidades por 1 USD) *</Label>
+            <Label htmlFor="rate">Tasa (unidades por 1 {baseCurrencyCode}) *</Label>
             <DecimalInput
               id="rate"
               decimals={4}

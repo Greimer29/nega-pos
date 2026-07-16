@@ -3,6 +3,7 @@ import CategoriaNoEncontradaException from '#exceptions/categoria_no_encontrada_
 import CategoriaDuplicadaException from '#exceptions/categoria_duplicada_exception'
 import Category from '#models/category'
 import CatalogProduct from '#models/catalog_product'
+import Material from '#models/material'
 
 export type CategoryInput = {
   name: string
@@ -87,6 +88,7 @@ export default class CategoryService {
 
     if (input.name !== undefined && input.name.trim() !== oldName) {
       await CatalogProduct.query().where('category', oldName).update({ category: category.name })
+      await Material.query().where('category', oldName).update({ category: category.name })
     }
 
     return category
@@ -98,7 +100,12 @@ export default class CategoryService {
     const productsCount = await CatalogProduct.query()
       .where('category', category.name)
       .count('* as total')
-    const total = Number(productsCount[0]?.$extras.total ?? 0)
+    const materialsCount = await Material.query()
+      .where('category', category.name)
+      .count('* as total')
+    const total =
+      Number(productsCount[0]?.$extras.total ?? 0) +
+      Number(materialsCount[0]?.$extras.total ?? 0)
 
     if (total > 0) {
       throw new CategoriaEnUsoException(total)

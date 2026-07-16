@@ -15,7 +15,7 @@ export type RenderedDocument = {
 
 export type { RenderComandaOptions } from '@/features/printing/utils/format-template-engine'
 
-export type PrintRenderConfig = Pick<PrintConfig, 'business' | 'formats' | 'documents'>
+export type PrintRenderConfig = Pick<PrintConfig, 'business' | 'formats' | 'documents' | 'ticket'>
 
 export function renderSaleDocument(
   kind: PrintDocumentKind,
@@ -29,7 +29,7 @@ export function renderSaleDocument(
     config.documents[kind].formatId
   )
   const paperWidthMm = config.documents[kind].paperWidthMm || format.paperWidthMm
-  const body = renderFormatBody(format, sale, config.business, comandaOptions)
+  const body = renderFormatBody(format, sale, config.business, config.ticket, comandaOptions)
   const titleByKind: Record<PrintDocumentKind, string> = {
     invoice: `Factura ${sale.code ?? sale.id}`,
     deliveryNote: `Nota de despacho ${sale.code ?? sale.id}`,
@@ -72,7 +72,8 @@ export function createSampleSale(): Sale {
     sold_at: new Date().toISOString(),
     confirmed_at: new Date().toISOString(),
     returned_at: null,
-    customer: { id: 1, name: 'Cliente de ejemplo', type: 'CORPORATE', active: true },
+    customer: { id: 1, name: 'Cliente de ejemplo', type: 'CORPORATE', active: true, document: 'J-12345678-9' },
+    sold_by: { id: 1, name: 'Vendedor Demo' },
     lines: [
       {
         id: 1,

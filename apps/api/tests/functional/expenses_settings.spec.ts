@@ -74,9 +74,7 @@ test.group('Expenses and settings API', (group) => {
     deleteResponse.assertBodyContains({ data: { eliminado: true } })
   })
 
-  test('POST /api/v1/expenses rejects VES currency with USD registration message', async ({
-    client,
-  }) => {
+  test('POST /api/v1/expenses rejects non-base currency', async ({ client, assert }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
 
     const response = await client.post('/api/v1/expenses').loginAs(user).json({
@@ -90,9 +88,9 @@ test.group('Expenses and settings API', (group) => {
     response.assertBodyContains({
       error: {
         code: 'MONEDA_REGISTRO_USD_REQUERIDA',
-        message: MONETARY_REGISTRATION_USD_MESSAGE,
       },
     })
+    assert.include(response.body().error.message, MONETARY_REGISTRATION_USD_MESSAGE)
   })
 
   test('GET /api/v1/expenses/summary includes weekly spent', async ({ client }) => {

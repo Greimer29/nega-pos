@@ -15,10 +15,11 @@ import { invalidateStockMovement } from '@/lib/query-invalidation'
 
 export const materialsQueryKey = ['materials'] as const
 
-export function useMaterialsQuery(params: MaterialListParams) {
+export function useMaterialsQuery(params: MaterialListParams, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: [...materialsQueryKey, params],
     queryFn: () => listMaterials(params),
+    enabled: options?.enabled ?? true,
   })
 }
 

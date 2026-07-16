@@ -66,6 +66,32 @@ export function SettingsVentasPrintPanel() {
       {message ? <p className="text-emerald-700 text-sm">{message}</p> : null}
       {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Estación de caja</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label htmlFor="ticket-station">Nombre de estación</Label>
+          <Input
+            id="ticket-station"
+            value={config.ticket.station_label}
+            placeholder="Ej. CAJA1"
+            onChange={(event) =>
+              setConfig((current) => ({
+                ...current,
+                ticket: {
+                  ...current.ticket,
+                  station_label: event.target.value,
+                },
+              }))
+            }
+          />
+          <p className="text-muted-foreground text-xs">
+            Aparece en el recibo como ESTA. Se guarda en la configuración local de esta instalación.
+          </p>
+        </CardContent>
+      </Card>
+
       {(['invoice', 'deliveryNote', 'comanda'] as const).map((kind) => (
         <Card key={kind}>
           <CardHeader>
@@ -78,7 +104,6 @@ export function SettingsVentasPrintPanel() {
             <label className="flex items-center gap-2 text-sm">
               <Checkbox
                 checked={config.documents[kind].enabled}
-                disabled={!canEdit}
                 onChange={(event) => updateDocument(kind, { enabled: event.target.checked })}
               />
               Habilitar impresión de {PRINT_DOCUMENT_LABELS[kind].toLowerCase()}
@@ -90,7 +115,7 @@ export function SettingsVentasPrintPanel() {
                 id={`printer-${kind}`}
                 printers={printers}
                 value={config.documents[kind].deviceName}
-                disabled={!canEdit || !electronAvailable}
+                disabled={!electronAvailable}
                 onChange={(deviceName) => updateDocument(kind, { deviceName })}
               />
             </div>
@@ -122,7 +147,6 @@ export function SettingsVentasPrintPanel() {
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={config.behavior.printInvoiceOnConfirm}
-              disabled={!canEdit}
               onChange={(event) =>
                 setConfig((current) => ({
                   ...current,
@@ -138,7 +162,6 @@ export function SettingsVentasPrintPanel() {
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={config.behavior.printDeliveryNoteOnConfirm}
-              disabled={!canEdit}
               onChange={(event) =>
                 setConfig((current) => ({
                   ...current,
@@ -154,7 +177,6 @@ export function SettingsVentasPrintPanel() {
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={config.behavior.printComandaOnConfirm}
-              disabled={!canEdit}
               onChange={(event) =>
                 setConfig((current) => ({
                   ...current,
@@ -170,7 +192,6 @@ export function SettingsVentasPrintPanel() {
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={config.behavior.printComandaFormula ?? false}
-              disabled={!canEdit}
               onChange={(event) =>
                 setConfig((current) => ({
                   ...current,
@@ -206,7 +227,7 @@ export function SettingsVentasPrintPanel() {
         </Button>
       ) : (
         <p className="text-muted-foreground text-sm">
-          Solo lectura — no tenés permiso para editar (`settings.edit`).
+          Solo lectura — no tenés permiso para editar la configuración.
         </p>
       )}
     </div>

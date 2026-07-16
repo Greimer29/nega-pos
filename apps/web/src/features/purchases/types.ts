@@ -7,6 +7,7 @@ export type PurchaseItemMaterial = {
   id: number
   code: string
   name: string
+  category: string
   unit: MaterialUnidad
 }
 
@@ -40,6 +41,7 @@ export type Purchase = {
   receivedDate: string | null
   invoiceNumber: string | null
   tieneFactura: boolean
+  entryCurrencyCode: string | null
   usdRate: string | null
   totalBs: string
   totalUsd: string | null
@@ -106,6 +108,7 @@ export type PurchaseInput = {
   date_recepcion?: string
   invoice_number?: string
   usd_rate?: number
+  entry_currency_code?: string
   notes?: string
   account_id?: number | null
   is_credit?: boolean

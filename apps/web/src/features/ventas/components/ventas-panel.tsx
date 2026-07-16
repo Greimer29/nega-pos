@@ -49,11 +49,30 @@ import { getApiErrorMessage } from '@/lib/api-error'
 import { isValidEntityId } from '@/lib/route-id'
 import { normalizeInventoryQuantity } from '@/lib/inventory-units'
 import { VentasPaymentMethodDialog } from '@/features/ventas/components/ventas-payment-method-dialog'
+import { SaleLineFormulaDialog } from '@/features/ventas/components/sale-line-formula-dialog'
+import { SaleLineKitchenNoteDialog } from '@/features/ventas/components/sale-line-kitchen-note-dialog'
 import type { PaymentMethod } from '@/features/payment-methods/types'
+import {
+  createCartLineId,
+  formulaMaterialsSignature,
+  getBaseFormulaMaterialIds,
+  hasAddedMaterialsBeyondBase,
+  resolveCartLineUnitPriceUsd,
+  type SaleLineFormulaMaterial,
+  type SaleLineFormulaMaterialRef,
+} from '@/features/ventas/utils/sale-line-formula'
 
 type CartLine = {
+  id: string
   product: CatalogProduct
   quantity: number
+  formulaMaterials?: SaleLineFormulaMaterial[] | null
+  unitPriceUsd?: number
+  kitchenNote?: string | null
+}
+
+function cartLineUnitPrice(line: CartLine): number {
+  return line.unitPriceUsd ?? Number(line.product.sale_price_usd)
 }
 
 const CATALOG_PER_PAGE = 30
@@ -87,7 +106,16 @@ function VentasCreateView() {
   const [billingMethod, setBillingMethod] = useState<BillingMethod>(
     () => initialDraft?.billingMethod ?? 'FAST'
   )
-  const [cart, setCart] = useState<CartLine[]>(() => initialDraft?.cart ?? [])
+  const [cart, setCart] = useState<CartLine[]>(() =>
+    (initialDraft?.cart ?? []).map((line) => ({
+      id: line.id ?? createCartLineId(),
+      product: line.product,
+      quantity: line.quantity,
+      formulaMaterials: line.formulaMaterials ?? null,
+      unitPriceUsd: line.unitPriceUsd,
+      kitchenNote: line.kitchenNote ?? null,
+    }))
+  )
   const [sourceSaleId, setSourceSaleId] = useState<number | null>(
     () => initialDraft?.sourceSaleId ?? null
   )
@@ -99,6 +127,8 @@ function VentasCreateView() {
   const [loadDraftOpen, setLoadDraftOpen] = useState(false)
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
   const [pendingSaleId, setPendingSaleId] = useState<number | null>(null)
+  const [formulaDialogLineId, setFormulaDialogLineId] = useState<string | null>(null)
+  const [kitchenNoteDialogLineId, setKitchenNoteDialogLineId] = useState<string | null>(null)
   const [editProduct, setEditProduct] = useState<CatalogProduct | null>(null)
   const [editProductOpen, setEditProductOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -172,7 +202,7 @@ function VentasCreateView() {
   const products = catalogData?.catalog_products ?? []
   const catalogMeta = catalogData?.meta
   const cartTotal = useMemo(
-    () => cart.reduce((sum, line) => sum + line.quantity * Number(line.product.sale_price_usd), 0),
+    () => cart.reduce((sum, line) => sum + line.quantity * cartLineUnitPrice(line), 0),
     [cart]
   )
   const stockBlocked = cartHasStockIssues(cart)
@@ -180,16 +210,33 @@ function VentasCreateView() {
   const cartLines = useMemo<VentasCartLine[]>(
     () =>
       cart.map((line) => ({
-        key: String(line.product.id),
+        key: line.id,
         name: line.product.name,
         code: catalogProductCode(line.product.id),
         quantity: line.quantity,
-        unitPriceUsd: Number(line.product.sale_price_usd),
+        unitPriceUsd: cartLineUnitPrice(line),
         saleUnit: line.product.sale_unit ?? 'UND',
         imageUrl: line.product.image_path ? catalogImageUrl(line.product.id) : null,
         imageTone: catalogImageTone(line.product.id),
+        hasFormula: Boolean(line.product.formula_id),
+        hasCustomFormula: line.formulaMaterials != null && line.formulaMaterials.length > 0,
+        kitchenNote: line.kitchenNote ?? null,
+        onAdjustFormula: line.product.formula_id
+          ? () => setFormulaDialogLineId(line.id)
+          : undefined,
+        onEditKitchenNote: () => setKitchenNoteDialogLineId(line.id),
       })),
     [cart]
+  )
+
+  const formulaDialogLine = useMemo(
+    () => cart.find((line) => line.id === formulaDialogLineId) ?? null,
+    [cart, formulaDialogLineId]
+  )
+
+  const kitchenNoteDialogLine = useMemo(
+    () => cart.find((line) => line.id === kitchenNoteDialogLineId) ?? null,
+    [cart, kitchenNoteDialogLineId]
   )
 
   const orderLabel = sourceSaleLabel
@@ -201,13 +248,17 @@ function VentasCreateView() {
   function addToCart(product: CatalogProduct) {
     setSuccessMessage(null)
     setCart((prev) => {
-      const existing = prev.find((line) => line.product.id === product.id)
+      const existing = prev.find(
+        (line) =>
+          line.product.id === product.id &&
+          formulaMaterialsSignature(line.formulaMaterials) === formulaMaterialsSignature(null)
+      )
       if (existing) {
         return prev.map((line) =>
-          line.product.id === product.id ? { ...line, quantity: line.quantity + 1 } : line
+          line.id === existing.id ? { ...line, quantity: line.quantity + 1 } : line
         )
       }
-      return [...prev, { product, quantity: 1 }]
+      return [...prev, { id: createCartLineId(), product, quantity: 1, formulaMaterials: null }]
     })
   }
 
@@ -216,28 +267,71 @@ function VentasCreateView() {
     setEditProductOpen(true)
   }
 
-  function removeFromCart(productId: number) {
+  function removeFromCart(lineId: string) {
     setSuccessMessage(null)
-    setCart((prev) => prev.filter((item) => item.product.id !== productId))
+    setCart((prev) => prev.filter((item) => item.id !== lineId))
   }
 
-  function updateCartQty(productId: number, quantity: number) {
+  function updateCartQty(lineId: string, quantity: number) {
     setSuccessMessage(null)
-    const line = cart.find((item) => item.product.id === productId)
+    const line = cart.find((item) => item.id === lineId)
     if (!line) return
 
     const unit = line.product.sale_unit ?? 'UND'
 
     if (quantity <= 0) {
-      removeFromCart(productId)
+      removeFromCart(lineId)
       return
     }
 
     const normalized = normalizeInventoryQuantity(quantity, unit)
 
     setCart((prev) =>
-      prev.map((item) =>
-        item.product.id === productId ? { ...item, quantity: normalized } : item
+      prev.map((item) => (item.id === lineId ? { ...item, quantity: normalized } : item))
+    )
+  }
+
+  function saveLineFormulaMaterials(
+    lineId: string,
+    materials: SaleLineFormulaMaterial[] | null,
+    materialRefs: SaleLineFormulaMaterialRef[] = []
+  ) {
+    setSuccessMessage(null)
+    setCart((prev) =>
+      prev.map((line) => {
+        if (line.id !== lineId) {
+          return line
+        }
+
+        if (materials === null) {
+          return {
+            ...line,
+            formulaMaterials: null,
+            unitPriceUsd: undefined,
+          }
+        }
+
+        const baseIds = getBaseFormulaMaterialIds(line.product)
+        const hasAdded = hasAddedMaterialsBeyondBase(baseIds, materials)
+
+        return {
+          ...line,
+          formulaMaterials: materials,
+          unitPriceUsd: hasAdded
+            ? resolveCartLineUnitPriceUsd(line.product, materials, materialRefs)
+            : undefined,
+        }
+      })
+    )
+  }
+
+  function saveLineKitchenNote(lineId: string, note: string | null) {
+    setSuccessMessage(null)
+    setCart((prev) =>
+      prev.map((line) =>
+        line.id === lineId
+          ? { ...line, kitchenNote: note?.trim() ? note.trim() : null }
+          : line
       )
     )
   }
@@ -303,7 +397,18 @@ function VentasCreateView() {
     return cart.map((item) => ({
       catalog_product_id: item.product.id,
       quantity: item.quantity,
-      unit_price_usd: Number(item.product.sale_price_usd),
+      unit_price_usd: cartLineUnitPrice(item),
+      ...(item.kitchenNote?.trim()
+        ? { kitchen_note: item.kitchenNote.trim() }
+        : {}),
+      ...(item.formulaMaterials && item.formulaMaterials.length > 0
+        ? {
+            formula_materials: item.formulaMaterials.map((material) => ({
+              material_id: material.material_id,
+              quantity_per_unit: material.quantity_per_unit,
+            })),
+          }
+        : {}),
     }))
   }
 
@@ -470,8 +575,8 @@ function VentasCreateView() {
               resetLoadedDraft()
               clearVentasCartDraft()
             }}
-            onRemoveLine={(key) => removeFromCart(Number(key))}
-            onUpdateQuantity={(key, qty) => updateCartQty(Number(key), qty)}
+            onRemoveLine={removeFromCart}
+            onUpdateQuantity={updateCartQty}
             emptyMessage="Agregá productos desde el catálogo."
             billingMethod={billingMethod}
             onBillingMethodChange={setBillingMethod}
@@ -728,6 +833,43 @@ function VentasCreateView() {
         totalUsd={cartTotal}
         isSubmitting={isSubmitting}
         onConfirm={(method) => void handlePaymentMethodConfirm(method)}
+      />
+      <SaleLineFormulaDialog
+        open={formulaDialogLineId != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFormulaDialogLineId(null)
+          }
+        }}
+        product={formulaDialogLine?.product ?? null}
+        initialMaterials={formulaDialogLine?.formulaMaterials}
+        onSave={(result) => {
+          if (formulaDialogLineId) {
+            saveLineFormulaMaterials(
+              formulaDialogLineId,
+              result.materials,
+              result.materialRefs
+            )
+          }
+          setFormulaDialogLineId(null)
+        }}
+      />
+      <SaleLineKitchenNoteDialog
+        open={kitchenNoteDialogLineId != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setKitchenNoteDialogLineId(null)
+          }
+        }}
+        productName={kitchenNoteDialogLine?.product.name ?? ''}
+        quantity={kitchenNoteDialogLine?.quantity ?? 0}
+        initialNote={kitchenNoteDialogLine?.kitchenNote ?? ''}
+        onSave={(note) => {
+          if (kitchenNoteDialogLineId) {
+            saveLineKitchenNote(kitchenNoteDialogLineId, note)
+          }
+          setKitchenNoteDialogLineId(null)
+        }}
       />
       {editProduct ? (
         <CatalogFormDialog

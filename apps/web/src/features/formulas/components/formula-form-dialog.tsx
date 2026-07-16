@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Trash2 } from 'lucide-react'
+import { MaterialSearchPicker } from '@/components/search-picker/material-search-picker'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -21,7 +22,7 @@ import {
   useUpdateFormulaMutation,
 } from '@/features/formulas/hooks/use-formulas'
 import type { Formula } from '@/features/formulas/types'
-import { useMaterialsQuery } from '@/features/materials/hooks/use-materials'
+import type { Material } from '@/features/materials/types'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { formatCostWarningsMessage } from '@/lib/cost-warnings'
 
@@ -32,7 +33,13 @@ type FormulaFormDialogProps = {
   onSaved?: (formula: Pick<Formula, 'id' | 'name'>) => void
 }
 
-type MaterialRow = { material_id: number; quantity: string }
+type MaterialRow = {
+  material_id: number
+  quantity: string
+  materialCode: string
+  materialName: string
+  materialUnit: string
+}
 
 export function FormulaFormDialog({
   open,
@@ -53,13 +60,7 @@ export function FormulaFormDialog({
   const { data: materialsData, isLoading: loadingMaterials } = useFormulaMaterialsQuery(
     open && isEditing ? formula.id : undefined
   )
-  const { data: catalogMaterialsData } = useMaterialsQuery({
-    page: 1,
-    perPage: 100,
-    status: 'active',
-  })
 
-  const materials = catalogMaterialsData?.materials ?? []
   const isPending =
     createMutation.isPending || updateMutation.isPending || updateMaterialsMutation.isPending
 
@@ -86,17 +87,35 @@ export function FormulaFormDialog({
         materialsData.map((item) => ({
           material_id: item.material_id,
           quantity: item.quantity,
+          materialCode: item.material?.code ?? `#${item.material_id}`,
+          materialName: item.material?.name ?? `Material #${item.material_id}`,
+          materialUnit: item.material?.unit ?? 'UND',
         }))
       )
     }
   }, [materialsData, open, isEditing])
 
-  function addMaterialRow() {
-    setMaterialRows((rows) => [...rows, { material_id: materials[0]?.id ?? 0, quantity: '1' }])
+  function addMaterial(material: Material) {
+    if (materialRows.some((row) => row.material_id === material.id)) {
+      setError(`"${material.name}" ya está en la fórmula.`)
+      return
+    }
+
+    setError(null)
+    setMaterialRows((rows) => [
+      ...rows,
+      {
+        material_id: material.id,
+        quantity: '1',
+        materialCode: material.code,
+        materialName: material.name,
+        materialUnit: material.unit,
+      },
+    ])
   }
 
-  function removeMaterialRow(index: number) {
-    setMaterialRows((rows) => rows.filter((_, i) => i !== index))
+  function removeMaterialRow(materialId: number) {
+    setMaterialRows((rows) => rows.filter((row) => row.material_id !== materialId))
   }
 
   async function handleSave() {
@@ -122,12 +141,10 @@ export function FormulaFormDialog({
         })
         const { costWarnings } = await updateMaterialsMutation.mutateAsync({
           id: formula.id,
-          items: materialRows
-            .filter((row) => row.material_id > 0)
-            .map((row) => ({
-              material_id: row.material_id,
-              quantity: Number(row.quantity),
-            })),
+          items: materialRows.map((row) => ({
+            material_id: row.material_id,
+            quantity: Number(row.quantity),
+          })),
         })
         const warningMessage = formatCostWarningsMessage(costWarnings)
         if (warningMessage) {
@@ -143,12 +160,10 @@ export function FormulaFormDialog({
         if (materialRows.length > 0) {
           const { costWarnings } = await updateMaterialsMutation.mutateAsync({
             id: created.id,
-            items: materialRows
-              .filter((row) => row.material_id > 0)
-              .map((row) => ({
-                material_id: row.material_id,
-                quantity: Number(row.quantity),
-              })),
+            items: materialRows.map((row) => ({
+              material_id: row.material_id,
+              quantity: Number(row.quantity),
+            })),
           })
           const warningMessage = formatCostWarningsMessage(costWarnings)
           if (warningMessage) {
@@ -200,83 +215,87 @@ export function FormulaFormDialog({
           <div className="space-y-3">
             <Label>Materiales</Label>
             <p className="text-muted-foreground text-xs">
-              La cantidad se ingresa en la unidad del material seleccionado ({' '}
+              Buscá y elegí cada material. La cantidad se ingresa en la unidad del material (
               <strong>MTS/KG</strong> admite decimales; <strong>UND/PAR/CAJ/ROL/SET</strong> son
               enteros).
             </p>
+
             {isEditing && loadingMaterials ? (
               <div className="text-muted-foreground flex items-center gap-2 py-4 text-sm">
                 <Loader2 className="size-4 animate-spin" />
                 Cargando materiales…
               </div>
             ) : materialRows.length === 0 ? (
-              <p className="text-muted-foreground text-sm">Sin materiales. Agregá al menos uno.</p>
+              <p className="text-muted-foreground rounded-lg border border-dashed px-3 py-4 text-sm">
+                Todavía no hay materiales. Usá el buscador de abajo para agregar.
+              </p>
             ) : (
-              materialRows.map((row, index) => {
-                const material = materials.find((m) => m.id === row.material_id)
-                const unit = material?.unit ?? 'UND'
-                const decimals = inventoryQuantityDecimals(unit)
-                const min = decimals === 0 ? 1 : 0.001
+              <div className="space-y-2">
+                {materialRows.map((row) => {
+                  const decimals = inventoryQuantityDecimals(row.materialUnit)
+                  const min = decimals === 0 ? 1 : 0.001
 
-                return (
-                  <div key={index} className="flex items-center gap-2">
-                    <div className="min-w-0 flex-1">
-                      <select
-                        className="border-input bg-background flex h-9 w-full rounded-md border px-3 text-sm"
-                        value={row.material_id}
+                  return (
+                    <div
+                      key={row.material_id}
+                      className="flex items-center gap-2 rounded-lg border px-3 py-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          <span className="text-muted-foreground font-mono text-xs">
+                            {row.materialCode}
+                          </span>
+                          {' · '}
+                          {row.materialName}
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                          Cantidad · {inventoryUnitAbrev(row.materialUnit)}
+                        </p>
+                      </div>
+                      <DecimalInput
+                        className="h-8 w-24 shrink-0"
+                        decimals={decimals}
+                        min={min}
+                        value={row.quantity}
                         onChange={(e) =>
                           setMaterialRows((rows) =>
-                            rows.map((r, i) =>
-                              i === index ? { ...r, material_id: Number(e.target.value) } : r
+                            rows.map((r) =>
+                              r.material_id === row.material_id
+                                ? { ...r, quantity: e.target.value }
+                                : r
                             )
                           )
                         }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        onClick={() => removeMaterialRow(row.material_id)}
+                        aria-label={`Quitar ${row.materialName}`}
                       >
-                        {materials.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.code} — {m.name}
-                          </option>
-                        ))}
-                      </select>
+                        <Trash2 className="size-4" />
+                      </Button>
                     </div>
-                    <span className="text-muted-foreground w-10 shrink-0 text-center text-xs font-semibold">
-                      {inventoryUnitAbrev(unit)}
-                    </span>
-                    <DecimalInput
-                      className="w-24 shrink-0"
-                      decimals={decimals}
-                      min={min}
-                      value={row.quantity}
-                      onChange={(e) =>
-                        setMaterialRows((rows) =>
-                          rows.map((r, i) =>
-                            i === index ? { ...r, quantity: e.target.value } : r
-                          )
-                        )
-                      }
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="shrink-0"
-                      onClick={() => removeMaterialRow(index)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                )
-              })
+                  )
+                })}
+              </div>
             )}
-            <Button type="button" variant="outline" size="sm" onClick={addMaterialRow}>
-              <Plus className="size-4" />
-              Agregar material
-            </Button>
+
+            <MaterialSearchPicker
+              enabled={open}
+              excludeIds={materialRows.map((row) => row.material_id)}
+              keepOpenOnSelect
+              clearOnSelect
+              label="Agregar material"
+              onSelect={addMaterial}
+            />
           </div>
         </div>
 
         {costWarning ? (
-          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 whitespace-pre-line">
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm whitespace-pre-line text-amber-900">
             {costWarning}
           </p>
         ) : null}

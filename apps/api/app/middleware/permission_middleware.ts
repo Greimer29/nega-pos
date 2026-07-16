@@ -1,5 +1,5 @@
 import PermisoDenegadoException from '#exceptions/permiso_denegado_exception'
-import { userHasPermission } from '#permissions/catalog'
+import { userHasAnyPermission, userHasPermission } from '#permissions/catalog'
 import { resolveRoutePermission } from '#permissions/route_permissions'
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
@@ -30,7 +30,11 @@ export default class PermissionMiddleware {
       ? authenticatedUser.permissions
       : null
 
-    if (!userHasPermission(authenticatedUser.role, permissions, resolved)) {
+    const allowed = Array.isArray(resolved)
+      ? userHasAnyPermission(authenticatedUser.role, permissions, resolved)
+      : userHasPermission(authenticatedUser.role, permissions, resolved)
+
+    if (!allowed) {
       throw new PermisoDenegadoException()
     }
 

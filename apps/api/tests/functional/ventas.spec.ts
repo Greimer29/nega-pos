@@ -1,5 +1,7 @@
 import PaymentMethod from '#models/payment_method'
+import AppSetting from '#models/app_setting'
 import CatalogProduct from '#models/catalog_product'
+import Currency from '#models/currency'
 import Customer from '#models/customer'
 import Formula from '#models/formula'
 import FormulaMaterial from '#models/formula_material'
@@ -36,6 +38,24 @@ async function resetDatabase() {
   await db.from('counters').delete()
   await db.from('suppliers').delete()
   await db.from('users').delete()
+
+  await AppSetting.updateOrCreate(
+    { key: 'base_currency_code' },
+    { value: 'XAU', updatedAt: DateTime.now() }
+  )
+
+  await db.from('currencies').where('code', 'XAU').update({
+    rate_per_usd: '1.0000',
+    is_active: true,
+  })
+  await db.from('currencies').where('code', 'USD').update({
+    rate_per_usd: '100.0000',
+    is_active: true,
+  })
+  await db.from('currencies').where('code', 'VES').update({
+    rate_per_usd: '100.0000',
+    is_active: true,
+  })
 }
 
 async function seedAdminUser() {
@@ -63,7 +83,7 @@ async function seedMaterial(overrides: Partial<Material> = {}) {
   return Material.create({
     code: 'MAT-001',
     name: 'Tela base',
-    category: 'FABRIC',
+    category: 'Uniforme',
     unit: 'ROL',
     minimumStock: '1',
     lastPurchasePriceUsd: '5.0000',
@@ -634,6 +654,429 @@ test.group('Ventas API — catálogo y ventas', (group) => {
     assert.equal(Number(materialStock?.$extras.total), 2)
   })
 
+  test('POST sale with custom formula omits material from stock deduction', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const materialA = await seedMaterial({ code: 'MAT-CUSTOM-A', name: 'Material A' })
+    const materialB = await seedMaterial({ code: 'MAT-CUSTOM-B', name: 'Material B' })
+
+    for (const material of [materialA, materialB]) {
+      await InventoryMovement.create({
+        materialId: Number(material.id),
+        type: 'PURCHASE_IN',
+        quantity: '20',
+      })
+    }
+
+    const formula = await Formula.create({ name: 'Fórmula custom omit', active: true })
+    await FormulaMaterial.create({
+      formulaId: Number(formula.id),
+      materialId: Number(materialA.id),
+      quantity: '1.000',
+    })
+    await FormulaMaterial.create({
+      formulaId: Number(formula.id),
+      materialId: Number(materialB.id),
+      quantity: '1.000',
+    })
+
+    const catalog = await CatalogProduct.create({
+      name: 'Producto receta custom',
+      category: 'Uniforme',
+      formulaId: Number(formula.id),
+      salePriceUsd: '25.0000',
+      costUsd: '10.0000',
+      stockQuantity: '0.000',
+      active: true,
+    })
+
+    const response = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        confirm: true,
+        guest_name: 'Cliente receta custom',
+        payment_method_code: 'cash_usd',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 2,
+            unit_price_usd: 25,
+            formula_materials: [{ material_id: Number(materialA.id), quantity_per_unit: 1 }],
+          },
+        ],
+      })
+
+    response.assertStatus(200)
+
+    const saleLine = response.body().data.sale.lines[0]
+    assert.equal(Number(saleLine.unit_price_usd), 25)
+
+    const stockA = await InventoryMovement.query()
+      .where('materialId', Number(materialA.id))
+      .sum('quantity as total')
+      .first()
+    const stockB = await InventoryMovement.query()
+      .where('materialId', Number(materialB.id))
+      .sum('quantity as total')
+      .first()
+
+    assert.equal(Number(stockA?.$extras.total), 18)
+    assert.equal(Number(stockB?.$extras.total), 20)
+  })
+
+  test('POST sale with custom formula doubles material consumption', async ({ client, assert }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const material = await seedMaterial({ code: 'MAT-CUSTOM-DBL' })
+
+    await InventoryMovement.create({
+      materialId: Number(material.id),
+      type: 'PURCHASE_IN',
+      quantity: '20',
+    })
+
+    const formula = await Formula.create({ name: 'Fórmula custom double', active: true })
+    await FormulaMaterial.create({
+      formulaId: Number(formula.id),
+      materialId: Number(material.id),
+      quantity: '1.000',
+    })
+
+    const catalog = await CatalogProduct.create({
+      name: 'Producto doble material',
+      category: 'Uniforme',
+      formulaId: Number(formula.id),
+      salePriceUsd: '18.0000',
+      costUsd: '6.0000',
+      stockQuantity: '0.000',
+      active: true,
+    })
+
+    const response = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        confirm: true,
+        guest_name: 'Cliente doble',
+        payment_method_code: 'cash_usd',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 2,
+            unit_price_usd: 18,
+            formula_materials: [{ material_id: Number(material.id), quantity_per_unit: 2 }],
+          },
+        ],
+      })
+
+    response.assertStatus(200)
+
+    assert.equal(Number(response.body().data.sale.lines[0].unit_price_usd), 18)
+
+    const materialStock = await InventoryMovement.query()
+      .where('materialId', Number(material.id))
+      .sum('quantity as total')
+      .first()
+
+    assert.equal(Number(materialStock?.$extras.total), 16)
+  })
+
+  test('POST sale with custom formula can add material outside base formula', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const baseMaterial = await seedMaterial({ code: 'MAT-CUSTOM-BASE' })
+    const extraMaterial = await seedMaterial({ code: 'MAT-CUSTOM-EXTRA' })
+
+    for (const material of [baseMaterial, extraMaterial]) {
+      await InventoryMovement.create({
+        materialId: Number(material.id),
+        type: 'PURCHASE_IN',
+        quantity: '10',
+      })
+    }
+
+    const formula = await Formula.create({ name: 'Fórmula base simple', active: true })
+    await FormulaMaterial.create({
+      formulaId: Number(formula.id),
+      materialId: Number(baseMaterial.id),
+      quantity: '1.000',
+    })
+
+    const catalog = await CatalogProduct.create({
+      name: 'Producto material extra',
+      category: 'Uniforme',
+      formulaId: Number(formula.id),
+      salePriceUsd: '30.0000',
+      costUsd: '12.0000',
+      stockQuantity: '0.000',
+      active: true,
+    })
+
+    const response = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        confirm: true,
+        guest_name: 'Cliente extra material',
+        payment_method_code: 'cash_usd',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 1,
+            unit_price_usd: 30,
+            formula_materials: [
+              { material_id: Number(baseMaterial.id), quantity_per_unit: 1 },
+              { material_id: Number(extraMaterial.id), quantity_per_unit: 0.5 },
+            ],
+          },
+        ],
+      })
+
+    response.assertStatus(200)
+
+    const saleLine = response.body().data.sale.lines[0]
+    assert.equal(Number(saleLine.unit_price_usd), 18.75)
+    assert.equal(Number(response.body().data.sale.total_usd), 18.75)
+
+    const baseStock = await InventoryMovement.query()
+      .where('materialId', Number(baseMaterial.id))
+      .sum('quantity as total')
+      .first()
+    const extraStock = await InventoryMovement.query()
+      .where('materialId', Number(extraMaterial.id))
+      .sum('quantity as total')
+      .first()
+
+    assert.equal(Number(baseStock?.$extras.total), 9)
+    assert.equal(Number(extraStock?.$extras.total), 9.5)
+  })
+
+  test('POST sale ignores client catalog price when custom formula adds material', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const baseMaterial = await seedMaterial({ code: 'MAT-PRICE-BASE' })
+    const extraMaterial = await seedMaterial({ code: 'MAT-PRICE-EXTRA' })
+
+    for (const material of [baseMaterial, extraMaterial]) {
+      await InventoryMovement.create({
+        materialId: Number(material.id),
+        type: 'PURCHASE_IN',
+        quantity: '10',
+      })
+    }
+
+    const formula = await Formula.create({ name: 'Fórmula precio extra', active: true })
+    await FormulaMaterial.create({
+      formulaId: Number(formula.id),
+      materialId: Number(baseMaterial.id),
+      quantity: '1.000',
+    })
+
+    const catalog = await CatalogProduct.create({
+      name: 'Producto precio extra',
+      category: 'Uniforme',
+      formulaId: Number(formula.id),
+      salePriceUsd: '30.0000',
+      costUsd: '12.0000',
+      stockQuantity: '0.000',
+      active: true,
+    })
+
+    const response = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        confirm: true,
+        guest_name: 'Cliente precio recalculado',
+        payment_method_code: 'cash_usd',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 1,
+            unit_price_usd: 30,
+            formula_materials: [
+              { material_id: Number(baseMaterial.id), quantity_per_unit: 1 },
+              { material_id: Number(extraMaterial.id), quantity_per_unit: 0.5 },
+            ],
+          },
+        ],
+      })
+
+    response.assertStatus(200)
+    assert.equal(Number(response.body().data.sale.lines[0].unit_price_usd), 18.75)
+    assert.equal(Number(response.body().data.sale.total_usd), 18.75)
+  })
+
+  test('draft sale persists and reloads custom formula materials', async ({ client, assert }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const material = await seedMaterial({ code: 'MAT-DRAFT-CUSTOM' })
+    const formula = await Formula.create({ name: 'Fórmula borrador', active: true })
+    await FormulaMaterial.create({
+      formulaId: Number(formula.id),
+      materialId: Number(material.id),
+      quantity: '1.000',
+    })
+
+    const catalog = await CatalogProduct.create({
+      name: 'Producto borrador custom',
+      category: 'Uniforme',
+      formulaId: Number(formula.id),
+      salePriceUsd: '14.0000',
+      costUsd: '4.0000',
+      stockQuantity: '0.000',
+      active: true,
+    })
+
+    const createResponse = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        guest_name: 'Borrador custom',
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 1,
+            unit_price_usd: 14,
+            formula_materials: [{ material_id: Number(material.id), quantity_per_unit: 3 }],
+          },
+        ],
+      })
+
+    createResponse.assertStatus(200)
+    const saleId = createResponse.body().data.sale.id
+
+    const detailResponse = await client.get(`/api/v1/sales/${saleId}`).loginAs(user)
+    detailResponse.assertStatus(200)
+
+    const line = detailResponse.body().data.sale.lines[0]
+    assert.isTrue(line.has_custom_formula)
+    assert.equal(Number(line.unit_price_usd), 14)
+    assert.lengthOf(line.formula_materials, 1)
+    assert.equal(line.formula_materials[0].material_id, Number(material.id))
+    assert.equal(line.formula_materials[0].quantity_per_unit, '3.000')
+    assert.equal(line.effective_formula_materials[0].quantity_per_unit, '3.000')
+  })
+
+  test('draft sale persists and reloads kitchen_note', async ({ client, assert }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const catalog = await CatalogProduct.create({
+      name: 'Combo de perros',
+      category: 'Comidas',
+      salePriceUsd: '8.0000',
+      costUsd: '3.0000',
+      stockQuantity: '20.000',
+      active: true,
+    })
+
+    const note =
+      '1 sin cebolla, sin mayonesa, sin zanahoria\n2 sin mostaza\n1 sin cebolla'
+
+    const createResponse = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        guest_name: 'Comanda notes',
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 3,
+            unit_price_usd: 8,
+            kitchen_note: note,
+          },
+        ],
+      })
+
+    createResponse.assertStatus(200)
+    const saleId = createResponse.body().data.sale.id as number
+    assert.equal(createResponse.body().data.sale.lines[0].kitchen_note, note)
+
+    const getResponse = await client.get(`/api/v1/sales/${saleId}`).loginAs(user)
+    getResponse.assertStatus(200)
+    assert.equal(getResponse.body().data.sale.lines[0].kitchen_note, note)
+  })
+
+  test('POST sale return with custom formula reverts effective material consumption', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const material = await seedMaterial({ code: 'MAT-RETURN-CUSTOM' })
+
+    await InventoryMovement.create({
+      materialId: Number(material.id),
+      type: 'PURCHASE_IN',
+      quantity: '10',
+    })
+
+    const formula = await Formula.create({ name: 'Fórmula devolución', active: true })
+    await FormulaMaterial.create({
+      formulaId: Number(formula.id),
+      materialId: Number(material.id),
+      quantity: '1.000',
+    })
+
+    const catalog = await CatalogProduct.create({
+      name: 'Producto devolución custom',
+      category: 'Uniforme',
+      formulaId: Number(formula.id),
+      salePriceUsd: '16.0000',
+      costUsd: '5.0000',
+      stockQuantity: '0.000',
+      active: true,
+    })
+
+    const saleResponse = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        confirm: true,
+        guest_name: 'Cliente devolución',
+        payment_method_code: 'cash_usd',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 2,
+            unit_price_usd: 16,
+            formula_materials: [{ material_id: Number(material.id), quantity_per_unit: 2 }],
+          },
+        ],
+      })
+
+    saleResponse.assertStatus(200)
+    const saleId = saleResponse.body().data.sale.id
+    const lineId = saleResponse.body().data.sale.lines[0].id
+
+    const returnResponse = await client
+      .post(`/api/v1/sales/${saleId}/return`)
+      .loginAs(user)
+      .json({ lines: [{ line_id: lineId, quantity: 1 }] })
+
+    returnResponse.assertStatus(200)
+
+    const materialStock = await InventoryMovement.query()
+      .where('materialId', Number(material.id))
+      .sum('quantity as total')
+      .first()
+
+    assert.equal(Number(materialStock?.$extras.total), 8)
+  })
+
   test('POST catalog product adjustment blocked when product has formula', async ({ client }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
     const formula = await Formula.create({ name: 'Fórmula bloqueo', active: true })
@@ -752,6 +1195,8 @@ test.group('Ventas API — catálogo y ventas', (group) => {
 
     confirmResponse.assertStatus(200)
     assert.match(confirmResponse.body().data.sale.code, /^0000000001$/)
+    assert.equal(confirmResponse.body().data.sale.sold_by.id, Number(user.id))
+    assert.equal(confirmResponse.body().data.sale.sold_by.name, user.name)
 
     const secondDraft = await client
       .post('/api/v1/sales')
@@ -995,6 +1440,111 @@ test.group('Ventas API — catálogo y ventas', (group) => {
     assert.equal(confirmResponse.body().data.sale.usd_rate, '40.0000')
     assert.equal(confirmResponse.body().data.sale.total_bs, '400.00')
     assert.equal(confirmResponse.body().data.sale.payment_method.name, 'Efectivo Bs')
+  })
+
+  test('POST /sales/:id/confirm snapshots XAU total when paying in base', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+
+    await Currency.updateOrCreate(
+      { code: 'XAU' },
+      { name: 'Oro', ratePerUsd: '1.0000', isActive: true }
+    )
+    await PaymentMethod.updateOrCreate(
+      { code: 'gold_xau' },
+      {
+        name: 'Oro XAU',
+        currencyCode: 'XAU',
+        isActive: true,
+        sortOrder: 99,
+      }
+    )
+
+    const catalog = await CatalogProduct.create({
+      name: 'Producto oro',
+      category: 'Uniforme',
+      salePriceUsd: '0.5000',
+      costUsd: '0.2000',
+      stockQuantity: '5.000',
+      active: true,
+    })
+
+    const draftResponse = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        guest_name: 'Cliente oro',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 1,
+            unit_price_usd: 0.5,
+          },
+        ],
+      })
+
+    draftResponse.assertStatus(200)
+
+    const confirmResponse = await client
+      .post(`/api/v1/sales/${draftResponse.body().data.sale.id}/confirm`)
+      .loginAs(user)
+      .json({ payment_method_code: 'gold_xau' })
+
+    confirmResponse.assertStatus(200)
+    assert.equal(confirmResponse.body().data.sale.payment_method_code, 'gold_xau')
+    assert.equal(confirmResponse.body().data.sale.usd_rate, '1.0000')
+    assert.equal(confirmResponse.body().data.sale.total_bs, '0.5000')
+  })
+
+  test('POST /sales/:id/confirm converts base XAU to USD with rate 100', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+
+    await db.from('currencies').where('code', 'USD').update({ rate_per_usd: '100.0000' })
+    await PaymentMethod.query().where('code', 'cash_usd').update({ isActive: true })
+
+    const catalog = await CatalogProduct.create({
+      name: 'Producto base',
+      category: 'Uniforme',
+      salePriceUsd: '1.0000',
+      costUsd: '0.4000',
+      stockQuantity: '5.000',
+      active: true,
+    })
+
+    const draftResponse = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        guest_name: 'Cliente USD',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 1,
+            unit_price_usd: 1,
+          },
+        ],
+      })
+
+    draftResponse.assertStatus(200)
+
+    const confirmResponse = await client
+      .post(`/api/v1/sales/${draftResponse.body().data.sale.id}/confirm`)
+      .loginAs(user)
+      .json({ payment_method_code: 'cash_usd' })
+
+    confirmResponse.assertStatus(200)
+    assert.equal(confirmResponse.body().data.sale.payment_method_code, 'cash_usd')
+    assert.equal(confirmResponse.body().data.sale.usd_rate, '100.0000')
+    assert.equal(confirmResponse.body().data.sale.total_bs, '100.00')
   })
 
   test('GET /sales with invalid id returns 422 without SQL error', async ({ client, assert }) => {

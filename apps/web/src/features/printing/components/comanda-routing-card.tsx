@@ -4,7 +4,6 @@ import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-catego
 import { PrinterSelect } from '@/features/printing/components/printer-select'
 import type { PrintConfig, PrinterInfo } from '@/features/printing/types'
 import {
-  MATERIALS_CATEGORY,
   UNCATEGORIZED_CATEGORY,
   UNCATEGORIZED_CATEGORY_LABEL,
   getRuleDeviceName,
@@ -35,7 +34,6 @@ export function ComandaRoutingCard({
       key: category.name,
       label: category.name,
     })),
-    { key: MATERIALS_CATEGORY, label: MATERIALS_CATEGORY },
     { key: UNCATEGORIZED_CATEGORY, label: UNCATEGORIZED_CATEGORY_LABEL },
   ]
 
@@ -57,24 +55,24 @@ export function ComandaRoutingCard({
       <CardHeader>
         <CardTitle className="text-base">Comanda por categoría</CardTitle>
         <CardDescription>
-          Envía comandas a distintas impresoras según la categoría del producto (cocina, barra,
-          etc.).
+          Enruta comandas a distintas impresoras según la categoría del producto vendido.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <label className="flex items-center gap-2 text-sm">
           <Checkbox
             checked={routing.enabled}
-            disabled={!canEdit}
             onChange={(event) => updateRouting({ enabled: event.target.checked })}
           />
           Usar impresoras distintas por categoría
         </label>
 
         <p className="text-muted-foreground text-xs">
-          Se usa la <strong>categoría del producto</strong> en catálogo (no el nombre del producto).
-          Si una venta mezcla categorías con impresoras distintas, se imprimen varias comandas (una
-          por impresora). Las categorías sin regla usan la impresora de <strong>Comanda</strong>
+          Se usa la <strong>categoría del producto</strong> en catálogo. Los materiales de la
+          fórmula (si activaste &quot;Imprimir fórmula en comanda&quot;) salen <strong>debajo del
+          producto en el mismo ticket</strong>, no en otra impresora. Si una venta mezcla categorías
+          con impresoras distintas, se imprimen varias comandas (una por impresora). Las categorías
+          sin regla usan la impresora de <strong>Comanda</strong>
           {defaultPrinter ? ` (${defaultPrinter})` : ' (sin asignar)'}.
         </p>
 
@@ -96,7 +94,7 @@ export function ComandaRoutingCard({
                         id={`comanda-printer-${row.key}`}
                         printers={printers}
                         value={getRuleDeviceName(routing.rules, row.key)}
-                        disabled={!canEdit || !electronAvailable}
+                        disabled={!electronAvailable}
                         onChange={(deviceName) =>
                           updateRouting({
                             rules: upsertCategoryRule(routing.rules, row.key, deviceName),

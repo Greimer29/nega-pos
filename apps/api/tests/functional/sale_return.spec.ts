@@ -112,7 +112,7 @@ test.group('Sale devolución venta API', (group) => {
     const material = await Material.create({
       code: 'MAT-DEV',
       name: 'Material devolución',
-      category: 'FABRIC',
+      category: 'Uniforme',
       unit: 'ROL',
       minimumStock: '1',
       active: true,

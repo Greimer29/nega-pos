@@ -1,11 +1,6 @@
 import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import {
-  CATEGORIA_LABELS,
-  MATERIAL_CATEGORIAS,
-  SORT_BY_LABELS,
-  STATUS_FILTER_LABELS,
-} from '@/features/materials/constants'
+import { SORT_BY_LABELS, STATUS_FILTER_LABELS } from '@/features/materials/constants'
 import type { MaterialCategoria, MaterialSortBy, MaterialStatusFilter } from '@/features/materials/types'
 import { cn } from '@/lib/utils'
 
@@ -18,6 +13,7 @@ type MaterialFiltersBarProps = {
   onCategoryChange: (value: MaterialCategoria | '') => void
   sortBy: MaterialSortBy
   onSortByChange: (value: MaterialSortBy) => void
+  categories: Array<{ id: number; name: string }>
   layout?: 'bar' | 'sidebar'
   hideSearch?: boolean
 }
@@ -31,6 +27,7 @@ export function MaterialFiltersBar({
   onCategoryChange,
   sortBy,
   onSortByChange,
+  categories,
   layout = 'bar',
   hideSearch = false,
 }: MaterialFiltersBarProps) {
@@ -78,12 +75,12 @@ export function MaterialFiltersBar({
             id="filter-category"
             className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
             value={category}
-            onChange={(e) => onCategoryChange(e.target.value as MaterialCategoria | '')}
+            onChange={(e) => onCategoryChange(e.target.value)}
           >
             <option value="">Todas</option>
-            {MATERIAL_CATEGORIAS.map((cat) => (
-              <option key={cat} value={cat}>
-                {CATEGORIA_LABELS[cat]}
+            {categories.map((item) => (
+              <option key={item.id} value={item.name}>
+                {item.name}
               </option>
             ))}
           </select>

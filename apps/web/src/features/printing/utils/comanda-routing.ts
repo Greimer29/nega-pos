@@ -2,9 +2,11 @@ import type { PrintConfig } from '@/features/printing/types'
 import type { Sale, SaleLine } from '@/features/ventas/types'
 
 export const UNCATEGORIZED_CATEGORY = '__sin_categoria__'
-export const MATERIALS_CATEGORY = 'Materiales'
 
 export const UNCATEGORIZED_CATEGORY_LABEL = 'Sin categoría / otros'
+
+/** @deprecated Ya no se enruta por "Materiales"; se filtra al cargar config legacy. */
+export const LEGACY_MATERIALS_ROUTING_CATEGORY = 'Materiales'
 
 export function normalizeCategoryKey(value: string): string {
   return value.trim().toLocaleLowerCase('es-VE')
@@ -49,7 +51,7 @@ export function resolveLineCategory(line: SaleLine): string {
   }
 
   if (line.material_id || line.material) {
-    return MATERIALS_CATEGORY
+    return UNCATEGORIZED_CATEGORY
   }
 
   return UNCATEGORIZED_CATEGORY
@@ -110,13 +112,6 @@ export function groupSaleLinesByComandaPrinter(
   return groups
 }
 
-export function getRuleDeviceName(
-  rules: PrintConfig['categoryRouting']['comanda']['rules'],
-  category: string
-): string {
-  return resolveRuleDeviceName(rules, category) ?? ''
-}
-
 export function upsertCategoryRule(
   rules: PrintConfig['categoryRouting']['comanda']['rules'],
   category: string,
@@ -132,4 +127,22 @@ export function upsertCategoryRule(
   }
 
   return [...withoutCategory, { category, deviceName: trimmedDevice }]
+}
+
+export function getRuleDeviceName(
+  rules: PrintConfig['categoryRouting']['comanda']['rules'],
+  category: string
+): string {
+  return resolveRuleDeviceName(rules, category) ?? ''
+}
+
+/** Quita reglas legacy de "Materiales" (los materiales van en la fórmula del producto, no en otra comanda). */
+export function sanitizeComandaRoutingRules(
+  rules: PrintConfig['categoryRouting']['comanda']['rules']
+): PrintConfig['categoryRouting']['comanda']['rules'] {
+  return rules.filter(
+    (rule) =>
+      normalizeCategoryKey(rule.category) !==
+      normalizeCategoryKey(LEGACY_MATERIALS_ROUTING_CATEGORY)
+  )
 }

@@ -156,4 +156,24 @@ test.group('route_permissions', () => {
     assert.equal(resolveRoutePermission('GET', '/api/v1/auth/me'), 'auth_only')
     assert.equal(resolveRoutePermission('POST', '/api/v1/auth/logout'), 'auth_only')
   })
+
+  test('categories routes accept settings or catalog permissions', ({ assert }) => {
+    assert.deepEqual(resolveRoutePermission('GET', '/api/v1/categories'), [
+      'catalog.view',
+      'settings.view',
+    ])
+    assert.deepEqual(resolveRoutePermission('PUT', '/api/v1/categories/42'), [
+      'catalog.edit',
+      'settings.edit',
+      'settings.view',
+    ])
+  })
+
+  test('settings mutations accept view or edit permission', ({ assert }) => {
+    assert.deepEqual(resolveRoutePermission('PUT', '/api/v1/settings/general'), [
+      'settings.edit',
+      'settings.view',
+    ])
+    assert.equal(resolveRoutePermission('GET', '/api/v1/settings/general'), 'settings.view')
+  })
 })

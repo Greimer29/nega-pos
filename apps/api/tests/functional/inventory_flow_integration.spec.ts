@@ -57,7 +57,7 @@ async function seedMaterial(overrides: Partial<Material> = {}) {
   return Material.create({
     code: 'INT-001',
     name: 'Tela integral',
-    category: 'FABRIC',
+    category: 'Uniforme',
     unit: 'ROL',
     minimumStock: '1',
     lastPurchasePriceUsd: '5.0000',

@@ -2,10 +2,13 @@ import { Coins, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 import { CurrencyFormDialog } from '@/features/currencies/components/currency-form-dialog'
 import {
+  useBaseCurrencyQuery,
   useCurrenciesQuery,
   useDeleteCurrencyMutation,
+  useUpdateBaseCurrencyMutation,
   useUpdateCurrencyMutation,
 } from '@/features/currencies/hooks/use-currencies'
 import type { Currency } from '@/features/currencies/types'
@@ -18,8 +21,10 @@ export function CurrenciesConfigCard() {
   const [actionError, setActionError] = useState<string | null>(null)
 
   const { data: currencies = [], isLoading, isError, error } = useCurrenciesQuery()
+  const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
   const updateMutation = useUpdateCurrencyMutation()
   const deleteMutation = useDeleteCurrencyMutation()
+  const updateBaseMutation = useUpdateBaseCurrencyMutation()
 
   function openCreate() {
     setSelectedCurrency(null)
@@ -32,7 +37,7 @@ export function CurrenciesConfigCard() {
   }
 
   async function toggleActive(currency: Currency) {
-    if (currency.code === 'USD') return
+    if (currency.code === baseCurrencyCode) return
     setActionError(null)
     try {
       await updateMutation.mutateAsync({
@@ -45,7 +50,7 @@ export function CurrenciesConfigCard() {
   }
 
   async function handleDelete(currency: Currency) {
-    if (currency.code === 'USD') return
+    if (currency.code === baseCurrencyCode) return
     if (!window.confirm(`¿Eliminar la moneda ${currency.code}?`)) return
     setActionError(null)
     try {
@@ -54,6 +59,17 @@ export function CurrenciesConfigCard() {
       setActionError(getApiErrorMessage(err))
     }
   }
+
+  async function handleBaseCurrencyChange(code: string) {
+    setActionError(null)
+    try {
+      await updateBaseMutation.mutateAsync(code)
+    } catch (err) {
+      setActionError(getApiErrorMessage(err))
+    }
+  }
+
+  const activeCurrencies = currencies.filter((c) => c.isActive)
 
   return (
     <Card>
@@ -64,8 +80,8 @@ export function CurrenciesConfigCard() {
             Monedas y tasas
           </CardTitle>
           <CardDescription>
-            Los registros monetarios se guardan en dólares (USD). Configurá monedas y tasas de
-            referencia; los reportes consolidan en $.
+            Los registros monetarios se guardan en la moneda base del sistema. La tasa de cada
+            moneda es cuántas unidades equivalen a 1 unidad de la base (ej. 100 USD = 1 XAU).
           </CardDescription>
         </div>
         <Button size="sm" onClick={openCreate}>
@@ -75,6 +91,27 @@ export function CurrenciesConfigCard() {
       </CardHeader>
       <CardContent className="space-y-4">
         {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
+
+        <div className="space-y-2 rounded-md border p-4">
+          <Label htmlFor="base-currency">Moneda base del sistema</Label>
+          <select
+            id="base-currency"
+            className="border-input bg-background w-full max-w-xs rounded-md border px-3 py-2 text-sm"
+            value={baseCurrencyCode}
+            disabled={updateBaseMutation.isPending || activeCurrencies.length === 0}
+            onChange={(event) => void handleBaseCurrencyChange(event.target.value)}
+          >
+            {activeCurrencies.map((currency) => (
+              <option key={currency.code} value={currency.code}>
+                {currency.code} — {currency.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-muted-foreground text-xs">
+            Ventas, compras, costos y reportes consolidan en esta moneda. Cambiarla no reconvierte
+            el histórico automáticamente (usar migración de cutover).
+          </p>
+        </div>
 
         {isLoading ? (
           <Loader2 className="text-muted-foreground size-5 animate-spin" />
@@ -89,7 +126,7 @@ export function CurrenciesConfigCard() {
                 <tr className="bg-muted/50 border-b text-left">
                   <th className="px-4 py-3 font-medium">Código</th>
                   <th className="px-4 py-3 font-medium">Nombre</th>
-                  <th className="px-4 py-3 font-medium text-right">Tasa / USD</th>
+                  <th className="px-4 py-3 font-medium text-right">Tasa / {baseCurrencyCode}</th>
                   <th className="px-4 py-3 font-medium">Estado</th>
                   <th className="px-4 py-3 font-medium text-right">Acciones</th>
                 </tr>
@@ -97,7 +134,14 @@ export function CurrenciesConfigCard() {
               <tbody>
                 {currencies.map((currency) => (
                   <tr key={currency.code} className="border-b last:border-b-0">
-                    <td className="px-4 py-3 font-mono font-medium">{currency.code}</td>
+                    <td className="px-4 py-3 font-mono font-medium">
+                      {currency.code}
+                      {currency.code === baseCurrencyCode ? (
+                        <span className="bg-primary/10 text-primary ml-2 rounded px-1.5 py-0.5 text-xs">
+                          Base
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3">{currency.name}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{currency.ratePerUsd}</td>
                     <td className="px-4 py-3">
@@ -122,7 +166,7 @@ export function CurrenciesConfigCard() {
                         >
                           <Pencil className="size-4" />
                         </Button>
-                        {currency.code !== 'USD' ? (
+                        {currency.code !== baseCurrencyCode ? (
                           <>
                             <Button
                               type="button"
@@ -156,6 +200,7 @@ export function CurrenciesConfigCard() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         currency={selectedCurrency}
+        baseCurrencyCode={baseCurrencyCode}
       />
     </Card>
   )

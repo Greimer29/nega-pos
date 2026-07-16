@@ -79,7 +79,7 @@ test.group('Ventas — material pendiente y compra', (group) => {
     const material = await Material.create({
       code: 'TEL-PEND',
       name: 'Tela pendiente',
-      category: 'FABRIC',
+      category: 'Uniforme',
       unit: 'ROL',
       minimumStock: '1',
       lastPurchasePriceUsd: '2.0000',
@@ -178,7 +178,7 @@ test.group('Ventas — material pendiente y compra', (group) => {
     const material = await Material.create({
       code: 'TEL-CRED',
       name: 'Tela crédito',
-      category: 'FABRIC',
+      category: 'Uniforme',
       unit: 'ROL',
       minimumStock: '1',
       lastPurchasePriceUsd: '2.0000',
@@ -274,7 +274,7 @@ test.group('Ventas — material pendiente y compra', (group) => {
     const material = await Material.create({
       code: 'TEL-STK-PROD',
       name: 'Tela stock producto',
-      category: 'FABRIC',
+      category: 'Uniforme',
       unit: 'ROL',
       minimumStock: '1',
       lastPurchasePriceUsd: '2.0000',

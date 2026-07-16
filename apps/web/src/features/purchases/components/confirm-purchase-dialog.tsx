@@ -92,8 +92,8 @@ export function ConfirmarPurchaseDialog({
           {sinItems ? <p className="text-destructive">La compra no tiene ítems.</p> : null}
           {sinTasa ? (
             <p className="text-amber-700 dark:text-amber-400">
-              No cargaste tasa USD. Los montos en bolívares quedarán en cero hasta que definas una
-              tasa.
+              No cargaste la tasa de la moneda de ingreso. Los montos en esa moneda quedarán en cero
+              hasta que definas una tasa.
             </p>
           ) : null}
           {error ? <p className="text-destructive whitespace-pre-line">{error}</p> : null}

@@ -80,7 +80,7 @@ test.group('Dashboard API', (group) => {
     const material = await Material.create({
       code: '5810',
       name: 'Atlética',
-      category: 'FABRIC',
+      category: 'Uniforme',
       unit: 'ROL',
       minimumStock: '5',
       active: true,
@@ -249,7 +249,7 @@ test.group('Dashboard API', (group) => {
     const material = await Material.create({
       code: 'MAT-DASH-FORM',
       name: 'Material dashboard',
-      category: 'FABRIC',
+      category: 'Uniforme',
       unit: 'UND',
       minimumStock: '0',
       lastPurchasePriceUsd: '1.0000',

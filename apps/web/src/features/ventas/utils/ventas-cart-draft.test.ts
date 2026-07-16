@@ -56,7 +56,7 @@ describe('ventas-cart-draft', () => {
 
   it('persists and restores cart draft in sessionStorage', () => {
     saveVentasCartDraft({
-      cart: [{ product: sampleProduct, quantity: 2 }],
+      cart: [{ id: 'line-1', product: sampleProduct, quantity: 2, formulaMaterials: null }],
       customerId: 5,
       clientName: 'Cliente demo',
       customerCreditDays: 30,
@@ -68,15 +68,88 @@ describe('ventas-cart-draft', () => {
 
     const restored = loadVentasCartDraft()
     expect(restored?.cart).toHaveLength(1)
+    expect(restored?.cart[0]?.id).toBe('line-1')
     expect(restored?.cart[0]?.product.name).toBe('Camisa')
     expect(restored?.cart[0]?.quantity).toBe(2)
     expect(restored?.customerId).toBe(5)
     expect(restored?.clientName).toBe('Cliente demo')
   })
 
+  it('persists custom formula materials in cart draft', () => {
+    saveVentasCartDraft({
+      cart: [
+        {
+          id: 'line-custom',
+          product: sampleProduct,
+          quantity: 1,
+          formulaMaterials: [{ material_id: 9, quantity_per_unit: 2.5 }],
+        },
+      ],
+      customerId: '',
+      clientName: '',
+      customerCreditDays: null,
+      paymentType: 'CASH',
+      billingMethod: 'FAST',
+      sourceSaleId: null,
+      sourceSaleLabel: null,
+    })
+
+    const restored = loadVentasCartDraft()
+    expect(restored?.cart[0]?.formulaMaterials).toEqual([
+      { material_id: 9, quantity_per_unit: 2.5 },
+    ])
+  })
+
+  it('persists custom unit price when formula adds materials', () => {
+    saveVentasCartDraft({
+      cart: [
+        {
+          id: 'line-priced',
+          product: sampleProduct,
+          quantity: 1,
+          formulaMaterials: [{ material_id: 9, quantity_per_unit: 2.5 }],
+          unitPriceUsd: 18.75,
+        },
+      ],
+      customerId: '',
+      clientName: '',
+      customerCreditDays: null,
+      paymentType: 'CASH',
+      billingMethod: 'FAST',
+      sourceSaleId: null,
+      sourceSaleLabel: null,
+    })
+
+    const restored = loadVentasCartDraft()
+    expect(restored?.cart[0]?.unitPriceUsd).toBe(18.75)
+  })
+
+  it('persists kitchen note in cart draft', () => {
+    saveVentasCartDraft({
+      cart: [
+        {
+          id: 'line-note',
+          product: sampleProduct,
+          quantity: 3,
+          kitchenNote: '1 sin cebolla\n2 sin mostaza',
+        },
+      ],
+      customerId: '',
+      clientName: '',
+      customerCreditDays: null,
+      paymentType: 'CASH',
+      billingMethod: 'FAST',
+      sourceSaleId: null,
+      sourceSaleLabel: null,
+    })
+
+    const restored = loadVentasCartDraft()
+    expect(restored?.cart[0]?.kitchenNote).toBe('1 sin cebolla\n2 sin mostaza')
+  })
+
   it('clears stored draft', () => {
     saveVentasCartDraft({
-      cart: [{ product: sampleProduct, quantity: 1 }],
+      cart: [{ id: 'line-2', product: sampleProduct, quantity: 1 }],
       customerId: '',
       clientName: '',
       customerCreditDays: null,

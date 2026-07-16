@@ -2,13 +2,16 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   createCurrency,
   deleteCurrency,
+  getBaseCurrencyCode,
   listCurrencies,
+  updateBaseCurrencyCode,
   updateCurrency,
 } from '@/features/currencies/services/currency-service'
 import type { CurrencyInput, CurrencyUpdateInput } from '@/features/currencies/types'
 import { useAuthenticatedQuery } from '@/lib/use-authenticated-query'
 
 export const currenciesQueryKey = ['currencies'] as const
+export const baseCurrencyQueryKey = ['currencies', 'base'] as const
 
 export function useCurrenciesQuery(activeOnly = false) {
   return useAuthenticatedQuery({
@@ -18,6 +21,13 @@ export function useCurrenciesQuery(activeOnly = false) {
 }
 export function useActiveCurrenciesQuery() {
   return useCurrenciesQuery(true)
+}
+
+export function useBaseCurrencyQuery() {
+  return useAuthenticatedQuery({
+    queryKey: baseCurrencyQueryKey,
+    queryFn: () => getBaseCurrencyCode(),
+  })
 }
 
 export function useCreateCurrencyMutation() {
@@ -50,6 +60,18 @@ export function useDeleteCurrencyMutation() {
     mutationFn: (code: string) => deleteCurrency(code),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: currenciesQueryKey })
+    },
+  })
+}
+
+export function useUpdateBaseCurrencyMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (code: string) => updateBaseCurrencyCode(code),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: currenciesQueryKey })
+      void queryClient.invalidateQueries({ queryKey: baseCurrencyQueryKey })
     },
   })
 }

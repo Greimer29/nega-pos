@@ -19,9 +19,34 @@ export type UpdateCurrencyInput = {
   is_active?: boolean
 }
 
-const PROTECTED_CODES = new Set(['USD'])
+/** Columna `rate_per_usd` = unidades de esa moneda por 1 unidad de la moneda base. */
+export const KEY_BASE_CURRENCY = 'base_currency_code'
+export const DEFAULT_BASE_CURRENCY = 'XAU'
+export const CUTOVER_BASE_CURRENCY = 'XAU'
 
 export default class CurrencyService {
+  async getBaseCurrencyCode(): Promise<string> {
+    const row = await AppSetting.find(KEY_BASE_CURRENCY)
+    const code = row?.value?.trim().toUpperCase()
+    return code && code.length === 3 ? code : DEFAULT_BASE_CURRENCY
+  }
+
+  async setBaseCurrencyCode(code: string): Promise<string> {
+    const normalized = code.trim().toUpperCase()
+    await this.assertActiva(normalized)
+
+    await AppSetting.updateOrCreate(
+      { key: KEY_BASE_CURRENCY },
+      { value: normalized, updatedAt: DateTime.now() }
+    )
+
+    const base = await this.obtener(normalized)
+    base.ratePerUsd = '1.0000'
+    await base.save()
+
+    return normalized
+  }
+
   async listar(activeOnly = false): Promise<Currency[]> {
     const query = Currency.query().orderBy('code', 'asc')
     if (activeOnly) {
@@ -67,16 +92,21 @@ export default class CurrencyService {
 
   async actualizar(code: string, input: UpdateCurrencyInput): Promise<Currency> {
     const currency = await this.obtener(code)
+    const baseCode = await this.getBaseCurrencyCode()
 
-    if (input.is_active === false && PROTECTED_CODES.has(currency.code)) {
-      throw new MonedaProtegidaException()
+    if (input.is_active === false && currency.code === baseCode) {
+      throw new MonedaProtegidaException('La moneda base del sistema no se puede desactivar')
     }
 
     if (input.name !== undefined) {
       currency.name = input.name.trim()
     }
     if (input.rate_per_usd !== undefined) {
-      currency.ratePerUsd = input.rate_per_usd.toFixed(4)
+      if (currency.code === baseCode) {
+        currency.ratePerUsd = '1.0000'
+      } else {
+        currency.ratePerUsd = input.rate_per_usd.toFixed(4)
+      }
     }
     if (input.is_active !== undefined) {
       currency.isActive = input.is_active
@@ -89,22 +119,25 @@ export default class CurrencyService {
   }
 
   async eliminar(code: string): Promise<{ code: string; eliminado: true }> {
-    if (PROTECTED_CODES.has(code.toUpperCase())) {
-      throw new MonedaProtegidaException()
+    const normalized = code.toUpperCase()
+    const baseCode = await this.getBaseCurrencyCode()
+    if (normalized === baseCode) {
+      throw new MonedaProtegidaException('La moneda base del sistema no se puede eliminar')
     }
 
-    await this.obtener(code)
-    await Currency.query().where('code', code.toUpperCase()).delete()
-    return { code: code.toUpperCase(), eliminado: true }
+    await this.obtener(normalized)
+    await Currency.query().where('code', normalized).delete()
+    return { code: normalized, eliminado: true }
   }
 
   async getActiveRates(): Promise<Record<string, number>> {
+    const baseCode = await this.getBaseCurrencyCode()
     const currencies = await this.listar(true)
     const rates: Record<string, number> = {}
 
     for (const currency of currencies) {
-      if (currency.code === 'USD') {
-        rates.USD = 1
+      if (currency.code === baseCode) {
+        rates[baseCode] = 1
         continue
       }
 
@@ -116,16 +149,17 @@ export default class CurrencyService {
       rates[currency.code] = rate
     }
 
-    if (!rates.USD) {
-      rates.USD = 1
+    if (!rates[baseCode]) {
+      rates[baseCode] = 1
     }
 
     return rates
   }
 
-  toUsd(amount: number, currencyCode: string, rates: Record<string, number>): number {
+  /** Convierte un monto en `currencyCode` a la moneda base del sistema. */
+  toBase(amount: number, currencyCode: string, rates: Record<string, number>, baseCode: string): number {
     const code = currencyCode.toUpperCase()
-    if (code === 'USD') {
+    if (code === baseCode) {
       return amount
     }
 
@@ -141,13 +175,41 @@ export default class CurrencyService {
     return amount / rate
   }
 
-  fromUsd(amountUsd: number, currencyCode: string, rates: Record<string, number>): number {
+  /** Convierte un monto en moneda base a `currencyCode`. */
+  fromBase(
+    amountBase: number,
+    currencyCode: string,
+    rates: Record<string, number>,
+    baseCode: string
+  ): number {
     const code = currencyCode.toUpperCase()
-    if (code === 'USD') {
-      return amountUsd
+    if (code === baseCode) {
+      return amountBase
     }
     const rate = rates[code] ?? 1
-    return amountUsd * rate
+    return amountBase * rate
+  }
+
+  /** @deprecated Usar toBase — alias hacia moneda base del sistema. */
+  toUsd(amount: number, currencyCode: string, rates: Record<string, number>): number {
+    const baseCode = Object.keys(rates).find((code) => rates[code] === 1 && code.length === 3)
+    return this.toBase(amount, currencyCode, rates, baseCode ?? DEFAULT_BASE_CURRENCY)
+  }
+
+  /** @deprecated Usar fromBase — alias desde moneda base del sistema. */
+  fromUsd(amountUsd: number, currencyCode: string, rates: Record<string, number>): number {
+    const baseCode = Object.keys(rates).find((code) => rates[code] === 1 && code.length === 3)
+    return this.fromBase(amountUsd, currencyCode, rates, baseCode ?? DEFAULT_BASE_CURRENCY)
+  }
+
+  async toBaseAsync(amount: number, currencyCode: string): Promise<number> {
+    const [rates, baseCode] = await Promise.all([this.getActiveRates(), this.getBaseCurrencyCode()])
+    return this.toBase(amount, currencyCode, rates, baseCode)
+  }
+
+  async fromBaseAsync(amountBase: number, currencyCode: string): Promise<number> {
+    const [rates, baseCode] = await Promise.all([this.getActiveRates(), this.getBaseCurrencyCode()])
+    return this.fromBase(amountBase, currencyCode, rates, baseCode)
   }
 
   formatRates(rates: Record<string, number>): Record<string, string> {

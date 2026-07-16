@@ -1,10 +1,13 @@
 import Currency from '#models/currency'
 import PaymentMethod from '#models/payment_method'
+import AppSetting from '#models/app_setting'
 import { BaseSeeder } from '@adonisjs/lucid/seeders'
+import { DateTime } from 'luxon'
 
 const CURRENCIES = [
-  { code: 'USD', name: 'Dólar estadounidense', ratePerUsd: '1.0000' },
-  { code: 'VES', name: 'Bolívar', ratePerUsd: '1.0000' },
+  { code: 'XAU', name: 'Oro', ratePerUsd: '1.0000' },
+  { code: 'USD', name: 'Dólar estadounidense', ratePerUsd: '100.0000' },
+  { code: 'VES', name: 'Bolívar', ratePerUsd: '100.0000' },
 ] as const
 
 const PAYMENT_METHODS = [
@@ -18,6 +21,11 @@ const PAYMENT_METHODS = [
 
 export default class extends BaseSeeder {
   async run() {
+    await AppSetting.updateOrCreate(
+      { key: 'base_currency_code' },
+      { value: 'XAU', updatedAt: DateTime.now() }
+    )
+
     for (const row of CURRENCIES) {
       await Currency.updateOrCreate(
         { code: row.code },

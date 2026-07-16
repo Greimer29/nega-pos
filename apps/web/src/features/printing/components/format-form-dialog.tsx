@@ -19,7 +19,7 @@ type FormatFormDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   format: PrintFormatRecord | null
-  config: Pick<PrintConfig, 'business' | 'formats' | 'documents'>
+  config: Pick<PrintConfig, 'business' | 'formats' | 'documents' | 'ticket'>
   canEdit: boolean
   onSave: (format: PrintFormatRecord) => void
 }
@@ -52,7 +52,7 @@ export function FormatFormDialog({
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    if (!format || !canEdit) return
+    if (!format) return
 
     setError(null)
     const trimmedName = name.trim()
@@ -149,9 +149,7 @@ export function FormatFormDialog({
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   Cancelar
                 </Button>
-                {canEdit ? (
-                  <Button type="submit">Aplicar cambios</Button>
-                ) : null}
+                <Button type="submit">Aplicar cambios</Button>
               </div>
             </div>
           </DialogHeader>
@@ -165,7 +163,6 @@ export function FormatFormDialog({
                 <Input
                   id="format-name"
                   value={name}
-                  disabled={!canEdit}
                   onChange={(event) => setName(event.target.value)}
                 />
               </div>
@@ -176,7 +173,7 @@ export function FormatFormDialog({
                   id="format-kind"
                   className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
                   value={documentKind}
-                  disabled={!canEdit || format?.isBuiltin}
+                  disabled={format?.isBuiltin}
                   onChange={(event) => setDocumentKind(event.target.value as PrintDocumentKind)}
                 >
                   <option value="invoice">Factura / Recibo</option>
@@ -192,7 +189,6 @@ export function FormatFormDialog({
                   type="number"
                   min={1}
                   value={paperWidthMm}
-                  disabled={!canEdit}
                   onChange={(event) => setPaperWidthMm(event.target.value)}
                 />
               </div>
@@ -203,7 +199,6 @@ export function FormatFormDialog({
                   id="format-body"
                   className="border-input bg-background min-h-56 w-full rounded-md border px-3 py-2 font-mono text-xs"
                   value={bodyHtml}
-                  disabled={!canEdit}
                   onChange={(event) => setBodyHtml(event.target.value)}
                 />
               </div>

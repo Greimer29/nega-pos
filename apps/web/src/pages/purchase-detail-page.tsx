@@ -5,7 +5,6 @@ import {
   Loader2,
   Pencil,
   Plus,
-  Search,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -24,14 +23,25 @@ import { useAuth } from '@/features/auth/hooks/use-auth'
 import { PurchasePaymentFormDialog } from '@/features/purchases/components/purchase-payment-form-dialog'
 import { AccountSelect } from '@/features/accounts/components/account-select'
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
-import { PrecioBimonetario } from '@/features/purchases/components/bi-currency-price'
+import {
+  useActiveCurrenciesQuery,
+  useBaseCurrencyQuery,
+} from '@/features/currencies/hooks/use-currencies'
+import { currencySymbol } from '@/features/currencies/utils/convert-currency'
+import { PrecioEnMonedaIngreso } from '@/features/purchases/components/purchase-entry-price'
 import { PurchaseEntryCurrencyToggle } from '@/features/purchases/components/purchase-entry-currency-toggle'
 import {
-  bsToUsd,
   buildPurchaseItemPayload,
+  entryRateLabel,
+  formatItemNativeDisplay,
+  inferPurchaseEntryCurrency,
+  isPurchaseEntryInNative,
   isValidPurchaseRate,
+  nativeToUsd,
+  purchaseEntryDecimals,
+  subtotalColumnLabel,
   type PurchaseEntryCurrency,
-  usdToBs,
+  unitPriceColumnLabel,
 } from '@/features/purchases/utils/purchase-entry-currency'
 import { ESTADO_LABELS, formatFecha } from '@/features/purchases/constants'
 import {
@@ -46,12 +56,12 @@ import {
 import { useExchangeRateQuery } from '@/features/purchases/hooks/use-settings'
 import { downloadFactura } from '@/features/purchases/services/purchase-service'
 import type { LocalPurchaseItem, PurchaseItem, PurchaseItemMaterial } from '@/features/purchases/types'
-import { MaterialFormDialog } from '@/features/materials/components/material-form-dialog'
+import { CatalogProductSearchPicker } from '@/components/search-picker/catalog-product-search-picker'
+import { MaterialSearchPicker } from '@/components/search-picker/material-search-picker'
 import { UNIT_ABREV } from '@/features/materials/constants'
-import { useMaterialsQuery } from '@/features/materials/hooks/use-materials'
+import { MaterialFormDialog } from '@/features/materials/components/material-form-dialog'
 import type { Material } from '@/features/materials/types'
 import type { CatalogProduct } from '@/features/ventas/types'
-import { useCatalogProductsQuery } from '@/features/ventas/hooks/use-catalog'
 import { CatalogFormDialog } from '@/features/ventas/components/catalog-form-dialog'
 import { catalogProductCode } from '@/features/ventas/components/ventas-order-cart'
 import { productSaleUnitAbrev } from '@/features/ventas/constants'
@@ -69,6 +79,7 @@ function materialToSummary(material: Material): PurchaseItemMaterial {
     id: material.id,
     code: material.code,
     name: material.name,
+    category: material.category,
     unit: material.unit,
   }
 }
@@ -98,6 +109,7 @@ function purchaseItemToLocal(item: PurchaseItem): LocalPurchaseItem {
       id: item.materialId ?? 0,
       code: `#${item.materialId}`,
       name: 'Material',
+      category: 'Otro',
       unit: 'UND',
     },
     quantity: Number(item.quantity),
@@ -135,10 +147,31 @@ function parseDbItemId(localId: string): number | null {
   return Number.isFinite(id) ? id : null
 }
 
-function formatItemBsDisplay(unitPriceUsd: number, rate: number | null): number {
-  if (!isValidPurchaseRate(rate)) return 0
-  const bs = usdToBs(unitPriceUsd, rate)
-  return Number.isFinite(bs) ? bs : 0
+function resolveEntryRateInput(
+  currencyCode: string,
+  currencies: Array<{ code: string; ratePerUsd: string }>,
+  purchaseRate?: string | null,
+  legacyGlobalRate?: string | number | null,
+  baseCurrencyCode = 'XAU'
+): string {
+  if (currencyCode.toUpperCase() === baseCurrencyCode.toUpperCase()) {
+    return ''
+  }
+
+  if (purchaseRate) {
+    return formatRateInput(purchaseRate)
+  }
+
+  const currency = currencies.find((row) => row.code === currencyCode)
+  if (currency) {
+    return formatRateInput(currency.ratePerUsd)
+  }
+
+  if (currencyCode === 'VES' && legacyGlobalRate) {
+    return formatRateInput(legacyGlobalRate)
+  }
+
+  return ''
 }
 
 function formatRateInput(value: string | number | null | undefined) {
@@ -164,15 +197,12 @@ export function PurchaseDetallePage() {
   const [isCredit, setIsCredit] = useState(false)
   const [creditDueDate, setCreditDueDate] = useState('')
   const [hasLocalChanges, setHasLocalChanges] = useState(false)
-  const [entryCurrency, setEntryCurrency] = useState<PurchaseEntryCurrency>('USD')
+  const [entryCurrency, setEntryCurrency] = useState<PurchaseEntryCurrency>('XAU')
   const itemSaveTimers = useRef<Map<string, number>>(new Map())
-  const itemBsEntryRef = useRef<Map<string, number>>(new Map())
-  const entryCurrencyRef = useRef<PurchaseEntryCurrency>('USD')
+  const itemNativeEntryRef = useRef<Map<string, number>>(new Map())
+  const entryCurrencyRef = useRef<PurchaseEntryCurrency>('XAU')
   const usdRateRef = useRef('')
 
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [searchOpen, setSearchOpen] = useState(false)
   const [itemAddMode, setItemAddMode] = useState<'material' | 'product'>('material')
 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
@@ -184,19 +214,9 @@ export function PurchaseDetallePage() {
 
   const { data: purchase, isLoading, isError, error } = usePurchaseQuery(purchaseId)
   const { data: globalRate } = useExchangeRateQuery()
+  const { data: activeCurrencies = [] } = useActiveCurrenciesQuery()
+  const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
   const { data: suppliersData } = useSuppliersQuery({ page: 1, perPage: 100, active: true })
-  const { data: materialsData } = useMaterialsQuery({
-    page: 1,
-    perPage: itemAddMode === 'material' && searchOpen && !debouncedSearch ? 3 : 15,
-    search: itemAddMode === 'material' ? debouncedSearch || undefined : undefined,
-    status: 'active',
-  })
-  const { data: catalogData } = useCatalogProductsQuery({
-    page: 1,
-    perPage: itemAddMode === 'product' && searchOpen && !debouncedSearch ? 3 : 15,
-    search: itemAddMode === 'product' ? debouncedSearch || undefined : undefined,
-    active: true,
-  })
   const deleteMutation = useDeletePurchaseMutation()
   const uploadMutation = useUploadFacturaMutation()
   const updateMutation = useUpdatePurchaseMutation()
@@ -219,11 +239,6 @@ export function PurchaseDetallePage() {
   const supplierOffersCredit = (supplier?.creditDays ?? 0) > 0
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300)
-    return () => window.clearTimeout(timer)
-  }, [search])
-
-  useEffect(() => {
     setLocalItems([])
     setSyncedPurchaseId(null)
     setInvoiceNumber('')
@@ -233,11 +248,9 @@ export function PurchaseDetallePage() {
     setIsCredit(false)
     setCreditDueDate('')
     setHasLocalChanges(false)
-    setEntryCurrency('USD')
-    itemBsEntryRef.current.clear()
-    setSearch('')
-    setSearchOpen(false)
-  }, [purchaseId])
+    setEntryCurrency(baseCurrencyCode)
+    itemNativeEntryRef.current.clear()
+  }, [purchaseId, baseCurrencyCode])
 
   useEffect(() => {
     if (!purchase || !isBorrador) return
@@ -245,13 +258,23 @@ export function PurchaseDetallePage() {
 
     setLocalItems((purchase.items ?? []).map(purchaseItemToLocal))
     setInvoiceNumber(purchase.invoiceNumber ?? '')
-    setUsdRate(formatRateInput(purchase.usdRate ?? globalRate))
+    const resolvedEntry = inferPurchaseEntryCurrency(purchase, baseCurrencyCode)
+    setEntryCurrency(resolvedEntry)
+    setUsdRate(
+      resolveEntryRateInput(
+        resolvedEntry,
+        activeCurrencies,
+        purchase.usdRate,
+        globalRate,
+        baseCurrencyCode
+      )
+    )
     setNotes(purchase.notes ?? '')
     setAccountId(purchase.accountId)
     setIsCredit(supplierOffersCredit ? purchase.isCredit : false)
     setCreditDueDate(purchase.creditDueDate ?? '')
     setSyncedPurchaseId(purchase.id)
-  }, [purchase, isBorrador, syncedPurchaseId, globalRate, supplierOffersCredit])
+  }, [purchase, isBorrador, syncedPurchaseId, globalRate, supplierOffersCredit, activeCurrencies, baseCurrencyCode])
 
   useEffect(() => {
     if (!supplierOffersCredit && isCredit) {
@@ -270,6 +293,7 @@ export function PurchaseDetallePage() {
           ...(purchase.supplierId ? { supplier_id: purchase.supplierId } : {}),
           date: purchase.date,
           invoice_number: invoiceNumber.trim() || undefined,
+          entry_currency_code: entryCurrency,
           usd_rate: usdRate ? Number(usdRate) : undefined,
           notes: notes.trim() || undefined,
           account_id: accountId,
@@ -287,6 +311,7 @@ export function PurchaseDetallePage() {
     syncedPurchaseId,
     invoiceNumber,
     usdRate,
+    entryCurrency,
     notes,
     accountId,
     isCredit,
@@ -315,8 +340,8 @@ export function PurchaseDetallePage() {
   }, [isBorrador, hasLocalChanges])
 
   useEffect(() => {
-    itemBsEntryRef.current.clear()
-  }, [usdRate])
+    itemNativeEntryRef.current.clear()
+  }, [usdRate, entryCurrency])
 
   const rateNum = isBorrador
     ? usdRate
@@ -340,13 +365,32 @@ export function PurchaseDetallePage() {
 
   const markDirty = useCallback(() => setHasLocalChanges(true), [])
 
-  function buildItemPayload(item: LocalPurchaseItem, unitPriceBsEntered?: number) {
+  const displayEntryCurrency = isBorrador
+    ? entryCurrency
+    : inferPurchaseEntryCurrency(
+        purchase ?? { entryCurrencyCode: null, usdRate: null },
+        baseCurrencyCode
+      )
+  const entrySymbol = currencySymbol(displayEntryCurrency)
+  const entryInNative = isPurchaseEntryInNative(displayEntryCurrency, baseCurrencyCode)
+  const entryPriceDecimals = purchaseEntryDecimals(displayEntryCurrency)
+  const canEnterPriceInNative = !entryInNative || isValidPurchaseRate(rateNum)
+
+  function handleEntryCurrencyChange(code: string) {
+    setEntryCurrency(code)
+    itemNativeEntryRef.current.clear()
+    setUsdRate(resolveEntryRateInput(code, activeCurrencies, null, globalRate, baseCurrencyCode))
+    markDirty()
+  }
+
+  function buildItemPayload(item: LocalPurchaseItem, unitPriceNativeEntered?: number) {
     const rate = usdRateRef.current ? Number(usdRateRef.current) : 0
     return buildPurchaseItemPayload(
       item,
       entryCurrencyRef.current,
       rate,
-      unitPriceBsEntered
+      unitPriceNativeEntered,
+      baseCurrencyCode
     )
   }
 
@@ -359,7 +403,7 @@ export function PurchaseDetallePage() {
 
     const timer = window.setTimeout(() => {
       itemSaveTimers.current.delete(localId)
-      const payload = buildItemPayload(item, itemBsEntryRef.current.get(localId))
+      const payload = buildItemPayload(item, itemNativeEntryRef.current.get(localId))
 
       void updateItemMutation
         .mutateAsync({ purchaseId, itemId, payload })
@@ -412,8 +456,6 @@ export function PurchaseDetallePage() {
         setLocalItems((prev) => [...prev, purchaseItemToLocal(created)])
       }
       markDirty()
-      setSearch('')
-      setSearchOpen(false)
     } catch (err) {
       setActionError(getApiErrorMessage(err))
     }
@@ -462,8 +504,6 @@ export function PurchaseDetallePage() {
         setLocalItems((prev) => [...prev, purchaseItemToLocal(created)])
       }
       markDirty()
-      setSearch('')
-      setSearchOpen(false)
     } catch (err) {
       setActionError(getApiErrorMessage(err))
     }
@@ -488,17 +528,14 @@ export function PurchaseDetallePage() {
   }
 
   function updateLocalItemPriceUsd(localId: string, unitPriceUsd: number) {
-    itemBsEntryRef.current.delete(localId)
+    itemNativeEntryRef.current.delete(localId)
     updateLocalItem(localId, { unitPriceUsd })
   }
 
-  function updateLocalItemPriceBs(localId: string, bs: number, rate: number) {
-    itemBsEntryRef.current.set(localId, bs)
-    updateLocalItem(localId, { unitPriceUsd: bsToUsd(bs, rate) })
+  function updateLocalItemPriceNative(localId: string, native: number, rate: number) {
+    itemNativeEntryRef.current.set(localId, native)
+    updateLocalItem(localId, { unitPriceUsd: nativeToUsd(native, rate) })
   }
-
-  const entryInBs = entryCurrency === 'VES'
-  const canEnterPriceInBs = !entryInBs || isValidPurchaseRate(rateNum)
 
   async function removeLocalItem(localId: string) {
     setActionError(null)
@@ -508,7 +545,7 @@ export function PurchaseDetallePage() {
       window.clearTimeout(existingTimer)
       itemSaveTimers.current.delete(localId)
     }
-    itemBsEntryRef.current.delete(localId)
+    itemNativeEntryRef.current.delete(localId)
 
     if (itemId) {
       try {
@@ -541,7 +578,7 @@ export function PurchaseDetallePage() {
       code: item.material.code,
       name: item.material.name,
       description: null,
-      category: 'FABRIC',
+      category: item.material.category ?? 'Otro',
       unit: item.material.unit,
       minimumStock: '0',
       location: null,
@@ -561,6 +598,7 @@ export function PurchaseDetallePage() {
   const confirmPayload = useMemo(
     () => ({
       invoice_number: invoiceNumber.trim() || undefined,
+      entry_currency_code: entryCurrency,
       usd_rate: usdRate ? Number(usdRate) : undefined,
       notes: notes.trim() || undefined,
       account_id: accountId,
@@ -581,7 +619,7 @@ export function PurchaseDetallePage() {
             }
       ),
     }),
-    [invoiceNumber, usdRate, notes, accountId, isCredit, creditDueDate, localItems, supplierOffersCredit]
+    [invoiceNumber, entryCurrency, usdRate, notes, accountId, isCredit, creditDueDate, localItems, supplierOffersCredit]
   )
 
   const sinVencimientoCredito = supplierOffersCredit && isCredit && !creditDueDate.trim()
@@ -680,9 +718,6 @@ export function PurchaseDetallePage() {
       setActionError(getApiErrorMessage(err))
     }
   }
-
-  const searchResults =
-    itemAddMode === 'material' ? (materialsData?.materials ?? []) : (catalogData?.catalog_products ?? [])
 
   return (
     <div className="flex flex-col gap-6">
@@ -784,33 +819,46 @@ export function PurchaseDetallePage() {
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <Label htmlFor="usd_rate">Tasa Bs/USD</Label>
+                      <Label htmlFor="usd_rate">
+                        {entryRateLabel(entryCurrency, entrySymbol, baseCurrencyCode)}
+                      </Label>
                       <PurchaseEntryCurrencyToggle
+                        currencies={activeCurrencies}
                         value={entryCurrency}
-                        onChange={setEntryCurrency}
+                        onChange={handleEntryCurrencyChange}
                       />
                     </div>
-                    <DecimalInput
-                      id="usd_rate"
-                      min="0"
-                      decimals={2}
-                      placeholder="Ej. 36.50"
-                      className="w-full"
-                      value={usdRate}
-                      onChange={(e) => {
-                        setUsdRate(e.target.value)
-                        markDirty()
-                      }}
-                    />
-                    {entryInBs && !isValidPurchaseRate(rateNum) ? (
-                      <p className="text-muted-foreground text-xs">
-                        Cargá la tasa de la factura para ingresar en Bs.
+                    {entryInNative ? (
+                      <>
+                        <DecimalInput
+                          id="usd_rate"
+                          min="0"
+                          decimals={4}
+                          placeholder="Ej. 36.50"
+                          className="w-full"
+                          value={usdRate}
+                          onChange={(e) => {
+                            setUsdRate(e.target.value)
+                            markDirty()
+                          }}
+                        />
+                        {!isValidPurchaseRate(rateNum) ? (
+                          <p className="text-muted-foreground text-xs">
+                            Cargá la tasa de la factura para ingresar en {entrySymbol}.
+                          </p>
+                        ) : (
+                          <p className="text-muted-foreground text-xs">
+                            La tasa queda en esta compra; no modifica Configuración. Al cambiarla,
+                            el monto en {entrySymbol} se recalcula y el monto en{' '}
+                            {baseCurrencyCode} del ítem no cambia.
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground text-sm">
+                        Los precios se ingresan en la moneda base ({baseCurrencyCode}).
                       </p>
-                    ) : entryInBs ? (
-                      <p className="text-muted-foreground text-xs">
-                        Al cambiar la tasa, el monto en Bs se recalcula; el USD del ítem no cambia.
-                      </p>
-                    ) : null}
+                    )}
                   </div>
                 </div>
               ) : (
@@ -823,12 +871,20 @@ export function PurchaseDetallePage() {
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-                      Tasa Bs/USD
+                      Moneda de ingreso
                     </p>
-                    <p className="font-medium">
-                      {purchase.usdRate ? formatRateInput(purchase.usdRate) : '—'}
-                    </p>
+                    <p className="font-medium">{entrySymbol}</p>
                   </div>
+                  {entryInNative ? (
+                    <div>
+                      <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                        {entryRateLabel(displayEntryCurrency, entrySymbol, baseCurrencyCode)}
+                      </p>
+                      <p className="font-medium">
+                        {purchase.usdRate ? formatRateInput(purchase.usdRate) : '—'}
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -968,7 +1024,7 @@ export function PurchaseDetallePage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="font-medium">Ítems</h3>
               {isBorrador && canEditPurchase ? (
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
                   <div className="bg-muted inline-flex rounded-lg p-1">
                     <button
                       type="button"
@@ -995,51 +1051,25 @@ export function PurchaseDetallePage() {
                       Productos
                     </button>
                   </div>
-                  <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
-                    <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
-                    <Input
-                      className="pl-9"
-                      placeholder={
-                        itemAddMode === 'material' ? 'Buscar material…' : 'Buscar producto…'
-                      }
-                      value={search}
-                      onChange={(e) => {
-                        setSearch(e.target.value)
-                        setSearchOpen(true)
-                      }}
-                      onFocus={() => setSearchOpen(true)}
-                    />
-                    {searchOpen ? (
-                      <div className="bg-popover absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border shadow-md">
-                        {searchResults.length === 0 ? (
-                          <p className="text-muted-foreground p-3 text-sm">Sin resultados</p>
-                        ) : itemAddMode === 'material' ? (
-                          (searchResults as Material[]).slice(0, 3).map((material) => (
-                            <button
-                              key={material.id}
-                              type="button"
-                              className="hover:bg-muted block w-full px-3 py-2 text-left text-sm"
-                              onClick={() => void addMaterialToItems(material)}
-                            >
-                              <span className="font-medium">{material.code}</span> — {material.name}
-                            </button>
-                          ))
-                        ) : (
-                          (searchResults as CatalogProduct[]).slice(0, 3).map((product) => (
-                            <button
-                              key={product.id}
-                              type="button"
-                              className="hover:bg-muted block w-full px-3 py-2 text-left text-sm"
-                              onClick={() => void addProductToItems(product)}
-                            >
-                              <span className="font-medium">{catalogProductCode(product.id)}</span>{' '}
-                              — {product.name}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    ) : null}
+
+                  <div className="min-w-[260px] flex-1 sm:max-w-md">
+                    {itemAddMode === 'material' ? (
+                      <MaterialSearchPicker
+                        variant="dropdown"
+                        label=""
+                        placeholder="Buscar material por código o nombre…"
+                        onSelect={(material) => void addMaterialToItems(material)}
+                      />
+                    ) : (
+                      <CatalogProductSearchPicker
+                        variant="dropdown"
+                        label=""
+                        placeholder="Buscar producto por código o nombre…"
+                        onSelect={(product) => void addProductToItems(product)}
+                      />
+                    )}
                   </div>
+
                   {itemAddMode === 'material' ? (
                     <Button
                       size="sm"
@@ -1078,14 +1108,10 @@ export function PurchaseDetallePage() {
                       <th className="px-3 py-2 font-medium">Cantidad</th>
                       <th className="px-3 py-2 font-medium">Unidad</th>
                       <th className="px-3 py-2 font-medium">
-                        {isBorrador && canEditPurchase && entryInBs
-                          ? 'Precio unit. (Bs)'
-                          : 'Precio unit. ($)'}
+                        {unitPriceColumnLabel(displayEntryCurrency, entrySymbol)}
                       </th>
                       <th className="px-3 py-2 font-medium">
-                        {isBorrador && canEditPurchase && entryInBs
-                          ? 'Subtotal (Bs)'
-                          : 'Subtotal ($)'}
+                        {subtotalColumnLabel(displayEntryCurrency, entrySymbol)}
                       </th>
                       {isBorrador && canEditPurchase ? (
                         <th className="px-3 py-2 font-medium text-right">Acciones</th>
@@ -1112,38 +1138,52 @@ export function PurchaseDetallePage() {
                             </td>
                             <td className="px-3 py-2">{localItemUnit(item)}</td>
                             <td className="px-3 py-2">
-                              {entryInBs ? (
+                              {entryInNative ? (
                                 <MoneyInput
                                   min="0"
+                                  decimals={entryPriceDecimals}
                                   className="h-8 w-28"
-                                  disabled={!canEnterPriceInBs}
-                                  value={formatItemBsDisplay(item.unitPriceUsd, rateNum)}
+                                  disabled={!canEnterPriceInNative}
+                                  value={formatItemNativeDisplay(
+                                    item.unitPriceUsd,
+                                    rateNum,
+                                    displayEntryCurrency,
+                                    baseCurrencyCode
+                                  )}
                                   onChange={(e) => {
-                                    const bs = parseDecimalInput(e.target.value, 2) ?? 0
+                                    const native =
+                                      parseDecimalInput(e.target.value, entryPriceDecimals) ?? 0
                                     if (isValidPurchaseRate(rateNum)) {
-                                      updateLocalItemPriceBs(item.localId, bs, rateNum)
+                                      updateLocalItemPriceNative(item.localId, native, rateNum)
                                     }
                                   }}
                                 />
                               ) : (
                                 <MoneyInput
                                   min="0"
+                                  decimals={entryPriceDecimals}
                                   className="h-8 w-28"
                                   value={item.unitPriceUsd}
                                   onChange={(e) =>
                                     updateLocalItemPriceUsd(
                                       item.localId,
-                                      parseDecimalInput(e.target.value, 2) ?? 0
+                                      parseDecimalInput(e.target.value, entryPriceDecimals) ?? 0
                                     )
                                   }
                                 />
                               )}
                             </td>
                             <td className="px-3 py-2 tabular-nums">
-                              {entryInBs && isValidPurchaseRate(rateNum) ? (
+                              {entryInNative && isValidPurchaseRate(rateNum) ? (
                                 formatNative(
-                                  item.quantity * formatItemBsDisplay(item.unitPriceUsd, rateNum),
-                                  'VES'
+                                  item.quantity *
+                                    formatItemNativeDisplay(
+                                      item.unitPriceUsd,
+                                      rateNum,
+                                      displayEntryCurrency,
+                                      baseCurrencyCode
+                                    ),
+                                  displayEntryCurrency
                                 )
                               ) : (
                                 formatFromUsd(item.quantity * item.unitPriceUsd)
@@ -1197,16 +1237,22 @@ export function PurchaseDetallePage() {
                                   : '—'}
                             </td>
                             <td className="px-3 py-2">
-                              <PrecioBimonetario
+                              <PrecioEnMonedaIngreso
                                 precioUsd={item.unitPriceUsd}
-                                precioBs={item.unitPriceBs}
+                                precioNativo={item.unitPriceBs}
+                                entryCurrency={displayEntryCurrency}
+                                baseCurrencyCode={baseCurrencyCode}
+                                rate={rateNum}
                                 size="sm"
                               />
                             </td>
                             <td className="px-3 py-2">
-                              <PrecioBimonetario
+                              <PrecioEnMonedaIngreso
                                 precioUsd={item.subtotalUsd}
-                                precioBs={item.subtotalBs}
+                                precioNativo={item.subtotalBs}
+                                entryCurrency={displayEntryCurrency}
+                                baseCurrencyCode={baseCurrencyCode}
+                                rate={rateNum}
                                 size="sm"
                               />
                             </td>
@@ -1218,9 +1264,12 @@ export function PurchaseDetallePage() {
             )}
 
             <div className="flex flex-col items-end gap-1 border-t pt-4">
-              <PrecioBimonetario
+              <PrecioEnMonedaIngreso
                 precioUsd={displayTotalUsd}
-                precioBs={displayTotalBs}
+                precioNativo={displayTotalBs}
+                entryCurrency={displayEntryCurrency}
+                baseCurrencyCode={baseCurrencyCode}
+                rate={rateNum}
                 className="items-end text-2xl font-semibold"
               />
             </div>
@@ -1274,7 +1323,7 @@ export function PurchaseDetallePage() {
             payload={confirmPayload}
             sinFactura={!invoiceNumber.trim()}
             sinItems={localItems.length === 0}
-            sinTasa={!usdRate}
+            sinTasa={entryInNative && !isValidPurchaseRate(rateNum)}
             onSuccess={() => {
               setHasLocalChanges(false)
               void navigate('/purchases')

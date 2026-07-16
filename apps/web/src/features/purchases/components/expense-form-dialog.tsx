@@ -44,6 +44,8 @@ import { AccountSelect } from '@/features/accounts/components/account-select'
 
 import { CurrencySelect } from '@/features/currencies/components/currency-select'
 
+import { useBaseCurrencyQuery } from '@/features/currencies/hooks/use-currencies'
+
 import type { Expense } from '@/features/purchases/types'
 
 import { getApiErrorMessage } from '@/lib/api-error'
@@ -88,9 +90,11 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
 
   const updateMutation = useUpdateExpenseMutation()
 
+  const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
+
   const [accountId, setAccountId] = useState<number | null>(null)
 
-  const [currencyCode, setCurrencyCode] = useState('USD')
+  const [currencyCode, setCurrencyCode] = useState(baseCurrencyCode)
 
 
 
@@ -130,7 +134,7 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
 
       setAccountId(isEditing ? expense.accountId : null)
 
-      setCurrencyCode(isEditing ? expense.currencyCode : 'USD')
+      setCurrencyCode(isEditing ? expense.currencyCode : baseCurrencyCode)
 
       reset(
 
@@ -160,7 +164,7 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
 
     }
 
-  }, [open, isEditing, expense, reset])
+  }, [open, isEditing, expense, reset, baseCurrencyCode])
 
 
 
@@ -168,7 +172,7 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
 
     try {
 
-      const payload = { ...values, account_id: accountId, currency_code: 'USD' }
+      const payload = { ...values, account_id: accountId, currency_code: baseCurrencyCode }
 
       if (isEditing) {
 
@@ -203,7 +207,8 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
           <DialogTitle>{isEditing ? 'Editar gasto' : 'Registrar gasto'}</DialogTitle>
 
           <DialogDescription>
-            Registrá el monto en dólares (USD). Los reportes consolidan en $.
+            Registrá el monto en la moneda base del sistema ({baseCurrencyCode}). Los reportes
+            consolidan en esa moneda.
           </DialogDescription>
 
         </DialogHeader>
@@ -250,7 +255,7 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
 
             <div className="space-y-2">
 
-              <Label htmlFor="expense-amount">Monto (USD $) *</Label>
+              <Label htmlFor="expense-amount">Monto ({baseCurrencyCode}) *</Label>
 
               <MoneyInput
 

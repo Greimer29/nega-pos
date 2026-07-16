@@ -3,7 +3,7 @@ import type { PermissionKey } from '#permissions/catalog'
 type RouteRule = {
   method: string
   pattern: RegExp
-  permission: PermissionKey
+  permission: PermissionKey | PermissionKey[]
 }
 
 const ROUTE_RULES: RouteRule[] = [
@@ -77,9 +77,21 @@ const ROUTE_RULES: RouteRule[] = [
   { method: 'GET', pattern: /^\/reports(\/|$)/, permission: 'reports.view' },
 
   { method: 'GET', pattern: /^\/settings(\/|$)/, permission: 'settings.view' },
-  { method: 'PUT', pattern: /^\/settings(\/|$)/, permission: 'settings.edit' },
-  { method: 'POST', pattern: /^\/settings(\/|$)/, permission: 'settings.edit' },
-  { method: 'DELETE', pattern: /^\/settings(\/|$)/, permission: 'settings.edit' },
+  {
+    method: 'PUT',
+    pattern: /^\/settings(\/|$)/,
+    permission: ['settings.edit', 'settings.view'],
+  },
+  {
+    method: 'POST',
+    pattern: /^\/settings(\/|$)/,
+    permission: ['settings.edit', 'settings.view'],
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/settings(\/|$)/,
+    permission: ['settings.edit', 'settings.view'],
+  },
 
   { method: 'GET', pattern: /^\/users(\/|$)/, permission: 'users.view' },
   { method: 'POST', pattern: /^\/users(\/|$)/, permission: 'users.manage' },
@@ -87,29 +99,81 @@ const ROUTE_RULES: RouteRule[] = [
   { method: 'PATCH', pattern: /^\/users(\/|$)/, permission: 'users.manage' },
 
   { method: 'GET', pattern: /^\/accounts(\/|$)/, permission: 'purchases.view' },
-  { method: 'POST', pattern: /^\/accounts(\/|$)/, permission: 'settings.edit' },
-  { method: 'PUT', pattern: /^\/accounts(\/|$)/, permission: 'settings.edit' },
-  { method: 'DELETE', pattern: /^\/accounts(\/|$)/, permission: 'settings.edit' },
+  {
+    method: 'POST',
+    pattern: /^\/accounts(\/|$)/,
+    permission: ['settings.edit', 'settings.view'],
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/accounts(\/|$)/,
+    permission: ['settings.edit', 'settings.view'],
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/accounts(\/|$)/,
+    permission: ['settings.edit', 'settings.view'],
+  },
 
   { method: 'GET', pattern: /^\/currencies(\/|$)/, permission: 'settings.view' },
-  { method: 'POST', pattern: /^\/currencies(\/|$)/, permission: 'settings.edit' },
-  { method: 'PUT', pattern: /^\/currencies(\/|$)/, permission: 'settings.edit' },
-  { method: 'DELETE', pattern: /^\/currencies(\/|$)/, permission: 'settings.edit' },
+  {
+    method: 'POST',
+    pattern: /^\/currencies(\/|$)/,
+    permission: ['settings.edit', 'settings.view'],
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/currencies(\/|$)/,
+    permission: ['settings.edit', 'settings.view'],
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/currencies(\/|$)/,
+    permission: ['settings.edit', 'settings.view'],
+  },
 
   { method: 'GET', pattern: /^\/payment-methods(\/|$)/, permission: 'settings.view' },
-  { method: 'POST', pattern: /^\/payment-methods(\/|$)/, permission: 'settings.edit' },
-  { method: 'PUT', pattern: /^\/payment-methods(\/|$)/, permission: 'settings.edit' },
-  { method: 'DELETE', pattern: /^\/payment-methods(\/|$)/, permission: 'settings.edit' },
+  {
+    method: 'POST',
+    pattern: /^\/payment-methods(\/|$)/,
+    permission: ['settings.edit', 'settings.view'],
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/payment-methods(\/|$)/,
+    permission: ['settings.edit', 'settings.view'],
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/payment-methods(\/|$)/,
+    permission: ['settings.edit', 'settings.view'],
+  },
 
-  { method: 'GET', pattern: /^\/categories(\/|$)/, permission: 'catalog.view' },
-  { method: 'POST', pattern: /^\/categories(\/|$)/, permission: 'catalog.edit' },
-  { method: 'PUT', pattern: /^\/categories(\/|$)/, permission: 'catalog.edit' },
-  { method: 'DELETE', pattern: /^\/categories(\/|$)/, permission: 'catalog.edit' },
+  {
+    method: 'GET',
+    pattern: /^\/categories(\/|$)/,
+    permission: ['catalog.view', 'settings.view'],
+  },
+  {
+    method: 'POST',
+    pattern: /^\/categories(\/|$)/,
+    permission: ['catalog.edit', 'settings.edit', 'settings.view'],
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/categories(\/|$)/,
+    permission: ['catalog.edit', 'settings.edit', 'settings.view'],
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/categories(\/|$)/,
+    permission: ['catalog.edit', 'settings.edit', 'settings.view'],
+  },
 ]
 
 const AUTH_ONLY_PATHS = new Set(['/auth/me', '/auth/logout'])
 
-export type ResolvedRoutePermission = PermissionKey | 'auth_only' | 'deny'
+export type ResolvedRoutePermission = PermissionKey | PermissionKey[] | 'auth_only' | 'deny'
 
 export function resolveRoutePermission(method: string, pathname: string): ResolvedRoutePermission {
   const path = pathname.replace(/^\/api\/v1/, '') || '/'
