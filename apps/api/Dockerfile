@@ -23,7 +23,14 @@ RUN node ace build
 FROM base AS production
 WORKDIR /app
 ENV NODE_ENV=production
+# Railway: migrations run in preDeployCommand; seed only if empty (entrypoint).
+# Local docker-compose: set RUN_MIGRATIONS_ON_START=true.
+ENV RUN_MIGRATIONS_ON_START=false
+ENV SKIP_BOOTSTRAP_SEED=false
 COPY --from=build /app/apps/api/build ./
-RUN pnpm install --prod --ignore-scripts && mkdir -p storage/uploads
+COPY apps/api/bin/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN pnpm install --prod --ignore-scripts \
+  && mkdir -p storage/uploads \
+  && chmod +x docker-entrypoint.sh
 EXPOSE 3333
-CMD ["node", "bin/server.js"]
+ENTRYPOINT ["./docker-entrypoint.sh"]

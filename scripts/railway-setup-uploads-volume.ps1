@@ -24,5 +24,6 @@ Write-Host "==> Configurando STORAGE_LOCAL_PATH=$MountPath ..." -ForegroundColor
 railway variables set "STORAGE_LOCAL_PATH=$MountPath"
 
 Write-Host ""
-Write-Host "Listo. Redeploy nega-pos-api y verificá uploads en storage/uploads del volumen montado." -ForegroundColor Green
+Write-Host "Listo. Redeploy nega-pos-api y verificá uploads en /data/uploads." -ForegroundColor Green
+Write-Host "Guía: docs/RAILWAY_DEPLOY.md" -ForegroundColor Gray
 Write-Host "Variables inyectadas por Railway al adjuntar volumen: RAILWAY_VOLUME_MOUNT_PATH, RAILWAY_VOLUME_NAME" -ForegroundColor Gray

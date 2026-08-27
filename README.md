@@ -74,4 +74,6 @@ Login local por defecto: `admin@negapos.local` / valor de `ADMIN_PASSWORD` en `a
 
 ### Deploy en Railway
 
-Configuración histórica en `docs/RAILWAY_DEPLOY.md` (descontinuado). Para deploy actual, consultar `DOCUMENTACION_OFICIAL.md` y la configuración en el repositorio (`apps/api/Dockerfile`, `docker-compose.yml`).
+Solo **API + MySQL** en Railway. Web, desktop y mobile son **100 % locales**.
+
+Guía: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md) · Config: `apps/api/railway.toml`, `apps/api/.env.railway.example`

@@ -67,7 +67,7 @@ flowchart TB
 1. El navegador o Electron carga la SPA React (`apps/web`).
 2. La SPA llama a la API REST en `/api/v1` con cookies de sesión y token CSRF.
 3. AdonisJS valida auth + permisos, ejecuta servicios de dominio y persiste en MySQL.
-4. En desktop, la impresión sale por IPC de Electron (`printing:*`) sin pasar por la API.
+4. En desktop, la **impresión física** sale por IPC de Electron (`printing:listPrinters` / `printing:printHtml`); la **configuración** de impresión va por la API (`/settings/printing`).
 
 ---
 
@@ -148,11 +148,12 @@ nega-pos/
 │   │       ├── features/    # Módulos por dominio
 │   │       ├── pages/       # Páginas de rutas
 │   │       └── routes/      # router.tsx
-│   └── desktop/             # Electron
-│       ├── electron/        # main.ts, preload, print-service
-│       └── print-config.json
+│   ├── desktop/             # Electron
+│   │   ├── electron/        # main.ts, preload, print-service
+│   │   └── print-config.json  # legacy (se migra a userData al arrancar)
+│   └── mobile/              # Capacitor Android (APK; reutiliza web/dist)
 ├── docker-compose.yml       # MySQL + API opcional
-├── scripts/                 # dev-setup.ps1, reset-database.ps1
+├── scripts/                 # dev-setup.ps1, reset-database.ps1, build-mobile.ps1
 └── package.json             # Scripts del monorepo
 ```
 
@@ -182,8 +183,41 @@ Credenciales alineadas con `apps/api/.env.example`: usuario `nega_pos`, BD `nega
 
 - Servidor estático embebido en `127.0.0.1:51740`
 - Build: `pnpm build:desktop` o desarrollo: `pnpm dev:desktop`
-- Configuración de impresión: `apps/desktop/print-config.json` (junto al ejecutable en producción)
+- Configuración de impresión: **fuente de verdad en MySQL** (`app_settings` key `print_config` vía `GET/PUT /api/v1/settings/printing`). El JSON local en userData solo sirve para **importación one-shot** al primer arranque si la BD está vacía.
 - API remota: `apps/desktop/api-url.json` (URL de Railway u otro host)
+
+### Mobile APK (Capacitor)
+
+- Workspace: `apps/mobile` (WebView de `apps/web/dist`; **no** altera el pipeline desktop)
+- Habla con la **API pública HTTPS** (`VITE_API_URL` al buildear); cookies cross-origin (`SameSite=None; Secure` en producción)
+- CORS: setear `MOBILE_APP_ORIGIN=https://localhost` en la API (Railway / `.env`)
+- Build: `$env:VITE_API_URL="https://tu-api"; pnpm build:mobile` luego `pnpm --filter mobile build:apk:debug`
+- Detalle: [`apps/mobile/README.md`](apps/mobile/README.md)
+- Impresión térmica es **exclusiva del desktop**; la config de impresión se ve/edita también desde el navegador vía API
+
+### Despliegue Railway (solo API + MySQL)
+
+**Railway despliega únicamente la API y MySQL.** Web, desktop y mobile corren **100 % en local** y se conectan a la URL HTTPS de la API.
+
+Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
+
+| En Railway | Local (PC) |
+|------------|------------|
+| `nega-pos-mysql` | — |
+| `nega-pos-api` (Docker) | — |
+| — | Web: `pnpm dev:web` → `VITE_API_URL` |
+| — | Desktop: `apps/desktop/api-url.json` |
+| — | Android: `pnpm build:mobile` + `VITE_API_URL` |
+
+| Pieza | Ubicación |
+|-------|-----------|
+| Dockerfile + entrypoint | `apps/api/Dockerfile`, `apps/api/bin/docker-entrypoint.sh` |
+| Config Railway | `apps/api/railway.toml` (solo servicio API) |
+| Vars plantilla | `apps/api/.env.railway.example` |
+| Seed seguro | `node ace db:bootstrap` — solo si `users` está vacío |
+| Uploads persistentes | Volume `/data/uploads` + `STORAGE_LOCAL_PATH=/data/uploads` |
+
+**Reglas:** no crear servicio web en Railway; `FRONTEND_URL=http://localhost:5173`; migraciones en pre-deploy; Volume para imágenes.
 
 ### Variables de entorno relevantes
 
@@ -198,14 +232,17 @@ Credenciales alineadas con `apps/api/.env.example`: usuario `nega_pos`, BD `nega
 | `DB_*` | Conexión MySQL |
 | `FRONTEND_URL` | CORS web (ej. `http://localhost:5173`) |
 | `DESKTOP_APP_ORIGIN` | CORS Electron (`http://127.0.0.1:51740`) |
+| `MOBILE_APP_ORIGIN` | CORS Capacitor APK (`https://localhost`) |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Seeder de usuario admin |
-| `DRIVE_DISK` / `STORAGE_LOCAL_PATH` | Archivos subidos (imágenes, facturas) |
+| `DRIVE_DISK` / `STORAGE_LOCAL_PATH` | Archivos subidos (imágenes, facturas). En Railway: Volume + `/data/uploads` |
+| `RUN_MIGRATIONS_ON_START` | Solo Docker local/`docker-compose` (`true`). En Railway: `false` (usa pre-deploy) |
+| `SKIP_BOOTSTRAP_SEED` | `true` para omitir `db:bootstrap` en el entrypoint |
 
 **Web** (`apps/web/.env.example`):
 
 | Variable | Propósito |
 |----------|-----------|
-| `VITE_API_URL` | URL base API sin `/api/v1` (ej. `http://localhost:3333`) |
+| `VITE_API_URL` | URL base API sin `/api/v1` (ej. `http://localhost:3333`; en APK usar la URL pública HTTPS) |
 
 ---
 
@@ -277,7 +314,7 @@ Credenciales alineadas con `apps/api/.env.example`: usuario `nega_pos`, BD `nega
 | `accounts` | `name`, `description`, `is_active` |
 | `currencies` | `code` (PK), `name`, `rate_per_usd` (unidades por 1 unidad de moneda base), `is_active` |
 | `payment_methods` | `code`, `name`, `is_active`, `sort_order` |
-| `app_settings` | `key` (PK); incluye `base_currency_code` (default/cutover `XAU`), tasa VES legacy, margen, general |
+| `app_settings` | `key` (PK); incluye `base_currency_code` (default/cutover `XAU`), tasa VES legacy, margen, `business_profile`, `print_config` |
 | `customer_payments` | `customer_id`, `order_id?`, `sale_id?`, `amount_usd` (monto en moneda base), `payment_method_code`, `account_id` |
 | `supplier_payments` | `supplier_id`, `purchase_id?`, `amount_usd` (monto en moneda base), … |
 | `expenses` | `account_id`, `date`, `description`, `amount_usd` (monto en moneda base), `currency_code` |
@@ -411,6 +448,8 @@ catalog_products ──< product_inventory_movements
 
 - Resumen del día: productos vendidos, montos, crédito, gastos, ganancia estimada.
 - Endpoints adicionales: overview, ventas diarias por producto, gastos del día, cierre diario.
+- **Cierre diario** (`GET /dashboard/daily-closing?date=YYYY-MM-DD`): agrega ventas por método de pago, facturas, productos vendidos, devoluciones y **gastos del día** (empresa + máquinas). El resumen incluye `expenses_count`, `expenses_total_usd` y `net_cash_usd` (contado − gastos). La fecha es opcional (hoy por defecto).
+- **Gastos del día** aceptan fecha opcional en servicio; el endpoint público sigue usando hoy salvo extensión futura.
 - Alertas de bajo stock en materiales y productos.
 
 ---
@@ -677,6 +716,8 @@ catalog_products ──< product_inventory_movements
 | POST | `/api/v1/settings/general/logo` | `settings.edit` | `SettingsController.uploadLogo` |
 | GET | `/api/v1/settings/general/logo` | `settings.view` | `SettingsController.downloadLogo` |
 | DELETE | `/api/v1/settings/general/logo` | `settings.edit` | `SettingsController.deleteLogo` |
+| GET | `/api/v1/settings/printing` | `settings.view` | `SettingsController.getPrinting` |
+| PUT | `/api/v1/settings/printing` | `settings.edit` | `SettingsController.updatePrinting` |
 
 ---
 
@@ -691,7 +732,7 @@ catalog_products ──< product_inventory_movements
 | `/dashboard` | Panel principal |
 | `/dashboard/productos-vendidos-hoy` | Ventas diarias por producto |
 | `/dashboard/gastos-del-dia` | Gastos del día |
-| `/dashboard/cierre-diario` | Cierre diario |
+| `/dashboard/cierre-diario` | Cierre diario (fecha en query `?date=`; incluye gastos y efectivo neto) |
 | `/customers` | Listado clientes |
 | `/customers/:id` | Detalle cliente |
 | `/customers/:id/cuenta` | Estado de cuenta cliente |
@@ -741,7 +782,7 @@ Cada feature encapsula servicios API (axios), hooks TanStack Query, componentes 
 
 - **TanStack Query**: caché servidor, invalidación tras mutaciones.
 - **Carrito de ventas**: `sessionStorage` vía `ventas-cart-draft.ts` — persiste borrador del POS entre recargas de pestaña.
-- **Formatos de impresión**: leídos/escritos en desktop (`print-config.json`); en web solo preview y edición de plantillas cuando corre en Electron.
+- **Formatos de impresión**: leídos/escritos vía API (`app_settings.print_config`). El PUT acepta `scope: devices | formats | full` para que Ventas y Formatos no se pisen. En Desktop, si la BD está vacía, se importa una vez el JSON legacy de userData.
 
 ---
 
@@ -750,23 +791,30 @@ Cada feature encapsula servicios API (axios), hooks TanStack Query, componentes 
 ### Electron (`apps/desktop/electron/`)
 
 - **main.ts**: servidor HTTP local en `127.0.0.1:51740` sirve `web/dist`; proxy de API configurable.
-- **preload.ts**: expone `window.electronAPI.printing` al renderer.
-- **print-service.ts**: lista impresoras, lee/escribe config, imprime HTML con dimensiones térmicas (ancho ~78 mm, altura dinámica, DPI ajustado).
+- **preload.ts**: expone `window.negaPos.printing` al renderer.
+- **print-service.ts**: lista impresoras, lee JSON local (solo migración), imprime HTML con dimensiones térmicas (ancho ~78 mm, altura dinámica, DPI ajustado). La config operativa vive en la API.
 
 ### IPC
 
 | Canal | Función |
 |-------|---------|
-| `printing:listPrinters` | Lista dispositivos |
-| `printing:getConfig` | Lee `print-config.json` |
-| `printing:saveConfig` | Persiste configuración |
+| `printing:listPrinters` | Lista dispositivos Windows |
 | `printing:printHtml` | Imprime HTML renderizado |
+| `printing:getLocalConfig` | Lee JSON local para import one-shot (null si no hay archivo) |
+| `printing:getConfigPath` | Ruta del JSON legacy en userData |
+| `printing:isMigrated` / `printing:markMigrated` | Flag local `print-config-migrated` |
+| `printing:getConfig` / `printing:saveConfig` | **Deprecated** — solo legado; el flujo normal usa la API |
 
 ### Render de documentos (`apps/web/src/features/printing/`)
 
 - **Tipos de documento:** `invoice`, `deliveryNote`, `comanda`.
 - **Motor de plantillas:** `format-template-engine.ts` con placeholders (`{{sale.lines}}`, `{{business.header}}`, etc.).
-- **Plantillas builtin:** factura, nota de despacho, comanda (sincronizadas con `print-config.json`).
+- **Plantillas builtin:** factura, nota de despacho, comanda (defaults en código; ediciones viven en BD vía API).
+- **Datos de negocio en tickets:** se rellenan desde `business_profile` en el GET de printing (no se persisten en `print_config`).
+- **Checklist manual:**
+  1. Habilitar comanda + Guardar → cerrar Desktop → reabrir → sigue habilitado.
+  2. Editar formato + Guardar formato → reiniciar → HTML custom presente.
+  3. Guardar Ventas no revierte formatos; guardar Formatos no revierte impresoras.
 - **Comportamiento** (`behavior` en config): imprimir al confirmar venta, comanda por fórmula, routing por categoría (`categoryRouting`).
 - **Notas de cocina:** `sale_lines.kitchen_note` (texto multilínea) se imprime solo en comanda debajo del producto (un renglón por línea del texto); no aparece en factura. Independiente de “imprimir fórmula”.
 
@@ -810,6 +858,7 @@ pnpm test
 | `pnpm dev:reset-db` | Reset BD (`scripts/reset-database.ps1`) |
 | `pnpm dev:desktop` | Build web + Electron dev |
 | `pnpm build:desktop` | Build web + empaquetado Windows |
+| `pnpm build:mobile` | Build web + sync Capacitor Android (`VITE_API_URL` requerida) |
 | `pnpm lint` / `pnpm typecheck` | Calidad en todos los workspaces |
 
 ### API (Ace frecuentes)
@@ -826,8 +875,9 @@ node ace generate:key
 
 ### Docker API + migraciones
 
-El servicio `api` en `docker-compose.yml` ejecuta `migration:run --force` al arrancar y expone `:3333`.
+- **Local (`docker-compose`):** entrypoint con `RUN_MIGRATIONS_ON_START=true` + `db:bootstrap` (seed solo si no hay users) + volumen `api_uploads`.
+- **Railway:** `apps/api/railway.toml` → `preDeployCommand = node ace migration:run --force`; entrypoint hace bootstrap condicional. Guía: `docs/RAILWAY_DEPLOY.md`.
 
 ---
 
-*Documento generado a partir del código en `apps/api`, `apps/web`, `apps/desktop` y configuración del repositorio.*
+*Documento generado a partir del código en `apps/api`, `apps/web`, `apps/desktop`, `apps/mobile` y configuración del repositorio.*

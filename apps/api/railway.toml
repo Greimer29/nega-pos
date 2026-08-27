@@ -1,3 +1,14 @@
+# =============================================================================
+# Nega POS — Railway config-as-code (API service ONLY)
+#
+# Railway project must contain ONLY:
+#   1. nega-pos-mysql  (Database plugin)
+#   2. nega-pos-api    (this service)
+#
+# Do NOT deploy apps/web, desktop or mobile on Railway — they run 100% local.
+# Guide: docs/RAILWAY_DEPLOY.md  |  Env: apps/api/.env.railway.example
+# =============================================================================
+
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "apps/api/Dockerfile"
@@ -7,8 +18,9 @@ preDeployCommand = "node ace migration:run --force"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
 
-# Invoice uploads (Sprint 2+): persistent storage requires a Railway Volume.
-# Volumes are NOT declared in this file — attach via dashboard or CLI:
-#   railway volume add --mount-path /data/uploads
-# Then set STORAGE_LOCAL_PATH=/data/uploads on the service (see docs/RAILWAY_DEPLOY.md).
+# Migrations: preDeployCommand (each deploy).
+# Seed: entrypoint runs db:bootstrap only if users table is empty.
+# Uploads: attach Volume mount /data/uploads + STORAGE_LOCAL_PATH=/data/uploads
+# (Volumes are NOT declared here — use Railway dashboard or CLI).

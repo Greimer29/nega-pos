@@ -47,12 +47,17 @@ services:
       DB_PORT: 3306
       FRONTEND_URL: http://localhost:5173
       DESKTOP_APP_ORIGIN: http://127.0.0.1:51740
+      MOBILE_APP_ORIGIN: https://localhost
+      # Local Docker: migrate on start; seed only if users table empty (entrypoint)
+      RUN_MIGRATIONS_ON_START: 'true'
+      SKIP_BOOTSTRAP_SEED: 'false'
+      STORAGE_LOCAL_PATH: /app/storage/uploads
     volumes:
       - api_uploads:/app/storage/uploads
     depends_on:
       mysql:
         condition: service_healthy
-    command: ['sh', '-c', 'node ace migration:run --force && node ace db:seed --files database/seeders/main/index_seeder && node bin/server.js']
+    # Uses Dockerfile ENTRYPOINT (docker-entrypoint.sh)
     healthcheck:
       test:
         [
