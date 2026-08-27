@@ -5,7 +5,15 @@ import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
 import { column } from '@adonisjs/lucid/orm'
 import type { PermissionKey } from '#permissions/catalog'
 
-export default class User extends compose(UserSchema, withAuthFinder(hash)) {
+/**
+ * Lazy hash factory: Ace commands may import this model before the app boots.
+ * Passing `hash` directly would capture `undefined` and break password hashing
+ * (e.g. `db:bootstrap` / seeders on Railway).
+ */
+export default class User extends compose(
+  UserSchema,
+  withAuthFinder(() => hash.use())
+) {
   static table = 'users'
 
   @column({

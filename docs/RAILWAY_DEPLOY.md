@@ -211,6 +211,7 @@ Instalá el APK en el dispositivo. No hay deploy de mobile en Railway.
 | APK no conecta | `VITE_API_URL` al buildear + `MOBILE_APP_ORIGIN` |
 | Imagen 404 tras redeploy | Volume + `STORAGE_LOCAL_PATH` |
 | Servicio web extra en Railway | **Eliminarlo** — web es solo local |
+| Bootstrap: `Cannot read properties of undefined (reading 'use')` | Hash no listo al importar User — ya corregido en `main` (`withAuthFinder(() => hash.use())`). Redeploy. |
 
 ---
 

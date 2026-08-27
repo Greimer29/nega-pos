@@ -1,7 +1,6 @@
 import { BaseCommand } from '@adonisjs/core/ace'
 import type { CommandOptions } from '@adonisjs/core/types/ace'
 import db from '@adonisjs/lucid/services/db'
-import IndexSeeder from '#database/seeders/main/index_seeder'
 
 /**
  * Seeds base data only when the users table is empty (first deploy).
@@ -38,7 +37,11 @@ export default class DbBootstrap extends BaseCommand {
     }
 
     this.logger.info('Empty database detected — running index seeder…')
+
+    // Dynamic import AFTER startApp so User/hash services resolve correctly.
+    const { default: IndexSeeder } = await import('#database/seeders/main/index_seeder')
     await new IndexSeeder(db.connection()).run()
+
     this.logger.success('Bootstrap seed completed (admin, currencies, categories, base data)')
   }
 }
