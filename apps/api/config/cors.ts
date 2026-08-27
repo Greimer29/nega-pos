@@ -1,4 +1,3 @@
-import app from '@adonisjs/core/services/app'
 import env from '#start/env'
 import { defineConfig } from '@adonisjs/cors'
 
@@ -21,22 +20,28 @@ function expandLocalhostTwin(origin: string): string[] {
   return []
 }
 
+function addOriginWithLocalhostTwins(origins: Set<string>, origin: string | undefined) {
+  if (!origin) {
+    return
+  }
+
+  origins.add(origin)
+
+  for (const twin of expandLocalhostTwin(origin)) {
+    origins.add(twin)
+  }
+}
+
 function frontendOrigins(): string[] {
-  const origins = new Set<string>([env.get('FRONTEND_URL')])
-  const desktopOrigin = env.get('DESKTOP_APP_ORIGIN')
+  const origins = new Set<string>()
 
-  if (desktopOrigin) {
-    origins.add(desktopOrigin)
-  }
+  addOriginWithLocalhostTwins(origins, env.get('FRONTEND_URL'))
+  addOriginWithLocalhostTwins(origins, env.get('DESKTOP_APP_ORIGIN'))
+  addOriginWithLocalhostTwins(origins, env.get('MOBILE_APP_ORIGIN'))
 
-  // Solo en desarrollo: evita errores CORS al alternar localhost / 127.0.0.1.
-  if (!app.inProduction) {
-    for (const origin of [...origins]) {
-      for (const twin of expandLocalhostTwin(origin)) {
-        origins.add(twin)
-      }
-    }
-  }
+  // Capacitor Android (http scheme / iOS capacitor://) — orígenes fijos del WebView.
+  origins.add('http://localhost')
+  origins.add('capacitor://localhost')
 
   return [...origins]
 }
