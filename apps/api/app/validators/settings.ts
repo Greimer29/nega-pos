@@ -33,3 +33,59 @@ export const updateBusinessProfileValidator = vine.create({
     })
     .optional(),
 })
+
+const printDocumentKind = vine.enum(['invoice', 'deliveryNote', 'comanda'] as const)
+
+const printDocumentSettingsSchema = vine.object({
+  enabled: vine.boolean(),
+  deviceName: vine.string().trim().maxLength(200).optional().nullable(),
+  paperWidthMm: vine.number().positive().max(300),
+  formatId: vine.string().trim().minLength(1).maxLength(120),
+})
+
+const printFormatSchema = vine.object({
+  id: vine.string().trim().minLength(1).maxLength(120),
+  name: vine.string().trim().minLength(1).maxLength(200),
+  documentKind: printDocumentKind,
+  paperWidthMm: vine.number().positive().max(300),
+  bodyHtml: vine.string().maxLength(200_000),
+  isBuiltin: vine.boolean(),
+})
+
+const categoryComandaRuleSchema = vine.object({
+  category: vine.string().trim().minLength(1).maxLength(120),
+  deviceName: vine.string().trim().minLength(1).maxLength(200),
+})
+
+export const updatePrintConfigValidator = vine.create({
+  scope: vine.enum(['devices', 'formats', 'full'] as const).optional(),
+  ticket: vine
+    .object({
+      station_label: vine.string().trim().maxLength(120).optional().nullable(),
+    })
+    .optional(),
+  formats: vine.array(printFormatSchema).optional(),
+  documents: vine
+    .object({
+      invoice: printDocumentSettingsSchema,
+      deliveryNote: printDocumentSettingsSchema,
+      comanda: printDocumentSettingsSchema,
+    })
+    .optional(),
+  behavior: vine
+    .object({
+      printInvoiceOnConfirm: vine.boolean(),
+      printDeliveryNoteOnConfirm: vine.boolean(),
+      printComandaOnConfirm: vine.boolean(),
+      printComandaFormula: vine.boolean().optional(),
+    })
+    .optional(),
+  categoryRouting: vine
+    .object({
+      comanda: vine.object({
+        enabled: vine.boolean(),
+        rules: vine.array(categoryComandaRuleSchema),
+      }),
+    })
+    .optional(),
+})

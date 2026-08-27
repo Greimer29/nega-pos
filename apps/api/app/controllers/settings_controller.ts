@@ -1,9 +1,11 @@
 import AppSettingsService from '#services/app_settings_service'
 import BusinessProfileService from '#services/business_profile_service'
+import PrintConfigService from '#services/print_config_service'
 import { serializeBusinessProfile } from '#transformers/business_profile_transformer'
 import {
   updateBusinessProfileValidator,
   updateExchangeRateValidator,
+  updatePrintConfigValidator,
   updateProfitMarginValidator,
 } from '#validators/settings'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -11,6 +13,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 export default class SettingsController {
   private service = new AppSettingsService()
   private businessProfileService = new BusinessProfileService()
+  private printConfigService = new PrintConfigService()
 
   async getExchangeRate({ serialize }: HttpContext) {
     const usdRate = await this.service.getExchangeRate()
@@ -97,6 +100,50 @@ export default class SettingsController {
 
     return serialize({
       business_profile: serializeBusinessProfile(profile),
+    })
+  }
+
+  async getPrinting({ serialize }: HttpContext) {
+    const result = await this.printConfigService.obtener()
+
+    return serialize({
+      print_config: result.printConfig,
+      persisted: result.persisted,
+    })
+  }
+
+  async updatePrinting({ request, serialize }: HttpContext) {
+    const payload = await request.validateUsing(updatePrintConfigValidator)
+    const scope = payload.scope ?? 'full'
+    const result = await this.printConfigService.guardarPatch(scope, {
+      scope,
+      ticket: payload.ticket
+        ? { station_label: payload.ticket.station_label ?? '' }
+        : undefined,
+      formats: payload.formats,
+      documents: payload.documents
+        ? {
+            invoice: {
+              ...payload.documents.invoice,
+              deviceName: payload.documents.invoice.deviceName ?? '',
+            },
+            deliveryNote: {
+              ...payload.documents.deliveryNote,
+              deviceName: payload.documents.deliveryNote.deviceName ?? '',
+            },
+            comanda: {
+              ...payload.documents.comanda,
+              deviceName: payload.documents.comanda.deviceName ?? '',
+            },
+          }
+        : undefined,
+      behavior: payload.behavior,
+      categoryRouting: payload.categoryRouting,
+    })
+
+    return serialize({
+      print_config: result.printConfig,
+      persisted: result.persisted,
     })
   }
 }
