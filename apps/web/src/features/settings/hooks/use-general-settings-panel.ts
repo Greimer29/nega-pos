@@ -1,11 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { applyBusinessPalette } from '@/features/branding/apply-business-palette'
-import { businessProfileQueryKey } from '@/features/branding/business-theme-provider'
+import {
+  businessProfileQueryKey,
+  useBusinessProfileQuery,
+} from '@/features/branding/business-theme-provider'
 import { useCanEditSettings } from '@/features/settings/hooks/use-can-edit-settings'
 import {
   deleteBusinessLogo,
-  fetchBusinessProfile,
   saveBusinessProfile,
   uploadBusinessLogo,
 } from '@/features/settings/services/general-settings-service'
@@ -16,15 +18,19 @@ import {
   type BusinessProfileInput,
 } from '@/features/settings/types/general-settings'
 import { getApiErrorMessage } from '@/lib/api-error'
-import { getPrintConfig, isPrintingAvailable, savePrintConfig } from '@/features/printing/services/printing-service'
-import { businessProfileToPrintBusiness } from '@/features/branding/business-theme-provider'
 
 export function useGeneralSettingsPanel() {
   const canEdit = useCanEditSettings()
   const queryClient = useQueryClient()
+  const {
+    data: remoteProfile,
+    isLoading: queryLoading,
+    isError: queryIsError,
+    error: queryError,
+    refetch,
+  } = useBusinessProfileQuery()
 
   const [profile, setProfile] = useState<BusinessProfile>(DEFAULT_BUSINESS_PROFILE)
-  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -32,58 +38,17 @@ export function useGeneralSettingsPanel() {
   const [logoVersion, setLogoVersion] = useState(0)
 
   useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const loaded = await fetchBusinessProfile()
-        if (!cancelled) {
-          setProfile(loaded)
-          applyBusinessPalette(loaded)
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(getApiErrorMessage(loadError))
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
+    if (remoteProfile) {
+      setProfile(remoteProfile)
+      applyBusinessPalette(remoteProfile)
     }
+  }, [remoteProfile])
 
-    void load()
-    return () => {
-      cancelled = true
+  useEffect(() => {
+    if (queryIsError && queryError) {
+      setError(getApiErrorMessage(queryError))
     }
-  }, [])
-
-  async function syncPrintConfigBusiness(next: BusinessProfile) {
-    if (!isPrintingAvailable()) {
-      return
-    }
-
-    const config = await getPrintConfig()
-    const business = businessProfileToPrintBusiness(next)
-    await savePrintConfig({
-      ...config,
-      business: {
-        name: business.name,
-        subtitle: business.subtitle,
-        footer: business.footer,
-        legalName: business.legalName,
-        rif: business.rif,
-        address: business.address,
-        phone: business.phone,
-        email: business.email,
-        website: business.website,
-        hasLogo: business.hasLogo,
-        logoUrl: business.logoUrl,
-      },
-    })
-  }
+  }, [queryIsError, queryError])
 
   async function handleSave() {
     setSaving(true)
@@ -108,8 +73,7 @@ export function useGeneralSettingsPanel() {
       const saved = await saveBusinessProfile(payload)
       setProfile(saved)
       applyBusinessPalette(saved)
-      await syncPrintConfigBusiness(saved)
-      void queryClient.invalidateQueries({ queryKey: businessProfileQueryKey })
+      queryClient.setQueryData(businessProfileQueryKey, saved)
       setMessage('Configuración general guardada.')
     } catch (saveError) {
       setError(getApiErrorMessage(saveError))
@@ -127,8 +91,7 @@ export function useGeneralSettingsPanel() {
       const saved = await uploadBusinessLogo(file)
       setProfile(saved)
       setLogoVersion(Date.now())
-      await syncPrintConfigBusiness(saved)
-      void queryClient.invalidateQueries({ queryKey: businessProfileQueryKey })
+      queryClient.setQueryData(businessProfileQueryKey, saved)
       setMessage('Logo actualizado.')
     } catch (uploadError) {
       setError(getApiErrorMessage(uploadError))
@@ -149,8 +112,7 @@ export function useGeneralSettingsPanel() {
       const saved = await deleteBusinessLogo()
       setProfile(saved)
       setLogoVersion(Date.now())
-      await syncPrintConfigBusiness(saved)
-      void queryClient.invalidateQueries({ queryKey: businessProfileQueryKey })
+      queryClient.setQueryData(businessProfileQueryKey, saved)
       setMessage('Logo eliminado.')
     } catch (deleteError) {
       setError(getApiErrorMessage(deleteError))
@@ -170,7 +132,7 @@ export function useGeneralSettingsPanel() {
     canEdit,
     profile,
     setProfile,
-    loading,
+    loading: queryLoading && !remoteProfile,
     saving,
     uploadingLogo,
     message,
@@ -180,5 +142,6 @@ export function useGeneralSettingsPanel() {
     handleLogoUpload,
     handleLogoDelete,
     resetPalette,
+    refetch,
   }
 }

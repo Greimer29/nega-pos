@@ -17,6 +17,7 @@ export function useCurrenciesQuery(activeOnly = false) {
   return useAuthenticatedQuery({
     queryKey: [...currenciesQueryKey, { activeOnly }],
     queryFn: () => listCurrencies(activeOnly),
+    staleTime: 60_000,
   })
 }
 export function useActiveCurrenciesQuery() {
@@ -27,6 +28,7 @@ export function useBaseCurrencyQuery() {
   return useAuthenticatedQuery({
     queryKey: baseCurrencyQueryKey,
     queryFn: () => getBaseCurrencyCode(),
+    staleTime: 60_000,
   })
 }
 

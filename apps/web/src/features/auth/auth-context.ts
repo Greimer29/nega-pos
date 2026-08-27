@@ -9,6 +9,8 @@ export type AuthContextValue = {
   isAuthenticated: boolean
   sessionBootstrapError: boolean
   retryBootstrap: () => Promise<void>
+  /** Clears bootstrap error so the user can open /login and sign in. */
+  dismissBootstrapError: () => void
   can: (permission: PermissionKey) => boolean
   canAny: (...permissions: PermissionKey[]) => boolean
   login: (email: string, password: string) => Promise<void>

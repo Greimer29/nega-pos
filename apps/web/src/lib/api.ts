@@ -12,6 +12,8 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
 export const api = axios.create({
   withCredentials: true,
   maxRedirects: 0,
+  // Railway remoto: evita colgarse indefinidamente al guardar settings.
+  timeout: 45_000,
   headers: {
     Accept: 'application/json',
     'Content-Type': 'application/json',
@@ -98,6 +100,11 @@ export async function ensureCsrfToken(): Promise<void> {
 export async function refreshCsrfToken(): Promise<void> {
   cachedCsrfToken = null
   csrfBootstrapPromise = null
+
+  // Si la cookie ya está, no hace falta otro RTT a /csrf.
+  if (getCsrfTokenFromCookie()) {
+    return
+  }
 
   try {
     const token = await fetchCsrfTokenFromApi()

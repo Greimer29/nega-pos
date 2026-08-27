@@ -65,6 +65,14 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '')
   const apiUrl = env.VITE_API_URL || 'http://localhost:3333'
 
+  if (!env.VITE_API_URL) {
+    console.warn(
+      '[nega-pos] VITE_API_URL no está en apps/web/.env — proxy usa http://localhost:3333 por defecto.'
+    )
+  } else {
+    console.log(`[nega-pos] Proxy /api → ${apiUrl}`)
+  }
+
   return {
     plugins: [react(), tailwindcss(), apiHealthCheckPlugin(apiUrl)],
     resolve: {

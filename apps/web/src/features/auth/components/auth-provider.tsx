@@ -15,6 +15,7 @@ import { queryClient } from '@/lib/query-client'
 import type { User } from '@/types/auth'
 
 const SESSION_KEEPALIVE_MS = 25 * 60 * 1000
+const SESSION_VISIBILITY_MIN_MS = 5 * 60 * 1000
 
 function isUnauthorizedError(error: unknown): boolean {
   return axios.isAxiosError(error) && error.response?.status === 401
@@ -24,6 +25,7 @@ function isApiUnreachableError(error: unknown): boolean {
   return (
     axios.isAxiosError(error) &&
     (error.code === 'ERR_NETWORK' ||
+      error.code === 'ECONNABORTED' ||
       error.message === 'Network Error' ||
       error.response?.status === 500 ||
       error.response?.status === 502 ||
@@ -75,7 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchCurrentUser = useCallback(async () => {
     const currentUser = await authService.getCurrentUser()
-    await refreshCsrfToken()
+    // No refrescar CSRF aquí: /auth/me es GET y la cookie XSRF ya suele existir.
+    // El interceptor pide CSRF solo en el primer POST/PUT si hace falta.
     setUser(currentUser)
     setSessionBootstrapError(false)
     return currentUser
@@ -107,6 +110,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [applySessionFailure, fetchCurrentUser])
 
+  const dismissBootstrapError = useCallback(() => {
+    setSessionBootstrapError(false)
+    setUser(null)
+  }, [])
+
   const revalidateSession = useCallback(async () => {
     try {
       await fetchCurrentUser()
@@ -136,14 +144,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
+    let lastCheckAt = Date.now()
+
     const intervalId = window.setInterval(() => {
+      lastCheckAt = Date.now()
       void revalidateSession()
     }, SESSION_KEEPALIVE_MS)
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void revalidateSession()
+      if (document.visibilityState !== 'visible') {
+        return
       }
+      // Evita un /auth/me en cada cambio de pestaña (suma latencia Railway).
+      if (Date.now() - lastCheckAt < SESSION_VISIBILITY_MIN_MS) {
+        return
+      }
+      lastCheckAt = Date.now()
+      void revalidateSession()
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -156,6 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const authenticatedUser = await authService.login({ email, password })
+    // Tras login la sesión/cookies cambian: renovar CSRF una sola vez.
     await refreshCsrfToken()
     setSessionBootstrapError(false)
     setUser(authenticatedUser)
@@ -180,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: user !== null,
       sessionBootstrapError,
       retryBootstrap,
+      dismissBootstrapError,
       can,
       canAny,
       login,
@@ -191,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       sessionBootstrapError,
       retryBootstrap,
+      dismissBootstrapError,
       can,
       canAny,
       login,

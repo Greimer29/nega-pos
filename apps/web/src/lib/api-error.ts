@@ -176,13 +176,21 @@ export function getApiError(error: unknown): ApiErrorBody {
       return {
         code: 'NETWORK_ERROR',
         message:
-          'No se pudo conectar con el servidor. Iniciá `pnpm dev:web` y abrí http://localhost:5173. Si usás la app de escritorio, verificá tu conexión a internet.',
+          'No se pudo conectar con la API. Verificá que `VITE_API_URL` en apps/web/.env apunte a Railway (o a la API local en :3333), reiniciá `pnpm dev:web` y recargá la página.',
       }
     }
 
     return {
       code: 'NETWORK_ERROR',
       message: 'No se pudo conectar con el servidor. Verificá tu conexión e intentá de nuevo.',
+    }
+  }
+
+  if (axios.isAxiosError(error) && error.code === 'ECONNABORTED') {
+    return {
+      code: 'TIMEOUT_ERROR',
+      message:
+        'La API tardó demasiado en responder. Revisá tu conexión o intentá de nuevo en unos segundos.',
     }
   }
 
@@ -195,6 +203,13 @@ export function getApiError(error: unknown): ApiErrorBody {
     return {
       code: 'SERVER_ERROR',
       message: 'El servidor respondió con un error inesperado. Intentá de nuevo en unos segundos.',
+    }
+  }
+
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return {
+      code: 'UNKNOWN_ERROR',
+      message: error.message.trim(),
     }
   }
 

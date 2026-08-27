@@ -1,4 +1,5 @@
-import { Navigate, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { canAccess, canAccessNav, type PermissionKey } from '@/features/permissions/catalog'
@@ -12,21 +13,41 @@ function AuthLoadingScreen() {
   )
 }
 
-function SessionBootstrapErrorScreen({ onRetry }: { onRetry: () => void }) {
+function SessionBootstrapErrorScreen({
+  onRetry,
+  onGoToLogin,
+}: {
+  onRetry: () => void
+  onGoToLogin: () => void
+}) {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-4 px-4 text-center">
       <p className="text-muted-foreground max-w-sm text-sm">
-        No se pudo verificar tu sesión. Revisá la conexión e intentá de nuevo.
+        No se pudo verificar tu sesión. Revisá la conexión e intentá de nuevo, o iniciá sesión
+        manualmente.
       </p>
-      <Button type="button" onClick={onRetry}>
-        Reintentar
-      </Button>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Button type="button" onClick={onRetry}>
+          Reintentar
+        </Button>
+        <Button type="button" variant="outline" asChild>
+          <Link to="/login" onClick={onGoToLogin}>
+            Iniciar sesión
+          </Link>
+        </Button>
+      </div>
     </div>
   )
 }
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, sessionBootstrapError, retryBootstrap } = useAuth()
+  const {
+    isAuthenticated,
+    isLoading,
+    sessionBootstrapError,
+    retryBootstrap,
+    dismissBootstrapError,
+  } = useAuth()
   const location = useLocation()
 
   if (isLoading) {
@@ -34,7 +55,12 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (sessionBootstrapError) {
-    return <SessionBootstrapErrorScreen onRetry={() => void retryBootstrap()} />
+    return (
+      <SessionBootstrapErrorScreen
+        onRetry={() => void retryBootstrap()}
+        onGoToLogin={dismissBootstrapError}
+      />
+    )
   }
 
   if (!isAuthenticated) {
@@ -44,15 +70,21 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return children
 }
 
+/**
+ * Login / guest screens must never be blocked by a failed /auth/me bootstrap.
+ * Network or API errors should still allow the user to try signing in.
+ */
 export function GuestRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, sessionBootstrapError, retryBootstrap } = useAuth()
+  const { isAuthenticated, isLoading, sessionBootstrapError, dismissBootstrapError } = useAuth()
+
+  useEffect(() => {
+    if (sessionBootstrapError) {
+      dismissBootstrapError()
+    }
+  }, [sessionBootstrapError, dismissBootstrapError])
 
   if (isLoading) {
     return <AuthLoadingScreen />
-  }
-
-  if (sessionBootstrapError) {
-    return <SessionBootstrapErrorScreen onRetry={() => void retryBootstrap()} />
   }
 
   if (isAuthenticated) {
@@ -71,7 +103,14 @@ export function PermissionRoute({
   permission?: PermissionKey
   navPath?: string
 }) {
-  const { user, isLoading, isAuthenticated, sessionBootstrapError, retryBootstrap } = useAuth()
+  const {
+    user,
+    isLoading,
+    isAuthenticated,
+    sessionBootstrapError,
+    retryBootstrap,
+    dismissBootstrapError,
+  } = useAuth()
   const location = useLocation()
 
   if (isLoading) {
@@ -79,7 +118,12 @@ export function PermissionRoute({
   }
 
   if (sessionBootstrapError) {
-    return <SessionBootstrapErrorScreen onRetry={() => void retryBootstrap()} />
+    return (
+      <SessionBootstrapErrorScreen
+        onRetry={() => void retryBootstrap()}
+        onGoToLogin={dismissBootstrapError}
+      />
+    )
   }
 
   if (!isAuthenticated) {
