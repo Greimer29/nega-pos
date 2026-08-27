@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
-import { Receipt, Wallet } from 'lucide-react'
+import { ArrowDownToLine, Receipt, Wallet } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import type { PurchasesHubTab } from '@/features/purchases/constants'
-import type { ExpenseSummary, PurchaseSummary } from '@/features/purchases/types'
+import type { ExpenseSummary, IncomeSummary, PurchaseSummary } from '@/features/purchases/types'
 import { settingsTabUrl } from '@/features/settings/constants'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { cn } from '@/lib/utils'
@@ -20,8 +20,10 @@ type PurchasesHubCardsProps = {
   onTabChange: (tab: PurchasesHubTab) => void
   purchasesSummary?: PurchaseSummary
   expensesSummary?: ExpenseSummary
+  incomesSummary?: IncomeSummary
   purchasesQuery?: HubCardQueryState
   expensesQuery?: HubCardQueryState
+  incomesQuery?: HubCardQueryState
 }
 
 export function PurchasesHubCards({
@@ -29,12 +31,14 @@ export function PurchasesHubCards({
   onTabChange,
   purchasesSummary,
   expensesSummary,
+  incomesSummary,
   purchasesQuery,
   expensesQuery,
+  incomesQuery,
 }: PurchasesHubCardsProps) {
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <HubCard
           active={activeTab === 'compras'}
           onClick={() => onTabChange('compras')}
@@ -80,6 +84,30 @@ export function PurchasesHubCards({
           ]}
           queryState={expensesQuery}
         />
+
+        <HubCard
+          active={activeTab === 'ingresos'}
+          onClick={() => onTabChange('ingresos')}
+          icon={<ArrowDownToLine className="size-5" />}
+          title="Ingresos"
+          kpis={[
+            {
+              label: 'Total ingresos',
+              value: <DisplayMoneyFromUsd amountUsd={incomesSummary?.totalUsd ?? '0'} />,
+            },
+            {
+              label: 'Registrados',
+              value: incomesSummary ? String(incomesSummary.count) : '—',
+            },
+            {
+              label: 'Esta semana',
+              value: (
+                <DisplayMoneyFromUsd amountUsd={incomesSummary?.weeklyReceivedUsd ?? '0'} />
+              ),
+            },
+          ]}
+          queryState={incomesQuery}
+        />
       </div>
 
       <p className="text-muted-foreground text-sm">
@@ -113,7 +141,7 @@ function HubCard({ active, onClick, icon, title, kpis, queryState }: HubCardProp
     >
       <Card
         className={cn(
-          'purchases-hub-card aspect-[15/7] h-full border shadow-none',
+          'purchases-hub-card border shadow-none',
           active && 'purchases-hub-card--active'
         )}
       >

@@ -2,7 +2,7 @@ import type { AccountStatementMovementType } from '@/features/reports/types'
 import type { AccountStatementParams } from '@/features/reports/types'
 import type { MetricTone } from '@/features/reports/report-ui'
 
-export type ReportMovementCategorySlug = 'ventas' | 'compras' | 'gastos' | 'maquina'
+export type ReportMovementCategorySlug = 'ventas' | 'compras' | 'gastos' | 'maquina' | 'ingresos'
 
 export type ReportTotalsKind = 'credit_split' | 'single'
 
@@ -51,6 +51,15 @@ export const REPORT_CATEGORIES: Record<ReportMovementCategorySlug, ReportCategor
     movementType: 'machine_expense',
     apiType: 'machine_expenses',
     tone: 'machine',
+    totalsKind: 'single',
+  },
+  ingresos: {
+    slug: 'ingresos',
+    title: 'Historial de ingresos',
+    subtitle: 'Aportes de capital y otras entradas de dinero en el período seleccionado',
+    movementType: 'income',
+    apiType: 'incomes',
+    tone: 'income',
     totalsKind: 'single',
   },
 }

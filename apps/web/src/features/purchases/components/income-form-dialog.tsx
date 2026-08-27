@@ -1,0 +1,161 @@
+import { zodResolver } from '@hookform/resolvers/zod'
+import { Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { MoneyInput } from '@/components/decimal-input'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  useCreateIncomeMutation,
+  useUpdateIncomeMutation,
+} from '@/features/purchases/hooks/use-incomes'
+import { AccountSelect } from '@/features/accounts/components/account-select'
+import { CurrencySelect } from '@/features/currencies/components/currency-select'
+import { useBaseCurrencyQuery } from '@/features/currencies/hooks/use-currencies'
+import type { Income } from '@/features/purchases/types'
+import { getApiErrorMessage } from '@/lib/api-error'
+
+const schema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida'),
+  description: z.string().trim().min(1, 'La descripción es obligatoria').max(255),
+  amount: z.coerce.number().positive('El monto debe ser mayor a 0'),
+})
+
+type FormInput = z.input<typeof schema>
+type FormValues = z.infer<typeof schema>
+
+type IncomeFormDialogProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  income?: Income | null
+}
+
+export function IncomeFormDialog({ open, onOpenChange, income }: IncomeFormDialogProps) {
+  const isEditing = income != null
+  const createMutation = useCreateIncomeMutation()
+  const updateMutation = useUpdateIncomeMutation()
+  const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
+  const [accountId, setAccountId] = useState<number | null>(null)
+  const [currencyCode, setCurrencyCode] = useState(baseCurrencyCode)
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<FormInput, unknown, FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      date: new Date().toISOString().slice(0, 10),
+      description: '',
+      amount: '',
+    },
+  })
+
+  useEffect(() => {
+    if (open) {
+      setAccountId(isEditing ? income.accountId : null)
+      setCurrencyCode(isEditing ? income.currencyCode : baseCurrencyCode)
+      reset(
+        isEditing
+          ? {
+              date: income.date,
+              description: income.description,
+              amount: Number(income.amount),
+            }
+          : {
+              date: new Date().toISOString().slice(0, 10),
+              description: '',
+              amount: '',
+            }
+      )
+    }
+  }, [open, isEditing, income, reset, baseCurrencyCode])
+
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      const payload = { ...values, account_id: accountId, currency_code: baseCurrencyCode }
+      if (isEditing) {
+        await updateMutation.mutateAsync({ id: income.id, payload })
+      } else {
+        await createMutation.mutateAsync(payload)
+      }
+      onOpenChange(false)
+    } catch (err) {
+      setError('root', { message: getApiErrorMessage(err) })
+    }
+  })
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{isEditing ? 'Editar ingreso' : 'Registrar ingreso'}</DialogTitle>
+          <DialogDescription>
+            Entradas de dinero (aporte de capital, etc.) en la moneda base ({baseCurrencyCode}).
+            Sumarán al balance del estado de cuenta.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="income-date">Fecha *</Label>
+            <Input id="income-date" type="date" {...register('date')} />
+            {errors.date ? <p className="text-destructive text-sm">{errors.date.message}</p> : null}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="income-description">Descripción *</Label>
+            <Input id="income-description" {...register('description')} />
+            {errors.description ? (
+              <p className="text-destructive text-sm">{errors.description.message}</p>
+            ) : null}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <CurrencySelect registrationOnly value={currencyCode} onChange={setCurrencyCode} />
+            <div className="space-y-2">
+              <Label htmlFor="income-amount">Monto ({baseCurrencyCode}) *</Label>
+              <MoneyInput
+                id="income-amount"
+                min="0"
+                placeholder="0.00"
+                {...register('amount')}
+              />
+              {errors.amount ? (
+                <p className="text-destructive text-sm">{errors.amount.message}</p>
+              ) : null}
+            </div>
+          </div>
+
+          <AccountSelect value={accountId} onChange={setAccountId} />
+
+          {errors.root ? (
+            <p className="text-destructive text-sm whitespace-pre-line">{errors.root.message}</p>
+          ) : null}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="animate-spin" /> : null}
+              {isEditing ? 'Guardar' : 'Registrar'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}

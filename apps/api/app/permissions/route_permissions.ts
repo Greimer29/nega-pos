@@ -73,6 +73,10 @@ const ROUTE_RULES: RouteRule[] = [
   { method: 'POST', pattern: /^\/expenses(\/|$)/, permission: 'expenses.edit' },
   { method: 'PUT', pattern: /^\/expenses(\/|$)/, permission: 'expenses.edit' },
   { method: 'DELETE', pattern: /^\/expenses(\/|$)/, permission: 'expenses.edit' },
+  { method: 'GET', pattern: /^\/incomes(\/|$)/, permission: 'incomes.view' },
+  { method: 'POST', pattern: /^\/incomes(\/|$)/, permission: 'incomes.edit' },
+  { method: 'PUT', pattern: /^\/incomes(\/|$)/, permission: 'incomes.edit' },
+  { method: 'DELETE', pattern: /^\/incomes(\/|$)/, permission: 'incomes.edit' },
 
   { method: 'GET', pattern: /^\/reports(\/|$)/, permission: 'reports.view' },
 

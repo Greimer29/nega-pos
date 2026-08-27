@@ -12,7 +12,7 @@ export const ESTADO_LABELS: Record<PurchaseEstado, string> = {
   VOIDED: 'Anulada',
 }
 
-export type PurchasesHubTab = 'compras' | 'gastos'
+export type PurchasesHubTab = 'compras' | 'gastos' | 'ingresos'
 
 export { PROFIT_MARGIN_PANEL_ID, profitMarginUrl } from '@/features/settings/constants'
 

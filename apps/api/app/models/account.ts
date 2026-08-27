@@ -1,5 +1,6 @@
 import { AccountSchema } from '#database/schema'
 import Expense from '#models/expense'
+import Income from '#models/income'
 import MachineExpense from '#models/machine_expense'
 import Purchase from '#models/purchase'
 import { hasMany } from '@adonisjs/lucid/orm'
@@ -13,6 +14,9 @@ export default class Account extends AccountSchema {
 
   @hasMany(() => Expense)
   declare expenses: HasMany<typeof Expense>
+
+  @hasMany(() => Income)
+  declare incomes: HasMany<typeof Income>
 
   @hasMany(() => MachineExpense)
   declare machineExpenses: HasMany<typeof MachineExpense>

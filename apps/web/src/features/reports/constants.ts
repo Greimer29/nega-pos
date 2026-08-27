@@ -9,6 +9,7 @@ export const MOVEMENT_TYPE_LABELS = {
   supplier_payment: 'Pago proveedor',
   expense: 'Gasto empresa',
   machine_expense: 'Gasto máquina',
+  income: 'Ingreso',
 } as const
 
 export type ReportsHubTab = 'estado-cuenta'

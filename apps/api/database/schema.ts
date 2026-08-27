@@ -192,6 +192,27 @@ export class ExpenseSchema extends BaseModel {
   declare updatedAt: DateTime
 }
 
+export class IncomeSchema extends BaseModel {
+  static $columns = ['accountId', 'amountUsd', 'createdAt', 'currencyCode', 'date', 'description', 'id', 'updatedAt'] as const
+  $columns = IncomeSchema.$columns
+  @column()
+  declare accountId: bigint | number | null
+  @column()
+  declare amountUsd: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare currencyCode: string
+  @column.date()
+  declare date: DateTime
+  @column()
+  declare description: string
+  @column({ isPrimary: true })
+  declare id: bigint | number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
 export class FormulaMaterialSchema extends BaseModel {
   static $columns = ['createdAt', 'formulaId', 'id', 'materialId', 'quantity', 'updatedAt'] as const
   $columns = FormulaMaterialSchema.$columns

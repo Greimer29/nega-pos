@@ -68,6 +68,13 @@ export const PERMISSION_GROUPS = {
       'expenses.edit': 'Crear y editar gastos',
     },
   },
+  incomes: {
+    label: 'Ingresos',
+    permissions: {
+      'incomes.view': 'Ver ingresos',
+      'incomes.edit': 'Crear y editar ingresos',
+    },
+  },
   reports: {
     label: 'Reportes',
     permissions: {

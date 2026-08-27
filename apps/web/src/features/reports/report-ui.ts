@@ -41,6 +41,12 @@ export const movementTheme: Record<
     badge: 'bg-teal-50 text-teal-800 border border-teal-200',
     label: 'Gasto máq.',
   },
+  income: {
+    bar: '#059669',
+    chart: '#10b981',
+    badge: 'bg-emerald-50 text-emerald-900 border border-emerald-200',
+    label: 'Ingreso',
+  },
 }
 
 export const chartSegmentColors: Record<string, string> = {
@@ -48,6 +54,7 @@ export const chartSegmentColors: Record<string, string> = {
   purchases: movementTheme.purchase.chart,
   expenses: movementTheme.expense.chart,
   machine: movementTheme.machine_expense.chart,
+  incomes: movementTheme.income.chart,
 }
 
 /** Tokens visuales — fondo blanco, acentos del sistema */

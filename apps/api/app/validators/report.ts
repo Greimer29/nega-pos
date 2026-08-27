@@ -2,7 +2,7 @@ import vine from '@vinejs/vine'
 
 const isoDate = vine.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const month = vine.string().regex(/^\d{4}-\d{2}$/)
-const movementTypes = ['purchases', 'expenses', 'machine_expenses', 'sales'] as const
+const movementTypes = ['purchases', 'expenses', 'machine_expenses', 'sales', 'incomes'] as const
 
 function normalizeMovementTypes(value: string | string[] | undefined) {
   if (!value) return undefined

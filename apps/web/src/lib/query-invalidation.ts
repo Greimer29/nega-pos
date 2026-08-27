@@ -19,6 +19,7 @@ export function invalidateDashboardAndReports(queryClient: QueryClient) {
 export function invalidatePurchasesHub(queryClient: QueryClient) {
   void queryClient.invalidateQueries({ queryKey: ['purchases'] })
   void queryClient.invalidateQueries({ queryKey: ['expenses'] })
+  void queryClient.invalidateQueries({ queryKey: ['incomes'] })
 }
 
 /** Materiales y catálogo de productos. */

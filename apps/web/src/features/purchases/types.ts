@@ -171,3 +171,37 @@ export type ExpenseListParams = {
   account_id?: number
   unassigned?: boolean
 }
+
+export type Income = {
+  id: number
+  date: string
+  description: string
+  amount: string
+  currencyCode: string
+  amountUsd: string
+  accountId: number | null
+  createdAt: string
+  updatedAt: string
+  account?: AccountResumen
+}
+
+export type IncomeSummary = {
+  totalUsd: string
+  count: number
+  weeklyReceivedUsd: string
+}
+
+export type IncomeInput = {
+  date: string
+  description: string
+  amount: number
+  currency_code?: string
+  account_id?: number | null
+}
+
+export type IncomeListParams = {
+  page?: number
+  perPage?: number
+  account_id?: number
+  unassigned?: boolean
+}

@@ -22,6 +22,7 @@ import PurchaseYaConfirmadaException from '#exceptions/compra_ya_confirmada_exce
 import PurchaseNoDevolvableException from '#exceptions/compra_no_devolvable_exception'
 import StockInsuficienteDevolucionException from '#exceptions/stock_insuficiente_devolucion_exception'
 import ExpenseNoEncontradoException from '#exceptions/gasto_no_encontrado_exception'
+import IncomeNoEncontradoException from '#exceptions/ingreso_no_encontrado_exception'
 import ArchivoComprobanteFaltanteException from '#exceptions/archivo_comprobante_faltante_exception'
 import ArchivoComprobanteNoAdjuntoException from '#exceptions/archivo_comprobante_no_adjunto_exception'
 import ArchivoReferenciaFaltanteException from '#exceptions/archivo_referencia_faltante_exception'
@@ -440,6 +441,15 @@ export default class HttpExceptionHandler extends ExceptionHandler {
         error: {
           code: ExpenseNoEncontradoException.code,
           message: error.message || ExpenseNoEncontradoException.message,
+        },
+      })
+    }
+
+    if (error instanceof IncomeNoEncontradoException) {
+      return ctx.response.status(404).json({
+        error: {
+          code: IncomeNoEncontradoException.code,
+          message: error.message || IncomeNoEncontradoException.message,
         },
       })
     }

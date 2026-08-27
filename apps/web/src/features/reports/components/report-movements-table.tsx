@@ -30,6 +30,10 @@ function movementLink(movement: AccountStatementMovement): string | null {
       return `/purchases/${movement.referenceId}`
     case 'machine_expense':
       return `/machines`
+    case 'expense':
+      return `/purchases?tab=gastos`
+    case 'income':
+      return `/purchases?tab=ingresos`
     default:
       return null
   }

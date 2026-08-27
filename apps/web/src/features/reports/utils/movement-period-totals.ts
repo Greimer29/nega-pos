@@ -86,7 +86,7 @@ function computePurchaseTotals(movements: AccountStatementMovement[]): CreditSpl
 
 function computeExpenseTotals(
   movements: AccountStatementMovement[],
-  type: 'expense' | 'machine_expense'
+  type: 'expense' | 'machine_expense' | 'income'
 ): SinglePeriodTotals {
   let totalUsd = 0
 
@@ -112,6 +112,8 @@ export function computeMovementPeriodTotals(
       return computeExpenseTotals(movements, 'expense')
     case 'maquina':
       return computeExpenseTotals(movements, 'machine_expense')
+    case 'ingresos':
+      return computeExpenseTotals(movements, 'income')
     default:
       return null
   }

@@ -10,11 +10,9 @@ import {
 import { creditSaleReportAmountUsd, creditSaleReportStatus } from '#utils/credit_sale_report'
 import CustomerPayment from '#models/customer_payment'
 import Expense from '#models/expense'
-
+import Income from '#models/income'
 import MachineExpense from '#models/machine_expense'
-
 import Sale from '#models/sale'
-
 import Purchase from '#models/purchase'
 import SupplierPayment from '#models/supplier_payment'
 
@@ -27,6 +25,7 @@ export type AccountStatementMovementType =
   | 'supplier_payment'
   | 'expense'
   | 'machine_expense'
+  | 'income'
 
 export type AccountStatementFilters = {
   from?: string
@@ -39,7 +38,7 @@ export type AccountStatementFilters = {
 
   unassigned?: boolean
 
-  types?: Array<'purchases' | 'expenses' | 'machine_expenses' | 'sales'>
+  types?: Array<'purchases' | 'expenses' | 'machine_expenses' | 'sales' | 'incomes'>
 
   display_currency?: string
 }
@@ -103,6 +102,8 @@ export type AccountStatementSummary = {
 
   machineExpensesUsd: string
 
+  incomesUsd: string
+
   netUsd: string
 
   sales: string
@@ -112,6 +113,8 @@ export type AccountStatementSummary = {
   expenses: string
 
   machineExpenses: string
+
+  incomes: string
 
   net: string
 
@@ -134,7 +137,9 @@ export default class ReportService {
   async estadoCuenta(filters: AccountStatementFilters): Promise<AccountStatementResult> {
     const period = this.resolvePeriod(filters)
 
-    const types = new Set(filters.types ?? ['purchases', 'expenses', 'machine_expenses', 'sales'])
+    const types = new Set(
+      filters.types ?? ['purchases', 'expenses', 'machine_expenses', 'sales', 'incomes']
+    )
 
     const rates = await this.currencyService.getActiveRates()
 
@@ -155,6 +160,8 @@ export default class ReportService {
     let expensesUsd = 0
 
     let machineExpensesUsd = 0
+
+    let incomesUsd = 0
 
     if (types.has('sales')) {
       const sales = await Sale.query()
@@ -629,6 +636,46 @@ export default class ReportService {
       }
     }
 
+    if (types.has('incomes')) {
+      const query = Income.query()
+        .where('date', '>=', period.from)
+        .where('date', '<=', period.to)
+        .preload('account')
+        .orderBy('date', 'desc')
+        .orderBy('id', 'desc')
+
+      this.applyAccountFilter(query, filters)
+
+      const incomes = await query
+
+      for (const income of incomes) {
+        const currencyCode = income.currencyCode ?? 'USD'
+        const native = Number(income.amountUsd ?? 0)
+        const usd = this.currencyService.toUsd(native, currencyCode, rates)
+
+        incomesUsd += usd
+
+        movements.push(
+          this.buildMovement({
+            id: Number(income.id),
+            type: 'income',
+            date: income.date.toISODate()!,
+            label: income.description,
+            account: income.account
+              ? { id: Number(income.account.id), name: income.account.name }
+              : null,
+            native,
+            currencyCode,
+            usd,
+            displayCurrency,
+            rates,
+            referenceId: Number(income.id),
+            isIncome: true,
+          })
+        )
+      }
+    }
+
     movements.sort((a, b) => {
       const dateCompare = b.date.localeCompare(a.date)
 
@@ -639,7 +686,7 @@ export default class ReportService {
       return b.id - a.id
     })
 
-    const netUsd = salesUsd - purchasesUsd - expensesUsd - machineExpensesUsd
+    const netUsd = salesUsd + incomesUsd - purchasesUsd - expensesUsd - machineExpensesUsd
 
     return {
       period,
@@ -654,6 +701,8 @@ export default class ReportService {
         expensesUsd: expensesUsd.toFixed(4),
 
         machineExpensesUsd: machineExpensesUsd.toFixed(4),
+
+        incomesUsd: incomesUsd.toFixed(4),
 
         netUsd: netUsd.toFixed(4),
 
@@ -676,6 +725,12 @@ export default class ReportService {
 
         machineExpenses: this.formatDisplay(
           this.currencyService.fromUsd(machineExpensesUsd, displayCurrency, rates),
+
+          displayCurrency
+        ),
+
+        incomes: this.formatDisplay(
+          this.currencyService.fromUsd(incomesUsd, displayCurrency, rates),
 
           displayCurrency
         ),

@@ -21,6 +21,7 @@ async function resetDatabase() {
   await db.from('purchase_items').delete()
   await db.from('purchases').delete()
   await db.from('expenses').delete()
+  await db.from('incomes').delete()
   await db.from('machine_expenses').delete()
   await db.from('customer_payments').delete()
   await db.from('supplier_payments').delete()
@@ -824,5 +825,36 @@ test.group('Reports API', (group) => {
     assert.equal(body.data.movements[0].amountUsd, '50.0000')
     assert.equal(body.data.movements[0].isCreditSale, true)
     assert.equal(body.data.movements[0].isIncome, false)
+  })
+
+  test('GET account-statement includes incomes in net balance', async ({ client, assert }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+
+    await client.post('/api/v1/incomes').loginAs(user).json({
+      date: '2026-06-15',
+      description: 'Capital inicial',
+      amount: 500,
+    })
+
+    const response = await client
+      .get('/api/v1/reports/account-statement')
+      .qs({ month: '2026-06', display_currency: 'USD' })
+      .loginAs(user)
+
+    response.assertStatus(200)
+    const body = response.body() as {
+      data: {
+        movements: Array<{ type: string; amountUsd: string; isIncome: boolean; label: string }>
+        summary: { incomesUsd: string; netUsd: string; incomes: string }
+      }
+    }
+
+    assert.equal(body.data.summary.incomesUsd, '500.0000')
+    assert.equal(body.data.summary.netUsd, '500.0000')
+    const incomeMovement = body.data.movements.find((m) => m.type === 'income')
+    assert.exists(incomeMovement)
+    assert.equal(incomeMovement!.label, 'Capital inicial')
+    assert.equal(incomeMovement!.isIncome, true)
+    assert.equal(incomeMovement!.amountUsd, '500.0000')
   })
 })

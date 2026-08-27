@@ -2,6 +2,8 @@ import {
 
   ArrowDownLeft,
 
+  ArrowDownToLine,
+
   ArrowUpRight,
 
   ChevronRight,
@@ -47,7 +49,7 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
   const formatUsd = (amountUsd: string) => formatReportDisplayAmount(amountUsd, formatFromUsd)
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <HeroKpiCard
         netLabel={formatUsd(summary.netUsd)}
         currency={displayCurrency}
@@ -61,6 +63,13 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
         value={formatUsd(summary.salesUsd)}
         tone="income"
         href={reportCategoryHref('ventas', filterSearch)}
+      />
+      <MetricCard
+        icon={ArrowDownToLine}
+        label="Ingresos (aportes)"
+        value={formatUsd(summary.incomesUsd ?? '0')}
+        tone="income"
+        href={reportCategoryHref('ingresos', filterSearch)}
       />
       <MetricCard
         icon={ShoppingCart}

@@ -6,9 +6,10 @@ import { PurchasesHubCards } from '@/features/purchases/components/purchases-hub
 import { PurchasesHubPanelTransition } from '@/features/purchases/components/purchases-hub-panel-transition'
 import { usePurchasesSummaryQuery } from '@/features/purchases/hooks/use-purchases'
 import { useExpensesSummaryQuery } from '@/features/purchases/hooks/use-expenses'
+import { useIncomesSummaryQuery } from '@/features/purchases/hooks/use-incomes'
 
 function parseTab(value: string | null): PurchasesHubTab {
-  if (value === 'gastos') {
+  if (value === 'gastos' || value === 'ingresos') {
     return value
   }
   return 'compras'
@@ -31,6 +32,7 @@ export function PurchasesPage() {
 
   const purchasesQueryState = usePurchasesSummaryQuery()
   const expensesQueryState = useExpensesSummaryQuery()
+  const incomesQueryState = useIncomesSummaryQuery()
 
   const {
     data: purchasesSummary,
@@ -44,12 +46,18 @@ export function PurchasesPage() {
     isError: expensesError,
     error: expensesQueryError,
   } = expensesQueryState
+  const {
+    data: incomesSummary,
+    isLoading: loadingIncomes,
+    isError: incomesError,
+    error: incomesQueryError,
+  } = incomesQueryState
 
   return (
     <div className="flex flex-col gap-6">
       <PanelHeader
         title="Compras"
-        description="Compras a proveedores y gastos de empresa."
+        description="Compras a proveedores, gastos e ingresos de empresa."
       />
 
       <PurchasesHubCards
@@ -57,6 +65,7 @@ export function PurchasesPage() {
         onTabChange={handleTabChange}
         purchasesSummary={purchasesSummary}
         expensesSummary={expensesSummary}
+        incomesSummary={incomesSummary}
         purchasesQuery={{
           isLoading: loadingPurchases,
           isError: purchasesError,
@@ -66,6 +75,11 @@ export function PurchasesPage() {
           isLoading: loadingExpenses,
           isError: expensesError,
           error: expensesQueryError,
+        }}
+        incomesQuery={{
+          isLoading: loadingIncomes,
+          isError: incomesError,
+          error: incomesQueryError,
         }}
       />
 

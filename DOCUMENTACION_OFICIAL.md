@@ -36,7 +36,7 @@ Referencia técnica **única y vigente** para desarrolladores. Derivada exclusiv
 | **Inventario** | Materiales con movimientos (`inventory_movements`) y productos con movimientos (`product_inventory_movements`) |
 | **Compras** | Borrador → ítems → confirmar → entrada `PURCHASE_IN` a materiales o productos |
 | **Partners** | Clientes y proveedores con abonos de crédito y estado de cuenta |
-| **Financiero** | Cuentas, monedas, métodos de pago, gastos operativos |
+| **Financiero** | Cuentas, monedas, métodos de pago, gastos e ingresos operativos |
 | **Máquinas** | Activos y gastos asociados (reparación, insumos, mantenimiento) |
 | **Reportes** | Estado de cuenta consolidado por período |
 | **Dashboard** | KPIs diarios, cierre, productos vendidos, gastos |
@@ -280,6 +280,7 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 | machines | `machines.view`, `machines.edit` |
 | purchases | `purchases.view`, `purchases.edit`, `purchases.confirm` |
 | expenses | `expenses.view`, `expenses.edit` |
+| incomes | `incomes.view`, `incomes.edit` |
 | reports | `reports.view` |
 | settings | `settings.view`, `settings.edit` |
 | users | `users.view`, `users.manage` |
@@ -290,7 +291,7 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 
 ## 7. Modelo de datos
 
-13 migraciones en `apps/api/database/migrations/`. 27 modelos Lucid en `apps/api/app/models/`.
+13 migraciones base + migraciones incrementales en `apps/api/database/migrations/`. Modelos Lucid en `apps/api/app/models/`.
 
 ### Agrupación de tablas
 
@@ -318,6 +319,7 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 | `customer_payments` | `customer_id`, `order_id?`, `sale_id?`, `amount_usd` (monto en moneda base), `payment_method_code`, `account_id` |
 | `supplier_payments` | `supplier_id`, `purchase_id?`, `amount_usd` (monto en moneda base), … |
 | `expenses` | `account_id`, `date`, `description`, `amount_usd` (monto en moneda base), `currency_code` |
+| `incomes` | `account_id`, `date`, `description`, `amount_usd` (monto en moneda base), `currency_code` — aportes / entradas de dinero |
 
 **Moneda base del sistema:** configurable (`GET/PUT /api/v1/currencies/base`, permiso `settings.edit`). Tras el cutover la base es **XAU (Oro)** con semántica *unidades de moneda por 1 unidad de base* (`XAU.rate=1`, `USD.rate=100` → 1 XAU = 100 USD). Las columnas `*_usd` **conservan el nombre** pero almacenan montos en la moneda base. Conversión: `base = monto / tasa`, `monto = base * tasa`.
 
@@ -442,7 +444,7 @@ catalog_products ──< product_inventory_movements
 
 ### Reportes (`report_service.ts`)
 
-- **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, compras, gastos, gastos de máquina, abonos de clientes/proveedores en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos.
+- **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **ingresos** (aportes), compras, gastos, gastos de máquina, abonos de clientes/proveedores en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). Balance neto: `ventas + ingresos − compras − gastos − gastos_máquina`.
 
 ### Dashboard (`dashboard_service.ts`)
 
@@ -635,6 +637,18 @@ catalog_products ──< product_inventory_movements
 | PUT | `/api/v1/expenses/:id` | `expenses.edit` | `ExpensesController.update` |
 | DELETE | `/api/v1/expenses/:id` | `expenses.edit` | `ExpensesController.destroy` |
 
+### Ingresos (`incomes.*`)
+
+Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuenta. Suman al balance del estado de cuenta.
+
+| Método | Ruta | Permiso | Controlador |
+|--------|------|---------|-------------|
+| GET | `/api/v1/incomes/summary` | `incomes.view` | `IncomesController.summary` |
+| GET | `/api/v1/incomes` | `incomes.view` | `IncomesController.index` |
+| POST | `/api/v1/incomes` | `incomes.edit` | `IncomesController.store` |
+| PUT | `/api/v1/incomes/:id` | `incomes.edit` | `IncomesController.update` |
+| DELETE | `/api/v1/incomes/:id` | `incomes.edit` | `IncomesController.destroy` |
+
 ### Máquinas (`machines.*`)
 
 | Método | Ruta | Permiso | Controlador |
@@ -743,7 +757,7 @@ catalog_products ──< product_inventory_movements
 | `/productos/:id` | Detalle producto |
 | `/productos/materiales` | Materiales |
 | `/productos/materiales/:id` | Detalle material |
-| `/purchases` | Compras |
+| `/purchases` | Hub Compras (`?tab=compras\|gastos\|ingresos`) |
 | `/purchases/:id` | Detalle compra |
 | `/suppliers` | Proveedores |
 | `/suppliers/:id/cuenta` | Estado de cuenta proveedor |
