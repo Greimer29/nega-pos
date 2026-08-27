@@ -19,10 +19,11 @@ export function useIncomesQuery(params: IncomeListParams) {
   })
 }
 
-export function useIncomesSummaryQuery() {
+export function useIncomesSummaryQuery(options?: { enabled?: boolean }) {
   return useAuthenticatedQuery({
     queryKey: [...incomesQueryKey, 'summary'],
     queryFn: getIncomesSummary,
+    enabled: options?.enabled,
   })
 }
 

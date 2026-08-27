@@ -20,7 +20,8 @@ healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
 
-# Migrations: preDeployCommand (each deploy).
+# Migrations: preDeployCommand runs on every deploy (`node ace migration:run --force`),
+# including `1750000000020_create_incomes_table` for the incomes hub.
 # Seed: entrypoint runs db:bootstrap only if users table is empty.
 # Uploads: attach Volume mount /data/uploads + STORAGE_LOCAL_PATH=/data/uploads
 # (Volumes are NOT declared here — use Railway dashboard or CLI).

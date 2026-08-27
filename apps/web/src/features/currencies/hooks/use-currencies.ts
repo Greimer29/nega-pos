@@ -35,14 +35,26 @@ export function useBaseCurrencyQuery() {
   })
 }
 
+function isCurrencyList(value: unknown): value is Currency[] {
+  return Array.isArray(value)
+}
+
+/** Solo listas `['currencies', …]`, nunca `['currencies', 'base']` (string). */
+function currencyListQueryFilter(query: { queryKey: readonly unknown[] }) {
+  return query.queryKey[0] === 'currencies' && query.queryKey[1] !== 'base'
+}
+
 function patchCurrencyLists(
   queryClient: ReturnType<typeof useQueryClient>,
   updater: (list: Currency[]) => Currency[]
 ) {
-  queryClient.setQueriesData<Currency[]>({ queryKey: currenciesQueryKey }, (current) => {
-    if (!current) return current
-    return updater(current)
-  })
+  queryClient.setQueriesData<Currency[]>(
+    { predicate: currencyListQueryFilter },
+    (current) => {
+      if (!isCurrencyList(current)) return current
+      return updater(current)
+    }
+  )
 }
 
 export function useCreateCurrencyMutation() {
@@ -57,7 +69,7 @@ export function useCreateCurrencyMutation() {
         }
         return [...list, created]
       })
-      void queryClient.invalidateQueries({ queryKey: currenciesQueryKey })
+      void queryClient.invalidateQueries({ predicate: currencyListQueryFilter })
     },
   })
 }
@@ -69,8 +81,10 @@ export function useUpdateCurrencyMutation() {
     mutationFn: ({ code, payload }: { code: string; payload: CurrencyUpdateInput }) =>
       updateCurrency(code, payload),
     onMutate: async ({ code, payload }) => {
-      await queryClient.cancelQueries({ queryKey: currenciesQueryKey })
-      const previous = queryClient.getQueriesData<Currency[]>({ queryKey: currenciesQueryKey })
+      await queryClient.cancelQueries({ predicate: currencyListQueryFilter })
+      const previous = queryClient
+        .getQueriesData<Currency[]>({ predicate: currencyListQueryFilter })
+        .filter((entry): entry is [typeof entry[0], Currency[]] => isCurrencyList(entry[1]))
 
       patchCurrencyLists(queryClient, (list) =>
         list.map((item) =>
@@ -101,7 +115,7 @@ export function useUpdateCurrencyMutation() {
       )
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: currenciesQueryKey })
+      void queryClient.invalidateQueries({ predicate: currencyListQueryFilter })
     },
   })
 }
@@ -112,8 +126,10 @@ export function useDeleteCurrencyMutation() {
   return useMutation({
     mutationFn: (code: string) => deleteCurrency(code),
     onMutate: async (code) => {
-      await queryClient.cancelQueries({ queryKey: currenciesQueryKey })
-      const previous = queryClient.getQueriesData<Currency[]>({ queryKey: currenciesQueryKey })
+      await queryClient.cancelQueries({ predicate: currencyListQueryFilter })
+      const previous = queryClient
+        .getQueriesData<Currency[]>({ predicate: currencyListQueryFilter })
+        .filter((entry): entry is [typeof entry[0], Currency[]] => isCurrencyList(entry[1]))
       patchCurrencyLists(queryClient, (list) => list.filter((item) => item.code !== code))
       return { previous }
     },
@@ -123,7 +139,7 @@ export function useDeleteCurrencyMutation() {
       })
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: currenciesQueryKey })
+      void queryClient.invalidateQueries({ predicate: currencyListQueryFilter })
     },
   })
 }
@@ -153,7 +169,7 @@ export function useUpdateBaseCurrencyMutation() {
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: baseCurrencyQueryKey })
-      void queryClient.invalidateQueries({ queryKey: currenciesQueryKey })
+      void queryClient.invalidateQueries({ predicate: currencyListQueryFilter })
     },
   })
 }

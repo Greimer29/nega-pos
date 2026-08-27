@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { PanelHeader } from '@/components/layout/panel-header'
+import { useAuth } from '@/features/auth/hooks/use-auth'
+import { canAccess } from '@/features/permissions/catalog'
 import type { PurchasesHubTab } from '@/features/purchases/constants'
 import { PurchasesHubCards } from '@/features/purchases/components/purchases-hub-cards'
 import { PurchasesHubPanelTransition } from '@/features/purchases/components/purchases-hub-panel-transition'
@@ -18,6 +20,9 @@ function parseTab(value: string | null): PurchasesHubTab {
 export function PurchasesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState<PurchasesHubTab>(() => parseTab(searchParams.get('tab')))
+  const { user } = useAuth()
+  const canViewIncomes = canAccess(user?.role, user?.permissions, 'incomes.view')
+  const canViewExpenses = canAccess(user?.role, user?.permissions, 'expenses.view')
 
   useEffect(() => {
     setActiveTab(parseTab(searchParams.get('tab')))
@@ -31,8 +36,8 @@ export function PurchasesPage() {
   }
 
   const purchasesQueryState = usePurchasesSummaryQuery()
-  const expensesQueryState = useExpensesSummaryQuery()
-  const incomesQueryState = useIncomesSummaryQuery()
+  const expensesQueryState = useExpensesSummaryQuery({ enabled: canViewExpenses })
+  const incomesQueryState = useIncomesSummaryQuery({ enabled: canViewIncomes })
 
   const {
     data: purchasesSummary,
@@ -72,13 +77,13 @@ export function PurchasesPage() {
           error: purchasesQueryError,
         }}
         expensesQuery={{
-          isLoading: loadingExpenses,
-          isError: expensesError,
+          isLoading: canViewExpenses && loadingExpenses,
+          isError: canViewExpenses && expensesError,
           error: expensesQueryError,
         }}
         incomesQuery={{
-          isLoading: loadingIncomes,
-          isError: incomesError,
+          isLoading: canViewIncomes && loadingIncomes,
+          isError: canViewIncomes && incomesError,
           error: incomesQueryError,
         }}
       />

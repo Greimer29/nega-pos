@@ -19,10 +19,11 @@ export function useExpensesQuery(params: ExpenseListParams) {
   })
 }
 
-export function useExpensesSummaryQuery() {
+export function useExpensesSummaryQuery(options?: { enabled?: boolean }) {
   return useAuthenticatedQuery({
     queryKey: [...expensesQueryKey, 'summary'],
     queryFn: getExpensesSummary,
+    enabled: options?.enabled,
   })
 }
 

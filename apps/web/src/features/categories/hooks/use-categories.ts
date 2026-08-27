@@ -26,7 +26,7 @@ function patchCategoryLists(
   updater: (list: Category[]) => Category[]
 ) {
   queryClient.setQueriesData<Category[]>({ queryKey: categoriesQueryKey }, (current) => {
-    if (!current) return current
+    if (!Array.isArray(current)) return current
     return updater(current)
   })
 }
