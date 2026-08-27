@@ -12,8 +12,8 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
 export const api = axios.create({
   withCredentials: true,
   maxRedirects: 0,
-  // Railway remoto: evita colgarse indefinidamente al guardar settings.
-  timeout: 45_000,
+  // Fallar antes: con Railway remoto, 20s + UI optimista > colgar 45–90s.
+  timeout: 20_000,
   headers: {
     Accept: 'application/json',
     'Content-Type': 'application/json',

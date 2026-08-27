@@ -7,17 +7,20 @@ import {
   updateBaseCurrencyCode,
   updateCurrency,
 } from '@/features/currencies/services/currency-service'
-import type { CurrencyInput, CurrencyUpdateInput } from '@/features/currencies/types'
+import type { Currency, CurrencyInput, CurrencyUpdateInput } from '@/features/currencies/types'
 import { useAuthenticatedQuery } from '@/lib/use-authenticated-query'
 
 export const currenciesQueryKey = ['currencies'] as const
 export const baseCurrencyQueryKey = ['currencies', 'base'] as const
 
+/** Preferencia de visualización en header (misma key que DisplayCurrencyProvider). */
+const DISPLAY_CURRENCY_STORAGE_KEY = 'nega-pos-display-currency-v2'
+
 export function useCurrenciesQuery(activeOnly = false) {
   return useAuthenticatedQuery({
     queryKey: [...currenciesQueryKey, { activeOnly }],
     queryFn: () => listCurrencies(activeOnly),
-    staleTime: 60_000,
+    staleTime: 15_000,
   })
 }
 export function useActiveCurrenciesQuery() {
@@ -28,7 +31,17 @@ export function useBaseCurrencyQuery() {
   return useAuthenticatedQuery({
     queryKey: baseCurrencyQueryKey,
     queryFn: () => getBaseCurrencyCode(),
-    staleTime: 60_000,
+    staleTime: 15_000,
+  })
+}
+
+function patchCurrencyLists(
+  queryClient: ReturnType<typeof useQueryClient>,
+  updater: (list: Currency[]) => Currency[]
+) {
+  queryClient.setQueriesData<Currency[]>({ queryKey: currenciesQueryKey }, (current) => {
+    if (!current) return current
+    return updater(current)
   })
 }
 
@@ -37,7 +50,13 @@ export function useCreateCurrencyMutation() {
 
   return useMutation({
     mutationFn: (payload: CurrencyInput) => createCurrency(payload),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      patchCurrencyLists(queryClient, (list) => {
+        if (list.some((item) => item.code === created.code)) {
+          return list.map((item) => (item.code === created.code ? created : item))
+        }
+        return [...list, created]
+      })
       void queryClient.invalidateQueries({ queryKey: currenciesQueryKey })
     },
   })
@@ -49,7 +68,39 @@ export function useUpdateCurrencyMutation() {
   return useMutation({
     mutationFn: ({ code, payload }: { code: string; payload: CurrencyUpdateInput }) =>
       updateCurrency(code, payload),
-    onSuccess: () => {
+    onMutate: async ({ code, payload }) => {
+      await queryClient.cancelQueries({ queryKey: currenciesQueryKey })
+      const previous = queryClient.getQueriesData<Currency[]>({ queryKey: currenciesQueryKey })
+
+      patchCurrencyLists(queryClient, (list) =>
+        list.map((item) =>
+          item.code === code
+            ? {
+                ...item,
+                name: payload.name ?? item.name,
+                ratePerUsd:
+                  payload.rate_per_usd !== undefined
+                    ? payload.rate_per_usd.toFixed(4)
+                    : item.ratePerUsd,
+                isActive: payload.is_active ?? item.isActive,
+              }
+            : item
+        )
+      )
+
+      return { previous }
+    },
+    onError: (_error, _vars, context) => {
+      context?.previous.forEach(([key, data]) => {
+        queryClient.setQueryData(key, data)
+      })
+    },
+    onSuccess: (updated) => {
+      patchCurrencyLists(queryClient, (list) =>
+        list.map((item) => (item.code === updated.code ? updated : item))
+      )
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: currenciesQueryKey })
     },
   })
@@ -60,7 +111,18 @@ export function useDeleteCurrencyMutation() {
 
   return useMutation({
     mutationFn: (code: string) => deleteCurrency(code),
-    onSuccess: () => {
+    onMutate: async (code) => {
+      await queryClient.cancelQueries({ queryKey: currenciesQueryKey })
+      const previous = queryClient.getQueriesData<Currency[]>({ queryKey: currenciesQueryKey })
+      patchCurrencyLists(queryClient, (list) => list.filter((item) => item.code !== code))
+      return { previous }
+    },
+    onError: (_error, _code, context) => {
+      context?.previous.forEach(([key, data]) => {
+        queryClient.setQueryData(key, data)
+      })
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: currenciesQueryKey })
     },
   })
@@ -71,9 +133,27 @@ export function useUpdateBaseCurrencyMutation() {
 
   return useMutation({
     mutationFn: (code: string) => updateBaseCurrencyCode(code),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: currenciesQueryKey })
+    onMutate: async (code) => {
+      await queryClient.cancelQueries({ queryKey: baseCurrencyQueryKey })
+      const previousBase = queryClient.getQueryData<string>(baseCurrencyQueryKey)
+      // UI inmediata: el select de moneda base no espera el round-trip a Railway.
+      queryClient.setQueryData(baseCurrencyQueryKey, code)
+      localStorage.setItem(DISPLAY_CURRENCY_STORAGE_KEY, code)
+      return { previousBase }
+    },
+    onError: (_error, _code, context) => {
+      if (context?.previousBase !== undefined) {
+        queryClient.setQueryData(baseCurrencyQueryKey, context.previousBase)
+        localStorage.setItem(DISPLAY_CURRENCY_STORAGE_KEY, context.previousBase)
+      }
+    },
+    onSuccess: (code) => {
+      queryClient.setQueryData(baseCurrencyQueryKey, code)
+      localStorage.setItem(DISPLAY_CURRENCY_STORAGE_KEY, code)
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: baseCurrencyQueryKey })
+      void queryClient.invalidateQueries({ queryKey: currenciesQueryKey })
     },
   })
 }

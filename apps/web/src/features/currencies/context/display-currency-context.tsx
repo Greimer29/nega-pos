@@ -82,13 +82,12 @@ export function DisplayCurrencyProvider({ children }: { children: ReactNode }) {
     const stored = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
     const preferred = stored && rates[stored] ? stored : baseCurrencyCode
 
-    if (preferred !== displayCurrency) {
-      setDisplayCurrencyState(preferred)
-    }
+    setDisplayCurrencyState((current) => (current === preferred ? current : preferred))
+
     if (!stored || !rates[stored]) {
       localStorage.setItem(STORAGE_KEY, baseCurrencyCode)
     }
-  }, [isLoading, baseCurrencyCode, rates, displayCurrency])
+  }, [isLoading, baseCurrencyCode, rates])
 
   const setDisplayCurrency = useCallback((code: string) => {
     setDisplayCurrencyState(code)

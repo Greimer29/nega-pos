@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 
 function shouldRetryQuery(failureCount: number, error: unknown): boolean {
-  // Un reintento en red/timeout ayuda con Railway remoto inestable.
+  // Solo GET: un reintento. Las mutations NO reintentan (evita esperas de 1–2 min).
   if (failureCount >= 1) {
     return false
   }
@@ -31,23 +31,14 @@ function shouldRetryQuery(failureCount: number, error: unknown): boolean {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60_000,
+      // Datos de config deben verse frescos tras mutar; 15s basta para navegación.
+      staleTime: 15_000,
       retry: shouldRetryQuery,
       refetchOnWindowFocus: false,
     },
     mutations: {
-      retry: (failureCount, error) => {
-        if (failureCount >= 1) return false
-        if (!axios.isAxiosError(error)) return false
-        return (
-          error.code === 'ERR_NETWORK' ||
-          error.code === 'ECONNABORTED' ||
-          error.message === 'Network Error' ||
-          error.response?.status === 502 ||
-          error.response?.status === 503 ||
-          error.response?.status === 504
-        )
-      },
+      // Nunca reintentar PUT/DELETE automáticamente: duplica espera y puede doble-aplicar.
+      retry: false,
     },
   },
 })
