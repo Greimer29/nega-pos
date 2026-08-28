@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Nega POS</string>
+    <string name="title_activity_main">Nega POS</string>
+    <string name="package_name">com.negapos.app</string>
+    <string name="custom_url_scheme">com.negapos.app</string>
+</resources>

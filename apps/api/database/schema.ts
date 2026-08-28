@@ -172,7 +172,7 @@ export class CustomerSchema extends BaseModel {
 }
 
 export class ExpenseSchema extends BaseModel {
-  static $columns = ['accountId', 'amountUsd', 'createdAt', 'currencyCode', 'date', 'description', 'id', 'updatedAt'] as const
+  static $columns = ['accountId', 'amountUsd', 'createdAt', 'currencyCode', 'date', 'description', 'entryRate', 'id', 'updatedAt'] as const
   $columns = ExpenseSchema.$columns
   @column()
   declare accountId: bigint | number | null
@@ -186,6 +186,8 @@ export class ExpenseSchema extends BaseModel {
   declare date: DateTime
   @column()
   declare description: string
+  @column()
+  declare entryRate: string | null
   @column({ isPrimary: true })
   declare id: bigint | number
   @column.dateTime({ autoCreate: true, autoUpdate: true })
@@ -193,7 +195,7 @@ export class ExpenseSchema extends BaseModel {
 }
 
 export class IncomeSchema extends BaseModel {
-  static $columns = ['accountId', 'amountUsd', 'createdAt', 'currencyCode', 'date', 'description', 'id', 'updatedAt'] as const
+  static $columns = ['accountId', 'amountUsd', 'createdAt', 'currencyCode', 'date', 'description', 'entryRate', 'id', 'updatedAt'] as const
   $columns = IncomeSchema.$columns
   @column()
   declare accountId: bigint | number | null
@@ -207,6 +209,8 @@ export class IncomeSchema extends BaseModel {
   declare date: DateTime
   @column()
   declare description: string
+  @column()
+  declare entryRate: string | null
   @column({ isPrimary: true })
   declare id: bigint | number
   @column.dateTime({ autoCreate: true, autoUpdate: true })
@@ -638,8 +642,31 @@ export class SaleLineSchema extends BaseModel {
   declare updatedAt: DateTime
 }
 
+export class SalesShiftSchema extends BaseModel {
+  static $columns = ['closedAt', 'closedByUserId', 'createdAt', 'id', 'notes', 'openedAt', 'openedByUserId', 'status', 'updatedAt'] as const
+  $columns = SalesShiftSchema.$columns
+  @column.dateTime()
+  declare closedAt: DateTime | null
+  @column()
+  declare closedByUserId: bigint | number | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: bigint | number
+  @column()
+  declare notes: string | null
+  @column.dateTime()
+  declare openedAt: DateTime
+  @column()
+  declare openedByUserId: bigint | number
+  @column()
+  declare status: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
 export class SaleSchema extends BaseModel {
-  static $columns = ['amountPaidUsd', 'balanceUsd', 'billingMode', 'code', 'confirmedAt', 'createdAt', 'creditDueDate', 'customerId', 'guestName', 'id', 'orderStatus', 'paymentMethodCode', 'paymentType', 'returnedAt', 'soldAt', 'soldByUserId', 'status', 'totalBs', 'totalUsd', 'updatedAt', 'usdRate'] as const
+  static $columns = ['amountPaidUsd', 'balanceUsd', 'billingMode', 'code', 'confirmedAt', 'createdAt', 'creditDueDate', 'customerId', 'guestName', 'id', 'orderStatus', 'paymentMethodCode', 'paymentType', 'returnedAt', 'salesShiftId', 'soldAt', 'soldByUserId', 'status', 'totalBs', 'totalUsd', 'updatedAt', 'usdRate'] as const
   $columns = SaleSchema.$columns
   @column()
   declare amountPaidUsd: string
@@ -669,6 +696,8 @@ export class SaleSchema extends BaseModel {
   declare paymentType: string
   @column.dateTime()
   declare returnedAt: DateTime | null
+  @column()
+  declare salesShiftId: bigint | number | null
   @column.dateTime()
   declare soldAt: DateTime | null
   @column()

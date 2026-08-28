@@ -10,6 +10,10 @@ const ROUTE_RULES: RouteRule[] = [
   { method: 'GET', pattern: /^\/dashboard\//, permission: 'dashboard.view' },
   { method: 'GET', pattern: /^\/dashboard$/, permission: 'dashboard.view' },
 
+  { method: 'GET', pattern: /^\/sales-shifts(\/|$)/, permission: 'dashboard.view' },
+  { method: 'POST', pattern: /^\/sales-shifts\/open$/, permission: 'ventas.confirm' },
+  { method: 'POST', pattern: /^\/sales-shifts\/[^/]+\/close$/, permission: 'ventas.confirm' },
+
   { method: 'GET', pattern: /^\/sales(\/|$)/, permission: 'ventas.view' },
   { method: 'POST', pattern: /^\/sales\/[^/]+\/return$/, permission: 'ventas.returns' },
   { method: 'POST', pattern: /^\/sales(\/|$)/, permission: 'ventas.confirm' },

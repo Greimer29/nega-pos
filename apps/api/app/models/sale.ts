@@ -2,6 +2,7 @@ import { SaleSchema } from '#database/schema'
 import Customer from '#models/customer'
 import SaleLine from '#models/sale_line'
 import PaymentMethod from '#models/payment_method'
+import SalesShift from '#models/sales_shift'
 import User from '#models/user'
 import { belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
@@ -20,4 +21,7 @@ export default class Sale extends SaleSchema {
 
   @belongsTo(() => User, { foreignKey: 'soldByUserId' })
   declare soldBy: BelongsTo<typeof User>
+
+  @belongsTo(() => SalesShift, { foreignKey: 'salesShiftId' })
+  declare salesShift: BelongsTo<typeof SalesShift>
 }

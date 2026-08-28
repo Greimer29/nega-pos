@@ -1,0 +1,22 @@
+{
+  "name": "mobile",
+  "version": "1.0.6",
+  "private": true,
+  "description": "Nega POS — wrapper Capacitor Android (reutiliza apps/web/dist)",
+  "scripts": {
+    "sync": "npx cap sync android",
+    "open": "npx cap open android",
+    "add:android": "npx cap add android",
+    "build:apk:debug": "cd android && .\\gradlew.bat assembleDebug",
+    "build:apk:release": "cd android && .\\gradlew.bat assembleRelease",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/core": "^7.4.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.3",
+    "typescript": "^5.7.3"
+  }
+}

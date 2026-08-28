@@ -14,6 +14,7 @@ import { DocumentPreview } from '@/features/printing/components/document-preview
 import { createSampleSale } from '@/features/printing/render-document'
 import type { PrintConfig, PrintDocumentKind, PrintFormatRecord } from '@/features/printing/types'
 import { FORMAT_PLACEHOLDER_HELP, DEFAULT_TICKET_PAPER_WIDTH_MM } from '@/features/printing/utils/print-format-defaults'
+import { getApiErrorMessage } from '@/lib/api-error'
 
 type FormatFormDialogProps = {
   open: boolean
@@ -21,7 +22,7 @@ type FormatFormDialogProps = {
   format: PrintFormatRecord | null
   config: Pick<PrintConfig, 'business' | 'formats' | 'documents' | 'ticket'>
   canEdit: boolean
-  onSave: (format: PrintFormatRecord) => void
+  onSave: (format: PrintFormatRecord) => void | Promise<void>
 }
 
 const sampleSale = createSampleSale()
@@ -40,19 +41,21 @@ export function FormatFormDialog({
   const [paperWidthMm, setPaperWidthMm] = useState(String(DEFAULT_TICKET_PAPER_WIDTH_MM))
   const [bodyHtml, setBodyHtml] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open || !format) return
     setError(null)
+    setSaving(false)
     setName(format.name)
     setDocumentKind(format.documentKind)
     setPaperWidthMm(String(format.paperWidthMm))
     setBodyHtml(format.bodyHtml)
   }, [open, format])
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    if (!format) return
+    if (!format || !canEdit) return
 
     setError(null)
     const trimmedName = name.trim()
@@ -72,14 +75,21 @@ export function FormatFormDialog({
       return
     }
 
-    onSave({
-      ...format,
-      name: trimmedName,
-      documentKind: format.isBuiltin ? format.documentKind : documentKind,
-      paperWidthMm: parsedWidth,
-      bodyHtml: trimmedBody,
-    })
-    onOpenChange(false)
+    setSaving(true)
+    try {
+      await onSave({
+        ...format,
+        name: trimmedName,
+        documentKind: format.isBuiltin ? format.documentKind : documentKind,
+        paperWidthMm: parsedWidth,
+        bodyHtml: trimmedBody,
+      })
+      onOpenChange(false)
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const draftFormat = format
@@ -135,21 +145,29 @@ export function FormatFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(event) => void handleSubmit(event)}>
           <DialogHeader className="gap-4">
             <div className="flex flex-col gap-3 pr-8 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex flex-col gap-1.5 text-center sm:text-left">
                 <DialogTitle>{isEditing ? 'Editar formato' : 'Nuevo formato'}</DialogTitle>
                 <DialogDescription>
-                  Editá el HTML del ticket usando placeholders. Los cambios se guardan al confirmar en
-                  la pestaña Formatos.
+                  Editá el HTML del ticket. Al guardar se escribe de inmediato en el archivo local de
+                  la app de escritorio.
                 </DialogDescription>
               </div>
               <div className="flex flex-col-reverse gap-2 sm:shrink-0 sm:flex-row sm:justify-end">
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => onOpenChange(false)}
+                >
                   Cancelar
                 </Button>
-                <Button type="submit">Aplicar cambios</Button>
+                <Button type="submit" disabled={saving || !canEdit}>
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Guardar formato
+                </Button>
               </div>
             </div>
           </DialogHeader>
@@ -163,6 +181,7 @@ export function FormatFormDialog({
                 <Input
                   id="format-name"
                   value={name}
+                  disabled={!canEdit || saving}
                   onChange={(event) => setName(event.target.value)}
                 />
               </div>
@@ -173,7 +192,7 @@ export function FormatFormDialog({
                   id="format-kind"
                   className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
                   value={documentKind}
-                  disabled={format?.isBuiltin}
+                  disabled={format?.isBuiltin || !canEdit || saving}
                   onChange={(event) => setDocumentKind(event.target.value as PrintDocumentKind)}
                 >
                   <option value="invoice">Factura / Recibo</option>
@@ -189,6 +208,7 @@ export function FormatFormDialog({
                   type="number"
                   min={1}
                   value={paperWidthMm}
+                  disabled={!canEdit || saving}
                   onChange={(event) => setPaperWidthMm(event.target.value)}
                 />
               </div>
@@ -199,6 +219,7 @@ export function FormatFormDialog({
                   id="format-body"
                   className="border-input bg-background min-h-56 w-full rounded-md border px-3 py-2 font-mono text-xs"
                   value={bodyHtml}
+                  disabled={!canEdit || saving}
                   onChange={(event) => setBodyHtml(event.target.value)}
                 />
               </div>

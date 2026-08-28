@@ -8,8 +8,8 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "build": "tsc --noEmit -p tsconfig.json && vite build",
-    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build --mode app",
+    "dev": "vite --mode app",
     "preview": "vite preview"
   },
   "dependencies": {

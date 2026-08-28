@@ -318,10 +318,12 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 | `app_settings` | `key` (PK); incluye `base_currency_code` (default/cutover `XAU`), tasa VES legacy, margen, `business_profile`, `print_config` |
 | `customer_payments` | `customer_id`, `order_id?`, `sale_id?`, `amount_usd` (monto en moneda base), `payment_method_code`, `account_id` |
 | `supplier_payments` | `supplier_id`, `purchase_id?`, `amount_usd` (monto en moneda base), … |
-| `expenses` | `account_id`, `date`, `description`, `amount_usd` (monto en moneda base), `currency_code` |
-| `incomes` | `account_id`, `date`, `description`, `amount_usd` (monto en moneda base), `currency_code` — aportes / entradas de dinero |
+| `expenses` | `account_id`, `date`, `description`, `amount_usd` (monto canónico en moneda base), `currency_code` (moneda de ingreso), `entry_rate` (unidades de moneda de ingreso por 1 de base; `null` si es base) |
+| `incomes` | `account_id`, `date`, `description`, `amount_usd` (monto canónico en moneda base), `currency_code`, `entry_rate` — aportes / entradas de dinero |
 
-**Moneda base del sistema:** configurable (`GET/PUT /api/v1/currencies/base`, permiso `settings.edit`). Tras el cutover la base es **XAU (Oro)** con semántica *unidades de moneda por 1 unidad de base* (`XAU.rate=1`, `USD.rate=100` → 1 XAU = 100 USD). Las columnas `*_usd` **conservan el nombre** pero almacenan montos en la moneda base. Conversión: `base = monto / tasa`, `monto = base * tasa`.
+**Moneda base del sistema:** configurable (`GET/PUT /api/v1/currencies/base`, permiso `settings.edit`). Tras el cutover la base es **XAU (Oro)** con semántica *unidades de moneda por 1 unidad de base* (`XAU.rate=1`, `USD.rate=100` → 1 XAU = 100 USD). Las columnas `*_usd` **conservan el nombre** pero almacenan montos en la moneda base. Conversión: `base = nativo / tasa`, `nativo = base * tasa`.
+
+**Tasa por documento (gastos, ingresos, compras, cobro contado):** el monto se ingresa en una moneda activa; la tasa default es `currencies.rate_per_usd`. Si el usuario la cambia, queda solo en ese registro (`entry_rate` en gastos/ingresos, `usd_rate` en compras/ventas) y **no** modifica el catálogo ni Configuración.
 
 #### Catálogo
 
@@ -368,8 +370,11 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 
 | Tabla | Campos clave |
 |-------|--------------|
-| `sales` | `code`, `customer_id?`, `guest_name`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), totales |
+| `sales_shifts` | `opened_at`, `closed_at`, `opened_by_user_id`, `closed_by_user_id`, `status` (OPEN/CLOSED), `notes` |
+| `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), totales |
 | `sale_lines` | `catalog_product_id?`, `material_id?`, `description`, `kitchen_note?` (indicaciones de cocina para comanda), cantidades y precios |
+
+**Turnos de venta:** solo puede haber un turno `OPEN`. Confirmar venta (`POST /sales/:id/confirm` o `POST /sales` con `confirm: true`) exige turno abierto; sin turno → `TURNO_NO_ABIERTO` (409). La venta confirmada guarda `sales.sales_shift_id`.
 
 #### Máquinas
 
@@ -384,6 +389,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 customers ──< orders ──< order_lines ──> catalog_products
                 └──< order_materials ──> materials
 customers ──< sales ──< sale_lines ──> catalog_products | materials
+sales_shifts ──< sales
 suppliers ──< purchases ──< purchase_items ──> materials | catalog_products
 formulas ──< formula_materials ──> materials
 catalog_products ──> formulas (opcional)
@@ -448,9 +454,9 @@ catalog_products ──< product_inventory_movements
 
 ### Dashboard (`dashboard_service.ts`)
 
-- Resumen del día: productos vendidos, montos, crédito, gastos, ganancia estimada.
+- Resumen del día: productos vendidos, montos, crédito, gastos, ganancia estimada (KPIs del turno abierto cuando existe).
 - Endpoints adicionales: overview, ventas diarias por producto, gastos del día, cierre diario.
-- **Cierre diario** (`GET /dashboard/daily-closing?date=YYYY-MM-DD`): agrega ventas por método de pago, facturas, productos vendidos, devoluciones y **gastos del día** (empresa + máquinas). El resumen incluye `expenses_count`, `expenses_total_usd` y `net_cash_usd` (contado − gastos). La fecha es opcional (hoy por defecto).
+- **Cierre diario** (`GET /dashboard/daily-closing?sales_shift_id=`): agrega ventas del turno (`sales.sales_shift_id`), métodos de pago, facturas, productos vendidos, devoluciones y **gastos** en las fechas calendario que cubre el turno (`opened_at` → `closed_at` / ahora, TZ `America/Caracas`). El resumen incluye `expenses_count`, `expenses_total_usd` y `net_cash_usd` (contado − gastos). Parámetro legacy `date` sigue disponible si no se envía `sales_shift_id`.
 - **Gastos del día** aceptan fecha opcional en servicio; el endpoint público sigue usando hoy salvo extensión futura.
 - Alertas de bajo stock en materiales y productos.
 
@@ -531,6 +537,8 @@ catalog_products ──< product_inventory_movements
 
 ### Ventas / facturación (`ventas.*`)
 
+Carrito y líneas en moneda base. Al confirmar **contado**, `POST .../confirm` acepta `payment_method_code`, y opcionalmente `currency_code` + `usd_rate` (override solo del documento; default = moneda/tasa del método). Crédito no usa tasa. Persiste `sales.usd_rate` y `sales.total_bs`.
+
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
 | GET | `/api/v1/sales/next-code` | `ventas.view` | `SalesController.nextCode` |
@@ -542,6 +550,15 @@ catalog_products ──< product_inventory_movements
 | POST | `/api/v1/sales/:id/confirm` | `ventas.confirm` | `SalesController.confirm` |
 | POST | `/api/v1/sales/:id/transition` | `ventas.confirm` | `SalesController.transition` |
 | POST | `/api/v1/sales/:id/return` | `ventas.returns` | `SalesController.returnSale` |
+
+### Turnos de venta
+
+| Método | Ruta | Permiso | Controlador |
+|--------|------|---------|-------------|
+| GET | `/api/v1/sales-shifts/current` | `dashboard.view` | `SalesShiftsController.current` |
+| GET | `/api/v1/sales-shifts` | `dashboard.view` | `SalesShiftsController.index` |
+| POST | `/api/v1/sales-shifts/open` | `ventas.confirm` | `SalesShiftsController.open` |
+| POST | `/api/v1/sales-shifts/:id/close` | `ventas.confirm` | `SalesShiftsController.close` |
 
 ### Catálogo (`catalog.*`)
 
@@ -629,6 +646,8 @@ catalog_products ──< product_inventory_movements
 
 ### Gastos (`expenses.*`)
 
+Alta/edición: `amount` (nativo), `currency_code` (cualquier activa), `entry_rate?` (default catálogo). Persistencia: `amount_usd = amount / entry_rate` (o `amount` si moneda = base). Listados y estado de cuenta consolidan con `amount_usd`.
+
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
 | GET | `/api/v1/expenses/summary` | `expenses.view` | `ExpensesController.summary` |
@@ -639,7 +658,7 @@ catalog_products ──< product_inventory_movements
 
 ### Ingresos (`incomes.*`)
 
-Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuenta. Suman al balance del estado de cuenta.
+Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuenta. Misma semántica multi-moneda que gastos (`entry_rate`). Suman al balance del estado de cuenta.
 
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
@@ -746,11 +765,11 @@ Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuent
 | `/dashboard` | Panel principal |
 | `/dashboard/productos-vendidos-hoy` | Ventas diarias por producto |
 | `/dashboard/gastos-del-dia` | Gastos del día |
-| `/dashboard/cierre-diario` | Cierre diario (fecha en query `?date=`; incluye gastos y efectivo neto) |
+| `/dashboard/cierre-diario` | Cierre diario (selector de turno; `?sales_shift_id=`; gastos del rango del turno y efectivo neto) |
 | `/customers` | Listado clientes |
 | `/customers/:id` | Detalle cliente |
 | `/customers/:id/cuenta` | Estado de cuenta cliente |
-| `/ventas` | Hub ventas (POS + historial pedidos/facturas) |
+| `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), cliente walk-in por defecto «Generico», en móvil carrito en drawer y filtros de catálogo en botón desplegable |
 | `/ventas/:id` | Detalle factura |
 | `/orders/:id` | Detalle pedido |
 | `/productos` | Catálogo |

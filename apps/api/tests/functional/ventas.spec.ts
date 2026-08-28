@@ -14,6 +14,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
+import { seedOpenSalesShift } from '#tests/helpers/seed_test_sale'
 
 const TEST_EMAIL = 'test-ventas@negapos.local'
 const TEST_PASSWORD = 'password123'
@@ -21,6 +22,7 @@ const TEST_PASSWORD = 'password123'
 async function resetDatabase() {
   await db.from('sale_lines').delete()
   await db.from('sales').delete()
+  await db.from('sales_shifts').delete()
   await db.from('order_lines').delete()
   await db.from('formula_materials').delete()
   await db.from('formulas').delete()
@@ -101,6 +103,8 @@ test.group('Ventas API — catálogo y ventas', (group) => {
   group.each.setup(async () => {
     await resetDatabase()
     await seedAdminUser()
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    await seedOpenSalesShift(Number(user.id))
   })
 
   test('PUT catalog product allows sale price below cost', async ({ client, assert }) => {
@@ -1440,6 +1444,59 @@ test.group('Ventas API — catálogo y ventas', (group) => {
     assert.equal(confirmResponse.body().data.sale.usd_rate, '40.0000')
     assert.equal(confirmResponse.body().data.sale.total_bs, '400.00')
     assert.equal(confirmResponse.body().data.sale.payment_method.name, 'Efectivo Bs')
+  })
+
+  test('POST /sales/:id/confirm allows currency_code and usd_rate override without changing catalog', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    await PaymentMethod.query().where('code', 'cash_bs').update({ isActive: true })
+    await db.from('currencies').where('code', 'VES').update({ rate_per_usd: '40.0000' })
+
+    const catalog = await CatalogProduct.create({
+      name: 'Producto override tasa',
+      category: 'Uniforme',
+      salePriceUsd: '10.0000',
+      costUsd: '5.0000',
+      stockQuantity: '5.000',
+      active: true,
+    })
+
+    const draftResponse = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        guest_name: 'Cliente override',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 1,
+            unit_price_usd: 10,
+          },
+        ],
+      })
+
+    draftResponse.assertStatus(200)
+
+    const confirmResponse = await client
+      .post(`/api/v1/sales/${draftResponse.body().data.sale.id}/confirm`)
+      .loginAs(user)
+      .json({
+        payment_method_code: 'cash_bs',
+        currency_code: 'VES',
+        usd_rate: 50,
+      })
+
+    confirmResponse.assertStatus(200)
+    assert.equal(confirmResponse.body().data.sale.payment_method_code, 'cash_bs')
+    assert.equal(confirmResponse.body().data.sale.usd_rate, '50.0000')
+    assert.equal(confirmResponse.body().data.sale.total_bs, '500.00')
+
+    const ves = await Currency.findByOrFail('code', 'VES')
+    assert.equal(ves.ratePerUsd, '40.0000')
   })
 
   test('POST /sales/:id/confirm snapshots XAU total when paying in base', async ({

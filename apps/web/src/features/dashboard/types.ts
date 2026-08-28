@@ -154,11 +154,21 @@ export type DailyClosing = {
     credit_total_usd: string
     products_sold: number
     products_amount_usd: string
+    expenses_count: number
+    expenses_total_usd: string
+    net_cash_usd: string
   }
   by_payment_method: DailyClosingPaymentMethod[]
   products: DailySoldProduct[]
   invoices: DailyClosingInvoice[]
   returns: DailyClosingReturn[]
+  expenses: {
+    items: DailyExpenseItem[]
+    summary: {
+      gastos_cantidad: number
+      gastos_monto_usd: string
+    }
+  }
 }
 
 export type DailyClosingResponse = {

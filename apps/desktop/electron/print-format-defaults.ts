@@ -124,81 +124,6 @@ export const DEFAULT_COMANDA_BODY_HTML = `${COMANDA_STYLES}
 {{comanda.lines}}
 </div>`
 
-const BUILTIN_IDS = new Set([
-  BUILTIN_INVOICE_FORMAT_ID,
-  BUILTIN_DELIVERY_NOTE_FORMAT_ID,
-  BUILTIN_COMANDA_FORMAT_ID,
-])
-
-export function migrateBuiltinBodyHtml(
-  id: string,
-  bodyHtml: string,
-  defaultBodyHtml: string
-): string {
-  if (!BUILTIN_IDS.has(id)) {
-    return bodyHtml
-  }
-
-  if (!bodyHtml.includes('<style')) {
-    return defaultBodyHtml
-  }
-
-  if (id === BUILTIN_INVOICE_FORMAT_ID) {
-    if (
-      bodyHtml.includes('VENDEDOR:') ||
-      bodyHtml.includes('SUB TOTAL') ||
-      bodyHtml.includes('inv-divider') ||
-      bodyHtml.includes('inv-footer') ||
-      !bodyHtml.includes('inv-sep') ||
-      !bodyHtml.includes('MESERO:')
-    ) {
-      return defaultBodyHtml
-    }
-    if (bodyHtml.includes('class="divider"') || bodyHtml.includes('class="center"')) {
-      return defaultBodyHtml
-    }
-    if (
-      bodyHtml.includes('{{sale.payment_type}}') &&
-      !bodyHtml.includes('{{sale.payment_details}}')
-    ) {
-      return defaultBodyHtml
-    }
-    if (bodyHtml.includes('TOTAL USD') && !bodyHtml.includes('{{sale.totals_summary}}')) {
-      return defaultBodyHtml
-    }
-    if (
-      bodyHtml.includes('inv-split') ||
-      bodyHtml.includes('white-space: nowrap') ||
-      bodyHtml.includes('--------------------------')
-    ) {
-      return defaultBodyHtml
-    }
-  }
-
-  if (id === BUILTIN_DELIVERY_NOTE_FORMAT_ID && bodyHtml.includes('class="divider"')) {
-    return defaultBodyHtml
-  }
-
-  if (id === BUILTIN_COMANDA_FORMAT_ID) {
-    if (bodyHtml.includes('class="center"')) {
-      return defaultBodyHtml
-    }
-    if (
-      bodyHtml.includes('cmd-muted') ||
-      bodyHtml.includes('cmd-bold') ||
-      bodyHtml.includes('border-bottom: 1px dashed') ||
-      bodyHtml.includes('------------------------------')
-    ) {
-      return defaultBodyHtml
-    }
-    if (!bodyHtml.includes('cmd-note')) {
-      return defaultBodyHtml
-    }
-  }
-
-  return bodyHtml
-}
-
 export function createBuiltinFormats(): Array<{
   id: string
   name: string
@@ -262,8 +187,7 @@ export function normalizeFormats(
           : 'invoice'
     const existingBuiltin = byId.get(id)
     const rawBodyHtml = String(raw.bodyHtml ?? existingBuiltin?.bodyHtml ?? '').trim()
-    const defaultBodyHtml = existingBuiltin?.bodyHtml ?? DEFAULT_INVOICE_BODY_HTML
-    const bodyHtml = migrateBuiltinBodyHtml(id, rawBodyHtml || defaultBodyHtml, defaultBodyHtml)
+    const bodyHtml = rawBodyHtml || existingBuiltin?.bodyHtml || DEFAULT_INVOICE_BODY_HTML
     const name = String(raw.name ?? existingBuiltin?.name ?? 'Formato sin nombre').trim()
 
     byId.set(id, {

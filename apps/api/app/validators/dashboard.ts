@@ -6,4 +6,5 @@ export const dashboardOverviewValidator = vine.create({
 
 export const dashboardDailyClosingValidator = vine.create({
   date: vine.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  sales_shift_id: vine.number().min(1).optional(),
 })

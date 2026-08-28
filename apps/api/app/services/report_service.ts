@@ -8,6 +8,7 @@ import {
   creditPurchaseVisibleInReport,
 } from '#utils/credit_purchase_report'
 import { creditSaleReportAmountUsd, creditSaleReportStatus } from '#utils/credit_sale_report'
+import { nativeAmountFromBase } from '#utils/monetary_entry'
 import CustomerPayment from '#models/customer_payment'
 import Expense from '#models/expense'
 import Income from '#models/income'
@@ -142,6 +143,7 @@ export default class ReportService {
     )
 
     const rates = await this.currencyService.getActiveRates()
+    const baseCurrencyCode = await this.currencyService.getBaseCurrencyCode()
 
     const displayCurrency = (filters.display_currency ?? 'USD').toUpperCase()
 
@@ -534,11 +536,13 @@ export default class ReportService {
       const expenses = await query
 
       for (const expense of expenses) {
-        const currencyCode = expense.currencyCode ?? 'USD'
+        const currencyCode = expense.currencyCode ?? baseCurrencyCode
 
-        const native = Number(expense.amountUsd ?? 0)
+        const usd = Number(expense.amountUsd ?? 0)
 
-        const usd = this.currencyService.toUsd(native, currencyCode, rates)
+        const native = Number(
+          nativeAmountFromBase(usd, expense.entryRate, currencyCode, baseCurrencyCode)
+        )
 
         expensesUsd += usd
 
@@ -649,9 +653,11 @@ export default class ReportService {
       const incomes = await query
 
       for (const income of incomes) {
-        const currencyCode = income.currencyCode ?? 'USD'
-        const native = Number(income.amountUsd ?? 0)
-        const usd = this.currencyService.toUsd(native, currencyCode, rates)
+        const currencyCode = income.currencyCode ?? baseCurrencyCode
+        const usd = Number(income.amountUsd ?? 0)
+        const native = Number(
+          nativeAmountFromBase(usd, income.entryRate, currencyCode, baseCurrencyCode)
+        )
 
         incomesUsd += usd
 

@@ -65,6 +65,13 @@ export function SettingsVentasPrintPanel() {
 
       {message ? <p className="text-emerald-700 text-sm">{message}</p> : null}
       {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
+      {!electronAvailable ? (
+        <p className="text-amber-800 bg-amber-50 border-amber-200 rounded-md border px-3 py-2 text-sm">
+          Estás en el navegador. Podés ver y guardar la configuración de impresión en el servidor.
+          La lista de impresoras Windows y la impresión de prueba solo están en la{' '}
+          <strong>app de escritorio</strong>.
+        </p>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -87,7 +94,8 @@ export function SettingsVentasPrintPanel() {
             }
           />
           <p className="text-muted-foreground text-xs">
-            Aparece en el recibo como ESTA. Se guarda en la configuración local de esta instalación.
+            Aparece en el recibo como ESTA. Se guarda en el servidor con la configuración de
+            impresión de esta instalación.
           </p>
         </CardContent>
       </Card>
@@ -115,7 +123,7 @@ export function SettingsVentasPrintPanel() {
                 id={`printer-${kind}`}
                 printers={printers}
                 value={config.documents[kind].deviceName}
-                disabled={!electronAvailable}
+                disabled={!canEdit}
                 onChange={(deviceName) => updateDocument(kind, { deviceName })}
               />
             </div>
@@ -221,7 +229,7 @@ export function SettingsVentasPrintPanel() {
       />
 
       {canEdit ? (
-        <Button type="button" disabled={saving} onClick={() => void handleSave()}>
+        <Button type="button" disabled={saving} onClick={() => void handleSave('devices')}>
           {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
           Guardar configuración
         </Button>

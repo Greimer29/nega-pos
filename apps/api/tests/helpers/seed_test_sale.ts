@@ -1,5 +1,6 @@
 import Sale from '#models/sale'
 import SaleLine from '#models/sale_line'
+import SalesShift from '#models/sales_shift'
 import { DateTime } from 'luxon'
 
 export type SeedTestSaleLineInput = {
@@ -28,6 +29,7 @@ export type SeedTestSaleInput = {
   amountPaidUsd?: string
   balanceUsd?: string
   creditDueDate?: DateTime | null
+  salesShiftId?: number | null
   lines: SeedTestSaleLineInput[]
 }
 
@@ -44,6 +46,16 @@ function allocateCode(override?: string) {
 
   nextCodeNumber += 1
   return String(nextCodeNumber).padStart(10, '0')
+}
+
+export async function seedOpenSalesShift(userId: number) {
+  return SalesShift.create({
+    openedAt: DateTime.now(),
+    openedByUserId: userId,
+    closedByUserId: null,
+    status: 'OPEN',
+    notes: null,
+  })
 }
 
 export async function seedTestSale(input: SeedTestSaleInput) {
@@ -68,6 +80,7 @@ export async function seedTestSale(input: SeedTestSaleInput) {
     creditDueDate: input.creditDueDate ?? null,
     soldAt,
     confirmedAt: input.confirmedAt ?? soldAt,
+    salesShiftId: input.salesShiftId ?? null,
   })
 
   for (const line of input.lines) {

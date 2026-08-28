@@ -144,6 +144,7 @@ export type Expense = {
   description: string
   amount: string
   currencyCode: string
+  entryRate: string | null
   amountUsd: string
   accountId: number | null
   createdAt: string
@@ -162,6 +163,7 @@ export type ExpenseInput = {
   description: string
   amount: number
   currency_code?: string
+  entry_rate?: number
   account_id?: number | null
 }
 
@@ -178,6 +180,7 @@ export type Income = {
   description: string
   amount: string
   currencyCode: string
+  entryRate: string | null
   amountUsd: string
   accountId: number | null
   createdAt: string
@@ -196,6 +199,7 @@ export type IncomeInput = {
   description: string
   amount: number
   currency_code?: string
+  entry_rate?: number
   account_id?: number | null
 }
 

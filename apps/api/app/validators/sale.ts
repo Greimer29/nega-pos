@@ -41,6 +41,8 @@ export const confirmSaleValidator = vine.create({
   payment_method_code: vine.string().trim().maxLength(50).optional(),
   payment_type: vine.enum(['CASH', 'CREDIT']).optional(),
   billing_mode: vine.enum(['FAST', 'ORDER']).optional(),
+  currency_code: vine.string().trim().toUpperCase().fixedLength(3).optional(),
+  usd_rate: vine.number().positive().optional(),
 })
 
 export const transitionSaleValidator = vine.create({

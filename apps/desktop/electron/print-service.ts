@@ -9,6 +9,7 @@ import {
 import { DEFAULT_TICKET_PAPER_WIDTH_MM } from './print-format-defaults'
 
 const PRINT_CONFIG_FILE = 'print-config.json'
+const PRINT_CONFIG_MIGRATED_FLAG = 'print-config-migrated'
 /** Resolución típica de impresoras térmicas 80 mm (203 DPI). */
 const THERMAL_DPI = 203
 
@@ -24,35 +25,73 @@ function mmToThermalPx(mm: number): number {
   return Math.round((mm / 25.4) * THERMAL_DPI)
 }
 
-function getConfigWritePath(): string {
-  if (app.isPackaged) {
-    return path.join(path.dirname(process.execPath), PRINT_CONFIG_FILE)
-  }
-  return path.join(app.getAppPath(), PRINT_CONFIG_FILE)
+/** Única fuente de verdad: userData (igual en dev y packaged). */
+export function getPrintConfigPath(): string {
+  return path.join(app.getPath('userData'), PRINT_CONFIG_FILE)
 }
 
-function getConfigReadCandidates(): string[] {
+function getLegacyConfigCandidates(): string[] {
+  const candidates = [path.join(app.getAppPath(), PRINT_CONFIG_FILE)]
+
   if (app.isPackaged) {
-    return [
+    candidates.push(
       path.join(path.dirname(process.execPath), PRINT_CONFIG_FILE),
-      path.join(process.resourcesPath, PRINT_CONFIG_FILE),
-    ]
+      path.join(process.resourcesPath, PRINT_CONFIG_FILE)
+    )
   }
-  return [path.join(app.getAppPath(), PRINT_CONFIG_FILE)]
+
+  return candidates
 }
 
-export function readPrintConfig(): PrintConfig {
-  for (const candidate of getConfigReadCandidates()) {
-    if (!fs.existsSync(candidate)) {
+function tryParseConfigFile(filePath: string): PrintConfig | null {
+  if (!fs.existsSync(filePath)) {
+    return null
+  }
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf8')) as Partial<PrintConfig>
+    return normalizePrintConfig(raw)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Si aún no hay config en userData, copia la primera legacy válida y la escribe ahí.
+ */
+function migrateLegacyConfigIfNeeded(targetPath: string): PrintConfig | null {
+  if (fs.existsSync(targetPath)) {
+    return null
+  }
+
+  for (const candidate of getLegacyConfigCandidates()) {
+    if (path.resolve(candidate) === path.resolve(targetPath)) {
       continue
     }
 
-    try {
-      const raw = JSON.parse(fs.readFileSync(candidate, 'utf8')) as Partial<PrintConfig>
-      return normalizePrintConfig(raw)
-    } catch {
-      // Continuar con el siguiente candidato.
+    const parsed = tryParseConfigFile(candidate)
+    if (!parsed) {
+      continue
     }
+
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true })
+    fs.writeFileSync(targetPath, JSON.stringify(parsed, null, 2), 'utf8')
+    return parsed
+  }
+
+  return null
+}
+
+export function readPrintConfig(): PrintConfig {
+  const target = getPrintConfigPath()
+  const migrated = migrateLegacyConfigIfNeeded(target)
+  if (migrated) {
+    return migrated
+  }
+
+  const fromUserData = tryParseConfigFile(target)
+  if (fromUserData) {
+    return fromUserData
   }
 
   return structuredClone(DEFAULT_PRINT_CONFIG)
@@ -60,9 +99,38 @@ export function readPrintConfig(): PrintConfig {
 
 export function writePrintConfig(config: PrintConfig): PrintConfig {
   const normalized = normalizePrintConfig(config)
-  const target = getConfigWritePath()
+  const target = getPrintConfigPath()
+  fs.mkdirSync(path.dirname(target), { recursive: true })
   fs.writeFileSync(target, JSON.stringify(normalized, null, 2), 'utf8')
   return normalized
+}
+
+function getPrintConfigMigratedFlagPath(): string {
+  return path.join(app.getPath('userData'), PRINT_CONFIG_MIGRATED_FLAG)
+}
+
+/** True if this installation already imported local JSON into the API. */
+export function isPrintConfigMigrated(): boolean {
+  return fs.existsSync(getPrintConfigMigratedFlagPath())
+}
+
+export function markPrintConfigMigrated(): void {
+  const flagPath = getPrintConfigMigratedFlagPath()
+  fs.mkdirSync(path.dirname(flagPath), { recursive: true })
+  fs.writeFileSync(flagPath, '1', 'utf8')
+}
+
+/**
+ * Local JSON for one-shot API import. Returns null when no file exists
+ * (avoids pushing pure code defaults into an empty DB).
+ */
+export function readLocalPrintConfigForMigration(): PrintConfig | null {
+  const target = getPrintConfigPath()
+  const migrated = migrateLegacyConfigIfNeeded(target)
+  if (migrated) {
+    return migrated
+  }
+  return tryParseConfigFile(target)
 }
 
 export type PrinterInfo = {

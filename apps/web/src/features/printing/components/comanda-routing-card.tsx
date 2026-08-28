@@ -94,7 +94,7 @@ export function ComandaRoutingCard({
                         id={`comanda-printer-${row.key}`}
                         printers={printers}
                         value={getRuleDeviceName(routing.rules, row.key)}
-                        disabled={!electronAvailable}
+                        disabled={!canEdit}
                         onChange={(deviceName) =>
                           updateRouting({
                             rules: upsertCategoryRule(routing.rules, row.key, deviceName),
@@ -111,7 +111,8 @@ export function ComandaRoutingCard({
 
         {!electronAvailable ? (
           <p className="text-muted-foreground text-xs">
-            La asignación de impresoras requiere la app de escritorio.
+            La lista de impresoras Windows solo aparece en la app de escritorio; en el navegador
+            podés escribir el nombre manualmente.
           </p>
         ) : null}
       </CardContent>

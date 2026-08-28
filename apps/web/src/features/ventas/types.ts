@@ -229,6 +229,8 @@ export type ConfirmSaleInput = {
   payment_method_code?: string
   payment_type?: SalePaymentType
   billing_mode?: SaleBillingMode
+  currency_code?: string
+  usd_rate?: number
 }
 
 export type SaleReturnInput = {

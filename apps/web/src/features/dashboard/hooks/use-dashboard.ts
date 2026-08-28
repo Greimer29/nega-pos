@@ -43,9 +43,10 @@ export function useDailyExpensesQuery() {
   })
 }
 
-export function useDailyClosingQuery(date: string) {
+export function useDailyClosingQuery(salesShiftId?: number) {
   return useQuery({
-    queryKey: [...dailyClosingQueryKey, date],
-    queryFn: () => getDailyClosing(date),
+    queryKey: [...dailyClosingQueryKey, salesShiftId ?? 'none'],
+    queryFn: () => getDailyClosing(salesShiftId),
+    enabled: salesShiftId != null,
   })
 }

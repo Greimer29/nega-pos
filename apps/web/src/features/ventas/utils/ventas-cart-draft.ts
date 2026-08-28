@@ -112,7 +112,9 @@ export function loadVentasCartDraft(): VentasCartDraft | null {
       cart: normalizedCart,
       customerId:
         typeof parsed.customerId === 'number' && parsed.customerId > 0 ? parsed.customerId : '',
-      clientName: typeof parsed.clientName === 'string' ? parsed.clientName : '',
+      clientName: typeof parsed.clientName === 'string' && parsed.clientName.trim()
+        ? parsed.clientName
+        : 'Generico',
       customerCreditDays:
         typeof parsed.customerCreditDays === 'number' ? parsed.customerCreditDays : null,
       paymentType: parsed.paymentType === 'CREDIT' ? 'CREDIT' : 'CASH',

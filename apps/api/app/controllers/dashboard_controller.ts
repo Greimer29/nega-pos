@@ -77,7 +77,10 @@ export default class DashboardControleler {
 
   async dailyClosing({ request, serialize }: HttpContext) {
     const filters = await request.validateUsing(dashboardDailyClosingValidator)
-    const data = await this.service.cierreDiario(filters.date)
+    const data = await this.service.cierreDiario({
+      salesShiftId: filters.sales_shift_id,
+      date: filters.date,
+    })
 
     return serialize({
       date: data.date,
@@ -88,6 +91,9 @@ export default class DashboardControleler {
         credit_total_usd: data.summary.creditTotalUsd,
         products_sold: data.summary.productsSold,
         products_amount_usd: data.summary.productsAmountUsd,
+        expenses_count: data.summary.expensesCount,
+        expenses_total_usd: data.summary.expensesTotalUsd,
+        net_cash_usd: data.summary.netCashUsd,
       },
       by_payment_method: data.byPaymentMethod.map((item) => ({
         code: item.code,
@@ -125,6 +131,20 @@ export default class DashboardControleler {
         returned_at: item.returnedAt,
         total_returned_usd: item.totalReturnedUsd,
       })),
+      expenses: {
+        items: data.expenses.items.map((item) => ({
+          id: item.id,
+          kind: item.kind,
+          description: item.description,
+          amount_usd: item.amountUsd,
+          machine_name: item.machineName,
+          category: item.category,
+        })),
+        summary: {
+          gastos_cantidad: data.expenses.summary.gastosCantidad,
+          gastos_monto_usd: data.expenses.summary.gastosMontoUsd,
+        },
+      },
     })
   }
 }

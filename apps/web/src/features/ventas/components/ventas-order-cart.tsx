@@ -44,6 +44,7 @@ type VentasOrderCartProps = {
   headerAction?: ReactNode
   billingMethod?: BillingMethod
   onBillingMethodChange?: (method: BillingMethod) => void
+  onClose?: () => void
 }
 
 const IMAGE_TONE_CLASS: Record<NonNullable<VentasCartLine['imageTone']>, string> = {
@@ -77,6 +78,7 @@ export function VentasOrderCart({
   headerAction,
   billingMethod,
   onBillingMethodChange,
+  onClose,
 }: VentasOrderCartProps) {
   const { displayCurrency } = useFormatMoney()
 
@@ -109,6 +111,19 @@ export function VentasOrderCart({
         >
           <Trash2 className="size-4" />
         </Button>
+          {onClose ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="size-9"
+              title="Cerrar carrito"
+              aria-label="Cerrar carrito"
+              onClick={onClose}
+            >
+              <X className="size-4" />
+            </Button>
+          ) : null}
         </div>
       </div>
 

@@ -4,15 +4,11 @@ const isoDate = vine.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
 const incomeFields = {
   date: isoDate,
-
   description: vine.string().trim().maxLength(255),
-
   amount: vine.number().min(0).optional(),
-
   amount_usd: vine.number().min(0).optional(),
-
   currency_code: vine.string().trim().toUpperCase().fixedLength(3).optional(),
-
+  entry_rate: vine.number().positive().optional(),
   account_id: vine.number().min(1).nullable().optional(),
 }
 
@@ -26,25 +22,18 @@ export const updateIncomeValidator = vine.create({
 
 export const listIncomesValidator = vine.create({
   page: vine.number().min(1).optional(),
-
   per_page: vine.number().min(1).max(100).optional(),
-
   account_id: vine.number().min(1).optional(),
-
   unassigned: vine.boolean().optional(),
 })
 
 export type IncomeValidatorPayload = {
   date: string
-
   description: string
-
   amount?: number
-
   amount_usd?: number
-
   currency_code?: string
-
+  entry_rate?: number
   account_id?: number | null
 }
 

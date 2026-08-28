@@ -1,5 +1,5 @@
-import { MONETARY_REGISTRATION_USD_MESSAGE } from '#exceptions/moneda_registro_usd_requerida_exception'
 import User from '#models/user'
+import Currency from '#models/currency'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
 import { test } from '@japa/runner'
@@ -70,23 +70,29 @@ test.group('Incomes API', (group) => {
     deleteResponse.assertBodyContains({ data: { eliminado: true } })
   })
 
-  test('POST /api/v1/incomes rejects non-base currency', async ({ client, assert }) => {
+  test('POST /api/v1/incomes accepts VES with entry_rate without changing catalog', async ({
+    client,
+    assert,
+  }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
+    await Currency.query().where('code', 'VES').update({ ratePerUsd: '100.0000' })
 
     const response = await client.post('/api/v1/incomes').loginAs(user).json({
       date: '2026-06-01',
       description: 'Ingreso en bolívares',
-      amount_usd: 100,
+      amount: 400,
       currency_code: 'VES',
+      entry_rate: 40,
     })
 
-    response.assertStatus(422)
-    response.assertBodyContains({
-      error: {
-        code: 'MONEDA_REGISTRO_USD_REQUERIDA',
-      },
-    })
-    assert.include(response.body().error.message, MONETARY_REGISTRATION_USD_MESSAGE)
+    response.assertStatus(200)
+    assert.equal(response.body().data.income.currencyCode, 'VES')
+    assert.equal(response.body().data.income.amount, '400.0000')
+    assert.equal(response.body().data.income.amountUsd, '10.0000')
+    assert.equal(response.body().data.income.entryRate, '40.000000')
+
+    const ves = await Currency.findByOrFail('code', 'VES')
+    assert.equal(ves.ratePerUsd, '100.0000')
   })
 
   test('GET /api/v1/incomes/summary includes weekly received', async ({ client }) => {

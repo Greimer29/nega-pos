@@ -10,11 +10,13 @@
     "typecheck": "npx pnpm@9.15.4 -r typecheck",
     "dev:db": "docker compose up -d mysql",
     "dev:api": "npx pnpm@9.15.4 --filter api dev",
-    "dev:web": "npx pnpm@9.15.4 --filter web dev",
+    "dev:web": "node scripts/sync-app-version.mjs && npx pnpm@9.15.4 --filter web dev",
     "dev:setup": "powershell -ExecutionPolicy Bypass -File scripts/dev-setup.ps1",
     "dev:reset-db": "powershell -ExecutionPolicy Bypass -File scripts/reset-database.ps1",
-    "build:desktop": "npx pnpm@9.15.4 --filter web build && npx pnpm@9.15.4 --filter desktop dist",
-    "dev:desktop": "npx pnpm@9.15.4 --filter web build && npx pnpm@9.15.4 --filter desktop dev"
+    "sync:version": "node scripts/sync-app-version.mjs",
+    "build:desktop": "node scripts/sync-app-version.mjs && npx pnpm@9.15.4 --filter web build && npx pnpm@9.15.4 --filter desktop dist",
+    "dev:desktop": "node scripts/sync-app-version.mjs && npx pnpm@9.15.4 --filter web build && npx pnpm@9.15.4 --filter desktop dev",
+    "build:mobile": "node scripts/sync-app-version.mjs && powershell -ExecutionPolicy Bypass -File scripts/build-mobile.ps1"
   },
   "engines": {
     "node": ">=20.0.0",

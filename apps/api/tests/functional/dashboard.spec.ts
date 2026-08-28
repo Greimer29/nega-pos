@@ -13,12 +13,21 @@ import FormulaMaterial from '#models/formula_material'
 import Currency from '#models/currency'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
-import { resetTestSaleCodes, seedTestSale } from '#tests/helpers/seed_test_sale'
+import { resetTestSaleCodes, seedOpenSalesShift, seedTestSale, type SeedTestSaleInput } from '#tests/helpers/seed_test_sale'
 import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
 
 const TEST_EMAIL = 'test-dashboard@negapos.local'
 const TEST_PASSWORD = 'password123'
+
+let openShiftId = 0
+
+async function seedDashboardSale(input: SeedTestSaleInput) {
+  return seedTestSale({
+    ...input,
+    salesShiftId: input.salesShiftId ?? openShiftId,
+  })
+}
 
 async function seedAdminUser() {
   await User.updateOrCreate(
@@ -41,6 +50,9 @@ test.group('Dashboard API', (group) => {
     await resetTestDatabase()
     resetTestSaleCodes()
     await seedAdminUser()
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const shift = await seedOpenSalesShift(Number(user.id))
+    openShiftId = Number(shift.id)
   })
 
   test('GET /api/v1/dashboard/summary requires authentication', async ({ client }) => {
@@ -165,7 +177,7 @@ test.group('Dashboard API', (group) => {
       category: 'REPAIR',
       description: 'Needles replacement',
       amount: '150.50',
-      currencyCode: 'USD',
+      currencyCode: 'XAU',
     })
     await MachineExpense.create({
       machineId: Number(machine.id),
@@ -173,7 +185,7 @@ test.group('Dashboard API', (group) => {
       category: 'SUPPLY',
       description: 'Machine oil',
       amount: '49.50',
-      currencyCode: 'USD',
+      currencyCode: 'XAU',
     })
     await MachineExpense.create({
       machineId: Number(machine.id),
@@ -208,7 +220,7 @@ test.group('Dashboard API', (group) => {
       stockQuantity: '8.000',
       active: true,
     })
-    await seedTestSale({
+    await seedDashboardSale({
       customerId: Number(customer.id),
       soldAt: DateTime.now(),
       totalUsd: '24.0000',
@@ -289,7 +301,7 @@ test.group('Dashboard API', (group) => {
     assert.isUndefined(item)
 
     const customer = await Customer.create({ name: 'Cliente fórmula', active: true })
-    await seedTestSale({
+    await seedDashboardSale({
       customerId: Number(customer.id),
       soldAt: DateTime.now(),
       totalUsd: '24.0000',
@@ -335,7 +347,7 @@ test.group('Dashboard API', (group) => {
       stockQuantity: '10.000',
       active: true,
     })
-    await seedTestSale({
+    await seedDashboardSale({
       customerId: Number(customer.id),
       soldAt: DateTime.now(),
       totalUsd: '24.0000',
@@ -354,7 +366,7 @@ test.group('Dashboard API', (group) => {
       date: DateTime.fromISO(hoy),
       description: 'Transporte',
       amountUsd: '4.0000',
-      currencyCode: 'USD',
+      currencyCode: 'XAU',
     })
 
     const machine = await Machine.create({
@@ -369,7 +381,7 @@ test.group('Dashboard API', (group) => {
       category: 'REPAIR',
       description: 'Repuesto',
       amount: '6.0000',
-      currencyCode: 'USD',
+      currencyCode: 'XAU',
     })
 
     const response = await client.get('/api/v1/dashboard/overview').loginAs(user)
@@ -398,7 +410,7 @@ test.group('Dashboard API', (group) => {
       date: DateTime.fromISO(hoy),
       description: 'Transporte',
       amountUsd: '4.0000',
-      currencyCode: 'USD',
+      currencyCode: 'XAU',
     })
 
     const machine = await Machine.create({
@@ -413,7 +425,7 @@ test.group('Dashboard API', (group) => {
       category: 'REPAIR',
       description: 'Repuesto',
       amount: '6.0000',
-      currencyCode: 'USD',
+      currencyCode: 'XAU',
     })
 
     const response = await client.get('/api/v1/dashboard/daily-expenses').loginAs(user)
@@ -469,13 +481,12 @@ test.group('Dashboard API', (group) => {
     assert.equal(body.data.machineExpensesMonth.totalAmount, '100.00')
   })
 
-  test('GET /api/v1/dashboard/overview uses sold_at for sales of the day', async ({
+  test('GET /api/v1/dashboard/overview uses open shift for ventas del dia', async ({
     client,
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
     const hoy = DateTime.now().toISODate()!
-    const ayer = DateTime.now().minus({ days: 1 }).toISODate()!
     const customer = await Customer.create({ name: 'Cliente Fecha', active: true })
     const product = await CatalogProduct.create({
       name: 'Producto fecha venta',
@@ -487,7 +498,7 @@ test.group('Dashboard API', (group) => {
       active: true,
     })
 
-    await seedTestSale({
+    await seedDashboardSale({
       customerId: Number(customer.id),
       soldAt: DateTime.fromISO(hoy),
       confirmedAt: DateTime.now().minus({ days: 2 }),
@@ -504,11 +515,12 @@ test.group('Dashboard API', (group) => {
       ],
     })
 
-    await seedTestSale({
+    await seedDashboardSale({
       customerId: Number(customer.id),
-      soldAt: DateTime.fromISO(ayer),
+      soldAt: DateTime.fromISO(hoy),
       confirmedAt: DateTime.now(),
       totalUsd: '10.0000',
+      salesShiftId: null,
       lines: [
         {
           catalogProductId: Number(product.id),
@@ -553,7 +565,7 @@ test.group('Dashboard API', (group) => {
       active: true,
     })
 
-    await seedTestSale({
+    await seedDashboardSale({
       customerId: Number(customer.id),
       soldAt: DateTime.fromISO(hoy),
       totalUsd: '20.0000',
@@ -600,7 +612,7 @@ test.group('Dashboard API', (group) => {
       active: true,
     })
 
-    await seedTestSale({
+    await seedDashboardSale({
       customerId: Number(customer.id),
       soldAt: DateTime.fromISO(hoy),
       confirmedAt: DateTime.now().minus({ days: 3 }),
@@ -622,7 +634,7 @@ test.group('Dashboard API', (group) => {
 
     const reportResponse = await client
       .get('/api/v1/reports/account-statement')
-      .qs({ month: mes, types: 'sales', display_currency: 'USD' })
+      .qs({ month: mes, types: 'sales', display_currency: 'XAU' })
       .loginAs(user)
 
     reportResponse.assertStatus(200)
@@ -665,7 +677,7 @@ test.group('Dashboard API', (group) => {
       active: true,
     })
 
-    await seedTestSale({
+    await seedDashboardSale({
       customerId: Number(customer.id),
       soldAt: DateTime.fromISO(hoy),
       totalUsd: '60.0000',
@@ -681,7 +693,7 @@ test.group('Dashboard API', (group) => {
       ],
     })
 
-    await seedTestSale({
+    await seedDashboardSale({
       customerId: Number(customer.id),
       soldAt: DateTime.fromISO(hoy),
       paymentType: 'CREDIT',
@@ -706,7 +718,7 @@ test.group('Dashboard API', (group) => {
 
     const reportResponse = await client
       .get('/api/v1/reports/account-statement')
-      .qs({ from: hoy, to: hoy, types: 'sales', display_currency: 'USD' })
+      .qs({ from: hoy, to: hoy, types: 'sales', display_currency: 'XAU' })
       .loginAs(user)
 
     reportResponse.assertStatus(200)
@@ -745,7 +757,7 @@ test.group('Dashboard API', (group) => {
       active: true,
     })
 
-    await seedTestSale({
+    await seedDashboardSale({
       customerId: Number(customer.id),
       soldAt: DateTime.now(),
       totalUsd: '50.0000',
@@ -761,7 +773,7 @@ test.group('Dashboard API', (group) => {
       ],
     })
 
-    await seedTestSale({
+    await seedDashboardSale({
       customerId: Number(customer.id),
       soldAt: DateTime.now(),
       paymentType: 'CREDIT',
@@ -914,36 +926,39 @@ test.group('Dashboard API', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const today = DateTime.now().toISODate()!
+    const opened = await client.post('/api/v1/sales-shifts/open').loginAs(user)
+    const shiftId = opened.body().data.sales_shift.id
 
-    await seedTestSale({
+    await seedDashboardSale({
       totalUsd: '25.0000',
       paymentMethodCode: 'cash_usd',
+      salesShiftId: shiftId,
       lines: [{ quantity: '1', unitPriceUsd: '25.0000' }],
     })
 
-    await seedTestSale({
+    await seedDashboardSale({
       totalUsd: '15.0000',
       paymentMethodCode: 'zelle',
+      salesShiftId: shiftId,
       lines: [{ quantity: '1', unitPriceUsd: '15.0000' }],
     })
 
-    await seedTestSale({
+    await seedDashboardSale({
       totalUsd: '30.0000',
       paymentType: 'CREDIT',
       paymentMethodCode: null,
+      salesShiftId: shiftId,
       lines: [{ quantity: '1', unitPriceUsd: '30.0000' }],
     })
 
     const response = await client
       .get('/api/v1/dashboard/daily-closing')
-      .qs({ date: today })
+      .qs({ sales_shift_id: shiftId })
       .loginAs(user)
 
     response.assertStatus(200)
 
     const body = response.body().data
-    assert.equal(body.date, today)
     assert.equal(body.summary.invoices_count, 3)
     assert.equal(body.summary.cash_total_usd, '40.0000')
     assert.equal(body.summary.credit_total_usd, '30.0000')
@@ -954,5 +969,71 @@ test.group('Dashboard API', (group) => {
     )
     assert.equal(cashUsd.sales_count, 1)
     assert.equal(cashUsd.total_usd, '25.0000')
+  })
+
+  test('GET /api/v1/dashboard/daily-closing includes expenses for the selected shift', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const today = DateTime.now().toISODate()!
+    const opened = await client.post('/api/v1/sales-shifts/open').loginAs(user)
+    const shiftId = opened.body().data.sales_shift.id
+
+    await seedDashboardSale({
+      totalUsd: '50.0000',
+      paymentMethodCode: 'cash_usd',
+      salesShiftId: shiftId,
+      lines: [{ quantity: '1', unitPriceUsd: '50.0000' }],
+    })
+
+    await Expense.create({
+      date: DateTime.fromISO(today),
+      description: 'Transporte cierre',
+      amountUsd: '10.0000',
+      currencyCode: 'XAU',
+    })
+
+    const machine = await Machine.create({
+      name: 'Máquina cierre',
+      type: 'OVERLOCK',
+      status: 'OPERATIONAL',
+      active: true,
+    })
+    await MachineExpense.create({
+      machineId: Number(machine.id),
+      date: DateTime.fromISO(today),
+      category: 'REPAIR',
+      description: 'Repuesto cierre',
+      amount: '5.0000',
+      currencyCode: 'XAU',
+    })
+
+    const response = await client
+      .get('/api/v1/dashboard/daily-closing')
+      .qs({ sales_shift_id: shiftId })
+      .loginAs(user)
+
+    response.assertStatus(200)
+
+    const body = response.body().data
+    assert.equal(body.summary.expenses_count, 2)
+    assert.equal(body.summary.cash_total_usd, '50.0000')
+
+    const companyExpense = body.expenses.items.find(
+      (item: { kind: string; description: string }) =>
+        item.kind === 'expense' && item.description === 'Transporte cierre'
+    )
+    const machineExpense = body.expenses.items.find(
+      (item: { kind: string; description: string }) =>
+        item.kind === 'machine_expense' && item.description === 'Repuesto cierre'
+    )
+    assert.exists(companyExpense)
+    assert.exists(machineExpense)
+    assert.equal(companyExpense.amount_usd, '10.0000')
+    assert.equal(machineExpense.amount_usd, '5.0000')
+    assert.equal(body.summary.expenses_total_usd, '15.0000')
+    assert.equal(body.summary.net_cash_usd, '35.0000')
+    assert.lengthOf(body.expenses.items, 2)
   })
 })

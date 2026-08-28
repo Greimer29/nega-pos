@@ -12,8 +12,12 @@ import path from 'node:path'
 import serveHandler from 'serve-handler'
 import type { PrintConfig } from './print-config'
 import {
+  getPrintConfigPath,
+  isPrintConfigMigrated,
   listPrinters,
+  markPrintConfigMigrated,
   printHtml,
+  readLocalPrintConfigForMigration,
   readPrintConfig,
   writePrintConfig,
   type PrintHtmlOptions,
@@ -23,6 +27,11 @@ const APP_NAME = 'Nega POS'
 const PORT = 51740
 const HOST = '127.0.0.1'
 const APP_URL = `http://${HOST}:${PORT}`
+
+app.setName(APP_NAME)
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.negapos.app')
+}
 
 let server: Server | null = null
 let mainWindow: BrowserWindow | null = null
@@ -192,8 +201,20 @@ function getPreloadPath(): string {
 function registerPrintingHandlers(): void {
   ipcMain.handle('printing:listPrinters', async (event) => listPrinters(event.sender))
 
+  /** @deprecated Prefer API; kept for migration / legacy callers. */
   ipcMain.handle('printing:getConfig', async () => readPrintConfig())
 
+  ipcMain.handle('printing:getLocalConfig', async () => readLocalPrintConfigForMigration())
+
+  ipcMain.handle('printing:getConfigPath', async () => getPrintConfigPath())
+
+  ipcMain.handle('printing:isMigrated', async () => isPrintConfigMigrated())
+
+  ipcMain.handle('printing:markMigrated', async () => {
+    markPrintConfigMigrated()
+  })
+
+  /** @deprecated Config is owned by the API; local write only for emergency/legacy. */
   ipcMain.handle('printing:saveConfig', async (_event, config: PrintConfig) =>
     writePrintConfig(config)
   )

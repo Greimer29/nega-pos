@@ -17,7 +17,6 @@ import {
   duplicateFormat,
   formatsForDocumentKind,
   removeFormat,
-  upsertFormat,
 } from '@/features/printing/utils/print-formats'
 import { usePrintSettingsPanel } from '@/features/settings/hooks/use-print-settings-panel'
 const sampleSale = createSampleSale()
@@ -31,7 +30,10 @@ export function SettingsFormatosPanel() {
     saving,
     message,
     error,
+    isDirty,
+    electronAvailable,
     handleSave,
+    persistFormat,
   } = usePrintSettingsPanel()
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -49,11 +51,10 @@ export function SettingsFormatosPanel() {
     setDialogOpen(true)
   }
 
-  function applyFormatUpdate(nextFormat: PrintFormatRecord) {
-    setConfig((current) => ({
-      ...current,
-      formats: upsertFormat(current.formats, nextFormat),
-    }))
+  async function saveFormatFromDialog(nextFormat: PrintFormatRecord) {
+    await persistFormat(nextFormat)
+    setSelectedFormat(nextFormat)
+    setPreviewFormatId(nextFormat.id)
   }
 
   function handleDuplicate(format: PrintFormatRecord) {
@@ -161,9 +162,15 @@ export function SettingsFormatosPanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      {message ? <p className="text-emerald-700 text-sm">{message}</p> : null}
+      {message ? <p className="text-emerald-700 text-sm whitespace-pre-line">{message}</p> : null}
       {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
       {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
+      {!electronAvailable ? (
+        <p className="text-amber-800 bg-amber-50 border-amber-200 rounded-md border px-3 py-2 text-sm">
+          Estás en el navegador. Los formatos se guardan en el servidor; la impresión física solo
+          está en la <strong>app de escritorio</strong>.
+        </p>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -321,9 +328,13 @@ export function SettingsFormatosPanel() {
       </Card>
 
       {canEdit ? (
-        <Button type="button" disabled={saving} onClick={() => void handleSave()}>
+        <Button
+          type="button"
+          disabled={saving || !isDirty}
+          onClick={() => void handleSave('formats')}
+        >
           {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-          Guardar formatos
+          Guardar cambios pendientes
         </Button>
       ) : (
         <p className="text-muted-foreground text-sm">
@@ -337,7 +348,7 @@ export function SettingsFormatosPanel() {
         format={selectedFormat}
         config={config}
         canEdit={canEdit}
-        onSave={applyFormatUpdate}
+        onSave={saveFormatFromDialog}
       />
     </div>
   )

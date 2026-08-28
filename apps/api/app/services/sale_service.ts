@@ -7,6 +7,7 @@ import MetodoPagoRequeridoException from '#exceptions/metodo_pago_requerido_exce
 import OrderNoDevolvableException from '#exceptions/pedido_no_devolvable_exception'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
 import StockInsuficienteException from '#exceptions/stock_insuficiente_exception'
+import TasaCambioInvalidaException from '#exceptions/tasa_cambio_invalida_exception'
 import TransicionInvalidaException from '#exceptions/transicion_invalida_exception'
 import VentaNoEditableException from '#exceptions/venta_no_editable_exception'
 import VentaNoEncontradaException from '#exceptions/venta_no_encontrada_exception'
@@ -24,6 +25,7 @@ import MaterialService from '#services/material_service'
 import PaymentMethodService from '#services/payment_method_service'
 import ProductInventoryService from '#services/product_inventory_service'
 import SaleCodigoService from '#services/sale_code_service'
+import SalesShiftService from '#services/sales_shift_service'
 import {
   assertFormulaMaterialsAllowed,
   normalizeFormulaMaterialsInput,
@@ -80,6 +82,8 @@ export type ConfirmSaleInput = {
   payment_type?: SalePaymentType
   payment_method_code?: string | null
   billing_mode?: SaleBillingMode
+  currency_code?: string | null
+  usd_rate?: number | null
   sold_by_user_id?: number | null
 }
 
@@ -132,6 +136,7 @@ export default class SaleService {
   private catalogProductStockService = new CatalogProductStockService()
   private paymentMethodService = new PaymentMethodService()
   private currencyService = new CurrencyService()
+  private salesShiftService = new SalesShiftService()
 
   previewNextCode(): Promise<string> {
     return this.codeService.preview()
@@ -383,7 +388,10 @@ export default class SaleService {
       sale.billingMode = billingMode
       sale.paymentType = paymentType
 
-      await this.aplicarMetodoPagoAlConfirmar(sale, paymentType, input.payment_method_code)
+      await this.aplicarMetodoPagoAlConfirmar(sale, paymentType, input.payment_method_code, {
+        currency_code: input.currency_code,
+        usd_rate: input.usd_rate,
+      })
 
       sale.code = await this.codeService.generar(trx)
       sale.status = 'COMPLETED'
@@ -393,6 +401,9 @@ export default class SaleService {
       if (input.sold_by_user_id) {
         sale.soldByUserId = input.sold_by_user_id
       }
+
+      const shift = await this.salesShiftService.requireOpen(trx)
+      sale.salesShiftId = shift.id
 
       await this.congelarCostoLineas(sale, trx)
       await this.descontarStock(sale, trx)
@@ -833,7 +844,8 @@ export default class SaleService {
   private async aplicarMetodoPagoAlConfirmar(
     sale: Sale,
     paymentType: SalePaymentType,
-    paymentMethodCode?: string | null
+    paymentMethodCode?: string | null,
+    options: { currency_code?: string | null; usd_rate?: number | null } = {}
   ) {
     const totalUsd = Number(sale.totalUsd)
 
@@ -850,13 +862,20 @@ export default class SaleService {
     }
 
     const method = await this.paymentMethodService.assertActivo(code)
-    const currency = await this.currencyService.assertActiva(method.currencyCode)
-    const rate = Number(currency.ratePerUsd)
+    const currencyCode = (options.currency_code?.trim() || method.currencyCode).toUpperCase()
+    const currency = await this.currencyService.assertActiva(currencyCode)
+    const overrideRate =
+      options.usd_rate !== undefined && options.usd_rate !== null ? Number(options.usd_rate) : NaN
+    const rate = overrideRate > 0 ? overrideRate : Number(currency.ratePerUsd)
     const baseCode = await this.currencyService.getBaseCurrencyCode()
 
+    if (!(rate > 0)) {
+      throw new TasaCambioInvalidaException(`La tasa de cambio de ${currencyCode} no es válida`)
+    }
+
     sale.paymentMethodCode = method.code
-    sale.usdRate = currency.ratePerUsd
-    sale.totalBs = formatSaleNativeTotal(totalUsd, method.currencyCode, rate, baseCode)
+    sale.usdRate = rate.toFixed(4)
+    sale.totalBs = formatSaleNativeTotal(totalUsd, currencyCode, rate, baseCode)
   }
 
   private async aplicarPagoAlConfirmar(

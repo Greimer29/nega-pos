@@ -42,15 +42,29 @@ describe('electron-bridge', () => {
       listPrinters: async () => [],
       getConfig: async () => ({
         business: { name: 'Test', subtitle: '', footer: '' },
+        ticket: { station_label: '' },
+        formats: [],
         documents: {
-          invoice: { enabled: true, deviceName: '', paperWidthMm: 78 },
-          deliveryNote: { enabled: false, deviceName: '', paperWidthMm: 78 },
+          invoice: { enabled: true, deviceName: '', paperWidthMm: 78, formatId: 'builtin-invoice' },
+          deliveryNote: {
+            enabled: false,
+            deviceName: '',
+            paperWidthMm: 78,
+            formatId: 'builtin-delivery-note',
+          },
+          comanda: { enabled: false, deviceName: '', paperWidthMm: 78, formatId: 'builtin-comanda' },
         },
         behavior: {
           printInvoiceOnConfirm: true,
           printDeliveryNoteOnConfirm: false,
+          printComandaOnConfirm: false,
         },
+        categoryRouting: { comanda: { enabled: false, rules: [] } },
       }),
+      getLocalConfig: async () => null,
+      getConfigPath: async () => 'C:\\Users\\test\\AppData\\Roaming\\desktop\\print-config.json',
+      isMigrated: async () => true,
+      markMigrated: async () => undefined,
       saveConfig: async (config: Awaited<ReturnType<typeof mockApi.getConfig>>) => config,
       printHtml: async () => undefined,
     }

@@ -10,6 +10,7 @@ import { controllers } from '#generated/controllers'
 const FormulasController = () => import('#controllers/formulas_controller')
 const CatalogProductsController = () => import('#controllers/catalog_products_controller')
 const SalesController = () => import('#controllers/sales_controller')
+const SalesShiftsController = () => import('#controllers/sales_shifts_controller')
 const ExpensesController = () => import('#controllers/expenses_controller')
 const IncomesController = () => import('#controllers/incomes_controller')
 const SettingsController = () => import('#controllers/settings_controller')
@@ -152,6 +153,11 @@ router
         router.get('dashboard/daily-product-sales', [controllers.Dashboard, 'dailyProductSales'])
         router.get('dashboard/daily-expenses', [controllers.Dashboard, 'dailyExpenses'])
         router.get('dashboard/daily-closing', [controllers.Dashboard, 'dailyClosing'])
+
+        router.get('sales-shifts/current', [SalesShiftsController, 'current'])
+        router.get('sales-shifts', [SalesShiftsController, 'index'])
+        router.post('sales-shifts/open', [SalesShiftsController, 'open'])
+        router.post('sales-shifts/:id/close', [SalesShiftsController, 'close'])
 
         router.get('machines', [controllers.Machines, 'index'])
         router.get('machines/:id', [controllers.Machines, 'show'])

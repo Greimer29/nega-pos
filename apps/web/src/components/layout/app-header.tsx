@@ -1,12 +1,16 @@
 import { Loader2, LogOut, RefreshCw } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { DisplayCurrencyToggle } from '@/features/currencies/components/display-currency-toggle'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { useAppRefresh } from '@/lib/use-app-refresh'
 
-export function AppHeader() {
+type AppHeaderProps = {
+  leading?: ReactNode
+}
+
+export function AppHeader({ leading }: AppHeaderProps) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -24,12 +28,13 @@ export function AppHeader() {
   }
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b px-4 md:px-6">
-      <div className="flex items-center gap-3">
-        <p className="text-muted-foreground text-sm">Gestión comercial</p>
+    <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-3 md:px-6">
+      <div className="flex min-w-0 items-center gap-2 md:gap-3">
+        {leading}
+        <p className="text-muted-foreground hidden text-sm sm:block">Gestión comercial</p>
         <DisplayCurrencyToggle />
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2 md:gap-3">
         <Button
           variant="ghost"
           size="sm"
@@ -52,7 +57,7 @@ export function AppHeader() {
         ) : null}
         <Button variant="outline" size="sm" onClick={handleLogout} disabled={isLoggingOut}>
           <LogOut className="size-4" />
-          Salir
+          <span className="hidden sm:inline">Salir</span>
         </Button>
       </div>
     </header>

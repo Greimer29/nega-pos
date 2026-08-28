@@ -1,9 +1,13 @@
 import MaterialService from '#services/material_service'
 import CurrencyService from '#services/currency_service'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
+import SalesShiftService from '#services/sales_shift_service'
 import CatalogProduct from '#models/catalog_product'
+import SalesShift from '#models/sales_shift'
+import TurnoNoEncontradoException from '#exceptions/turno_no_encontrado_exception'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
+import { todayIsoDate } from '#utils/app_timezone'
 import {
   creditPurchaseCountsTowardPeriodTotal,
   creditPurchaseReportAmountUsd,
@@ -157,11 +161,15 @@ export type DailyClosingResult = {
     creditTotalUsd: string
     productsSold: number
     productsAmountUsd: string
+    expensesCount: number
+    expensesTotalUsd: string
+    netCashUsd: string
   }
   byPaymentMethod: DailyClosingPaymentMethodItem[]
   products: DailySoldProductItem[]
   invoices: DailyClosingInvoiceItem[]
   returns: DailyClosingReturnItem[]
+  expenses: DailyExpensesResult
 }
 
 export type DashboardOverview = {
@@ -182,6 +190,7 @@ export default class DashboardService {
   private materialService = new MaterialService()
   private currencyService = new CurrencyService()
   private catalogProductStockService = new CatalogProductStockService()
+  private salesShiftService = new SalesShiftService()
 
   private sumMachineExpensesUsd(
     rows: Array<{ amount: string | number; currency_code?: string | null }>,
@@ -379,19 +388,53 @@ export default class DashboardService {
     }
   }
 
-  private async gastosDelDia(): Promise<{ cantidad: number; montoUsd: number }> {
-    const hoy = DateTime.now().toISODate()!
+  private resolveDashboardDate(dateInput?: string): string {
+    return dateInput?.trim() || DateTime.now().toISODate()!
+  }
+
+  private async gastosDelDia(dateInput?: string): Promise<{ cantidad: number; montoUsd: number }> {
+    const date = this.resolveDashboardDate(dateInput)
     const rates = await this.currencyService.getActiveRates()
 
+    const expenseRows = await db.from('expenses').where('date', date).select('amount_usd')
+
+    let expenseUsd = 0
+    for (const row of expenseRows) {
+      expenseUsd += Number(row.amount_usd ?? 0)
+    }
+
+    const machineRows = await db
+      .from('machine_expenses')
+      .where('date', date)
+      .select('amount', 'currency_code')
+
+    const machineUsd = this.sumMachineExpensesUsd(machineRows, rates)
+
+    return {
+      cantidad: expenseRows.length + machineRows.length,
+      montoUsd: expenseUsd + machineUsd,
+    }
+  }
+
+  private async gastosDelTurno(shift: {
+    openedAt: DateTime
+    closedAt: DateTime | null
+  }): Promise<{ cantidad: number; montoUsd: number }> {
+    const dates = this.salesShiftService.calendarDatesForShift(shift)
+    if (dates.length === 0) {
+      return { cantidad: 0, montoUsd: 0 }
+    }
+
+    const rates = await this.currencyService.getActiveRates()
     const expenses = await db
       .from('expenses')
-      .where('date', hoy)
+      .whereIn('date', dates)
       .select(db.raw('COUNT(*) as qty'), db.raw('COALESCE(SUM(amount_usd), 0) as total_usd'))
       .first()
 
     const machineRows = await db
       .from('machine_expenses')
-      .where('date', hoy)
+      .whereIn('date', dates)
       .select('amount', 'currency_code')
 
     const machineUsd = this.sumMachineExpensesUsd(machineRows, rates)
@@ -402,15 +445,26 @@ export default class DashboardService {
     }
   }
 
-  /** Ventas del dashboard usan sold_at (mismo criterio que reportes). */
+  /** Ventas del dashboard usan el turno abierto actual (sales_shift_id). */
   private async ventasDelDia(): Promise<VentasDelDia> {
-    const hoy = DateTime.now().toISODate()!
+    const shift = await this.salesShiftService.current()
+    if (!shift) {
+      return {
+        productosVendidos: 0,
+        montoProductosUsd: '0.0000',
+        montoCreditoUsd: '0.0000',
+        pedidosCredito: 0,
+        gastosCantidad: 0,
+        gastosMontoUsd: '0.0000',
+      }
+    }
 
+    const shiftId = Number(shift.id)
     const ventas = await db
       .from('sales')
       .join('sale_lines', 'sale_lines.sale_id', 'sales.id')
       .whereIn('sales.status', [...SALE_STATUSES])
-      .whereRaw('DATE(sales.sold_at) = ?', [hoy])
+      .where('sales.sales_shift_id', shiftId)
       .select(
         db.raw('COALESCE(SUM(sale_lines.quantity - sale_lines.returned_quantity), 0) as qty'),
         db.raw(
@@ -425,7 +479,7 @@ export default class DashboardService {
       )
       .first()
 
-    const gastos = await this.gastosDelDia()
+    const gastos = await this.gastosDelTurno(shift)
 
     return {
       productosVendidos: Number(ventas?.qty ?? 0),
@@ -438,14 +492,27 @@ export default class DashboardService {
   }
 
   async productosVendidosDelDia(): Promise<DailyProductSalesResult> {
-    const hoy = DateTime.now().toISODate()!
+    const shift = await this.salesShiftService.current()
+    const hoy = todayIsoDate()
 
+    if (!shift) {
+      return {
+        date: hoy,
+        products: [],
+        summary: {
+          productosVendidos: 0,
+          montoProductosUsd: '0.0000',
+        },
+      }
+    }
+
+    const shiftId = Number(shift.id)
     const rows = await db
       .from('sales')
       .join('sale_lines', 'sale_lines.sale_id', 'sales.id')
       .join('catalog_products', 'catalog_products.id', 'sale_lines.catalog_product_id')
       .whereIn('sales.status', [...SALE_STATUSES])
-      .whereRaw('DATE(sales.sold_at) = ?', [hoy])
+      .where('sales.sales_shift_id', shiftId)
       .whereNotNull('sale_lines.catalog_product_id')
       .groupBy(
         'catalog_products.id',
@@ -506,7 +573,7 @@ export default class DashboardService {
     const summary = await this.ventasDelDia()
 
     return {
-      date: hoy,
+      date: shift.openedAt.toISO()!.slice(0, 10),
       products,
       summary: {
         productosVendidos: summary.productosVendidos,
@@ -515,20 +582,35 @@ export default class DashboardService {
     }
   }
 
-  async gastosDelDiaDetalle(): Promise<DailyExpensesResult> {
-    const hoy = DateTime.now().toISODate()!
+  async gastosDelDiaDetalleForDates(dates: string[]): Promise<DailyExpensesResult> {
+    if (dates.length === 0) {
+      return {
+        date: todayIsoDate(),
+        items: [],
+        summary: {
+          gastosCantidad: 0,
+          gastosMontoUsd: '0.0000',
+        },
+      }
+    }
+
     const rates = await this.currencyService.getActiveRates()
 
     const expenseRows = await db
       .from('expenses')
-      .where('date', hoy)
-      .select('id', 'description', 'amount_usd as amountUsd')
+      .whereIn('date', dates)
+      .select(
+        'id',
+        'description',
+        'amount_usd as amountUsd',
+        'currency_code as currencyCode'
+      )
       .orderBy('amount_usd', 'desc')
 
     const machineRows = await db
       .from('machine_expenses')
       .join('machines', 'machines.id', 'machine_expenses.machine_id')
-      .where('machine_expenses.date', hoy)
+      .whereIn('machine_expenses.date', dates)
       .select(
         'machine_expenses.id',
         'machine_expenses.description',
@@ -540,14 +622,18 @@ export default class DashboardService {
       .orderBy('machine_expenses.amount', 'desc')
 
     const items: DailyExpenseItem[] = [
-      ...expenseRows.map((row) => ({
-        id: Number(row.id),
-        kind: 'expense' as const,
-        description: String(row.description),
-        amountUsd: Number(row.amountUsd ?? 0).toFixed(4),
-        machineName: null,
-        category: null,
-      })),
+      ...expenseRows.map((row) => {
+        const amountUsd = Number(row.amountUsd ?? 0)
+
+        return {
+          id: Number(row.id),
+          kind: 'expense' as const,
+          description: String(row.description),
+          amountUsd: amountUsd.toFixed(4),
+          machineName: null,
+          category: null,
+        }
+      }),
       ...machineRows.map((row) => {
         const currencyCode = row.currencyCode ? String(row.currencyCode) : 'USD'
         const amountUsd = this.currencyService.toUsd(Number(row.amount ?? 0), currencyCode, rates)
@@ -563,10 +649,79 @@ export default class DashboardService {
       }),
     ].sort((a, b) => Number(b.amountUsd) - Number(a.amountUsd))
 
-    const summary = await this.gastosDelDia()
+    const gastosMontoUsd = items.reduce((sum, item) => sum + Number(item.amountUsd), 0)
 
     return {
-      date: hoy,
+      date: dates[0],
+      items,
+      summary: {
+        gastosCantidad: items.length,
+        gastosMontoUsd: gastosMontoUsd.toFixed(4),
+      },
+    }
+  }
+
+  async gastosDelDiaDetalle(dateInput?: string): Promise<DailyExpensesResult> {
+    const date = this.resolveDashboardDate(dateInput)
+    const rates = await this.currencyService.getActiveRates()
+
+    const expenseRows = await db
+      .from('expenses')
+      .where('date', date)
+      .select(
+        'id',
+        'description',
+        'amount_usd as amountUsd',
+        'currency_code as currencyCode'
+      )
+      .orderBy('amount_usd', 'desc')
+
+    const machineRows = await db
+      .from('machine_expenses')
+      .join('machines', 'machines.id', 'machine_expenses.machine_id')
+      .where('machine_expenses.date', date)
+      .select(
+        'machine_expenses.id',
+        'machine_expenses.description',
+        'machine_expenses.amount',
+        'machine_expenses.currency_code as currencyCode',
+        'machine_expenses.category',
+        'machines.name as machineName'
+      )
+      .orderBy('machine_expenses.amount', 'desc')
+
+    const items: DailyExpenseItem[] = [
+      ...expenseRows.map((row) => {
+        const amountUsd = Number(row.amountUsd ?? 0)
+
+        return {
+          id: Number(row.id),
+          kind: 'expense' as const,
+          description: String(row.description),
+          amountUsd: amountUsd.toFixed(4),
+          machineName: null,
+          category: null,
+        }
+      }),
+      ...machineRows.map((row) => {
+        const currencyCode = row.currencyCode ? String(row.currencyCode) : 'USD'
+        const amountUsd = this.currencyService.toUsd(Number(row.amount ?? 0), currencyCode, rates)
+
+        return {
+          id: Number(row.id),
+          kind: 'machine_expense' as const,
+          description: String(row.description),
+          amountUsd: amountUsd.toFixed(4),
+          machineName: row.machineName ? String(row.machineName) : null,
+          category: row.category ? String(row.category) : null,
+        }
+      }),
+    ].sort((a, b) => Number(b.amountUsd) - Number(a.amountUsd))
+
+    const summary = await this.gastosDelDia(date)
+
+    return {
+      date,
       items,
       summary: {
         gastosCantidad: summary.cantidad,
@@ -576,14 +731,23 @@ export default class DashboardService {
   }
 
   private async gananciaDelDia(): Promise<GananciaDelDia> {
-    const hoy = DateTime.now().toISODate()!
+    const shift = await this.salesShiftService.current()
+    if (!shift) {
+      return {
+        montoUsd: '0.0000',
+        gananciaCreditoUsd: '0.0000',
+        porcentajeSobreVentas: 0,
+      }
+    }
+
+    const shiftId = Number(shift.id)
 
     const row = await db
       .from('sales')
       .join('sale_lines', 'sale_lines.sale_id', 'sales.id')
       .join('catalog_products', 'catalog_products.id', 'sale_lines.catalog_product_id')
       .whereIn('sales.status', [...SALE_STATUSES])
-      .whereRaw('DATE(sales.sold_at) = ?', [hoy])
+      .where('sales.sales_shift_id', shiftId)
       .select(
         db.raw(
           'COALESCE(SUM((sale_lines.unit_price_usd - COALESCE(sale_lines.cost_usd, catalog_products.cost_usd)) * (sale_lines.quantity - sale_lines.returned_quantity)), 0) as profit'
@@ -604,7 +768,7 @@ export default class DashboardService {
     const sales = Number(row?.sales ?? 0)
     const creditProfit = Number(row?.credit_profit ?? 0)
     const creditSales = Number(row?.credit_sales ?? 0)
-    const gastos = await this.gastosDelDia()
+    const gastos = await this.gastosDelTurno(shift)
     const netProfit = profit - creditProfit - gastos.montoUsd
     const ventasContado = sales - creditSales
     const porcentaje = ventasContado > 0 ? (netProfit / ventasContado) * 100 : 0
@@ -713,15 +877,36 @@ export default class DashboardService {
     }))
   }
 
-  async cierreDiario(dateInput?: string): Promise<DailyClosingResult> {
-    const date = dateInput?.trim() || DateTime.now().toISODate()!
+  async cierreDiario(input?: { salesShiftId?: number; date?: string }): Promise<DailyClosingResult> {
+    let date: string
+    let salesShiftId: number | null = null
+    let shiftForExpenses: SalesShift | null = null
 
-    const sales = await db
+    if (input?.salesShiftId) {
+      const shift = await SalesShift.find(input.salesShiftId)
+      if (!shift) {
+        throw new TurnoNoEncontradoException()
+      }
+      salesShiftId = Number(shift.id)
+      shiftForExpenses = shift
+      date = shift.openedAt.toISO()!.slice(0, 10)
+    } else {
+      date = input?.date?.trim() || DateTime.now().toISODate()!
+    }
+
+    const salesQuery = db
       .from('sales')
       .leftJoin('customers', 'customers.id', 'sales.customer_id')
       .leftJoin('payment_methods', 'payment_methods.code', 'sales.payment_method_code')
       .whereIn('sales.status', ['COMPLETED', 'RETURNED'])
-      .whereRaw('DATE(sales.confirmed_at) = ?', [date])
+
+    if (salesShiftId) {
+      salesQuery.where('sales.sales_shift_id', salesShiftId)
+    } else {
+      salesQuery.whereRaw('DATE(sales.confirmed_at) = ?', [date])
+    }
+
+    const sales = await salesQuery
       .select(
         'sales.id',
         'sales.code',
@@ -737,12 +922,19 @@ export default class DashboardService {
       )
       .orderBy('sales.confirmed_at', 'asc')
 
-    const productRows = await db
+    const productQuery = db
       .from('sales')
       .join('sale_lines', 'sale_lines.sale_id', 'sales.id')
       .join('catalog_products', 'catalog_products.id', 'sale_lines.catalog_product_id')
       .whereIn('sales.status', [...SALE_STATUSES])
-      .whereRaw('DATE(sales.sold_at) = ?', [date])
+
+    if (salesShiftId) {
+      productQuery.where('sales.sales_shift_id', salesShiftId)
+    } else {
+      productQuery.whereRaw('DATE(sales.sold_at) = ?', [date])
+    }
+
+    const productRows = await productQuery
       .whereNotNull('sale_lines.catalog_product_id')
       .groupBy(
         'catalog_products.id',
@@ -854,10 +1046,17 @@ export default class DashboardService {
       }
     }
 
-    const returnsRows = await db
+    const returnsQuery = db
       .from('sales')
       .where('status', 'RETURNED')
-      .whereRaw('DATE(sales.returned_at) = ?', [date])
+
+    if (salesShiftId) {
+      returnsQuery.where('sales_shift_id', salesShiftId)
+    } else {
+      returnsQuery.whereRaw('DATE(sales.returned_at) = ?', [date])
+    }
+
+    const returnsRows = await returnsQuery
       .select('id', 'code', 'returned_at as returnedAt', 'total_usd as totalUsd')
 
     const returns: DailyClosingReturnItem[] = returnsRows.map((row) => ({
@@ -899,6 +1098,14 @@ export default class DashboardService {
       }
     }
 
+    const expenses = shiftForExpenses
+      ? await this.gastosDelDiaDetalleForDates(
+          this.salesShiftService.calendarDatesForShift(shiftForExpenses)
+        )
+      : await this.gastosDelDiaDetalle(date)
+    const expensesTotalUsd = Number(expenses.summary.gastosMontoUsd)
+    const netCashUsd = cashTotalUsd - expensesTotalUsd
+
     return {
       date,
       summary: {
@@ -908,11 +1115,15 @@ export default class DashboardService {
         creditTotalUsd: creditTotalUsd.toFixed(4),
         productsSold,
         productsAmountUsd: productsAmountUsd.toFixed(4),
+        expensesCount: expenses.summary.gastosCantidad,
+        expensesTotalUsd: expenses.summary.gastosMontoUsd,
+        netCashUsd: netCashUsd.toFixed(4),
       },
       byPaymentMethod,
       products,
       invoices,
       returns,
+      expenses,
     }
   }
 }

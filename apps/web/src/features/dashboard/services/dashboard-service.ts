@@ -24,9 +24,9 @@ export async function getDailyExpenses() {
   return data.data
 }
 
-export async function getDailyClosing(date?: string) {
+export async function getDailyClosing(salesShiftId?: number) {
   const { data } = await api.get<DailyClosingResponse>('/dashboard/daily-closing', {
-    params: { date: date || undefined },
+    params: { sales_shift_id: salesShiftId || undefined },
   })
   return data.data
 }

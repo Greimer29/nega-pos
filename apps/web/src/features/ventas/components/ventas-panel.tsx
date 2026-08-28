@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FileText, FolderOpen, Loader2, Plus, Search } from 'lucide-react'
+import { FileText, FolderOpen, Loader2, Plus, Search, ShoppingCart, SlidersHorizontal } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -49,6 +49,8 @@ import { getApiErrorMessage } from '@/lib/api-error'
 import { isValidEntityId } from '@/lib/route-id'
 import { normalizeInventoryQuantity } from '@/lib/inventory-units'
 import { VentasPaymentMethodDialog } from '@/features/ventas/components/ventas-payment-method-dialog'
+import { VentasShiftControls } from '@/features/ventas/components/ventas-shift-controls'
+import { useCurrentSalesShiftQuery } from '@/features/ventas/hooks/use-sales-shifts'
 import { SaleLineFormulaDialog } from '@/features/ventas/components/sale-line-formula-dialog'
 import { SaleLineKitchenNoteDialog } from '@/features/ventas/components/sale-line-kitchen-note-dialog'
 import type { PaymentMethod } from '@/features/payment-methods/types'
@@ -90,13 +92,17 @@ function VentasCreateView() {
   const { can } = useAuth()
   const canConfirmSale = can('ventas.confirm')
   const canCreditSale = can('ventas.credit')
+  const { data: currentShift, isLoading: shiftLoading } = useCurrentSalesShiftQuery()
+  const shiftOpen = Boolean(currentShift)
   const [initialDraft] = useState(() => loadVentasCartDraft())
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [category, setCategory] = useState('')
   const [page, setPage] = useState(1)
   const [customerId, setCustomerId] = useState<number | ''>(() => initialDraft?.customerId ?? '')
-  const [clientName, setClientName] = useState(() => initialDraft?.clientName ?? '')
+  const [clientName, setClientName] = useState(() =>
+    initialDraft?.clientName?.trim() ? initialDraft.clientName : 'Generico'
+  )
   const [customerCreditDays, setCustomerCreditDays] = useState<number | null>(
     () => initialDraft?.customerCreditDays ?? null
   )
@@ -106,6 +112,8 @@ function VentasCreateView() {
   const [billingMethod, setBillingMethod] = useState<BillingMethod>(
     () => initialDraft?.billingMethod ?? 'FAST'
   )
+  const [cartOpen, setCartOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [cart, setCart] = useState<CartLine[]>(() =>
     (initialDraft?.cart ?? []).map((line) => ({
       id: line.id ?? createCartLineId(),
@@ -165,6 +173,25 @@ function VentasCreateView() {
   }, [searchInput])
 
   useEffect(() => {
+    if (!cartOpen) return
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setCartOpen(false)
+      }
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [cartOpen])
+
+  useEffect(() => {
     if (initialDraft && !isVentasCartDraftEmpty(initialDraft)) {
       setSuccessMessage('Se restauró el borrador de venta de esta sesión.')
     }
@@ -201,6 +228,11 @@ function VentasCreateView() {
 
   const products = catalogData?.catalog_products ?? []
   const catalogMeta = catalogData?.meta
+  const activeFilterCount = category ? 1 : 0
+  const cartItemCount = useMemo(
+    () => cart.reduce((sum, line) => sum + line.quantity, 0),
+    [cart]
+  )
   const cartTotal = useMemo(
     () => cart.reduce((sum, line) => sum + line.quantity * cartLineUnitPrice(line), 0),
     [cart]
@@ -360,10 +392,7 @@ function VentasCreateView() {
     if (customerId) {
       return { customer_id: Number(customerId) }
     }
-    const name = clientName.trim()
-    if (!name) {
-      throw new Error('Ingresá el nombre del cliente.')
-    }
+    const name = clientName.trim() || 'Generico'
     return { guest_name: name }
   }
 
@@ -378,7 +407,7 @@ function VentasCreateView() {
     } else {
       setCustomerId('')
       setCustomerCreditDays(null)
-      setClientName(draft.guestName ?? '')
+      setClientName(draft.guestName?.trim() ? draft.guestName : 'Generico')
     }
     setPaymentType(draft.paymentType)
     setBillingMethod(draft.billingMethod)
@@ -454,14 +483,26 @@ function VentasCreateView() {
     }
   }
 
-  async function finalizeConfirm(saleId: number, paymentMethodCode?: string) {
+  async function finalizeConfirm(
+    saleId: number,
+    paymentMethodCode?: string,
+    paymentOptions?: { currency_code?: string; usd_rate?: number }
+  ) {
     const sale = await confirmSaleMutation.mutateAsync({
       id: saleId,
       payload: {
         payment_type: paymentType,
         billing_mode: billingMethod,
         ...(paymentType === 'CASH' && paymentMethodCode
-          ? { payment_method_code: paymentMethodCode }
+          ? {
+              payment_method_code: paymentMethodCode,
+              ...(paymentOptions?.currency_code
+                ? { currency_code: paymentOptions.currency_code }
+                : {}),
+              ...(paymentOptions?.usd_rate != null
+                ? { usd_rate: paymentOptions.usd_rate }
+                : {}),
+            }
           : {}),
       },
     })
@@ -491,11 +532,6 @@ function VentasCreateView() {
     }
     if (stockBlocked) {
       setActionError('Hay productos sin stock suficiente en el carrito.')
-      return
-    }
-
-    if (!customerId && !clientName.trim()) {
-      setActionError('Ingresá el nombre del cliente o buscá uno registrado.')
       return
     }
 
@@ -534,14 +570,17 @@ function VentasCreateView() {
     }
   }
 
-  async function handlePaymentMethodConfirm(method: PaymentMethod) {
+  async function handlePaymentMethodConfirm(
+    method: PaymentMethod,
+    options: { currency_code: string; usd_rate?: number }
+  ) {
     if (!pendingSaleId) return
 
     setIsSubmitting(true)
     setActionError(null)
 
     try {
-      await finalizeConfirm(pendingSaleId, method.code)
+      await finalizeConfirm(pendingSaleId, method.code, options)
       setPaymentDialogOpen(false)
       setPendingSaleId(null)
     } catch (submitError) {
@@ -560,177 +599,239 @@ function VentasCreateView() {
         ? 'Confirmar pedido a crédito'
         : 'Confirmar pedido'
 
+  function renderBillingCart(options?: { onClose?: () => void }) {
+    return (
+      <VentasOrderCart
+        className="h-full min-h-0 w-full"
+        orderLabel={orderLabel}
+        lines={cartLines}
+        subtotalUsd={cartTotal}
+        totalUsd={cartTotal}
+        onClear={() => {
+          setCart([])
+          resetLoadedDraft()
+          clearVentasCartDraft()
+        }}
+        onRemoveLine={removeFromCart}
+        onUpdateQuantity={updateCartQty}
+        emptyMessage="Agregá productos desde el catálogo."
+        billingMethod={billingMethod}
+        onBillingMethodChange={setBillingMethod}
+        onClose={options?.onClose}
+        headerAction={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            title="Cargar factura"
+            aria-label="Cargar factura"
+            onClick={() => setLoadDraftOpen(true)}
+          >
+            <FolderOpen className="size-4" />
+          </Button>
+        }
+      >
+        <div className="space-y-3 pt-1">
+          <div className="space-y-2">
+            <Label className="text-xs">Cliente</Label>
+            <div className="flex gap-2">
+              <Input
+                className="min-w-0 flex-1"
+                placeholder="Generico"
+                value={clientName}
+                onChange={(e) => handleClientNameChange(e.target.value)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                title="Registrar cliente"
+                aria-label="Registrar cliente"
+                onClick={() => setCustomerDialogOpen(true)}
+              >
+                <Plus className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                title="Buscar cliente registrado"
+                aria-label="Buscar cliente registrado"
+                onClick={() => setCustomerPickOpen(true)}
+              >
+                <Search className="size-4" />
+              </Button>
+            </div>
+            {customerId ? (
+              <p className="text-muted-foreground text-xs">Cliente registrado vinculado</p>
+            ) : null}
+          </div>
+
+          <div className="flex items-start justify-between gap-2">
+            <div className="space-y-2">
+              <Label className="text-xs">Forma de pago</Label>
+              <div className="bg-muted inline-flex rounded-lg p-1">
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-xs font-medium',
+                    paymentType === 'CASH' ? 'bg-background shadow-sm' : 'text-muted-foreground'
+                  )}
+                  onClick={() => setPaymentType('CASH')}
+                >
+                  Contado
+                </button>
+                <button
+                  type="button"
+                  disabled={!customerId || !canCreditSale}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-xs font-medium',
+                    paymentType === 'CREDIT'
+                      ? 'bg-background shadow-sm'
+                      : 'text-muted-foreground',
+                    (!customerId || !canCreditSale) && 'cursor-not-allowed opacity-50'
+                  )}
+                  onClick={() => setPaymentType('CREDIT')}
+                >
+                  Crédito
+                </button>
+              </div>
+              {paymentType === 'CREDIT' && customerId ? (
+                <p className="text-muted-foreground text-xs">
+                  Plazo: {customerCreditDays ?? 0} días
+                </p>
+              ) : null}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground shrink-0"
+              title="Generar presupuesto"
+              aria-label="Generar presupuesto"
+              disabled={isSubmitting || cart.length === 0}
+              onClick={() => void saveBudget()}
+            >
+              {isSubmitting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <FileText className="size-4" />
+              )}
+            </Button>
+          </div>
+
+          {stockBlocked ? (
+            <p className="text-destructive text-xs">
+              Hay productos sin stock o por debajo del mínimo en el carrito.
+            </p>
+          ) : null}
+
+          {successMessage ? (
+            <p className="text-emerald-700 text-sm">{successMessage}</p>
+          ) : null}
+          {actionError ? (
+            <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p>
+          ) : null}
+
+          {canConfirmSale ? (
+            <div className="space-y-2">
+              {!shiftLoading && !shiftOpen ? (
+                <VentasShiftControls fullWidth align="start" />
+              ) : null}
+              <Button
+                className="w-full"
+                disabled={
+                  isSubmitting || cart.length === 0 || stockBlocked || !shiftOpen || shiftLoading
+                }
+                onClick={() => void confirmOrder()}
+              >
+                {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
+                {!shiftLoading && !shiftOpen
+                  ? 'Abrí un turno para vender'
+                  : confirmButtonLabel}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-center text-sm">
+              No tenés permiso para confirmar ventas.
+            </p>
+          )}
+        </div>
+      </VentasOrderCart>
+    )
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="grid min-h-0 flex-1 items-stretch gap-6 xl:grid-cols-3">
-        <div className="flex min-h-0 xl:col-span-1">
-          <VentasOrderCart
-            className="h-full min-h-0 w-full"
-            orderLabel={orderLabel}
-            lines={cartLines}
-            subtotalUsd={cartTotal}
-            totalUsd={cartTotal}
-            onClear={() => {
-              setCart([])
-              resetLoadedDraft()
-              clearVentasCartDraft()
-            }}
-            onRemoveLine={removeFromCart}
-            onUpdateQuantity={updateCartQty}
-            emptyMessage="Agregá productos desde el catálogo."
-            billingMethod={billingMethod}
-            onBillingMethodChange={setBillingMethod}
-            headerAction={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-8"
-                title="Cargar factura"
-                aria-label="Cargar factura"
-                onClick={() => setLoadDraftOpen(true)}
-              >
-                <FolderOpen className="size-4" />
-              </Button>
-            }
-          >
-            <div className="space-y-3 pt-1">
-              <div className="space-y-2">
-                <Label className="text-xs">Cliente</Label>
-                <div className="flex gap-2">
-                  <Input
-                    className="min-w-0 flex-1"
-                    placeholder="Nombre del cliente"
-                    value={clientName}
-                    onChange={(e) => handleClientNameChange(e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="shrink-0"
-                    title="Registrar cliente"
-                    aria-label="Registrar cliente"
-                    onClick={() => setCustomerDialogOpen(true)}
-                  >
-                    <Plus className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="shrink-0"
-                    title="Buscar cliente registrado"
-                    aria-label="Buscar cliente registrado"
-                    onClick={() => setCustomerPickOpen(true)}
-                  >
-                    <Search className="size-4" />
-                  </Button>
-                </div>
-                {customerId ? (
-                  <p className="text-muted-foreground text-xs">Cliente registrado vinculado</p>
-                ) : null}
-              </div>
-
-              <div className="flex items-start justify-between gap-2">
-                <div className="space-y-2">
-                  <Label className="text-xs">Forma de pago</Label>
-                  <div className="bg-muted inline-flex rounded-lg p-1">
-                    <button
-                      type="button"
-                      className={cn(
-                        'rounded-md px-3 py-1.5 text-xs font-medium',
-                        paymentType === 'CASH' ? 'bg-background shadow-sm' : 'text-muted-foreground'
-                      )}
-                      onClick={() => setPaymentType('CASH')}
-                    >
-                      Contado
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!customerId || !canCreditSale}
-                      className={cn(
-                        'rounded-md px-3 py-1.5 text-xs font-medium',
-                        paymentType === 'CREDIT'
-                          ? 'bg-background shadow-sm'
-                          : 'text-muted-foreground',
-                        (!customerId || !canCreditSale) && 'cursor-not-allowed opacity-50'
-                      )}
-                      onClick={() => setPaymentType('CREDIT')}
-                    >
-                      Crédito
-                    </button>
-                  </div>
-                  {paymentType === 'CREDIT' && customerId ? (
-                    <p className="text-muted-foreground text-xs">
-                      Plazo: {customerCreditDays ?? 0} días
-                    </p>
-                  ) : null}
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground hover:text-foreground shrink-0"
-                  title="Generar presupuesto"
-                  aria-label="Generar presupuesto"
-                  disabled={isSubmitting || cart.length === 0}
-                  onClick={() => void saveBudget()}
-                >
-                  {isSubmitting ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <FileText className="size-4" />
-                  )}
-                </Button>
-              </div>
-
-              {stockBlocked ? (
-                <p className="text-destructive text-xs">
-                  Hay productos sin stock o por debajo del mínimo en el carrito.
-                </p>
-              ) : null}
-
-              {successMessage ? (
-                <p className="text-emerald-700 text-sm">{successMessage}</p>
-              ) : null}
-              {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
-
-              {canConfirmSale ? (
-                <Button
-                  className="w-full"
-                  disabled={isSubmitting || cart.length === 0 || stockBlocked}
-                  onClick={() => void confirmOrder()}
-                >
-                  {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
-                  {confirmButtonLabel}
-                </Button>
-              ) : (
-                <p className="text-muted-foreground text-center text-sm">
-                  No tenés permiso para confirmar ventas.
-                </p>
-              )}
-            </div>
-          </VentasOrderCart>
-        </div>
+        <div className="hidden min-h-0 xl:col-span-1 xl:flex">{renderBillingCart()}</div>
 
         <Card className="flex h-full min-h-0 flex-col overflow-hidden border-violet-100/80 bg-gradient-to-b from-violet-50/40 to-white xl:col-span-2">
           <CardHeader className="shrink-0">
-            <CardTitle className="text-base">Catálogo de productos</CardTitle>
-            <CardDescription>
-              {catalogMeta
-                ? `${catalogMeta.total} producto${catalogMeta.total === 1 ? '' : 's'}`
-                : 'Filtrá y agregá productos a la venta'}
-            </CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1.5">
+                <CardTitle className="text-base">Catálogo de productos</CardTitle>
+                <CardDescription>
+                  {catalogMeta
+                    ? `${catalogMeta.total} producto${catalogMeta.total === 1 ? '' : 's'}`
+                    : 'Filtrá y agregá productos a la venta'}
+                </CardDescription>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="relative shrink-0 md:hidden"
+                  title="Filtros"
+                  aria-label="Filtros"
+                  aria-expanded={filtersOpen}
+                  aria-controls="ventas-catalog-filters"
+                  onClick={() => setFiltersOpen((open) => !open)}
+                >
+                  <SlidersHorizontal className="size-4" />
+                  {activeFilterCount > 0 ? (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-semibold text-white">
+                      {activeFilterCount}
+                    </span>
+                  ) : null}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="relative shrink-0 xl:hidden"
+                  title="Abrir carrito"
+                  aria-label="Abrir carrito"
+                  onClick={() => setCartOpen(true)}
+                >
+                  <ShoppingCart className="size-4" />
+                  {cartItemCount > 0 ? (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-semibold text-white">
+                      {cartItemCount > 99 ? '99+' : cartItemCount}
+                    </span>
+                  ) : null}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden pt-0">
-            <div className="flex shrink-0 flex-wrap gap-3">
-              <Input
-                placeholder="Buscar producto…"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="max-w-xs bg-white"
-              />
+            <div className="flex shrink-0 flex-col gap-3">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Buscar producto…"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="min-w-0 flex-1 bg-white md:max-w-xs"
+                />
+              </div>
+              <div
+                id="ventas-catalog-filters"
+                className={cn('flex-wrap gap-3', filtersOpen ? 'flex' : 'hidden', 'md:flex')}
+              >
               <select
                 className="border-input flex h-9 rounded-md border bg-white px-3 text-sm"
                 value={category}
@@ -746,6 +847,7 @@ function VentasCreateView() {
                   </option>
                 ))}
               </select>
+              </div>
             </div>
 
             <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto pr-1">
@@ -807,6 +909,29 @@ function VentasCreateView() {
         </Card>
       </div>
 
+      <div
+        className={cn(
+          'fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 xl:hidden',
+          cartOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        )}
+        aria-hidden={!cartOpen}
+        onClick={() => setCartOpen(false)}
+      />
+      <div
+        className={cn(
+          'fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-xl transition-transform duration-300 xl:hidden',
+          'pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]',
+          cartOpen ? 'translate-x-0' : 'pointer-events-none translate-x-full'
+        )}
+        role="dialog"
+        aria-modal={cartOpen}
+        aria-label="Facturación"
+      >
+        <div className="min-h-0 flex-1 p-3">
+          {renderBillingCart({ onClose: () => setCartOpen(false) })}
+        </div>
+      </div>
+
       <CustomerFormDialog
         open={customerDialogOpen}
         onOpenChange={setCustomerDialogOpen}
@@ -832,7 +957,7 @@ function VentasCreateView() {
         }}
         totalUsd={cartTotal}
         isSubmitting={isSubmitting}
-        onConfirm={(method) => void handlePaymentMethodConfirm(method)}
+        onConfirm={(method, options) => void handlePaymentMethodConfirm(method, options)}
       />
       <SaleLineFormulaDialog
         open={formulaDialogLineId != null}

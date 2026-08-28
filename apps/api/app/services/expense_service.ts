@@ -2,7 +2,7 @@ import ExpenseNoEncontradoException from '#exceptions/gasto_no_encontrado_except
 import Expense from '#models/expense'
 import AccountService from '#services/account_service'
 import CurrencyService from '#services/currency_service'
-import { assertRegistroMonedaBase } from '#utils/monetary_registration'
+import { resolveMonetaryEntryAmount } from '#utils/monetary_entry'
 import { DateTime } from 'luxon'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import type { ExpenseValidatorPayload } from '#validators/expense'
@@ -59,36 +59,42 @@ export default class ExpenseService {
   }
 
   async crear(input: ExpenseInput): Promise<Expense> {
-    const amount = resolveExpenseAmount(input)
-    const baseCode = await this.currencyService.getBaseCurrencyCode()
-    const currencyCode = (input.currency_code ?? baseCode).toUpperCase()
-    assertRegistroMonedaBase(currencyCode, baseCode)
-    await this.currencyService.assertActiva(currencyCode)
+    const amountNative = resolveExpenseAmount(input)
+    const resolved = await resolveMonetaryEntryAmount({
+      amountNative,
+      currencyCode: input.currency_code,
+      entryRate: input.entry_rate,
+      currencyService: this.currencyService,
+    })
     const accountId = await this.resolveAccountId(input.account_id)
 
     return Expense.create({
       date: DateTime.fromISO(input.date),
       description: input.description.trim(),
-      amountUsd: amount.toFixed(4),
-      currencyCode,
+      amountUsd: resolved.amountUsd,
+      currencyCode: resolved.currencyCode,
+      entryRate: resolved.entryRate,
       accountId: accountId ?? null,
     })
   }
 
   async actualizar(id: number, input: ExpenseInput): Promise<Expense> {
     const expense = await this.obtener(id)
-    const amount = resolveExpenseAmount(input)
-    const baseCode = await this.currencyService.getBaseCurrencyCode()
-    const currencyCode = (input.currency_code ?? expense.currencyCode ?? baseCode).toUpperCase()
-    assertRegistroMonedaBase(currencyCode, baseCode)
-    await this.currencyService.assertActiva(currencyCode)
+    const amountNative = resolveExpenseAmount(input)
+    const resolved = await resolveMonetaryEntryAmount({
+      amountNative,
+      currencyCode: input.currency_code ?? expense.currencyCode,
+      entryRate: input.entry_rate,
+      currencyService: this.currencyService,
+    })
     const accountId = await this.resolveAccountId(input.account_id)
 
     expense.merge({
       date: DateTime.fromISO(input.date),
       description: input.description.trim(),
-      amountUsd: amount.toFixed(4),
-      currencyCode,
+      amountUsd: resolved.amountUsd,
+      currencyCode: resolved.currencyCode,
+      entryRate: resolved.entryRate,
       ...(accountId !== undefined ? { accountId } : {}),
     })
     await expense.save()
@@ -103,19 +109,11 @@ export default class ExpenseService {
   }
 
   async resumen(): Promise<ExpenseSummary> {
-    const [rates, baseCode] = await Promise.all([
-      this.currencyService.getActiveRates(),
-      this.currencyService.getBaseCurrencyCode(),
-    ])
-    const expenses = await Expense.query().select(['amountUsd', 'currencyCode'])
+    const expenses = await Expense.query().select(['amountUsd'])
 
     let totalUsd = 0
     for (const expense of expenses) {
-      totalUsd += this.currencyService.toUsd(
-        Number(expense.amountUsd ?? 0),
-        expense.currencyCode ?? baseCode,
-        rates
-      )
+      totalUsd += Number(expense.amountUsd ?? 0)
     }
 
     const count = expenses.length
@@ -127,15 +125,11 @@ export default class ExpenseService {
     const weeklyExpenses = await Expense.query()
       .where('date', '>=', weekStart)
       .where('date', '<=', weekEnd)
-      .select(['amountUsd', 'currencyCode'])
+      .select(['amountUsd'])
 
     let weeklyUsd = 0
     for (const expense of weeklyExpenses) {
-      weeklyUsd += this.currencyService.toUsd(
-        Number(expense.amountUsd ?? 0),
-        expense.currencyCode ?? baseCode,
-        rates
-      )
+      weeklyUsd += Number(expense.amountUsd ?? 0)
     }
 
     return {

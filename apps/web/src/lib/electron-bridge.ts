@@ -16,7 +16,13 @@ export type ElectronPrintHtmlOptions = {
 export type ElectronPrintingApi = {
   isAvailable: true
   listPrinters: () => Promise<ElectronPrinterInfo[]>
+  /** @deprecated Prefer API print config. */
   getConfig: () => Promise<PrintConfig>
+  getLocalConfig?: () => Promise<PrintConfig | null>
+  getConfigPath: () => Promise<string>
+  isMigrated?: () => Promise<boolean>
+  markMigrated?: () => Promise<void>
+  /** @deprecated Prefer API print config. */
   saveConfig: (config: PrintConfig) => Promise<PrintConfig>
   printHtml: (options: ElectronPrintHtmlOptions) => Promise<void>
 }

@@ -16,6 +16,11 @@ import {
   isComandaPrintingConfigured,
   resolveCategoryLabelForLines,
 } from '@/features/printing/utils/comanda-routing'
+import {
+  fetchPrintConfig,
+  savePrintConfigToApi,
+  type PrintConfigSavePayload,
+} from '@/features/settings/services/print-settings-service'
 import type { Sale } from '@/features/ventas/types'
 import {
   getElectronPrintingApi,
@@ -32,6 +37,8 @@ export type PrintDocumentsResult = {
   printed: PrintDocumentKind[]
   errors: PrintDocumentError[]
 }
+
+export type { PrintConfigSavePayload }
 
 const PRINT_JOB_DELAY_MS = 700
 
@@ -63,19 +70,97 @@ export async function listPrinters(): Promise<PrinterInfo[]> {
 }
 
 export async function getPrintConfig(): Promise<PrintConfig> {
-  const api = getElectronPrintingApi()
-  if (!api) {
+  try {
+    const result = await fetchPrintConfig()
+    return result.printConfig
+  } catch {
     return structuredClone(DEFAULT_PRINT_CONFIG)
   }
-  return api.getConfig()
 }
 
-export async function savePrintConfig(config: PrintConfig): Promise<PrintConfig> {
+export async function getPrintConfigPersisted(): Promise<{
+  printConfig: PrintConfig
+  persisted: boolean
+}> {
+  return fetchPrintConfig()
+}
+
+/** @deprecated Local path is only for one-shot migration display; config lives in the API. */
+export async function getPrintConfigPath(): Promise<string | null> {
   const api = getElectronPrintingApi()
-  if (!api) {
-    throw new Error('La configuración de impresión solo está disponible en la app de escritorio.')
+  if (!api?.getConfigPath) {
+    return null
   }
-  return api.saveConfig(config)
+  return api.getConfigPath()
+}
+
+export async function getLocalPrintConfigForMigration(): Promise<PrintConfig | null> {
+  const api = getElectronPrintingApi()
+  if (!api?.getLocalConfig) {
+    return null
+  }
+  return api.getLocalConfig()
+}
+
+export async function isLocalPrintConfigMigrated(): Promise<boolean> {
+  const api = getElectronPrintingApi()
+  if (!api?.isMigrated) {
+    return true
+  }
+  return api.isMigrated()
+}
+
+export async function markLocalPrintConfigMigrated(): Promise<void> {
+  const api = getElectronPrintingApi()
+  if (!api?.markMigrated) {
+    return
+  }
+  await api.markMigrated()
+}
+
+export async function savePrintConfig(payload: PrintConfigSavePayload): Promise<PrintConfig> {
+  const result = await savePrintConfigToApi(payload)
+  return result.printConfig
+}
+
+async function maybeImportLocalPrintConfig(persisted: boolean): Promise<PrintConfig | null> {
+  if (persisted || !isPrintingAvailable()) {
+    return null
+  }
+
+  const alreadyMigrated = await isLocalPrintConfigMigrated()
+  if (alreadyMigrated) {
+    return null
+  }
+
+  const local = await getLocalPrintConfigForMigration()
+  if (!local) {
+    await markLocalPrintConfigMigrated()
+    return null
+  }
+
+  const imported = await savePrintConfig({
+    scope: 'full',
+    ticket: local.ticket,
+    formats: local.formats,
+    documents: local.documents,
+    behavior: local.behavior,
+    categoryRouting: local.categoryRouting,
+  })
+  await markLocalPrintConfigMigrated()
+  return imported
+}
+
+export async function loadPrintConfigWithMigration(): Promise<{
+  printConfig: PrintConfig
+  persisted: boolean
+}> {
+  const { printConfig, persisted } = await fetchPrintConfig()
+  const imported = await maybeImportLocalPrintConfig(persisted)
+  if (imported) {
+    return { printConfig: imported, persisted: true }
+  }
+  return { printConfig, persisted }
 }
 
 async function printSingleDocument(
@@ -171,7 +256,7 @@ export async function printSaleDocuments(
     return { printed: [], errors: [] }
   }
 
-  const resolvedConfig = config ?? (await api.getConfig())
+  const resolvedConfig = config ?? (await getPrintConfig())
   const printed: PrintDocumentKind[] = []
   const errors: PrintDocumentError[] = []
   let jobIndex = 0
@@ -246,7 +331,7 @@ export async function printTestDocument(kind: PrintDocumentKind): Promise<void> 
     throw new Error('La impresión de prueba solo está disponible en la app de escritorio.')
   }
 
-  const config = await api.getConfig()
+  const config = await getPrintConfig()
   const docSettings = config.documents[kind]
   const label = PRINT_DOCUMENT_LABELS[kind]
 

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ProfitMarginLink } from '@/features/purchases/components/profit-margin-link'
 import { VentasHistoryPanel } from '@/features/ventas/components/ventas-history-panel'
 import { VentasPanel } from '@/features/ventas/components/ventas-panel'
+import { VentasShiftControls } from '@/features/ventas/components/ventas-shift-controls'
 import { cn } from '@/lib/utils'
 
 type VentasTab = 'facturar' | 'historial'
@@ -34,7 +35,10 @@ export function VentasPage() {
             </button>
           ))}
         </div>
-        <ProfitMarginLink />
+        <div className="flex items-center gap-2">
+          <VentasShiftControls iconOnly="mobile" />
+          <ProfitMarginLink />
+        </div>
       </div>
 
       {activeTab === 'facturar' ? (

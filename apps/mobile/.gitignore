@@ -1,0 +1,12 @@
+# Artefactos de build y deps locales
+node_modules/
+*.apk
+*.aab
+*.ipa
+.idea/
+*.iml
+local.properties
+.gradle/
+build/
+app/build/
+capacitor-cordova-android-plugins/

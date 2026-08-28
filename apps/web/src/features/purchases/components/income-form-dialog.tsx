@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useEffect, useMemo, useState } from 'react'
+import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,8 +20,20 @@ import {
   useUpdateIncomeMutation,
 } from '@/features/purchases/hooks/use-incomes'
 import { AccountSelect } from '@/features/accounts/components/account-select'
-import { CurrencySelect } from '@/features/currencies/components/currency-select'
-import { useBaseCurrencyQuery } from '@/features/currencies/hooks/use-currencies'
+import {
+  EntryCurrencyRateFields,
+  catalogRateForCurrency,
+} from '@/features/currencies/components/entry-currency-rate-fields'
+import {
+  useActiveCurrenciesQuery,
+  useBaseCurrencyQuery,
+} from '@/features/currencies/hooks/use-currencies'
+import { currencySymbol } from '@/features/currencies/utils/convert-currency'
+import {
+  isPurchaseEntryInNative,
+  isValidPurchaseRate,
+  nativeToBase,
+} from '@/features/purchases/utils/purchase-entry-currency'
 import type { Income } from '@/features/purchases/types'
 import { getApiErrorMessage } from '@/lib/api-error'
 
@@ -45,13 +57,16 @@ export function IncomeFormDialog({ open, onOpenChange, income }: IncomeFormDialo
   const createMutation = useCreateIncomeMutation()
   const updateMutation = useUpdateIncomeMutation()
   const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
+  const { data: currencies = [] } = useActiveCurrenciesQuery()
   const [accountId, setAccountId] = useState<number | null>(null)
   const [currencyCode, setCurrencyCode] = useState(baseCurrencyCode)
+  const [entryRate, setEntryRate] = useState('')
 
   const {
     register,
     handleSubmit,
     reset,
+    control,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<FormInput, unknown, FormValues>({
@@ -63,10 +78,18 @@ export function IncomeFormDialog({ open, onOpenChange, income }: IncomeFormDialo
     },
   })
 
+  const amountWatch = useWatch({ control, name: 'amount' })
+
   useEffect(() => {
     if (open) {
       setAccountId(isEditing ? income.accountId : null)
-      setCurrencyCode(isEditing ? income.currencyCode : baseCurrencyCode)
+      const code = isEditing ? income.currencyCode : baseCurrencyCode
+      setCurrencyCode(code)
+      setEntryRate(
+        isEditing && income.entryRate
+          ? String(Number(income.entryRate))
+          : catalogRateForCurrency(currencies, code)
+      )
       reset(
         isEditing
           ? {
@@ -81,11 +104,36 @@ export function IncomeFormDialog({ open, onOpenChange, income }: IncomeFormDialo
             }
       )
     }
-  }, [open, isEditing, income, reset, baseCurrencyCode])
+  }, [open, isEditing, income, reset, baseCurrencyCode, currencies])
+
+  function handleCurrencyChange(code: string) {
+    setCurrencyCode(code)
+    setEntryRate(catalogRateForCurrency(currencies, code))
+  }
+
+  const entryInNative = isPurchaseEntryInNative(currencyCode, baseCurrencyCode)
+  const rateNum = Number(entryRate)
+  const amountNum = Number(amountWatch)
+  const basePreview = useMemo(() => {
+    if (!entryInNative || !isValidPurchaseRate(rateNum) || !(amountNum > 0)) return null
+    return nativeToBase(amountNum, rateNum)
+  }, [entryInNative, rateNum, amountNum])
+
+  const symbol = currencySymbol(currencyCode)
 
   const onSubmit = handleSubmit(async (values) => {
+    if (entryInNative && !isValidPurchaseRate(rateNum)) {
+      setError('root', { message: 'Indicá una tasa válida para la moneda elegida.' })
+      return
+    }
+
     try {
-      const payload = { ...values, account_id: accountId, currency_code: baseCurrencyCode }
+      const payload = {
+        ...values,
+        account_id: accountId,
+        currency_code: currencyCode,
+        ...(entryInNative ? { entry_rate: rateNum } : {}),
+      }
       if (isEditing) {
         await updateMutation.mutateAsync({ id: income.id, payload })
       } else {
@@ -103,8 +151,8 @@ export function IncomeFormDialog({ open, onOpenChange, income }: IncomeFormDialo
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar ingreso' : 'Registrar ingreso'}</DialogTitle>
           <DialogDescription>
-            Entradas de dinero (aporte de capital, etc.) en la moneda base ({baseCurrencyCode}).
-            Sumarán al balance del estado de cuenta.
+            Entradas de dinero (aporte de capital, etc.) en la moneda elegida. Sumarán al balance
+            en {baseCurrencyCode}.
           </DialogDescription>
         </DialogHeader>
 
@@ -123,20 +171,31 @@ export function IncomeFormDialog({ open, onOpenChange, income }: IncomeFormDialo
             ) : null}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <CurrencySelect registrationOnly value={currencyCode} onChange={setCurrencyCode} />
-            <div className="space-y-2">
-              <Label htmlFor="income-amount">Monto ({baseCurrencyCode}) *</Label>
-              <MoneyInput
-                id="income-amount"
-                min="0"
-                placeholder="0.00"
-                {...register('amount')}
-              />
-              {errors.amount ? (
-                <p className="text-destructive text-sm">{errors.amount.message}</p>
-              ) : null}
-            </div>
+          <EntryCurrencyRateFields
+            currencyCode={currencyCode}
+            onCurrencyChange={handleCurrencyChange}
+            rate={entryRate}
+            onRateChange={setEntryRate}
+            preview={
+              basePreview != null ? (
+                <p className="text-muted-foreground text-xs">
+                  Equivale a {basePreview.toFixed(4)} {baseCurrencyCode}.
+                </p>
+              ) : null
+            }
+          />
+
+          <div className="space-y-2">
+            <Label htmlFor="income-amount">Monto ({symbol}) *</Label>
+            <MoneyInput
+              id="income-amount"
+              min="0"
+              placeholder="0.00"
+              {...register('amount')}
+            />
+            {errors.amount ? (
+              <p className="text-destructive text-sm">{errors.amount.message}</p>
+            ) : null}
           </div>
 
           <AccountSelect value={accountId} onChange={setAccountId} />

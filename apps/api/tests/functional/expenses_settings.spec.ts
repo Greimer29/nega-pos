@@ -1,10 +1,10 @@
-import { MONETARY_REGISTRATION_USD_MESSAGE } from '#exceptions/moneda_registro_usd_requerida_exception'
 import User from '#models/user'
 import Currency from '#models/currency'
 import Machine from '#models/machine'
 import MachineExpense from '#models/machine_expense'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { DateTime } from 'luxon'
+import db from '@adonisjs/lucid/services/db'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
 import { test } from '@japa/runner'
 
@@ -74,23 +74,29 @@ test.group('Expenses and settings API', (group) => {
     deleteResponse.assertBodyContains({ data: { eliminado: true } })
   })
 
-  test('POST /api/v1/expenses rejects non-base currency', async ({ client, assert }) => {
+  test('POST /api/v1/expenses accepts VES with entry_rate without changing catalog', async ({
+    client,
+    assert,
+  }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
+    await db.from('currencies').where('code', 'VES').update({ rate_per_usd: '100.0000' })
 
     const response = await client.post('/api/v1/expenses').loginAs(user).json({
       date: '2026-06-01',
       description: 'Gasto en bolívares',
-      amount_usd: 100,
+      amount: 400,
       currency_code: 'VES',
+      entry_rate: 40,
     })
 
-    response.assertStatus(422)
-    response.assertBodyContains({
-      error: {
-        code: 'MONEDA_REGISTRO_USD_REQUERIDA',
-      },
-    })
-    assert.include(response.body().error.message, MONETARY_REGISTRATION_USD_MESSAGE)
+    response.assertStatus(200)
+    assert.equal(response.body().data.expense.currencyCode, 'VES')
+    assert.equal(response.body().data.expense.amount, '400.0000')
+    assert.equal(response.body().data.expense.amountUsd, '10.0000')
+    assert.equal(response.body().data.expense.entryRate, '40.000000')
+
+    const ves = await Currency.findByOrFail('code', 'VES')
+    assert.equal(ves.ratePerUsd, '100.0000')
   })
 
   test('GET /api/v1/expenses/summary includes weekly spent', async ({ client }) => {

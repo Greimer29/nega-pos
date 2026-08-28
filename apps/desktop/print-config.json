@@ -1,7 +1,7 @@
 {
   "business": {
-    "name": "ParriBurguer",
-    "subtitle": "Despues de una buena hamburguesa se perdona lo que sea",
+    "name": "",
+    "subtitle": "",
     "footer": "Gracias por su compra"
   },
   "ticket": {
@@ -35,33 +35,33 @@
   ],
   "documents": {
     "invoice": {
-      "enabled": true,
+      "enabled": false,
       "deviceName": "POS-80C",
       "paperWidthMm": 78,
       "formatId": "builtin-invoice"
     },
     "deliveryNote": {
-      "enabled": true,
+      "enabled": false,
       "deviceName": "POS-80C",
       "paperWidthMm": 78,
       "formatId": "builtin-delivery-note"
     },
     "comanda": {
       "enabled": true,
-      "deviceName": "POS-80C",
+      "deviceName": "POS ALMACEN",
       "paperWidthMm": 78,
       "formatId": "builtin-comanda"
     }
   },
   "behavior": {
-    "printInvoiceOnConfirm": true,
+    "printInvoiceOnConfirm": false,
     "printDeliveryNoteOnConfirm": false,
     "printComandaOnConfirm": true,
-    "printComandaFormula": true
+    "printComandaFormula": false
   },
   "categoryRouting": {
     "comanda": {
-      "enabled": true,
+      "enabled": false,
       "rules": [
         {
           "category": "Uniforme",
@@ -85,6 +85,10 @@
         },
         {
           "category": "Accesorio",
+          "deviceName": "POS-80C"
+        },
+        {
+          "category": "Comida Rapida",
           "deviceName": "POS-80C"
         }
       ]

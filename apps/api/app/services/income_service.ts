@@ -2,7 +2,7 @@ import IncomeNoEncontradoException from '#exceptions/ingreso_no_encontrado_excep
 import Income from '#models/income'
 import AccountService from '#services/account_service'
 import CurrencyService from '#services/currency_service'
-import { assertRegistroMonedaBase } from '#utils/monetary_registration'
+import { resolveMonetaryEntryAmount } from '#utils/monetary_entry'
 import { DateTime } from 'luxon'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import type { IncomeValidatorPayload } from '#validators/income'
@@ -59,36 +59,42 @@ export default class IncomeService {
   }
 
   async crear(input: IncomeInput): Promise<Income> {
-    const amount = resolveIncomeAmount(input)
-    const baseCode = await this.currencyService.getBaseCurrencyCode()
-    const currencyCode = (input.currency_code ?? baseCode).toUpperCase()
-    assertRegistroMonedaBase(currencyCode, baseCode)
-    await this.currencyService.assertActiva(currencyCode)
+    const amountNative = resolveIncomeAmount(input)
+    const resolved = await resolveMonetaryEntryAmount({
+      amountNative,
+      currencyCode: input.currency_code,
+      entryRate: input.entry_rate,
+      currencyService: this.currencyService,
+    })
     const accountId = await this.resolveAccountId(input.account_id)
 
     return Income.create({
       date: DateTime.fromISO(input.date),
       description: input.description.trim(),
-      amountUsd: amount.toFixed(4),
-      currencyCode,
+      amountUsd: resolved.amountUsd,
+      currencyCode: resolved.currencyCode,
+      entryRate: resolved.entryRate,
       accountId: accountId ?? null,
     })
   }
 
   async actualizar(id: number, input: IncomeInput): Promise<Income> {
     const income = await this.obtener(id)
-    const amount = resolveIncomeAmount(input)
-    const baseCode = await this.currencyService.getBaseCurrencyCode()
-    const currencyCode = (input.currency_code ?? income.currencyCode ?? baseCode).toUpperCase()
-    assertRegistroMonedaBase(currencyCode, baseCode)
-    await this.currencyService.assertActiva(currencyCode)
+    const amountNative = resolveIncomeAmount(input)
+    const resolved = await resolveMonetaryEntryAmount({
+      amountNative,
+      currencyCode: input.currency_code ?? income.currencyCode,
+      entryRate: input.entry_rate,
+      currencyService: this.currencyService,
+    })
     const accountId = await this.resolveAccountId(input.account_id)
 
     income.merge({
       date: DateTime.fromISO(input.date),
       description: input.description.trim(),
-      amountUsd: amount.toFixed(4),
-      currencyCode,
+      amountUsd: resolved.amountUsd,
+      currencyCode: resolved.currencyCode,
+      entryRate: resolved.entryRate,
       ...(accountId !== undefined ? { accountId } : {}),
     })
     await income.save()
@@ -103,19 +109,11 @@ export default class IncomeService {
   }
 
   async resumen(): Promise<IncomeSummary> {
-    const [rates, baseCode] = await Promise.all([
-      this.currencyService.getActiveRates(),
-      this.currencyService.getBaseCurrencyCode(),
-    ])
-    const incomes = await Income.query().select(['amountUsd', 'currencyCode'])
+    const incomes = await Income.query().select(['amountUsd'])
 
     let totalUsd = 0
     for (const income of incomes) {
-      totalUsd += this.currencyService.toUsd(
-        Number(income.amountUsd ?? 0),
-        income.currencyCode ?? baseCode,
-        rates
-      )
+      totalUsd += Number(income.amountUsd ?? 0)
     }
 
     const count = incomes.length
@@ -127,15 +125,11 @@ export default class IncomeService {
     const weeklyIncomes = await Income.query()
       .where('date', '>=', weekStart)
       .where('date', '<=', weekEnd)
-      .select(['amountUsd', 'currencyCode'])
+      .select(['amountUsd'])
 
     let weeklyUsd = 0
     for (const income of weeklyIncomes) {
-      weeklyUsd += this.currencyService.toUsd(
-        Number(income.amountUsd ?? 0),
-        income.currencyCode ?? baseCode,
-        rates
-      )
+      weeklyUsd += Number(income.amountUsd ?? 0)
     }
 
     return {
