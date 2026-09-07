@@ -8,9 +8,15 @@ export type AdminUserSeedOverrides = {
   name?: string
 }
 
+export type AdminUserSeedOptions = {
+  /** Lucid connection name (required when seeding a tenant DB outside HTTP ALS). */
+  connection?: string
+}
+
 export default class extends BaseSeeder {
-  async run(overrides: AdminUserSeedOverrides = {}) {
+  async run(overrides: AdminUserSeedOverrides = {}, options: AdminUserSeedOptions = {}) {
     const email = overrides.email ?? env.get('ADMIN_EMAIL')
+    const conn = options.connection ? { connection: options.connection } : undefined
 
     await User.updateOrCreate(
       { email },
@@ -19,7 +25,8 @@ export default class extends BaseSeeder {
         name: overrides.name ?? env.get('ADMIN_NOMBRE'),
         role: 'ADMIN',
         active: true,
-      }
+      },
+      conn
     )
   }
 }

@@ -405,6 +405,17 @@ export function getApiErrorMessage(error: unknown): string {
   const apiError = getApiError(error)
   const lines = formatApiErrorDetails(apiError.details)
 
+  // Platform / provision errors must stay actionable (CREATE DATABASE, wrong DB, etc.).
+  if (
+    apiError.code === 'PROVISION_FAILED' ||
+    apiError.code === 'DB_CREATE_DENIED' ||
+    apiError.code === 'PLATFORM_ERROR' ||
+    apiError.code === 'SLUG_TAKEN' ||
+    apiError.code === 'EMAIL_TAKEN'
+  ) {
+    return lines.length > 0 ? lines.join('\n') : apiError.message
+  }
+
   if (lines.length > 0) {
     return sanitizeUserFacingMessage(lines.join('\n'))
   }

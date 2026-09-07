@@ -19,11 +19,19 @@ const PAYMENT_METHODS = [
   { code: 'binance', name: 'Binance', currencyCode: 'USD', sortOrder: 6 },
 ] as const
 
+export type FinancialBaseSeedOptions = {
+  /** Lucid connection name (required when seeding a tenant DB outside HTTP ALS). */
+  connection?: string
+}
+
 export default class extends BaseSeeder {
-  async run() {
+  async run(options: FinancialBaseSeedOptions = {}) {
+    const conn = options.connection ? { connection: options.connection } : undefined
+
     await AppSetting.updateOrCreate(
       { key: 'base_currency_code' },
-      { value: 'XAU', updatedAt: DateTime.now() }
+      { value: 'XAU', updatedAt: DateTime.now() },
+      conn
     )
 
     for (const row of CURRENCIES) {
@@ -33,7 +41,8 @@ export default class extends BaseSeeder {
           name: row.name,
           ratePerUsd: row.ratePerUsd,
           isActive: true,
-        }
+        },
+        conn
       )
     }
 
@@ -45,7 +54,8 @@ export default class extends BaseSeeder {
           currencyCode: row.currencyCode,
           isActive: true,
           sortOrder: row.sortOrder,
-        }
+        },
+        conn
       )
     }
   }

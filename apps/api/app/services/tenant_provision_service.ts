@@ -231,6 +231,8 @@ export default class TenantProvisionService {
   ) {
     const client = db.connection(connectionName)
 
+    // Pass connection explicitly: Lucid/mysql2 pool callbacks can drop ALS,
+    // which made seeders write into the default `railway` DB instead of the tenant.
     await runWithTenant(
       {
         companyId,
@@ -239,8 +241,8 @@ export default class TenantProvisionService {
         directoryUserId: 0,
       },
       async () => {
-        await new FinancialBaseSeeder(client).run()
-        await new AdminUserSeeder(client).run(admin)
+        await new FinancialBaseSeeder(client).run({ connection: connectionName })
+        await new AdminUserSeeder(client).run(admin, { connection: connectionName })
       }
     )
   }
