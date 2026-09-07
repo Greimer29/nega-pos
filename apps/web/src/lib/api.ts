@@ -70,11 +70,12 @@ async function fetchCsrfTokenFromApi(): Promise<string | null> {
   return data.data.csrf_token
 }
 
+/**
+ * Ensures we have a plain CSRF token from GET /csrf aligned with the current
+ * session secret. Do NOT trust a leftover XSRF-TOKEN cookie alone — after login
+ * or Railway redeploy it often desyncs and Shield returns Invalid CSRF token.
+ */
 export async function ensureCsrfToken(): Promise<void> {
-  if (getCsrfTokenFromCookie()) {
-    return
-  }
-
   if (cachedCsrfToken) {
     return
   }
@@ -101,28 +102,39 @@ export async function refreshCsrfToken(): Promise<void> {
   cachedCsrfToken = null
   csrfBootstrapPromise = null
 
-  // Si la cookie ya está, no hace falta otro RTT a /csrf.
-  if (getCsrfTokenFromCookie()) {
-    return
-  }
-
   try {
-    const token = await fetchCsrfTokenFromApi()
-    cachedCsrfToken = token
+    cachedCsrfToken = await fetchCsrfTokenFromApi()
   } catch {
     cachedCsrfToken = null
   }
 }
 
 function applyCsrfHeader(config: import('axios').InternalAxiosRequestConfig) {
-  const cookieToken = getCsrfTokenFromCookie()
-  if (cookieToken) {
-    config.headers.set('X-XSRF-TOKEN', cookieToken)
+  // Prefer the plain token from /csrf (X-CSRF-TOKEN). Stale encrypted XSRF
+  // cookies after session rotation are the usual cause of Railway CSRF 403s.
+  if (cachedCsrfToken) {
+    config.headers.set('X-CSRF-TOKEN', cachedCsrfToken)
+    config.headers.delete('X-XSRF-TOKEN')
+
+    // Belt-and-suspenders: Shield also accepts `_csrf` in the body.
+    if (
+      config.data &&
+      typeof config.data === 'object' &&
+      !(config.data instanceof FormData) &&
+      !Array.isArray(config.data)
+    ) {
+      const body = config.data as Record<string, unknown>
+      if (!('_csrf' in body)) {
+        config.data = { ...body, _csrf: cachedCsrfToken }
+      }
+    }
+
     return
   }
 
-  if (cachedCsrfToken) {
-    config.headers.set('X-CSRF-TOKEN', cachedCsrfToken)
+  const cookieToken = getCsrfTokenFromCookie()
+  if (cookieToken) {
+    config.headers.set('X-XSRF-TOKEN', cookieToken)
   }
 }
 
