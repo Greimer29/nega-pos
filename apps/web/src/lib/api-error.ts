@@ -364,16 +364,46 @@ export function apiErrorDetailsIncludeField(details: unknown, field: string): bo
   return false
 }
 
+/** Convierte mensajes técnicos de servidor/SQL en texto usable para la UI. */
+function sanitizeUserFacingMessage(message: string): string {
+  const trimmed = message.trim()
+  if (!trimmed) return trimmed
+
+  const lower = trimmed.toLowerCase()
+  if (
+    lower.includes("doesn't exist") ||
+    lower.includes('does not exist') ||
+    lower.includes('unknown column') ||
+    lower.includes('er_no_such_table') ||
+    lower.includes('er_bad_field_error') ||
+    /\bselect\s+.+\s+from\s+/i.test(trimmed) ||
+    /\b(insert|update|delete)\s+.+\s+(into|from|set)\b/i.test(trimmed)
+  ) {
+    // Keep actionable provision / MySQL privilege messages visible.
+    if (
+      lower.includes('create database') ||
+      lower.includes('grant create') ||
+      lower.includes('mysql') ||
+      lower.includes('railway')
+    ) {
+      return trimmed
+    }
+    return 'El servidor no está listo o la base de datos no está migrada. Contactá al administrador o revisá el despliegue.'
+  }
+
+  return trimmed
+}
+
 /** Mensaje listo para mostrar en UI: prioriza `details` sobre el mensaje genérico. */
 export function getApiErrorMessage(error: unknown): string {
   const apiError = getApiError(error)
   const lines = formatApiErrorDetails(apiError.details)
 
   if (lines.length > 0) {
-    return lines.join('\n')
+    return sanitizeUserFacingMessage(lines.join('\n'))
   }
 
-  return apiError.message
+  return sanitizeUserFacingMessage(apiError.message)
 }
 
 /** @deprecated Usar `formatApiErrorDetails` o `getApiErrorMessage`. */

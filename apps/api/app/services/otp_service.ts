@@ -45,7 +45,7 @@ export default class OtpService {
     return row
   }
 
-  async consume(params: {
+  async verify(params: {
     email: string
     purpose: EmailVerificationPurpose
     code: string
@@ -73,8 +73,22 @@ export default class OtpService {
       })
     }
 
+    return row
+  }
+
+  async markConsumed(id: number) {
+    const row = await EmailVerificationCode.findOrFail(id)
     row.consumedAt = DateTime.utc()
     await row.save()
     return row
+  }
+
+  async consume(params: {
+    email: string
+    purpose: EmailVerificationPurpose
+    code: string
+  }): Promise<EmailVerificationCode> {
+    const row = await this.verify(params)
+    return this.markConsumed(row.id)
   }
 }

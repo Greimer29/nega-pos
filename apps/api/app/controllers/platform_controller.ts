@@ -40,12 +40,27 @@ function mapServiceError(error: unknown, response: HttpContext['response']) {
     const err = error as { code?: string; message?: string; status?: number }
     return response.status(err.status ?? 400).json({
       error: {
-        code: err.code,
+        code: err.code ?? 'PLATFORM_ERROR',
         message: err.message ?? 'Error de plataforma',
       },
     })
   }
-  throw error
+
+  if (error instanceof Error) {
+    return response.status(500).json({
+      error: {
+        code: 'PLATFORM_ERROR',
+        message: error.message,
+      },
+    })
+  }
+
+  return response.status(500).json({
+    error: {
+      code: 'PLATFORM_ERROR',
+      message: 'Error de plataforma',
+    },
+  })
 }
 
 export default class PlatformController {
