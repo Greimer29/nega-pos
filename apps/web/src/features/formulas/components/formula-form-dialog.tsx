@@ -14,7 +14,7 @@ import { DecimalInput } from '@/components/decimal-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { inventoryQuantityDecimals, inventoryUnitAbrev } from '@/lib/inventory-units'
+import { inventoryQuantityDecimals, inventoryQuantityMinPositive, inventoryUnitAbrev } from '@/lib/inventory-units'
 import {
   useCreateFormulaMutation,
   useFormulaMaterialsQuery,
@@ -276,7 +276,7 @@ export function FormulaFormDialog({
               <div className="space-y-2">
                 {materialRows.map((row) => {
                   const decimals = inventoryQuantityDecimals(row.materialUnit)
-                  const min = decimals === 0 ? 1 : 0.001
+                  const min = inventoryQuantityMinPositive(row.materialUnit)
 
                   return (
                     <div

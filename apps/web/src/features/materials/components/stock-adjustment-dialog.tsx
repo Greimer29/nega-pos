@@ -43,6 +43,7 @@ export function AjusteStockDialog({ open, onOpenChange, material, onSuccess }: A
         <StockAdjustmentForm
           open={open}
           currentStock={currentStock}
+          unitCode={material.unit}
           unitLabel={unit}
           isSubmitting={ajusteMutation.isPending}
           errorMessage={errorMessage}

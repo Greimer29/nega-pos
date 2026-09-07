@@ -43,6 +43,7 @@ const inventoryMovementTypeValues = [
   'MANUAL_CARGO',
   'MANUAL_DESCARGO',
   'REVERSAL_ADJUSTMENT',
+  'PRICE_CHANGE',
 ] as const
 
 function normalizeInventoryMovementTypes(value: string | string[] | undefined) {

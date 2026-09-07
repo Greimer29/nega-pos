@@ -268,6 +268,7 @@ export function ProductDetailPage() {
                       <th className="px-4 py-3 font-medium">Tipo</th>
                       <th className="px-4 py-3 font-medium">Cantidad</th>
                       <th className="px-4 py-3 font-medium">Nota</th>
+                      <th className="px-4 py-3 font-medium">Usuario</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -282,14 +283,21 @@ export function ProductDetailPage() {
                         <td
                           className={cn(
                             'px-4 py-3 font-medium tabular-nums',
-                            Number(mov.quantity) > 0 ? 'text-emerald-700' : 'text-red-600'
+                            Number(mov.quantity) > 0
+                              ? 'text-emerald-700'
+                              : Number(mov.quantity) < 0
+                                ? 'text-red-600'
+                                : 'text-muted-foreground'
                           )}
                         >
-                        {Number(mov.quantity) > 0 ? '+' : ''}
-                        {mov.quantity}{' '}
-                        {productSaleUnitAbrev(product.sale_unit ?? 'UND')}
+                          {mov.type === 'PRICE_CHANGE'
+                            ? '—'
+                            : `${Number(mov.quantity) > 0 ? '+' : ''}${mov.quantity} ${productSaleUnitAbrev(product.sale_unit ?? 'UND')}`}
                         </td>
                         <td className="text-muted-foreground px-4 py-3">{mov.note ?? '—'}</td>
+                        <td className="text-muted-foreground px-4 py-3">
+                          {mov.created_by_name?.trim() || '—'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

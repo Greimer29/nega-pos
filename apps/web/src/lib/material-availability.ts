@@ -17,9 +17,15 @@ export function formatMaterialShortagesMessage(missing: MaterialShortage[]): str
     return null
   }
 
+  const formatQty = (value: number) =>
+    Number(value.toFixed(2)).toLocaleString('es-VE', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    })
+
   const lines = missing.map(
     (item) =>
-      `• ${item.name}: faltan ${item.faltante.toFixed(3)} (disponible ${item.stock_actual.toFixed(3)}, se necesitan ${item.consumo_proyectado.toFixed(3)})`
+      `• ${item.name}: faltan ${formatQty(item.faltante)} (disponible ${formatQty(item.stock_actual)}, se necesitan ${formatQty(item.consumo_proyectado)})`
   )
 
   return lines.join('\n')

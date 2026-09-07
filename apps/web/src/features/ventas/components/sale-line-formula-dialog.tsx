@@ -20,7 +20,10 @@ import type {
 import {
   mapCatalogFormulaToLineMaterials,
 } from '@/features/ventas/utils/sale-line-formula'
-import { inventoryQuantityDecimals } from '@/lib/inventory-units'
+import {
+  inventoryQuantityDecimals,
+  inventoryQuantityStep,
+} from '@/lib/inventory-units'
 import { parseDecimalInput } from '@/lib/numeric-input'
 
 type EditableRow = SaleLineFormulaMaterial & {
@@ -203,7 +206,7 @@ export function SaleLineFormulaDialog({
                       </div>
                       <DecimalInput
                         min={0}
-                        step={decimals === 0 ? 1 : 0.001}
+                        step={inventoryQuantityStep(row.materialUnit)}
                         decimals={decimals}
                         className="h-8 w-20"
                         value={row.quantity_per_unit}

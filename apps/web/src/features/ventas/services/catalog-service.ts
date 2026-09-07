@@ -74,12 +74,37 @@ export async function deleteCatalogImage(id: number) {
 
 export async function ajustarStockProducto(
   id: number,
-  payload: { mode: 'CARGO' | 'DESCARGO' | 'AJUSTE'; quantity: number; note?: string }
+  payload: {
+    mode: 'CARGO' | 'DESCARGO' | 'AJUSTE'
+    quantity: number
+    note?: string
+    catalog_product_size_id?: number | null
+  }
 ) {
   const { data } = await api.post<{
     data: { movimiento: import('@/features/ventas/types').ProductInventoryMovement }
   }>(`/catalog-products/${id}/adjustment`, payload)
   return data.data.movimiento
+}
+
+export type BulkAjusteStockProductoInput = {
+  mode: 'CARGO' | 'DESCARGO' | 'AJUSTE'
+  note?: string
+  items: Array<{
+    catalog_product_id: number
+    catalog_product_size_id?: number | null
+    quantity: number
+  }>
+}
+
+export async function ajustarStockProductoMasivo(payload: BulkAjusteStockProductoInput) {
+  const { data } = await api.post<{
+    data: {
+      movimientos: import('@/features/ventas/types').ProductInventoryMovement[]
+      count: number
+    }
+  }>('/catalog-products/bulk-adjustment', payload)
+  return data.data
 }
 
 export async function replaceCatalogProductSizes(id: number, sizes: CatalogProductSizeInput[]) {

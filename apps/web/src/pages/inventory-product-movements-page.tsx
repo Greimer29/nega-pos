@@ -40,6 +40,7 @@ const MOVEMENT_TYPE_GROUPS: Array<{
     label: 'Ajustes',
     types: ['MANUAL_ADJUSTMENT', 'MANUAL_CARGO', 'MANUAL_DESCARGO'],
   },
+  { id: 'price', label: 'Precio', types: ['PRICE_CHANGE'] },
   { id: 'reversal', label: 'Reversión', types: ['REVERSAL_ADJUSTMENT'] },
 ]
 
@@ -296,13 +297,14 @@ export function InventoryProductMovementsPage() {
                     <th className="px-3 py-3 font-medium">Tipo</th>
                     <th className="px-3 py-3 font-medium text-right">Cantidad</th>
                     <th className="px-3 py-3 font-medium">Nota</th>
+                    <th className="px-3 py-3 font-medium">Usuario</th>
                     <th className="px-4 py-3 font-medium">Vínculo</th>
                   </tr>
                 </thead>
                 <tbody>
                   {movements.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-12 text-center text-neutral-500">
+                      <td colSpan={6} className="px-4 py-12 text-center text-neutral-500">
                         No hay movimientos en el período seleccionado.
                       </td>
                     </tr>
@@ -355,6 +357,9 @@ export function InventoryProductMovementsPage() {
                           </td>
                           <td className="px-3 py-2.5 text-neutral-600">
                             {movement.note?.trim() || '—'}
+                          </td>
+                          <td className="px-3 py-2.5 text-neutral-600">
+                            {movement.created_by_name?.trim() || '—'}
                           </td>
                           <td className="px-4 py-2.5">
                             {links.length === 0 ? (

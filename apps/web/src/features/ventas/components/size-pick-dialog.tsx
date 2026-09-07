@@ -7,11 +7,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { CatalogProduct, CatalogProductSize } from '@/features/ventas/types'
+import { formatInventoryQuantity } from '@/lib/inventory-units'
 import { sizesWithStock } from '@/features/ventas/utils/product-sizes'
-
-function formatQty(value: string | number) {
-  return Number(value).toLocaleString('es-VE')
-}
 
 type SizePickDialogProps = {
   open: boolean
@@ -22,6 +19,7 @@ type SizePickDialogProps = {
 
 export function SizePickDialog({ open, product, onOpenChange, onPick }: SizePickDialogProps) {
   const sizes = product ? sizesWithStock(product) : []
+  const unit = product?.sale_unit ?? 'UND'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -49,7 +47,7 @@ export function SizePickDialog({ open, product, onOpenChange, onPick }: SizePick
               >
                 <span className="text-base font-semibold">{size.size}</span>
                 <span className="text-muted-foreground text-[11px] tabular-nums">
-                  {formatQty(size.stock_quantity)}
+                  {formatInventoryQuantity(size.stock_quantity, unit)}
                 </span>
               </Button>
             ))}

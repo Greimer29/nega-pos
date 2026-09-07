@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { CircularImageField } from '@/components/circular-image-field'
 import { DecimalInput, MoneyInput } from '@/components/decimal-input'
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,11 @@ import type { CatalogProduct } from '@/features/ventas/types'
 import type { ProductSaleUnit } from '@/features/ventas/constants'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { formatCostWarningsMessage, isBelowCost } from '@/lib/cost-warnings'
+import {
+  formatInventoryQuantity,
+  inventoryQuantityDecimals,
+  normalizeInventoryQuantity,
+} from '@/lib/inventory-units'
 import {
   calcProfitMarginPercent,
   calcSalePriceFromMargin,
@@ -84,6 +89,7 @@ export function CatalogFormDialog({
   const [marginPercent, setMarginPercent] = useState('')
   const [formulaId, setFormulaId] = useState<number | ''>('')
   const [stockQuantity, setStockQuantity] = useState('0')
+  const [useFormula, setUseFormula] = useState(false)
   const [useSizes, setUseSizes] = useState(false)
   const [sizeRows, setSizeRows] = useState<SizeRow[]>([newSizeRow()])
   const [error, setError] = useState<string | null>(null)
@@ -110,13 +116,17 @@ export function CatalogFormDialog({
   const isPending = createMutation.isPending || updateMutation.isPending
   const imagePending = uploadImageMutation.isPending || deleteImageMutation.isPending
   const { formatFromUsd } = useFormatMoney()
+  const stockDecimals = inventoryQuantityDecimals(saleUnit)
   const sizesStockTotal = useMemo(
     () =>
       sizeRows.reduce((sum, row) => {
         if (!row.size.trim()) return sum
-        return sum + Math.max(0, Number(row.stock_quantity) || 0)
+        return (
+          sum +
+          normalizeInventoryQuantity(Math.max(0, Number(row.stock_quantity) || 0), saleUnit)
+        )
       }, 0),
-    [sizeRows]
+    [saleUnit, sizeRows]
   )
 
   useEffect(() => {
@@ -200,6 +210,7 @@ export function CatalogFormDialog({
       setCostPrice(product.cost_usd)
       setMarginPercent(formatMarginValue(Number(product.cost_usd), product.sale_price_usd))
       setFormulaId(product.formula_id ?? '')
+      setUseFormula(Boolean(product.formula_id))
       setStockQuantity(product.stock_quantity)
       const productSizes = product.sizes ?? []
       if (productSizes.length > 0) {
@@ -224,6 +235,7 @@ export function CatalogFormDialog({
       setCostPrice('0')
       setMarginPercent('')
       setFormulaId('')
+      setUseFormula(false)
       setStockQuantity('0')
       setUseSizes(false)
       setSizeRows([newSizeRow()])
@@ -311,11 +323,32 @@ export function CatalogFormDialog({
 
   function handleFormulaSaved(saved: Pick<Formula, 'id' | 'name'>) {
     setFormulaId(saved.id)
+    setUseFormula(true)
     setUseSizes(false)
   }
 
   function clearFormula() {
     setFormulaId('')
+  }
+
+  function handleUseFormulaChange(checked: boolean) {
+    setUseFormula(checked)
+    if (checked) {
+      setUseSizes(false)
+      return
+    }
+    clearFormula()
+  }
+
+  function handleSelectExistingFormula(idValue: string) {
+    if (!idValue) {
+      clearFormula()
+      return
+    }
+    const selected = formulas.find((formula) => String(formula.id) === idValue)
+    if (!selected) return
+    setFormulaId(selected.id)
+    setUseSizes(false)
   }
 
   function validateSizeRows(): string | null {
@@ -345,8 +378,13 @@ export function CatalogFormDialog({
     setError(null)
     setCostWarning(null)
 
-    if (useSizes && hasFormula) {
+    if (useFormula && useSizes) {
       setError('Un producto con fórmula no puede usar tallas.')
+      return
+    }
+
+    if (useFormula && !hasFormula) {
+      setError('Elegí o creá una fórmula, o desactivá «Usar fórmula».')
       return
     }
 
@@ -365,7 +403,10 @@ export function CatalogFormDialog({
           .filter((row) => row.size.trim())
           .map((row) => ({
             size: row.size.trim(),
-            stock_quantity: Math.max(0, Number(row.stock_quantity) || 0),
+            stock_quantity: normalizeInventoryQuantity(
+              Math.max(0, Number(row.stock_quantity) || 0),
+              saleUnit
+            ),
           }))
       : hadSizes && !hasFormula
         ? []
@@ -386,7 +427,7 @@ export function CatalogFormDialog({
               ? sizesStockTotal
               : purchaseFlow && !isEditing
                 ? 0
-                : Number(stockQuantity),
+                : normalizeInventoryQuantity(Number(stockQuantity) || 0, saleUnit),
             ...(sizesPayload !== undefined ? { sizes: sizesPayload } : {}),
           }),
     }
@@ -522,7 +563,7 @@ export function CatalogFormDialog({
                 <div className="space-y-2">
                   <Label>Stock total</Label>
                   <p className="text-sm font-semibold tabular-nums">
-                    {sizesStockTotal.toLocaleString('es-VE')}{' '}
+                    {formatInventoryQuantity(sizesStockTotal, saleUnit)}{' '}
                     {productSaleUnitLabel(saleUnit).toLowerCase()}
                   </p>
                   <p className="text-muted-foreground text-xs">
@@ -535,7 +576,7 @@ export function CatalogFormDialog({
                   <DecimalInput
                     id="catalog-stock"
                     min={0}
-                    decimals={2}
+                    decimals={stockDecimals}
                     value={stockQuantity}
                     onChange={(e) => setStockQuantity(e.target.value)}
                   />
@@ -544,87 +585,131 @@ export function CatalogFormDialog({
                   </p>
                 </div>
               )}
-
-              <div className="space-y-2">
-                <Label>Fórmula (opcional)</Label>
-                {hasFormula ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="border-input bg-muted/30 flex min-w-0 flex-1 items-center rounded-md border px-3 py-2 text-sm">
-                      <span className="truncate font-medium">
-                        {selectedFormula?.name ?? `Fórmula #${selectedFormulaId}`}
-                      </span>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="size-9 shrink-0"
-                      aria-label="Editar fórmula"
-                      onClick={openEditFormulaDialog}
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="size-9 shrink-0"
-                      aria-label="Quitar fórmula"
-                      onClick={clearFormula}
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-start"
-                    disabled={useSizes}
-                    onClick={openCreateFormulaDialog}
-                  >
-                    Usar fórmula
-                  </Button>
-                )}
-                {useSizes ? (
-                  <p className="text-muted-foreground text-xs">
-                    Desactivá las tallas para poder usar fórmula.
-                  </p>
-                ) : null}
-                {hasFormula ? (
-                  <p className="text-muted-foreground text-xs">
-                    Costo desde fórmula: {formatFromUsd(formulaCost)}
-                  </p>
-                ) : null}
-              </div>
             </div>
 
             <div className="space-y-3">
               <label
                 className={cn(
                   'flex items-center gap-2 text-sm',
-                  hasFormula && 'text-muted-foreground'
+                  useSizes && 'text-muted-foreground'
+                )}
+              >
+                <Checkbox
+                  checked={useFormula}
+                  disabled={useSizes}
+                  onChange={(e) => handleUseFormulaChange(e.target.checked)}
+                />
+                Usar fórmula
+              </label>
+              {useSizes ? (
+                <p className="text-muted-foreground text-xs">
+                  Desactivá las tallas para poder usar fórmula.
+                </p>
+              ) : null}
+              {useFormula && !useSizes ? (
+                <div className="space-y-3">
+                  {hasFormula ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="border-input bg-muted/30 flex min-w-0 flex-1 items-center rounded-md border px-3 py-2 text-sm">
+                        <span className="truncate font-medium">
+                          {selectedFormula?.name ?? `Fórmula #${selectedFormulaId}`}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="size-9 shrink-0"
+                        aria-label="Editar fórmula"
+                        onClick={openEditFormulaDialog}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          clearFormula()
+                        }}
+                      >
+                        Cambiar
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {formulas.length > 0 ? (
+                        <div className="space-y-2">
+                          <Label htmlFor="catalog-formula-pick">Elegir fórmula existente</Label>
+                          <select
+                            id="catalog-formula-pick"
+                            className="border-input bg-background flex h-9 w-full rounded-md border px-3 text-sm"
+                            value=""
+                            onChange={(e) => handleSelectExistingFormula(e.target.value)}
+                          >
+                            <option value="">Seleccionar…</option>
+                            {formulas.map((formula) => (
+                              <option key={formula.id} value={formula.id}>
+                                {formula.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-xs">
+                          Todavía no hay fórmulas. Creá una nueva.
+                        </p>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={openCreateFormulaDialog}
+                      >
+                        <Plus className="size-4" />
+                        Crear fórmula nueva
+                      </Button>
+                    </div>
+                  )}
+                  {hasFormula ? (
+                    <p className="text-muted-foreground text-xs">
+                      Costo desde fórmula: {formatFromUsd(formulaCost)}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-3">
+              <label
+                className={cn(
+                  'flex items-center gap-2 text-sm',
+                  useFormula && 'text-muted-foreground'
                 )}
               >
                 <Checkbox
                   checked={useSizes}
-                  disabled={hasFormula}
+                  disabled={useFormula}
                   onChange={(e) => {
                     const checked = e.target.checked
                     setUseSizes(checked)
-                    if (checked && sizeRows.length === 0) {
-                      setSizeRows([newSizeRow()])
+                    if (checked) {
+                      setUseFormula(false)
+                      clearFormula()
+                      if (sizeRows.length === 0) {
+                        setSizeRows([newSizeRow()])
+                      }
                     }
                   }}
                 />
                 Usar tallas
               </label>
-              {hasFormula ? (
+              {useFormula ? (
                 <p className="text-muted-foreground text-xs">
                   Los productos con fórmula no admiten tallas.
                 </p>
               ) : null}
-              {useSizes && !hasFormula ? (
+              {useSizes && !useFormula ? (
                 <div className="space-y-2">
                   {sizeRows.map((row) => (
                     <div key={row.key} className="flex items-center gap-2">
@@ -644,7 +729,7 @@ export function CatalogFormDialog({
                       <DecimalInput
                         className="h-9 min-w-0 flex-1"
                         min={0}
-                        decimals={2}
+                        decimals={stockDecimals}
                         placeholder="Stock"
                         value={row.stock_quantity}
                         onChange={(e) =>
@@ -769,8 +854,6 @@ export function CatalogFormDialog({
       open={formulaDialogOpen}
       onOpenChange={setFormulaDialogOpen}
       formula={editingFormula}
-      pickableFormulas={editingFormula ? [] : formulas}
-      onPickExisting={handleFormulaSaved}
       onSaved={handleFormulaSaved}
     />
     </>

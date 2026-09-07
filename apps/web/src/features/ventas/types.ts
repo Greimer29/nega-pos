@@ -47,12 +47,21 @@ export type CatalogProduct = {
 
 export type ProductInventoryMovement = {
   id: number
-  type: 'PURCHASE_IN' | 'SALE_OUT' | 'MANUAL_ADJUSTMENT' | 'MANUAL_CARGO' | 'MANUAL_DESCARGO' | 'REVERSAL_ADJUSTMENT'
+  type:
+    | 'PURCHASE_IN'
+    | 'SALE_OUT'
+    | 'MANUAL_ADJUSTMENT'
+    | 'MANUAL_CARGO'
+    | 'MANUAL_DESCARGO'
+    | 'REVERSAL_ADJUSTMENT'
+    | 'PRICE_CHANGE'
   quantity: string
   note: string | null
   purchase_item_id: number | null
   order_id: number | null
   sale_id: number | null
+  created_by_user_id?: number | null
+  created_by_name?: string | null
   created_at: string
 }
 

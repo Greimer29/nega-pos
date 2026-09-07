@@ -5,4 +5,5 @@ export const PRODUCT_MOVIMIENTO_LABELS = {
   MANUAL_CARGO: 'Cargo manual',
   MANUAL_DESCARGO: 'Descargo manual',
   REVERSAL_ADJUSTMENT: 'Reversión',
+  PRICE_CHANGE: 'Cambio de precio',
 } as const

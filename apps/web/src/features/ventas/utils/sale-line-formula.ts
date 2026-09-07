@@ -79,7 +79,7 @@ export function formulaMaterialsSignature(
       .sort((a, b) => a.material_id - b.material_id)
       .map((item) => ({
         material_id: item.material_id,
-        quantity_per_unit: Number(item.quantity_per_unit.toFixed(3)),
+        quantity_per_unit: Number(item.quantity_per_unit.toFixed(2)),
       }))
   )
 }

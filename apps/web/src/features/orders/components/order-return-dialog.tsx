@@ -16,6 +16,13 @@ import { useReturnOrderMutation } from '@/features/orders/hooks/use-orders'
 import { getOrder } from '@/features/orders/services/order-service'
 import type { OrderLine } from '@/features/orders/types'
 import { getApiErrorMessage } from '@/lib/api-error'
+import {
+  formatInventoryQuantity,
+  inventoryQuantityDecimals,
+  inventoryQuantityMinPositive,
+  inventoryQuantityStep,
+  normalizeInventoryQuantity,
+} from '@/lib/inventory-units'
 import { parseDecimalInput } from '@/lib/numeric-input'
 import { cn } from '@/lib/utils'
 
@@ -34,6 +41,11 @@ type OrderReturnDialogProps = {
 
 function remainingQty(line: OrderLine) {
   return Math.max(0, Number(line.quantity) - Number(line.returned_quantity ?? 0))
+}
+
+/** Pedidos de prenda usan enteros; si el catálogo expone unidad, se respeta. */
+function lineUnit(line: OrderLine) {
+  return line.catalog_product?.sale_unit ?? 'UND'
 }
 
 export function OrderReturnDialog({
@@ -106,8 +118,13 @@ export function OrderReturnDialog({
   }
 
   function updateQty(lineId: number, quantity: number) {
+    const line = lines.find((item) => item.id === lineId)
+    if (!line) return
+    const unit = lineUnit(line)
+    const remaining = remainingQty(line)
+    const next = Math.min(remaining, Math.max(0, normalizeInventoryQuantity(quantity, unit)))
     setSelection((prev) =>
-      prev.map((item) => (item.lineId === lineId ? { ...item, quantity } : item))
+      prev.map((item) => (item.lineId === lineId ? { ...item, quantity: next } : item))
     )
   }
 
@@ -164,6 +181,8 @@ export function OrderReturnDialog({
               const remaining = remainingQty(line)
               const item = selection.find((s) => s.lineId === line.id)
               const fullyReturned = remaining <= 0
+              const unit = lineUnit(line)
+              const decimals = inventoryQuantityDecimals(unit)
 
               return (
                 <div
@@ -192,11 +211,11 @@ export function OrderReturnDialog({
                         {line.catalog_product?.name ?? 'Producto'}
                       </p>
                       <p className="text-muted-foreground text-xs">
-                        Vendido: {Number(line.quantity).toLocaleString('es-VE')}
+                        Vendido: {formatInventoryQuantity(line.quantity, unit)}
                         {Number(line.returned_quantity ?? 0) > 0 ? (
                           <span className="text-destructive">
                             {' '}
-                            · Devuelto: {Number(line.returned_quantity).toLocaleString('es-VE')}
+                            · Devuelto: {formatInventoryQuantity(line.returned_quantity, unit)}
                           </span>
                         ) : null}
                       </p>
@@ -206,16 +225,20 @@ export function OrderReturnDialog({
                         <div className="mt-2 flex items-center gap-2">
                           <Label className="text-xs">Cantidad</Label>
                           <DecimalInput
-                            min={0.001}
+                            min={inventoryQuantityMinPositive(unit)}
+                            step={inventoryQuantityStep(unit)}
                             max={remaining}
+                            decimals={decimals}
                             className="h-8 w-20 px-2 text-xs"
                             value={item?.quantity ?? remaining}
                             disabled={!item?.selected || returnMutation.isPending}
                             onChange={(e) =>
-                              updateQty(line.id, parseDecimalInput(e.target.value, 3) ?? 0)
+                              updateQty(line.id, parseDecimalInput(e.target.value, decimals) ?? 0)
                             }
                           />
-                          <span className="text-muted-foreground text-xs">/ {remaining}</span>
+                          <span className="text-muted-foreground text-xs">
+                            / {formatInventoryQuantity(remaining, unit)}
+                          </span>
                         </div>
                       )}
                     </div>

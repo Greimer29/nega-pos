@@ -28,6 +28,7 @@ import type { Material } from '@/features/materials/types'
 import { useSuppliersQuery } from '@/features/suppliers/hooks/use-suppliers'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { formatCostWarningsMessage } from '@/lib/cost-warnings'
+import { inventoryQuantityDecimals, normalizeInventoryQuantity } from '@/lib/inventory-units'
 
 const materialSchema = z.object({
   code: z.string().trim().min(1, 'El código es obligatorio').max(30),
@@ -96,7 +97,7 @@ function toPayload(values: MaterialFormValues) {
     description: values.description?.trim() || undefined,
     category: values.category,
     unit: values.unit,
-    stock_minimo: values.stock_minimo ?? 1,
+    stock_minimo: normalizeInventoryQuantity(values.stock_minimo ?? 1, values.unit),
     location: values.location?.trim() || undefined,
     supplier_habitual_id:
       values.supplier_habitual_id === '' ? undefined : Number(values.supplier_habitual_id),
@@ -150,11 +151,15 @@ export function MaterialForm({
     handleSubmit,
     reset,
     setError,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<MaterialFormInput, unknown, MaterialFormValues>({
     resolver: zodResolver(materialSchema),
     defaultValues: emptyValues(),
   })
+
+  const selectedUnit = watch('unit')
+  const stockMinDecimals = inventoryQuantityDecimals(selectedUnit ?? 'UND')
 
   useEffect(() => {
     if (isEditing && material) {
@@ -362,7 +367,12 @@ export function MaterialForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="stock_minimo">Stock mínimo</Label>
-          <DecimalInput id="stock_minimo" min="0" decimals={2} {...register('stock_minimo')} />
+          <DecimalInput
+            id="stock_minimo"
+            min="0"
+            decimals={stockMinDecimals}
+            {...register('stock_minimo')}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="supplier_habitual_id">Proveedor habitual</Label>

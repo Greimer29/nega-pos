@@ -75,6 +75,7 @@ export type OrderLine = {
     name: string
     sale_price_usd: string
     category: string
+    sale_unit?: string | null
   }
 }
 

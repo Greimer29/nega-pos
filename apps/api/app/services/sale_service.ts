@@ -37,6 +37,7 @@ import {
   type SaleLineFormulaMaterialInput,
 } from '#services/sale_line_formula'
 import { formatCantidadMovimiento } from '#services/order_stock'
+import { formatInventoryQuantityForStorage, normalizeInventoryQuantity } from '#constants/inventory_units'
 import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
 import db from '@adonisjs/lucid/services/db'
@@ -501,6 +502,7 @@ export default class SaleService {
             .preload('catalogProduct', (cp) =>
               cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
             )
+            .preload('material')
             .preload('saleLineMaterials', (slm) => slm.preload('material'))
         )
         .forUpdate()
@@ -530,12 +532,14 @@ export default class SaleService {
 
         const alreadyReturned = Number(line.returnedQuantity ?? 0)
         const remaining = Number(line.quantity) - alreadyReturned
+        const unit = line.catalogProduct?.saleUnit ?? line.material?.unit ?? 'UND'
+        const returnQty = normalizeInventoryQuantity(request.quantity, unit)
 
-        if (request.quantity > remaining + 0.0005) {
+        if (returnQty > remaining + 0.0005) {
           throw new DevolucionCantidadInvalidaException()
         }
 
-        line.returnedQuantity = (alreadyReturned + request.quantity).toFixed(3)
+        line.returnedQuantity = formatInventoryQuantityForStorage(alreadyReturned + returnQty, unit)
         line.useTransaction(trx)
         await line.save()
 
@@ -543,18 +547,18 @@ export default class SaleService {
           await this.revertirStockProductoParcial(
             Number(sale.id),
             Number(line.catalogProductId),
-            request.quantity,
+            returnQty,
             trx,
             note
           )
           if (line.catalogProductSizeId) {
             await this.sizeService.restoreSizeStock(
               Number(line.catalogProductSizeId),
-              request.quantity,
+              returnQty,
               trx
             )
           }
-          await this.revertirMaterialesLineaParcial(sale, line, request.quantity, trx, note)
+          await this.revertirMaterialesLineaParcial(sale, line, returnQty, trx, note)
         }
 
         if (line.materialId) {
@@ -562,7 +566,7 @@ export default class SaleService {
             {
               materialId: Number(line.materialId),
               type: 'REVERSAL_ADJUSTMENT',
-              quantity: request.quantity.toFixed(3),
+              quantity: formatInventoryQuantityForStorage(returnQty, unit),
               note,
             },
             { client: trx }
@@ -618,7 +622,6 @@ export default class SaleService {
         throw new LineaVentaInvalidaException()
       }
 
-      const quantity = line.quantity
       const unitPrice = line.unit_price_usd
 
       if (hasCatalog) {
@@ -631,6 +634,9 @@ export default class SaleService {
         if (!product) {
           throw new ProductoCatalogoNoEncontradoException()
         }
+
+        const unit = product.saleUnit ?? 'UND'
+        const quantity = normalizeInventoryQuantity(line.quantity, unit)
 
         await assertFormulaMaterialsAllowed(product, line.formula_materials)
         const formulaMaterials = normalizeFormulaMaterialsInput(line.formula_materials)
@@ -652,7 +658,7 @@ export default class SaleService {
           catalogProductSizeId: resolvedSize.sizeId,
           size: resolvedSize.sizeLabel,
           description: product.name,
-          quantity: quantity.toFixed(3),
+          quantity: formatInventoryQuantityForStorage(quantity, unit),
           unitPriceUsd: unitPrice.toFixed(4),
           subtotalUsd: subtotal.toFixed(4),
           costUsd: product.costUsd,
@@ -671,6 +677,8 @@ export default class SaleService {
           throw new MaterialNoEncontradoException()
         }
 
+        const unit = material.unit ?? 'UND'
+        const quantity = normalizeInventoryQuantity(line.quantity, unit)
         const subtotal = quantity * unitPrice
         totalUsd += subtotal
 
@@ -680,7 +688,7 @@ export default class SaleService {
           catalogProductSizeId: null,
           size: null,
           description: material.name,
-          quantity: quantity.toFixed(3),
+          quantity: formatInventoryQuantityForStorage(quantity, unit),
           unitPriceUsd: unitPrice.toFixed(4),
           subtotalUsd: subtotal.toFixed(4),
           costUsd: material.lastPurchasePriceUsd,

@@ -15,6 +15,11 @@ import {
   inventoryAdjustmentSubmitLabel,
   type InventoryAdjustmentMode,
 } from '@/lib/inventory-adjustment'
+import {
+  formatInventoryQuantity,
+  inventoryQuantityDecimals,
+  normalizeInventoryQuantity,
+} from '@/lib/inventory-units'
 import { cn } from '@/lib/utils'
 
 const ajusteSchema = z
@@ -56,6 +61,8 @@ export type StockAdjustmentPayload = {
 type StockAdjustmentFormProps = {
   open?: boolean
   currentStock: number
+  /** Código de unidad (UND, MTS, KG, …) para decimales y normalización. */
+  unitCode: string
   unitLabel: string
   isSubmitting?: boolean
   errorMessage?: string | null
@@ -66,12 +73,14 @@ type StockAdjustmentFormProps = {
 export function StockAdjustmentForm({
   open = true,
   currentStock,
+  unitCode,
   unitLabel,
   isSubmitting = false,
   errorMessage,
   onSubmit,
   onCancel,
 }: StockAdjustmentFormProps) {
+  const quantityDecimals = inventoryQuantityDecimals(unitCode)
   const {
     register,
     handleSubmit,
@@ -102,7 +111,7 @@ export function StockAdjustmentForm({
   const submit = handleSubmit(async (values) => {
     await onSubmit({
       mode: values.mode,
-      quantity: values.quantity,
+      quantity: normalizeInventoryQuantity(values.quantity, unitCode),
       note: values.note?.trim() || undefined,
     })
   })
@@ -112,7 +121,7 @@ export function StockAdjustmentForm({
       <div className="bg-muted/40 rounded-md border px-3 py-2 text-sm">
         <span className="text-muted-foreground">Stock actual: </span>
         <span className="font-semibold tabular-nums">
-          {currentStock.toLocaleString('es-VE')} {unitLabel}
+          {formatInventoryQuantity(currentStock, unitCode)} {unitLabel}
         </span>
       </div>
 
@@ -144,7 +153,7 @@ export function StockAdjustmentForm({
         </Label>
         <DecimalInput
           id="adjustment-quantity"
-          decimals={3}
+          decimals={quantityDecimals}
           min={mode === 'AJUSTE' ? 0 : undefined}
           {...register('quantity')}
         />

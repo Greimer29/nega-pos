@@ -1,6 +1,10 @@
 import ProductoConFormulaNoPermiteTallasException from '#exceptions/producto_con_formula_no_permite_tallas_exception'
 import ProductoTallaDuplicadaException from '#exceptions/producto_talla_duplicada_exception'
 import ProductoTallaRequeridaException from '#exceptions/producto_talla_requerida_exception'
+import {
+  formatInventoryQuantityForStorage,
+  normalizeInventoryQuantity,
+} from '#constants/inventory_units'
 import CatalogProduct from '#models/catalog_product'
 import CatalogProductSize from '#models/catalog_product_size'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
@@ -29,7 +33,7 @@ export function productHasSizes(product: CatalogProduct): boolean {
 }
 
 export default class CatalogProductSizeService {
-  normalizeSizes(sizes: SizeInput[]): NormalizedSize[] {
+  normalizeSizes(sizes: SizeInput[], saleUnit = 'UND'): NormalizedSize[] {
     const normalized: NormalizedSize[] = []
     const seen = new Set<string>()
 
@@ -43,7 +47,10 @@ export default class CatalogProductSizeService {
       }
       seen.add(key)
 
-      const stockQuantity = Math.max(0, Number(row.stock_quantity) || 0)
+      const stockQuantity = normalizeInventoryQuantity(
+        Math.max(0, Number(row.stock_quantity) || 0),
+        saleUnit
+      )
       normalized.push({ size, stockQuantity })
     }
 
@@ -63,7 +70,8 @@ export default class CatalogProductSizeService {
       throw new ProductoConFormulaNoPermiteTallasException()
     }
 
-    const normalized = this.normalizeSizes(sizes)
+    const saleUnit = product.saleUnit ?? 'UND'
+    const normalized = this.normalizeSizes(sizes, saleUnit)
     const productId = Number(product.id)
 
     const run = async (client: TransactionClientContract) => {
@@ -75,7 +83,7 @@ export default class CatalogProductSizeService {
           {
             catalogProductId: productId,
             size: row.size,
-            stockQuantity: row.stockQuantity.toFixed(4),
+            stockQuantity: formatInventoryQuantityForStorage(row.stockQuantity, saleUnit),
           },
           { client }
         )
@@ -84,7 +92,7 @@ export default class CatalogProductSizeService {
 
       const sum = normalized.reduce((acc, row) => acc + row.stockQuantity, 0)
       product.useTransaction(client)
-      product.stockQuantity = sum.toFixed(3)
+      product.stockQuantity = formatInventoryQuantityForStorage(sum, saleUnit)
       await product.save()
 
       return created

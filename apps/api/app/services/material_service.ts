@@ -4,6 +4,10 @@ import {
   resolveInventoryAdjustment,
   type InventoryAdjustmentMode,
 } from '#constants/inventory_adjustment'
+import {
+  formatInventoryQuantityForStorage,
+  normalizeInventoryQuantity,
+} from '#constants/inventory_units'
 import PurchaseItem from '#models/purchase_item'
 import Material from '#models/material'
 import InventoryMovement from '#models/inventory_movement'
@@ -443,11 +447,9 @@ export default class MaterialService {
       }
 
       const stockActual = await this.calcularStock(Number(material.id), trx)
-      const { delta, movementType } = resolveInventoryAdjustment(
-        input.mode,
-        input.quantity,
-        stockActual
-      )
+      const unit = material.unit ?? 'UND'
+      const quantity = normalizeInventoryQuantity(input.quantity, unit)
+      const { delta, movementType } = resolveInventoryAdjustment(input.mode, quantity, stockActual)
 
       if (stockActual + delta < 0) {
         throw new StockInsuficienteException([
@@ -465,7 +467,7 @@ export default class MaterialService {
         {
           materialId: Number(material.id),
           type: movementType,
-          quantity: String(delta),
+          quantity: formatInventoryQuantityForStorage(delta, unit),
           note: input.note?.trim() || null,
         },
         { client: trx }
@@ -559,13 +561,14 @@ export default class MaterialService {
   }
 
   private prepareInput(input: MaterialInput) {
+    const unit = input.unit
     return {
       code: input.code.trim(),
       name: input.name.trim(),
       description: input.description?.trim() || null,
       category: input.category,
-      unit: input.unit,
-      minimumStock: String(input.minimum_stock ?? 1),
+      unit,
+      minimumStock: formatInventoryQuantityForStorage(input.minimum_stock ?? 1, unit),
       location: input.location?.trim() || null,
       defaultSupplierId: input.default_supplier_id ?? null,
       lastPurchasePriceUsd:

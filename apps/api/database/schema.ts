@@ -523,12 +523,14 @@ export class PaymentMethodSchema extends BaseModel {
 }
 
 export class ProductInventoryMovementSchema extends BaseModel {
-  static $columns = ['catalogProductId', 'createdAt', 'id', 'note', 'orderId', 'purchaseItemId', 'quantity', 'saleId', 'type'] as const
+  static $columns = ['catalogProductId', 'createdAt', 'createdByUserId', 'id', 'note', 'orderId', 'purchaseItemId', 'quantity', 'saleId', 'type'] as const
   $columns = ProductInventoryMovementSchema.$columns
   @column()
   declare catalogProductId: bigint | number
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
+  @column()
+  declare createdByUserId: bigint | number | null
   @column({ isPrimary: true })
   declare id: bigint | number
   @column()

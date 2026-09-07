@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Layers, Loader2, Plus, SlidersHorizontal } from 'lucide-react'
+import { Layers, Loader2, PackageMinus, Plus, SlidersHorizontal } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -126,6 +126,22 @@ export function ProductosPage() {
                 <span className="hidden sm:inline">Ver materiales</span>
               </Link>
             </Button>
+            <PermissionGate permission="catalog.edit">
+              <Button
+                variant="outline"
+                asChild
+                className="size-9 sm:h-9 sm:w-auto sm:px-4"
+              >
+                <Link
+                  to="/productos/movimientos"
+                  title="Cargo, descargo o ajuste masivo"
+                  aria-label="Movimiento de inventario"
+                >
+                  <PackageMinus className="size-4" />
+                  <span className="hidden sm:inline">Movimientos</span>
+                </Link>
+              </Button>
+            </PermissionGate>
             <PermissionGate permission="catalog.edit">
               <Button
                 onClick={openCreateDialog}

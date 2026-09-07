@@ -5,8 +5,8 @@ import { PublicImage } from '@/components/public-image'
 import { catalogImageUrl } from '@/features/ventas/constants'
 import { catalogImageTone, catalogProductCode } from '@/features/ventas/components/ventas-order-cart'
 import type { CatalogProduct } from '@/features/ventas/types'
-import { cn } from '@/lib/utils'
 import { isBelowCost } from '@/lib/cost-warnings'
+import { formatInventoryQuantity } from '@/lib/inventory-units'
 import { isProductStockLow } from '@/features/ventas/utils/product-stock'
 import { formatSizeStockSummary } from '@/features/ventas/utils/product-sizes'
 import {
@@ -14,6 +14,7 @@ import {
   formatSignedProfitMarginPercent,
   profitMarginIsNegative,
 } from '@/lib/profit-margin'
+import { cn } from '@/lib/utils'
 
 type CatalogProductCardProps = {
   product: CatalogProduct
@@ -38,14 +39,6 @@ const ICON_SIZE = 'size-[clamp(0.65rem,4cqi,0.9rem)]'
 const LABEL_SIZE = 'text-[length:clamp(0.5625rem,2.6cqi,0.6875rem)]'
 const VALUE_SIZE = 'text-[length:clamp(0.7rem,3.6cqi,0.875rem)]'
 const PRICE_SIZE = 'text-[length:clamp(0.85rem,4.6cqi,1.05rem)]'
-
-function formatCatalogQty(value: string | number) {
-  const n = Number(value)
-  if (!Number.isFinite(n)) {
-    return '0'
-  }
-  return n.toLocaleString('es-VE', { maximumFractionDigits: 3 })
-}
 
 export function CatalogProductCard({
   product,
@@ -289,7 +282,8 @@ function CatalogStockBadge({
   const hasSizes = sizes.length > 0
   const outOfStock = stock <= 0
   const alert = outOfStock || stockIsLow
-  const label = outOfStock ? 'Sin stock' : `${formatCatalogQty(stock)} disponibles`
+  const unit = product.sale_unit ?? 'UND'
+  const label = outOfStock ? 'Sin stock' : `${formatInventoryQuantity(stock, unit)} disponibles`
 
   useEffect(() => {
     if (!open) {
@@ -383,7 +377,9 @@ function CatalogStockBadge({
                 className="text-muted-foreground flex items-center justify-between gap-3 text-[11px]"
               >
                 <span className="font-medium text-slate-800">{size.size}</span>
-                <span className="tabular-nums">{formatCatalogQty(size.stock_quantity)}</span>
+                <span className="tabular-nums">
+                  {formatInventoryQuantity(size.stock_quantity, unit)}
+                </span>
               </li>
             ))}
           </ul>

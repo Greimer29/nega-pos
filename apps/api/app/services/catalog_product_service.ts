@@ -9,7 +9,9 @@ import CategoryService from '#services/category_service'
 import FormulaService from '#services/formula_service'
 import CatalogProductSizeService from '#services/catalog_product_size_service'
 import ProductCodeService from '#services/product_code_service'
+import ProductInventoryService from '#services/product_inventory_service'
 import type { InventoryUnit } from '#constants/inventory_units'
+import { formatInventoryQuantityForStorage, normalizeInventoryQuantity } from '#constants/inventory_units'
 import type { CostWarning } from '#types/cost_warning'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
@@ -54,6 +56,7 @@ export type CatalogProductImageDownload = {
 export type ApplyProfitMarginInput = {
   catalog_product_ids: number[]
   profit_margin_percent: number
+  userId?: number | null
 }
 
 export type ApplyProfitMarginSkipped = {
@@ -70,6 +73,14 @@ export type ApplyProfitMarginResult = {
 export type CatalogProductUpdateResult = {
   product: CatalogProduct
   costWarnings: CostWarning[]
+}
+
+export type CatalogProductUpdateOptions = {
+  userId?: number | null
+}
+
+function formatUsdNote(value: string | number) {
+  return Number(value).toFixed(2)
 }
 
 const IMAGE_MIME: Record<string, string> = {
@@ -96,6 +107,7 @@ export default class CatalogProductService {
   private categoryService = new CategoryService()
   private productCodeService = new ProductCodeService()
   private sizeService = new CatalogProductSizeService()
+  private inventoryService = new ProductInventoryService()
 
   async listar(
     filters: ListCatalogProductsFilters = {}
@@ -187,18 +199,22 @@ export default class CatalogProductService {
     }
 
     return db.transaction(async (trx) => {
+      const saleUnit = input.sale_unit ?? 'UND'
+      const stockQty = input.formula_id
+        ? 0
+        : normalizeInventoryQuantity(input.stock_quantity ?? 0, saleUnit)
       const product = await CatalogProduct.create(
         {
           name: input.name.trim(),
           description: input.description?.trim() || null,
           category: input.category.trim(),
-          saleUnit: input.sale_unit ?? 'UND',
+          saleUnit,
           formulaId: input.formula_id ?? null,
           salePriceUsd: input.sale_price_usd.toFixed(4),
           previousSalePriceUsd: null,
           costUsd: costUsd.toFixed(4),
-          stockQuantity: (input.formula_id ? 0 : (input.stock_quantity ?? 0)).toFixed(3),
-          minimumStock: (input.minimum_stock ?? 0).toFixed(3),
+          stockQuantity: formatInventoryQuantityForStorage(stockQty, saleUnit),
+          minimumStock: formatInventoryQuantityForStorage(input.minimum_stock ?? 0, saleUnit),
           active: input.active ?? true,
         },
         { client: trx }
@@ -217,7 +233,8 @@ export default class CatalogProductService {
 
   async actualizar(
     id: number,
-    input: CatalogProductUpdateInput
+    input: CatalogProductUpdateInput,
+    options: CatalogProductUpdateOptions = {}
   ): Promise<CatalogProductUpdateResult> {
     return db.transaction(async (trx) => {
       const product = await CatalogProduct.query({ client: trx })
@@ -231,6 +248,13 @@ export default class CatalogProductService {
 
       const costWarnings: CostWarning[] = []
       const previousFormulaId = product.formulaId
+      const previousSalePrice = product.salePriceUsd
+      const previousCostUsd = product.costUsd
+      const previousStock = Number(product.stockQuantity)
+      const trackedSalePrice = input.sale_price_usd !== undefined
+      const trackedCost = input.cost_usd !== undefined
+      const trackedStock =
+        input.stock_quantity !== undefined || input.sizes !== undefined
 
       if (input.formula_id !== undefined) {
         if (input.formula_id === null) {
@@ -273,8 +297,10 @@ export default class CatalogProductService {
         product.saleUnit = input.sale_unit
       }
 
+      const saleUnit = product.saleUnit ?? 'UND'
+
       if (input.minimum_stock !== undefined) {
-        product.minimumStock = input.minimum_stock.toFixed(3)
+        product.minimumStock = formatInventoryQuantityForStorage(input.minimum_stock, saleUnit)
       }
 
       if (input.active !== undefined) {
@@ -300,7 +326,7 @@ export default class CatalogProductService {
       } else if (input.stock_quantity !== undefined && !product.formulaId) {
         const existingSizes = await this.sizeService.loadSizes(Number(product.id), trx)
         if (existingSizes.length === 0) {
-          product.stockQuantity = input.stock_quantity.toFixed(3)
+          product.stockQuantity = formatInventoryQuantityForStorage(input.stock_quantity, saleUnit)
         }
       }
 
@@ -313,13 +339,26 @@ export default class CatalogProductService {
       product.useTransaction(trx)
       await product.save()
       await product.load('sizes', (q) => q.orderBy('size', 'asc'))
+
+      await this.registrarHistorialEdicion(product, {
+        previousSalePrice,
+        previousCostUsd,
+        previousStock,
+        trackedSalePrice,
+        trackedCost,
+        trackedStock,
+        userId: options.userId ?? null,
+        trx,
+      })
+
       return { product, costWarnings }
     })
   }
 
   async replaceSizes(
     id: number,
-    sizes: Array<{ size: string; stock_quantity: number }>
+    sizes: Array<{ size: string; stock_quantity: number }>,
+    options: CatalogProductUpdateOptions = {}
   ): Promise<CatalogProduct> {
     return db.transaction(async (trx) => {
       const product = await CatalogProduct.query({ client: trx })
@@ -331,8 +370,21 @@ export default class CatalogProductService {
         throw new ProductoCatalogoNoEncontradoException()
       }
 
+      const previousStock = Number(product.stockQuantity)
       await this.sizeService.replaceSizes(product, sizes, trx)
       await product.load('sizes', (q) => q.orderBy('size', 'asc'))
+
+      await this.registrarHistorialEdicion(product, {
+        previousSalePrice: product.salePriceUsd,
+        previousCostUsd: product.costUsd,
+        previousStock,
+        trackedSalePrice: false,
+        trackedCost: false,
+        trackedStock: true,
+        userId: options.userId ?? null,
+        trx,
+      })
+
       return product
     })
   }
@@ -422,6 +474,7 @@ export default class CatalogProductService {
           continue
         }
 
+        const previousSalePrice = product.salePriceUsd
         const newSalePrice = (Number(costUsd) * multiplier).toFixed(4)
         const currentSalePrice = product.salePriceUsd
 
@@ -434,6 +487,21 @@ export default class CatalogProductService {
         product.salePriceUsd = newSalePrice
         product.useTransaction(trx)
         await product.save()
+
+        if (previousSalePrice !== newSalePrice) {
+          await this.inventoryService.registrarMovimiento(
+            {
+              catalogProductId: Number(product.id),
+              type: 'PRICE_CHANGE',
+              quantity: 0,
+              note: `Edición de precio: venta $${formatUsdNote(previousSalePrice)} → $${formatUsdNote(newSalePrice)} (margen)`,
+              createdByUserId: input.userId ?? null,
+              skipStockUpdate: true,
+            },
+            trx
+          )
+        }
+
         updatedCount++
       }
     })
@@ -554,6 +622,75 @@ export default class CatalogProductService {
       }
     }
     return null
+  }
+
+  private async registrarHistorialEdicion(
+    product: CatalogProduct,
+    params: {
+      previousSalePrice: string
+      previousCostUsd: string
+      previousStock: number
+      trackedSalePrice: boolean
+      trackedCost: boolean
+      trackedStock: boolean
+      userId: number | null
+      trx: import('@adonisjs/lucid/types/database').TransactionClientContract
+    }
+  ) {
+    const saleUnit = product.saleUnit ?? 'UND'
+    const userId = params.userId
+
+    if (params.trackedStock && !product.formulaId) {
+      const stockDelta = normalizeInventoryQuantity(
+        Number(product.stockQuantity) - params.previousStock,
+        saleUnit
+      )
+      if (stockDelta !== 0) {
+        await this.inventoryService.registrarMovimiento(
+          {
+            catalogProductId: Number(product.id),
+            type: 'MANUAL_ADJUSTMENT',
+            quantity: stockDelta,
+            note: 'Edición de producto (stock)',
+            createdByUserId: userId,
+            skipStockUpdate: true,
+          },
+          params.trx
+        )
+      }
+    }
+
+    const saleChanged =
+      params.trackedSalePrice && product.salePriceUsd !== params.previousSalePrice
+    const costChanged = params.trackedCost && product.costUsd !== params.previousCostUsd
+
+    if (!saleChanged && !costChanged) {
+      return
+    }
+
+    const parts: string[] = []
+    if (saleChanged) {
+      parts.push(
+        `venta $${formatUsdNote(params.previousSalePrice)} → $${formatUsdNote(product.salePriceUsd)}`
+      )
+    }
+    if (costChanged) {
+      parts.push(
+        `costo $${formatUsdNote(params.previousCostUsd)} → $${formatUsdNote(product.costUsd)}`
+      )
+    }
+
+    await this.inventoryService.registrarMovimiento(
+      {
+        catalogProductId: Number(product.id),
+        type: 'PRICE_CHANGE',
+        quantity: 0,
+        note: `Edición de precio: ${parts.join('; ')}`,
+        createdByUserId: userId,
+        skipStockUpdate: true,
+      },
+      params.trx
+    )
   }
 
   private async assertFormulaExiste(formulaId: number) {

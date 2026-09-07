@@ -46,6 +46,7 @@ export type InventoryMovementTypeFilter =
   | 'MANUAL_CARGO'
   | 'MANUAL_DESCARGO'
   | 'REVERSAL_ADJUSTMENT'
+  | 'PRICE_CHANGE'
 
 export type InventoryMovementsFilters = {
   from?: string
@@ -156,6 +157,7 @@ export default class InventoryReportService {
       .where('created_at', '<=', to.toSQL()!)
       .preload('sale')
       .preload('order')
+      .preload('createdBy')
       .preload('purchaseItem', (builder) => builder.preload('purchase'))
       .orderBy('created_at', 'desc')
       .orderBy('id', 'desc')
@@ -195,6 +197,8 @@ export default class InventoryReportService {
         quantity: row.quantity,
         note: row.note,
         created_at: row.createdAt.toISO(),
+        created_by_user_id: row.createdByUserId ? Number(row.createdByUserId) : null,
+        created_by_name: row.createdBy?.name ?? null,
         sale_id: row.saleId ? Number(row.saleId) : null,
         sale_code: row.sale?.code ?? null,
         order_id: row.orderId ? Number(row.orderId) : null,

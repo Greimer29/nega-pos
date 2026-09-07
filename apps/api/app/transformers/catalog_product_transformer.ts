@@ -21,6 +21,8 @@ export function serializeProductMovimiento(movimiento: ProductInventoryMovement)
     purchase_item_id: movimiento.purchaseItemId ? Number(movimiento.purchaseItemId) : null,
     order_id: movimiento.orderId ? Number(movimiento.orderId) : null,
     sale_id: movimiento.saleId ? Number(movimiento.saleId) : null,
+    created_by_user_id: movimiento.createdByUserId ? Number(movimiento.createdByUserId) : null,
+    created_by_name: movimiento.createdBy?.name ?? null,
     created_at: movimiento.createdAt.toISO(),
   }
 }

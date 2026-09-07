@@ -13,6 +13,7 @@ import {
   updateCatalogProductValidator,
   applyCatalogProfitMarginValidator,
   ajusteCatalogProductValidator,
+  bulkAjusteCatalogProductValidator,
   replaceCatalogProductSizesValidator,
 } from '#validators/catalog_product'
 import { serializeCostWarning } from '#types/cost_warning'
@@ -75,12 +76,28 @@ export default class CatalogProductsController {
     })
   }
 
-  async ajuste({ params, request, serialize }: HttpContext) {
+  async ajuste({ params, request, auth, serialize }: HttpContext) {
     const payload = await request.validateUsing(ajusteCatalogProductValidator)
-    const movimiento = await this.inventoryService.ajustar(Number(params.id), payload)
+    const movimiento = await this.inventoryService.ajustar(Number(params.id), {
+      ...payload,
+      created_by_user_id: Number(auth.getUserOrFail().id),
+    })
 
     return serialize({
       movimiento: serializeProductMovimientos([movimiento])[0],
+    })
+  }
+
+  async ajusteMasivo({ request, auth, serialize }: HttpContext) {
+    const payload = await request.validateUsing(bulkAjusteCatalogProductValidator)
+    const movimientos = await this.inventoryService.ajustarEnLote({
+      ...payload,
+      created_by_user_id: Number(auth.getUserOrFail().id),
+    })
+
+    return serialize({
+      movimientos: serializeProductMovimientos(movimientos),
+      count: movimientos.length,
     })
   }
 
@@ -93,9 +110,11 @@ export default class CatalogProductsController {
     })
   }
 
-  async update({ params, request, serialize }: HttpContext) {
+  async update({ params, request, auth, serialize }: HttpContext) {
     const payload = await request.validateUsing(updateCatalogProductValidator)
-    const { product, costWarnings } = await this.service.actualizar(Number(params.id), payload)
+    const { product, costWarnings } = await this.service.actualizar(Number(params.id), payload, {
+      userId: Number(auth.getUserOrFail().id),
+    })
 
     return serialize({
       catalog_product: await this.serializeWithStock(product),
@@ -103,20 +122,23 @@ export default class CatalogProductsController {
     })
   }
 
-  async replaceSizes({ params, request, serialize }: HttpContext) {
+  async replaceSizes({ params, request, auth, serialize }: HttpContext) {
     const payload = await request.validateUsing(replaceCatalogProductSizesValidator)
-    const product = await this.service.replaceSizes(Number(params.id), payload.sizes)
+    const product = await this.service.replaceSizes(Number(params.id), payload.sizes, {
+      userId: Number(auth.getUserOrFail().id),
+    })
 
     return serialize({
       catalog_product: await this.serializeWithStock(product),
     })
   }
 
-  async applyProfitMargin({ request, serialize }: HttpContext) {
+  async applyProfitMargin({ request, auth, serialize }: HttpContext) {
     const payload = await request.validateUsing(applyCatalogProfitMarginValidator)
     const result = await this.service.aplicarMargenGanancia({
       catalog_product_ids: payload.catalog_product_ids,
       profit_margin_percent: payload.profit_margin_percent,
+      userId: Number(auth.getUserOrFail().id),
     })
 
     return serialize({

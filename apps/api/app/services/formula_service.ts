@@ -1,3 +1,4 @@
+import { formatInventoryQuantityForStorage, normalizeInventoryQuantity } from '#constants/inventory_units'
 import FormulaEnUsoException from '#exceptions/formula_en_uso_exception'
 import FormulaNoEncontradaException from '#exceptions/formula_no_encontrada_exception'
 import MaterialNoEncontradoException from '#exceptions/material_no_encontrado_exception'
@@ -135,11 +136,14 @@ export default class FormulaService {
       await FormulaMaterial.query({ client: trx }).where('formulaId', id).delete()
 
       for (const item of items) {
+        const material = await Material.query({ client: trx }).where('id', item.material_id).first()
+        const unit = material?.unit ?? 'UND'
+        const quantity = normalizeInventoryQuantity(item.quantity, unit)
         await FormulaMaterial.create(
           {
             formulaId: id,
             materialId: item.material_id,
-            quantity: item.quantity.toFixed(3),
+            quantity: formatInventoryQuantityForStorage(quantity, unit),
           },
           { client: trx }
         )

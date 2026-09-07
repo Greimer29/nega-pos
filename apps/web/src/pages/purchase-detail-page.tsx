@@ -72,6 +72,10 @@ import { notifyApiError } from '@/features/notifications/query-error-state'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { parseDecimalInput } from '@/lib/numeric-input'
+import {
+  inventoryQuantityDecimals,
+  normalizeInventoryQuantity,
+} from '@/lib/inventory-units'
 import { cn } from '@/lib/utils'
 
 function materialToSummary(material: Material): PurchaseItemMaterial {
@@ -133,6 +137,13 @@ function localItemUnit(item: LocalPurchaseItem) {
     return productSaleUnitAbrev(item.catalogProduct?.saleUnit ?? 'UND')
   }
   return UNIT_ABREV[item.material?.unit ?? 'UND']
+}
+
+function localItemUnitCode(item: LocalPurchaseItem) {
+  if (item.itemType === 'product') {
+    return item.catalogProduct?.saleUnit ?? 'UND'
+  }
+  return item.material?.unit ?? 'UND'
 }
 
 function addDaysIso(baseIso: string, days: number) {
@@ -1115,16 +1126,26 @@ export function PurchaseDetallePage() {
                             <td className="px-3 py-2">{localItemCode(item)}</td>
                             <td className="px-3 py-2">{localItemName(item)}</td>
                             <td className="px-3 py-2">
-                              <DecimalInput
-                                min="0"
-                                className="h-8 w-24"
-                                value={item.quantity}
-                                onChange={(e) =>
-                                  updateLocalItem(item.localId, {
-                                    quantity: parseDecimalInput(e.target.value, 2) ?? 0,
-                                  })
-                                }
-                              />
+                              {(() => {
+                                const unit = localItemUnitCode(item)
+                                const decimals = inventoryQuantityDecimals(unit)
+                                return (
+                                  <DecimalInput
+                                    min="0"
+                                    decimals={decimals}
+                                    className="h-8 w-24"
+                                    value={item.quantity}
+                                    onChange={(e) =>
+                                      updateLocalItem(item.localId, {
+                                        quantity: normalizeInventoryQuantity(
+                                          parseDecimalInput(e.target.value, decimals) ?? 0,
+                                          unit
+                                        ),
+                                      })
+                                    }
+                                  />
+                                )
+                              })()}
                             </td>
                             <td className="px-3 py-2">{localItemUnit(item)}</td>
                             <td className="px-3 py-2">

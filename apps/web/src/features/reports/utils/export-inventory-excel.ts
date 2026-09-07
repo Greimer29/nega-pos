@@ -151,6 +151,7 @@ const MOVEMENT_LABELS: Record<string, string> = {
   MANUAL_CARGO: 'Ajuste (+)',
   MANUAL_DESCARGO: 'Ajuste (-)',
   REVERSAL_ADJUSTMENT: 'Reversión',
+  PRICE_CHANGE: 'Cambio de precio',
 }
 
 export function exportInventoryMovementsExcel(options: {
@@ -158,7 +159,7 @@ export function exportInventoryMovementsExcel(options: {
   movements: InventoryProductMovement[]
   periodLabel: string
 }) {
-  const headerCells = ['Fecha', 'Tipo', 'Cantidad', 'Nota', 'Venta', 'Pedido', 'Compra']
+  const headerCells = ['Fecha', 'Tipo', 'Cantidad', 'Nota', 'Usuario', 'Venta', 'Pedido', 'Compra']
     .map((label) => cell(label))
     .join('')
 
@@ -179,6 +180,7 @@ export function exportInventoryMovementsExcel(options: {
         cell(MOVEMENT_LABELS[movement.type] ?? movement.type),
         cell(Number(movement.quantity), 'Number'),
         cell(movement.note ?? ''),
+        cell(movement.created_by_name ?? ''),
         cell(movement.sale_code ?? (movement.sale_id ? `#${movement.sale_id}` : '')),
         cell(movement.order_code ?? (movement.order_id ? `#${movement.order_id}` : '')),
         cell(movement.purchase_id ? `#${movement.purchase_id}` : ''),

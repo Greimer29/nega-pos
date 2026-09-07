@@ -123,6 +123,7 @@ export type InventoryMovementType =
   | 'MANUAL_CARGO'
   | 'MANUAL_DESCARGO'
   | 'REVERSAL_ADJUSTMENT'
+  | 'PRICE_CHANGE'
 
 export type InventoryProductMovement = {
   id: number
@@ -130,6 +131,8 @@ export type InventoryProductMovement = {
   quantity: string
   note: string | null
   created_at: string | null
+  created_by_user_id?: number | null
+  created_by_name?: string | null
   sale_id: number | null
   sale_code: string | null
   order_id: number | null

@@ -47,6 +47,7 @@ export function ProductStockAdjustmentDialog({
         <StockAdjustmentForm
           open={open}
           currentStock={currentStock}
+          unitCode={product.sale_unit ?? 'UND'}
           unitLabel={unit}
           isSubmitting={ajusteMutation.isPending}
           errorMessage={errorMessage}

@@ -207,6 +207,10 @@ router
           CatalogProductsController,
           'applyProfitMargin',
         ])
+        router.post('catalog-products/bulk-adjustment', [
+          CatalogProductsController,
+          'ajusteMasivo',
+        ])
         router.get('catalog-products/:id', [CatalogProductsController, 'show'])
         router.post('catalog-products/:id/adjustment', [CatalogProductsController, 'ajuste'])
         router.post('catalog-products', [CatalogProductsController, 'store'])

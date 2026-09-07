@@ -13,6 +13,7 @@ import { PlatformPage } from '@/pages/platform-page'
 import { MaterialsPage } from '@/pages/materials-page'
 import { MaterialDetallePage } from '@/pages/material-detail-page'
 import { ProductDetailPage } from '@/pages/product-detail-page'
+import { ProductInventoryBulkAdjustmentPage } from '@/pages/product-inventory-bulk-adjustment-page'
 import { ProductosPage } from '@/pages/productos-page'
 import { PurchasesPage } from '@/pages/purchases-page'
 import { PurchaseDetallePage } from '@/pages/purchase-detail-page'
@@ -138,8 +139,8 @@ export const router = createBrowserRouter([
         element: <ProductosPage />,
       },
       {
-        path: 'productos/:id',
-        element: <ProductDetailPage />,
+        path: 'productos/movimientos',
+        element: <ProductInventoryBulkAdjustmentPage />,
       },
       {
         path: 'productos/materiales',
@@ -148,6 +149,10 @@ export const router = createBrowserRouter([
       {
         path: 'productos/materiales/:id',
         element: <MaterialDetallePage />,
+      },
+      {
+        path: 'productos/:id',
+        element: <ProductDetailPage />,
       },
       {
         path: 'materials',

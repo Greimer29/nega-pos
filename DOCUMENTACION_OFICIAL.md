@@ -372,11 +372,11 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 |-------|--------------|
 | `materials` | `code`, `name`, `category` (FABRIC/THREAD/…), `unit`, `minimum_stock`, `default_supplier_id`, precios, `active` |
 | `inventory_movements` | `material_id`, `type`, `quantity`, refs a compra/pedido/venta |
-| `product_inventory_movements` | `catalog_product_id`, `type`, `quantity`, refs |
+| `product_inventory_movements` | `catalog_product_id`, `type`, `quantity`, refs, `created_by_user_id` |
 
 **Tipos de movimiento — materiales:** `PURCHASE_IN`, `ORDER_OUT`, `MANUAL_ADJUSTMENT`, `MANUAL_CARGO`, `MANUAL_DESCARGO`, `REVERSAL_ADJUSTMENT`, `SALE_OUT`.
 
-**Tipos de movimiento — productos:** `PURCHASE_IN`, `SALE_OUT`, `MANUAL_ADJUSTMENT`, `MANUAL_CARGO`, `MANUAL_DESCARGO`, `REVERSAL_ADJUSTMENT`.
+**Tipos de movimiento — productos:** `PURCHASE_IN`, `SALE_OUT`, `MANUAL_ADJUSTMENT`, `MANUAL_CARGO`, `MANUAL_DESCARGO`, `REVERSAL_ADJUSTMENT`, `PRICE_CHANGE`.
 
 #### Compras
 
@@ -449,7 +449,7 @@ catalog_products ──< product_inventory_movements
 - Producto **sin** fórmula: stock en `catalog_products.stock_quantity` vía `product_inventory_movements`.
 - Producto **con tallas** (`catalog_product_sizes`): stock por talla; `stock_quantity` del producto = suma. Ventas/pedidos exigen `catalog_product_size_id` o `size`; al confirmar se descuenta la talla y el total global (movimiento `SALE_OUT` con nota `… talla {size}`). Compras v1 no desglosan por talla.
 - API: create/update aceptan `sizes[]`; `PUT /catalog-products/:id/sizes` reemplaza el set (`[]` limpia). Listado `?size=` filtra productos con esa talla y stock > 0. Serialización siempre incluye `has_sizes` + `sizes[]`.
-- Ajustes manuales: `POST catalog-products/:id/adjustment` y `POST materials/:id/adjustment`.
+- Ajustes manuales: `POST catalog-products/:id/adjustment`, `POST catalog-products/bulk-adjustment` (varios productos en una transacción) y `POST materials/:id/adjustment`. Los productos con tallas requieren `catalog_product_size_id`. Los productos con fórmula no admiten ajuste manual de stock. Las ediciones de producto que cambian **stock** o **precio/costo** generan movimientos en `product_inventory_movements` (`MANUAL_ADJUSTMENT` / `PRICE_CHANGE`) con `created_by_user_id`; cambios de nombre/descripción no se registran.
 
 ### Pedidos (`order_service.ts` + `order_state_machine.ts`)
 
@@ -620,6 +620,7 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 | PUT | `/api/v1/catalog-products/:id/sizes` | `catalog.edit` | `CatalogProductsController.replaceSizes` |
 | DELETE | `/api/v1/catalog-products/:id` | `catalog.edit` | `CatalogProductsController.destroy` |
 | POST | `/api/v1/catalog-products/apply-profit-margin` | `catalog.pricing` | `CatalogProductsController.applyProfitMargin` |
+| POST | `/api/v1/catalog-products/bulk-adjustment` | `catalog.edit` | `CatalogProductsController.ajusteMasivo` |
 | POST | `/api/v1/catalog-products/:id/adjustment` | `catalog.edit` | `CatalogProductsController.ajuste` |
 | POST | `/api/v1/catalog-products/:id/image` | `catalog.edit` | `CatalogProductsController.uploadImage` |
 | GET | `/api/v1/catalog-products/:id/image` | `catalog.view` | `CatalogProductsController.downloadImage` |
@@ -824,7 +825,8 @@ Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuent
 | `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), botón de registrar gasto de empresa (sin salir del POS; permiso `expenses.edit`), cliente walk-in por defecto «Generico», precio por línea (atajos −5/−10/−20 %), fórmula por línea si el producto tiene, descuento de factura aparte; en móvil carrito en drawer y filtros de catálogo en botón desplegable |
 | `/ventas/:id` | Detalle factura |
 | `/orders/:id` | Detalle pedido |
-| `/productos` | Catálogo. Filtros de categoría en botón desplegable (mismo patrón que ventas) |
+| `/productos` | Catálogo. Filtros de categoría en botón desplegable (mismo patrón que ventas). Botón «Movimientos» → cargo/descargo/ajuste masivo |
+| `/productos/movimientos` | Cargo, descargo o ajuste de stock sobre varios productos (y tallas) en un solo registro |
 | `/productos/:id` | Detalle producto |
 | `/productos/materiales` | Materiales |
 | `/productos/materiales/:id` | Detalle material |
