@@ -178,6 +178,24 @@ export default class PlatformController {
     }
   }
 
+  async retryOtp({ params, serialize, response }: HttpContext) {
+    try {
+      const result = await this.#provision.retryProvisionOtp(Number(params.id))
+      return serialize({
+        message: result.emailDelivered
+          ? 'Código enviado para reintentar el alta'
+          : 'Código regenerado para reintentar el alta. Usá el código mostrado si el email falla.',
+        email: result.email,
+        slug: result.slug,
+        debugCode: result.debugCode,
+        emailDelivered: result.emailDelivered,
+        emailError: result.emailError,
+      })
+    } catch (error) {
+      return mapServiceError(error, response)
+    }
+  }
+
   async updateCompanyStatus({ params, request, serialize, response }: HttpContext) {
     const payload = await request.validateUsing(updateCompanyStatusValidator)
     const company = await Company.find(Number(params.id))

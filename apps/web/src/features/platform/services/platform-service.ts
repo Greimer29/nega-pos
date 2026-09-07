@@ -80,6 +80,20 @@ export async function resendCompanyOtp(email: string) {
   return data.data
 }
 
+export async function retryCompanyOtp(companyId: number) {
+  const { data } = await api.post<{
+    data: {
+      email: string
+      slug: string
+      message: string
+      debugCode?: string
+      emailDelivered?: boolean
+      emailError?: string
+    }
+  }>(`/platform/companies/${companyId}/retry-otp`)
+  return data.data
+}
+
 export async function updateCompanyStatus(id: number, status: 'ACTIVE' | 'SUSPENDED') {
   const { data } = await api.patch<{ data: { company: PlatformCompany } }>(
     `/platform/companies/${id}/status`,

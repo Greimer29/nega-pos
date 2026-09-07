@@ -43,6 +43,7 @@ router
             router.post('companies', [PlatformController, 'createCompany'])
             router.post('companies/confirm', [PlatformController, 'confirmCompany'])
             router.post('companies/resend-otp', [PlatformController, 'resendOtp'])
+            router.post('companies/:id/retry-otp', [PlatformController, 'retryOtp'])
             router.patch('companies/:id/status', [PlatformController, 'updateCompanyStatus'])
           })
           .use(middleware.platformAuth())

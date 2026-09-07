@@ -7,12 +7,21 @@ import { getApiErrorMessage } from '@/lib/api-error'
 import * as platformService from '@/features/platform/services/platform-service'
 import type { PlatformAdmin, PlatformCompany } from '@/features/platform/services/platform-service'
 
+type OtpResult = {
+  email: string
+  slug: string
+  debugCode?: string
+  emailDelivered?: boolean
+  emailError?: string
+}
+
 export function PlatformPage() {
   const navigate = useNavigate()
   const [admin, setAdmin] = useState<PlatformAdmin | null>(null)
   const [companies, setCompanies] = useState<PlatformCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showCreateForm, setShowCreateForm] = useState(false)
   const [form, setForm] = useState({
     slug: '',
     name: '',
@@ -21,6 +30,7 @@ export function PlatformPage() {
     admin_name: '',
   })
   const [pendingEmail, setPendingEmail] = useState<string | null>(null)
+  const [pendingSlug, setPendingSlug] = useState<string | null>(null)
   const [otp, setOtp] = useState('')
   const [debugCode, setDebugCode] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -44,18 +54,24 @@ export function PlatformPage() {
     void load()
   }, [load])
 
+  function applyOtpResult(result: OtpResult) {
+    setPendingEmail(result.email)
+    setPendingSlug(result.slug)
+    setShowCreateForm(false)
+    setOtp(result.debugCode ?? '')
+    setDebugCode(result.debugCode ?? null)
+    if (result.emailError) {
+      setError(`Email no enviado: ${result.emailError}`)
+    }
+  }
+
   async function onCreate(event: React.FormEvent) {
     event.preventDefault()
     setBusy(true)
     setError(null)
     try {
       const result = await platformService.createCompany(form)
-      setPendingEmail(result.email)
-      setOtp(result.debugCode ?? '')
-      setDebugCode(result.debugCode ?? null)
-      if (result.emailError) {
-        setError(`Email no enviado: ${result.emailError}`)
-      }
+      applyOtpResult(result)
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -71,7 +87,9 @@ export function PlatformPage() {
     try {
       await platformService.confirmCompany(pendingEmail, otp)
       setPendingEmail(null)
+      setPendingSlug(null)
       setDebugCode(null)
+      setShowCreateForm(false)
       setForm({
         slug: '',
         name: '',
@@ -80,8 +98,7 @@ export function PlatformPage() {
         admin_name: '',
       })
       setOtp('')
-      const list = await platformService.listCompanies()
-      setCompanies(list)
+      setCompanies(await platformService.listCompanies())
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -89,12 +106,24 @@ export function PlatformPage() {
     }
   }
 
-  async function onToggleStatus(company: PlatformCompany) {
+  async function onRetryCompany(company: PlatformCompany) {
     setBusy(true)
     setError(null)
     try {
-      const next = company.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE'
-      await platformService.updateCompanyStatus(company.id, next)
+      const result = await platformService.retryCompanyOtp(company.id)
+      applyOtpResult(result)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onSuspendActive(company: PlatformCompany) {
+    setBusy(true)
+    setError(null)
+    try {
+      await platformService.updateCompanyStatus(company.id, 'SUSPENDED')
       setCompanies(await platformService.listCompanies())
     } catch (err) {
       setError(getApiErrorMessage(err))
@@ -141,7 +170,21 @@ export function PlatformPage() {
         ) : null}
 
         <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
-          <h2 className="text-lg font-medium">Empresas</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-medium">Empresas</h2>
+            {!pendingEmail && !showCreateForm ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  setError(null)
+                  setShowCreateForm(true)
+                }}
+              >
+                Nueva empresa
+              </Button>
+            ) : null}
+          </div>
+
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-neutral-400">
@@ -157,7 +200,7 @@ export function PlatformPage() {
                 {companies.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-4 text-neutral-500">
-                      Todavía no hay empresas. Creá la primera abajo.
+                      Todavía no hay empresas. Usá “Nueva empresa” para crear la primera.
                     </td>
                   </tr>
                 ) : (
@@ -168,16 +211,28 @@ export function PlatformPage() {
                       <td className="py-2 pr-3 font-mono text-xs">{company.dbName}</td>
                       <td className="py-2 pr-3">{company.status}</td>
                       <td className="py-2">
-                        {company.status === 'ACTIVE' || company.status === 'SUSPENDED' ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={busy}
-                            onClick={() => void onToggleStatus(company)}
-                          >
-                            {company.status === 'ACTIVE' ? 'Suspender' : 'Activar'}
-                          </Button>
-                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                          {company.status === 'SUSPENDED' || company.status === 'PROVISIONING' ? (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              disabled={busy || Boolean(pendingEmail)}
+                              onClick={() => void onRetryCompany(company)}
+                            >
+                              Continuar alta
+                            </Button>
+                          ) : null}
+                          {company.status === 'ACTIVE' ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => void onSuspendActive(company)}
+                            >
+                              Suspender
+                            </Button>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -187,20 +242,19 @@ export function PlatformPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
-          <h2 className="text-lg font-medium">
-            {pendingEmail ? 'Confirmar alta (OTP)' : 'Crear empresa'}
-          </h2>
+        {pendingEmail ? (
+          <section className="rounded-xl border border-amber-500/30 bg-neutral-900 p-6">
+            <h2 className="text-lg font-medium">Confirmar alta (OTP)</h2>
+            <p className="mt-1 text-sm text-neutral-400">
+              Empresa <span className="text-neutral-200">{pendingSlug}</span> — código para{' '}
+              <span className="text-neutral-200">{pendingEmail}</span>
+            </p>
 
-          {pendingEmail ? (
             <form className="mt-4 space-y-4" onSubmit={onConfirm}>
-              <p className="text-sm text-neutral-400">
-                Código enviado a <span className="text-neutral-200">{pendingEmail}</span>. Si el
-                email falla, el código aparece abajo o en los logs de la API.
-              </p>
               {debugCode ? (
                 <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-                  Código OTP (debug): <span className="font-mono text-lg tracking-widest">{debugCode}</span>
+                  Código OTP (debug):{' '}
+                  <span className="font-mono text-lg tracking-widest">{debugCode}</span>
                 </div>
               ) : null}
               <Input
@@ -224,11 +278,7 @@ export function PlatformPage() {
                       setError(null)
                       try {
                         const result = await platformService.resendCompanyOtp(pendingEmail)
-                        setOtp(result.debugCode ?? '')
-                        setDebugCode(result.debugCode ?? null)
-                        if (result.emailError) {
-                          setError(`Email no enviado: ${result.emailError}`)
-                        }
+                        applyOtpResult(result)
                       } catch (err) {
                         setError(getApiErrorMessage(err))
                       } finally {
@@ -244,14 +294,34 @@ export function PlatformPage() {
                   variant="ghost"
                   onClick={() => {
                     setPendingEmail(null)
+                    setPendingSlug(null)
                     setDebugCode(null)
+                    setOtp('')
                   }}
                 >
-                  Cancelar
+                  Cerrar
                 </Button>
               </div>
             </form>
-          ) : (
+          </section>
+        ) : null}
+
+        {showCreateForm && !pendingEmail ? (
+          <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-medium">Nueva empresa</h2>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowCreateForm(false)
+                  setError(null)
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+
             <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={onCreate}>
               <Input
                 placeholder="Slug (ej. coreva)"
@@ -289,14 +359,14 @@ export function PlatformPage() {
                 onChange={(e) => setForm((f) => ({ ...f, admin_password: e.target.value }))}
                 required
                 minLength={8}
-                className="bg-neutral-950 sm:col-span-2"
+                className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500 sm:col-span-2"
               />
               <Button type="submit" disabled={busy} className="sm:col-span-2">
                 {busy ? <Loader2 className="animate-spin" /> : 'Enviar código OTP'}
               </Button>
             </form>
-          )}
-        </section>
+          </section>
+        ) : null}
       </div>
     </div>
   )

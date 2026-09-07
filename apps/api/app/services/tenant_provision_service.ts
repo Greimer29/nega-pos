@@ -174,6 +174,64 @@ export default class TenantProvisionService {
     return this.requestCreate(payload)
   }
 
+  /**
+   * Re-issues OTP for a company stuck in PROVISIONING/SUSPENDED (failed first provision).
+   */
+  async retryProvisionOtp(companyId: number) {
+    const company = await Company.findOrFail(companyId)
+    if (company.status === 'ACTIVE') {
+      throw Object.assign(new Error('La empresa ya está activa'), {
+        code: 'COMPANY_ALREADY_ACTIVE',
+        status: 409,
+      })
+    }
+
+    const rows = await db
+      .connection('central')
+      .from('email_verification_codes')
+      .where('purpose', 'COMPANY_CREATE')
+      .orderBy('id', 'desc')
+      .limit(50)
+
+    for (const row of rows) {
+      const payload =
+        typeof row.payload === 'string'
+          ? (JSON.parse(row.payload) as CreateCompanyDraft)
+          : (row.payload as CreateCompanyDraft | null)
+
+      if (!payload?.slug || normalizeSlug(payload.slug) !== company.slug) {
+        continue
+      }
+
+      return this.requestCreate({
+        ...payload,
+        name: company.name,
+        slug: company.slug,
+      })
+    }
+
+    const directoryUser = await DirectoryUser.query({ connection: 'central' })
+      .where('company_id', company.id)
+      .orderBy('id', 'asc')
+      .first()
+
+    if (!directoryUser) {
+      throw Object.assign(
+        new Error(
+          'No hay datos de alta pendientes para esta empresa. Creá de nuevo el alta con el mismo slug o contactá soporte.'
+        ),
+        { code: 'RETRY_PAYLOAD_MISSING', status: 404 }
+      )
+    }
+
+    throw Object.assign(
+      new Error(
+        `No se encontró el password del alta original. Reenviá OTP al email ${directoryUser.email} desde "Nueva empresa" con el mismo slug, o pedí un alta nueva.`
+      ),
+      { code: 'RETRY_PASSWORD_MISSING', status: 404 }
+    )
+  }
+
   async provision(draft: CreateCompanyDraft) {
     const slug = normalizeSlug(draft.slug)
     const dbName = tenantDbNameForSlug(slug)
