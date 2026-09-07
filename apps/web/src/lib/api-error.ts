@@ -413,7 +413,8 @@ export function getApiErrorMessage(error: unknown): string {
     apiError.code === 'SLUG_TAKEN' ||
     apiError.code === 'EMAIL_TAKEN' ||
     apiError.code === 'TENANT_CONNECTION_MISMATCH' ||
-    apiError.code === 'TENANT_MIGRATION_MISSING_TABLE'
+    apiError.code === 'TENANT_MIGRATION_MISSING_TABLE' ||
+    apiError.code === 'TENANT_MIGRATIONS_INCOMPLETE'
   ) {
     return lines.length > 0 ? lines.join('\n') : apiError.message
   }

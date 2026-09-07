@@ -12,6 +12,7 @@ import {
   ensureTenantConnection,
   tenantDbNameForSlug,
 } from '#utils/tenant_connection'
+import { runWithTenant } from '#utils/tenant_context'
 
 export type CreateCompanyDraft = {
   slug: string
@@ -158,9 +159,10 @@ export default class TenantProvisionService {
       await this.#createDatabase(dbName)
 
       const connectionName = ensureTenantConnection(dbName)
-      await this.#runTenantMigrations(connectionName)
+      await this.#runTenantMigrations(connectionName, dbName, company.id)
       await this.#assertTenantHasTable(dbName, 'app_settings')
       await this.#assertTenantHasTable(dbName, 'users')
+      await this.#assertTenantMigrationComplete(dbName)
       await this.#seedTenantMysql(dbName, {
         email: adminEmail,
         password: draft.adminPassword,
@@ -235,19 +237,80 @@ export default class TenantProvisionService {
     }
   }
 
-  async #runTenantMigrations(connectionName: string) {
-    const migrator = new MigrationRunner(db, app, {
-      direction: 'up',
-      connectionName,
-      dryRun: false,
-      disableLocks: false,
-    })
+  async #assertTenantMigrationComplete(dbName: string) {
+    const connection = await this.#openMysql(dbName)
+    try {
+      const [rows] = await connection.query<RowDataPacket[]>(
+        `SELECT name FROM adonis_schema ORDER BY id ASC`
+      )
+      const applied = rows.map((row) => String(row.name))
+      logger.info({ dbName, appliedCount: applied.length, applied }, 'Tenant migration status')
 
-    await migrator.run()
-
-    if (migrator.error) {
-      throw migrator.error
+      const required = [
+        '1750000000001_create_users_table',
+        '1750000000003_create_financial_base_tables',
+        '1750000000019_set_base_currency_xau',
+      ]
+      const missingByFile = required.filter((fragment) =>
+        !applied.some((name) => name.includes(fragment))
+      )
+      if (missingByFile.length > 0) {
+        throw Object.assign(
+          new Error(
+            `Migraciones incompletas en "${dbName}". Faltan: ${missingByFile.join(', ')}. Aplicadas (${applied.length}): ${applied.join(', ') || '(ninguna)'}`
+          ),
+          { code: 'TENANT_MIGRATIONS_INCOMPLETE', status: 500 }
+        )
+      }
+    } finally {
+      await connection.end()
     }
+  }
+
+  async #runTenantMigrations(connectionName: string, dbName: string, companyId: number) {
+    // Bind ALS so any accidental global `db` usage during migrations hits the tenant.
+    await runWithTenant(
+      {
+        companyId,
+        dbName,
+        connectionName,
+        directoryUserId: 0,
+      },
+      async () => {
+        const migrator = new MigrationRunner(db, app, {
+          direction: 'up',
+          connectionName,
+          dryRun: false,
+          disableLocks: false,
+        })
+
+        await migrator.run()
+
+        if (migrator.error) {
+          logger.error(
+            {
+              err: migrator.error,
+              connectionName,
+              dbName,
+              status: migrator.status,
+              migratedFiles: migrator.migratedFiles,
+            },
+            'Tenant MigrationRunner failed'
+          )
+          throw migrator.error
+        }
+
+        logger.info(
+          {
+            connectionName,
+            dbName,
+            status: migrator.status,
+            migratedFiles: Object.keys(migrator.migratedFiles ?? {}),
+          },
+          'Tenant MigrationRunner finished'
+        )
+      }
+    )
   }
 
   /**

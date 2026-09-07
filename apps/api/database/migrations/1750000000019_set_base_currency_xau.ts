@@ -1,11 +1,14 @@
 import { BaseSchema } from '@adonisjs/lucid/schema'
-import db from '@adonisjs/lucid/services/db'
 
 /**
  * Cutover: moneda base del sistema = XAU.
  * - 1 XAU = 100 USD (USD.rate_per_usd = 100)
  * - Montos canónicos históricos (antes en USD) se dividen por 100
  * - rate_per_usd de monedas no-USD/XAU se multiplica por 100
+ *
+ * IMPORTANT: use `this.db` (migration client), never the global Lucid `db`
+ * service. Global `db` targets the default connection (`railway` on Railway)
+ * and breaks multi-tenant provision.
  */
 export default class extends BaseSchema {
   private readonly factor = 100
@@ -14,7 +17,7 @@ export default class extends BaseSchema {
     const now = new Date()
 
     await this.defer(async () => {
-      await db.transaction(async (trx) => {
+      await this.db.transaction(async (trx) => {
         await trx
           .table('app_settings')
           .insert({
@@ -129,7 +132,7 @@ export default class extends BaseSchema {
 
   async down() {
     await this.defer(async () => {
-      await db.transaction(async (trx) => {
+      await this.db.transaction(async (trx) => {
         const now = new Date()
         const updates: Array<[string, string]> = [
           ['sales', 'total_usd'],
