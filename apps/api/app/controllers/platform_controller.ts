@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Company from '#models/company'
 import PlatformAdmin from '#models/platform_admin'
 import TenantProvisionService from '#services/tenant_provision_service'
+import { clearTenantClaims } from '#services/directory_auth_service'
 import {
   PLATFORM_SESSION_KEY,
   readPlatformClaims,
@@ -50,7 +51,7 @@ function mapServiceError(error: unknown, response: HttpContext['response']) {
 export default class PlatformController {
   #provision = new TenantProvisionService()
 
-  async login({ request, session, serialize, response }: HttpContext) {
+  async login({ request, session, auth, serialize, response }: HttpContext) {
     const { email, password } = await request.validateUsing(platformLoginValidator)
     const admin = await PlatformAdmin.query().where('email', email.trim().toLowerCase()).first()
 
@@ -62,6 +63,14 @@ export default class PlatformController {
         },
       })
     }
+
+    // Avoid stale tenant web-session cookies conflicting with platform auth.
+    try {
+      await auth.use('web').logout()
+    } catch {
+      // ignore
+    }
+    clearTenantClaims(session)
 
     session.put(PLATFORM_SESSION_KEY, { id: admin.id, email: admin.email })
 

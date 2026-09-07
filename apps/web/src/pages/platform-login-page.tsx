@@ -61,10 +61,11 @@ export function PlatformLoginPage() {
             <Input
               id="platform-email"
               type="email"
+              autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="bg-neutral-950"
+              className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500"
             />
           </div>
           <div className="space-y-2">
@@ -74,10 +75,11 @@ export function PlatformLoginPage() {
             <Input
               id="platform-password"
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="bg-neutral-950"
+              className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500"
             />
           </div>
           {error ? <p className="text-sm text-red-300">{error}</p> : null}
