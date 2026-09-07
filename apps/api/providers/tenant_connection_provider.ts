@@ -1,6 +1,5 @@
 import type { ApplicationService } from '@adonisjs/core/types'
 import { BaseModel } from '@adonisjs/lucid/orm'
-import db from '@adonisjs/lucid/services/db'
 import { getTenantStore } from '#utils/tenant_context'
 import { isMultiTenantEnabled } from '#utils/multi_tenant'
 import type { Database } from '@adonisjs/lucid/database'
@@ -8,11 +7,14 @@ import type { Database } from '@adonisjs/lucid/database'
 /**
  * Makes Lucid models and `db.*` helpers use the per-request tenant connection
  * when AsyncLocalStorage is set. Models with `static connection = 'central'` keep central.
+ *
+ * Uses `start` (not `boot`) so Lucid's Database service is already bound in the container.
+ * Ace preDeploy / migration commands also go through this path safely.
  */
 export default class TenantConnectionProvider {
   constructor(protected app: ApplicationService) {}
 
-  async boot() {
+  async start() {
     if (!isMultiTenantEnabled()) {
       return
     }
@@ -21,7 +23,6 @@ export default class TenantConnectionProvider {
       configurable: true,
       enumerable: true,
       get() {
-        // Own static `connection` on subclasses (e.g. central models) wins via own props.
         if (Object.prototype.hasOwnProperty.call(this, '__ownConnection')) {
           return (this as { __ownConnection: string }).__ownConnection
         }
@@ -41,8 +42,6 @@ export default class TenantConnectionProvider {
       },
     })
 
-    // Re-apply explicit central connection on control-plane models
-    // (class field initializers may have run before this getter existed).
     const centralModels = await Promise.all([
       import('#models/company'),
       import('#models/directory_user'),
@@ -54,16 +53,28 @@ export default class TenantConnectionProvider {
       Model.connection = 'central'
     }
 
-    const database = db as Database & { __tenantPrimary?: string }
+    let database: (Database & { __tenantPrimary?: string }) | null = null
+    try {
+      database = (await this.app.container.make('lucid.db')) as Database & {
+        __tenantPrimary?: string
+      }
+    } catch {
+      return
+    }
+
+    if (!database || typeof database.primaryConnectionName !== 'string') {
+      return
+    }
+
     database.__tenantPrimary = database.primaryConnectionName
     Object.defineProperty(database, 'primaryConnectionName', {
       configurable: true,
       enumerable: true,
       get() {
-        return getTenantStore()?.connectionName ?? database.__tenantPrimary ?? 'mysql'
+        return getTenantStore()?.connectionName ?? database!.__tenantPrimary ?? 'mysql'
       },
       set(value: string) {
-        database.__tenantPrimary = value
+        database!.__tenantPrimary = value
       },
     })
   }
