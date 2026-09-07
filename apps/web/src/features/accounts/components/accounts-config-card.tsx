@@ -6,7 +6,7 @@ import { AccountDeleteDialog } from '@/features/accounts/components/account-dele
 import { AccountFormDialog } from '@/features/accounts/components/account-form-dialog'
 import { useAccountsQuery } from '@/features/accounts/hooks/use-accounts'
 import type { Account } from '@/features/accounts/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { QueryErrorState } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 export function AccountsConfigCard() {
@@ -62,7 +62,7 @@ export function AccountsConfigCard() {
         {isLoading ? (
           <Loader2 className="text-muted-foreground size-5 animate-spin" />
         ) : isError ? (
-          <p className="text-destructive text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+          <QueryErrorState isError error={error} title="No se pudieron cargar las cuentas" />
         ) : accounts.length === 0 ? (
           <p className="text-muted-foreground text-sm">No hay cuentas creadas.</p>
         ) : (

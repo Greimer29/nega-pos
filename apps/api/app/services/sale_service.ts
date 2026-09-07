@@ -30,13 +30,13 @@ import {
   assertFormulaMaterialsAllowed,
   normalizeFormulaMaterialsInput,
   resolveEffectiveFormulaMaterials,
-  resolveSaleLineUnitPriceUsd,
   sumEffectiveMaterialCostUsd,
   type ResolvedSaleLineFormulaMaterial,
   type SaleLineFormulaMaterialInput,
 } from '#services/sale_line_formula'
 import { formatCantidadMovimiento } from '#services/order_stock'
 import { formatSaleNativeTotal } from '#utils/currency_amount'
+import { applyInvoiceDiscount } from '#utils/invoice_discount'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
@@ -63,6 +63,7 @@ export type CreateSaleInput = {
   payment_type?: SalePaymentType
   billing_mode?: SaleBillingMode
   usd_rate?: number | null
+  discount_usd?: number
   lines: SaleLineInput[]
   confirm?: boolean
   sold_by_user_id?: number | null
@@ -75,6 +76,7 @@ export type UpdateSaleInput = {
   payment_type?: SalePaymentType
   billing_mode?: SaleBillingMode
   usd_rate?: number | null
+  discount_usd?: number
   lines?: SaleLineInput[]
 }
 
@@ -235,7 +237,8 @@ export default class SaleService {
     await this.assertCustomer(input.customer_id)
 
     return db.transaction(async (trx) => {
-      const { totalUsd, resolvedLines } = await this.resolveLines(input.lines, trx)
+      const { totalUsd: subtotalUsd, resolvedLines } = await this.resolveLines(input.lines, trx)
+      const { discountUsd, totalUsd } = applyInvoiceDiscount(subtotalUsd, input.discount_usd)
       const totalBs =
         input.usd_rate && input.usd_rate > 0
           ? formatSaleNativeTotal(totalUsd, 'VES', input.usd_rate)
@@ -250,6 +253,7 @@ export default class SaleService {
           paymentType: input.payment_type ?? 'CASH',
           billingMode: input.billing_mode ?? 'FAST',
           orderStatus: 'DELIVERED',
+          discountUsd: discountUsd.toFixed(4),
           totalUsd: totalUsd.toFixed(4),
           totalBs,
           usdRate: input.usd_rate ? input.usd_rate.toFixed(4) : null,
@@ -301,8 +305,22 @@ export default class SaleService {
         }
 
         await SaleLine.query({ client: trx }).where('saleId', Number(sale.id)).delete()
-        const { totalUsd, resolvedLines } = await this.resolveLines(input.lines, trx)
+        const { totalUsd: subtotalUsd, resolvedLines } = await this.resolveLines(input.lines, trx)
         await this.persistLines(Number(sale.id), resolvedLines, trx)
+        const { discountUsd, totalUsd } = applyInvoiceDiscount(
+          subtotalUsd,
+          input.discount_usd !== undefined ? input.discount_usd : Number(sale.discountUsd)
+        )
+        sale.discountUsd = discountUsd.toFixed(4)
+        sale.totalUsd = totalUsd.toFixed(4)
+      } else if (input.discount_usd !== undefined) {
+        const lines = await SaleLine.query({ client: trx }).where('saleId', Number(sale.id))
+        const subtotalUsd = lines.reduce(
+          (sum, line) => sum + Number(line.quantity) * Number(line.unitPriceUsd),
+          0
+        )
+        const { discountUsd, totalUsd } = applyInvoiceDiscount(subtotalUsd, input.discount_usd)
+        sale.discountUsd = discountUsd.toFixed(4)
         sale.totalUsd = totalUsd.toFixed(4)
       }
 
@@ -587,7 +605,7 @@ export default class SaleService {
       }
 
       const quantity = line.quantity
-      let unitPrice = line.unit_price_usd
+      const unitPrice = line.unit_price_usd
 
       if (hasCatalog) {
         const product = await CatalogProduct.query({ client: trx })
@@ -601,10 +619,6 @@ export default class SaleService {
 
         await assertFormulaMaterialsAllowed(product, line.formula_materials)
         const formulaMaterials = normalizeFormulaMaterialsInput(line.formula_materials)
-
-        if (line.formula_materials !== undefined) {
-          unitPrice = await resolveSaleLineUnitPriceUsd(product, line.formula_materials, trx)
-        }
 
         const subtotal = quantity * unitPrice
         totalUsd += subtotal
@@ -1022,11 +1036,13 @@ export default class SaleService {
       netTotal += activeQty * Number(line.unitPriceUsd)
     }
 
-    sale.totalUsd = Math.max(0, netTotal).toFixed(4)
+    const { discountUsd, totalUsd } = applyInvoiceDiscount(netTotal, Number(sale.discountUsd))
+    sale.discountUsd = discountUsd.toFixed(4)
+    sale.totalUsd = totalUsd.toFixed(4)
 
     if (sale.paymentType === 'CREDIT') {
       const paid = Number(sale.amountPaidUsd)
-      sale.balanceUsd = Math.max(0, netTotal - paid).toFixed(4)
+      sale.balanceUsd = Math.max(0, totalUsd - paid).toFixed(4)
     } else {
       sale.amountPaidUsd = sale.totalUsd
       sale.balanceUsd = '0.0000'

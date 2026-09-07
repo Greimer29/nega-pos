@@ -9,7 +9,7 @@ import { formatFecha, ESTADO_LABELS, MODALIDAD_LABELS } from '@/features/orders/
 import { useOrdersQuery } from '@/features/orders/hooks/use-orders'
 import type { OrderEstado } from '@/features/orders/types'
 import { useCustomersQuery } from '@/features/customers/hooks/use-customers'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { QueryErrorState } from '@/features/notifications/query-error-state'
 
 const PER_PAGE = 20
 
@@ -105,7 +105,7 @@ export function OrdersPage() {
               Cargando pedidos…
             </div>
           ) : isError ? (
-            <p className="text-destructive text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+            <QueryErrorState isError error={error} title="No se pudieron cargar los pedidos" />
           ) : orders.length === 0 ? (
             <p className="text-muted-foreground py-8 text-center text-sm">
               No hay pedidos con estos filtros.

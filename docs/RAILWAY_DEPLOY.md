@@ -14,29 +14,44 @@ Los clientes web, desktop y Android corren en la máquina del usuario y se conec
 
 ---
 
-## Arquitectura
+## Arquitectura multi-empresa
 
 ```
 GitHub (main) ──Docker──► Railway
-                              ├── nega-pos-mysql  (persistente)
-                              └── nega-pos-api    (Dockerfile)
-                                    ├── preDeploy: migration:run --force
-                                    ├── start: entrypoint → db:bootstrap → server
-                                    └── Volume /data/uploads (imágenes/PDFs)
+                              ├── nega-pos-mysql
+                              │     ├── nega_pos_central   (control plane)
+                              │     └── nega_pos_t_<slug>  (una BD por empresa)
+                              └── nega-pos-api
+                                    ├── preDeploy: migration:run_central --force
+                                    ├── start: db:bootstrap (platform admin) → server
+                                    └── Volume /data/uploads (paths t_<companyId>/…)
 
 PC local ──HTTPS──► https://TU-API.up.railway.app
-  ├── Web:     pnpm dev:web  (localhost:5173)
+  ├── Web:     pnpm dev:web  (/login empresas, /platform super admin)
   ├── Desktop: Electron + api-url.json
   └── Android: APK Capacitor (VITE_API_URL al buildear)
 ```
 
-| Servicio | Persistencia |
-|----------|--------------|
-| MySQL | Persistente (plugin Railway) |
-| Uploads API | **Solo** con Volume en `/data/uploads` |
-| Contenedor API | Efímero (cada redeploy = nueva imagen) |
+| Pieza | Persistencia |
+|-------|--------------|
+| MySQL central + tenants | Plugin Railway (`CREATE DATABASE` por empresa) |
+| Uploads | Volume `/data/uploads` con prefijo por tenant |
+| Contenedor API | Efímero |
 
-**No crear** servicios adicionales en Railway para web, desktop ni mobile.
+**Importante:** el usuario MySQL de la app debe poder ejecutar `CREATE DATABASE`. Si el user del plugin no puede, usá el root del plugin o otorgá el grant.
+
+---
+
+## Cutover desde cero (wipe)
+
+La producción previa de Nega POS (single DB) **se puede borrar**.
+
+1. Borrar/recrear el plugin MySQL **o** `DROP DATABASE` de la BD vieja.
+2. Crear `nega_pos_central` (SQL o al primer migrate si el user puede crear DBs — en la práctica creala a mano).
+3. Variables: `DB_CENTRAL_DATABASE=nega_pos_central`, `MULTI_TENANT_ENABLED=true`, `PLATFORM_ADMIN_*`, `RESEND_API_KEY` (opcional), `GOOGLE_CLIENT_ID` (opcional).
+4. Redeploy API desde `main`.
+5. Login en `http://localhost:5173/platform/login` → crear empresas (OTP → provision).
+6. Clientes locales siguen con el mismo `VITE_API_URL`.
 
 ---
 
@@ -45,10 +60,10 @@ PC local ──HTTPS──► https://TU-API.up.railway.app
 | Archivo | Rol |
 |---------|-----|
 | `apps/api/Dockerfile` | Imagen producción + entrypoint |
-| `apps/api/railway.toml` | Config-as-code **solo servicio API** |
+| `apps/api/railway.toml` | Config-as-code **solo servicio API** (migrate **central**) |
 | `apps/api/.env.railway.example` | Variables para Railway |
 | `apps/api/bin/docker-entrypoint.sh` | Storage + bootstrap + server |
-| `apps/api/commands/db_bootstrap.ts` | Seed solo si `users` está vacío |
+| `apps/api/commands/db_bootstrap.ts` | Platform admin en central |
 | `scripts/railway-setup-uploads-volume.ps1` | Volume CLI |
 
 ---
@@ -56,12 +71,13 @@ PC local ──HTTPS──► https://TU-API.up.railway.app
 ## Reglas (no negociables)
 
 1. **Solo 2 servicios** en el proyecto Railway: MySQL + API.
-2. **Migraciones** → `preDeployCommand` en `railway.toml` (`migration:run --force`).
-3. **Seeders** → `db:bootstrap` en entrypoint (solo BD vacía). No `db:seed` en cada redeploy.
-4. **Uploads** → Volume `/data/uploads` + `STORAGE_LOCAL_PATH=/data/uploads`.
-5. **Root Directory** del servicio API = raíz del monorepo (vacío).
-6. **`FRONTEND_URL`** = `http://localhost:5173` (web local). No desplegar web en Railway.
-7. **No rotar `APP_KEY`** después de producción.
+2. **Migraciones de deploy** → solo **central** (`node ace migration:run_central --force`).
+3. **Tenant DBs** se migran al **provisionar** la empresa (no en cada deploy).
+4. **Seeders** → `db:bootstrap` crea platform admin. No seedear una BD POS global.
+5. **Uploads** → Volume `/data/uploads` + `STORAGE_LOCAL_PATH=/data/uploads`.
+6. **Root Directory** del servicio API = raíz del monorepo (vacío).
+7. **`FRONTEND_URL`** = `http://localhost:5173` (web local).
+8. **No rotar `APP_KEY`** después de producción.
 
 ---
 
@@ -70,62 +86,48 @@ PC local ──HTTPS──► https://TU-API.up.railway.app
 1. [Railway](https://railway.com) → **New Project** → conectar repo GitHub (`main`).
 2. **Add → Database → MySQL** (`nega-pos-mysql`).
 3. Esperar estado **Online**.
+4. Crear BD central (SSH/mysql CLI del plugin):
+
+```sql
+CREATE DATABASE IF NOT EXISTS nega_pos_central
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
 
 ---
 
-## Paso 2 — Servicio API (único servicio de app)
+## Paso 2 — Servicio API
 
-1. **Add Service → GitHub Repo** → mismo repo → `nega-pos-api`.
-2. **No agregar** otro servicio para `apps/web`, desktop ni mobile.
-3. **Settings**:
-
-| Setting | Valor |
-|---------|--------|
-| Root Directory | *(vacío — raíz del monorepo)* |
-| Config-as-code | `apps/api/railway.toml` |
-
-4. **Networking → Generate Domain** → URL HTTPS de la API.
+1. **Add Service → GitHub Repo** → `nega-pos-api`.
+2. **Settings**: Root Directory vacío; Config-as-code `apps/api/railway.toml`.
+3. **Networking → Generate Domain**.
 
 ---
 
 ## Paso 3 — Variables de entorno
-
-Generá `APP_KEY`:
 
 ```powershell
 cd apps\api
 node ace generate:key
 ```
 
-Copiá desde `apps/api/.env.railway.example`:
+Copiá desde `apps/api/.env.railway.example`, en especial:
 
 | Variable | Valor |
 |----------|--------|
-| `NODE_ENV` | `production` |
-| `HOST` | `0.0.0.0` |
-| `PORT` | `${{PORT}}` |
-| `APP_KEY` | output de `generate:key` |
-| `APP_URL` | URL HTTPS de la API |
-| `SESSION_DRIVER` | `cookie` |
-| `SESSION_MAX_AGE` | `365d` |
+| `MULTI_TENANT_ENABLED` | `true` |
+| `DB_CENTRAL_DATABASE` | `nega_pos_central` |
 | `DB_*` | `${{nega-pos-mysql.MYSQL*}}` |
-| `FRONTEND_URL` | **`http://localhost:5173`** (web local) |
-| `DESKTOP_APP_ORIGIN` | `http://127.0.0.1:51740` |
-| `MOBILE_APP_ORIGIN` | `https://localhost` |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NOMBRE` | admin producción |
-| `DRIVE_DISK` | `local` |
+| `PLATFORM_ADMIN_EMAIL` / `PASSWORD` | super admin |
+| `RESEND_API_KEY` / `MAIL_FROM` | OTP (opcional en smoke tests) |
+| `GOOGLE_CLIENT_ID` | opcional |
 | `STORAGE_LOCAL_PATH` | `/data/uploads` |
-| `RUN_MIGRATIONS_ON_START` | `false` |
-| `SKIP_BOOTSTRAP_SEED` | `false` |
+| `FRONTEND_URL` | `http://localhost:5173` |
 
 ---
 
-## Paso 4 — Volume (imágenes persistentes)
+## Paso 4 — Volume
 
-1. Servicio `nega-pos-api` → **Settings → Volumes → Add Volume**
-2. Mount path: **`/data/uploads`**
-3. Variable: `STORAGE_LOCAL_PATH=/data/uploads`
-4. **Redeploy**
+Mount `/data/uploads` + `STORAGE_LOCAL_PATH=/data/uploads` → Redeploy.
 
 ```powershell
 .\scripts\railway-setup-uploads-volume.ps1
@@ -133,72 +135,29 @@ Copiá desde `apps/api/.env.railway.example`:
 
 ---
 
-## Paso 5 — Primer deploy
+## Paso 5 — Primer deploy y primera empresa
 
-1. Push a `main` o **Redeploy**.
-2. Verificar: Pre-deploy migraciones OK → health OK → login admin.
-3. Si falta admin: `railway ssh -- node ace db:bootstrap`
-
----
-
-## Paso 6 — Clientes locales (100 % en tu PC)
-
-### Web (local)
-
-`apps/web/.env`:
-
-```env
-VITE_API_URL=https://TU-API.up.railway.app
-```
-
-```powershell
-pnpm dev:web
-```
-
-Abrir `http://localhost:5173`. La API debe tener `FRONTEND_URL=http://localhost:5173`.
-
-### Desktop (local)
-
-`apps/desktop/api-url.json`:
-
-```json
-{
-  "apiUrl": "https://TU-API.up.railway.app"
-}
-```
-
-```powershell
-pnpm build:desktop
-```
-
-### Android APK (local)
-
-```powershell
-$env:VITE_API_URL = "https://TU-API.up.railway.app"
-pnpm build:mobile
-pnpm --filter mobile build:apk:debug
-```
-
-Instalá el APK en el dispositivo. No hay deploy de mobile en Railway.
+1. Push / Redeploy → preDeploy migra **central** → bootstrap platform admin.
+2. Web local: `VITE_API_URL=https://TU-API…` → `pnpm dev:web`.
+3. Abrir `/platform/login` → crear empresa → OTP → confirm (crea `nega_pos_t_<slug>` + migrate + admin).
+4. Login empresa en `/login` con el email del admin.
 
 ---
 
-## Qué hace cada redeploy (solo API)
+## Clientes locales
+
+Igual que antes: web/desktop/mobile **locales** apuntando a la API HTTPS. Sin URL por empresa: el aislamiento es sesión/API.
+
+---
+
+## Qué hace cada redeploy
 
 | Paso | Acción |
 |------|--------|
-| Build | Imagen Docker `apps/api/Dockerfile` |
-| Pre-deploy | Migraciones pendientes |
-| Start | Storage → bootstrap (si BD vacía) → server |
-| Volume | Uploads persisten en `/data/uploads` |
-
----
-
-## Verificación
-
-1. `GET https://TU-API/health` → 200
-2. Web local: login en `http://localhost:5173`
-3. Subir imagen → redeploy API → imagen sigue disponible
+| Build | Imagen Docker |
+| Pre-deploy | Migraciones **central** pendientes |
+| Start | Storage → `db:bootstrap` (platform admin) → server |
+| Volume | Uploads `t_<companyId>/…` |
 
 ---
 
@@ -206,30 +165,18 @@ Instalá el APK en el dispositivo. No hay deploy de mobile en Railway.
 
 | Síntoma | Solución |
 |---------|----------|
-| CORS / login web local | `FRONTEND_URL=http://localhost:5173` en API |
-| Desktop no conecta | `api-url.json` + `DESKTOP_APP_ORIGIN` |
-| APK no conecta | `VITE_API_URL` al buildear + `MOBILE_APP_ORIGIN` |
+| `CREATE DATABASE` denied | Grant o user root del plugin MySQL |
+| OTP no llega | Sin `RESEND_API_KEY` el código sale en logs de la API |
+| Login empresa 401 sin tenant | Volvé a loguear; la sesión debe llevar claims de empresa |
+| CORS web local | `FRONTEND_URL=http://localhost:5173` |
 | Imagen 404 tras redeploy | Volume + `STORAGE_LOCAL_PATH` |
-| Servicio web extra en Railway | **Eliminarlo** — web es solo local |
-| Bootstrap: `Cannot read properties of undefined (reading 'use')` | Hash no listo al importar User — ya corregido en `main` (`withAuthFinder(() => hash.use())`). Redeploy. |
-
----
-
-## Comandos útiles
-
-```powershell
-railway login
-railway link
-railway logs
-railway ssh -- node ace db:bootstrap
-railway ssh -- node ace db:seed --files admin_user_seeder
-```
 
 ---
 
 ## Resumen
 
 1. Railway = **MySQL + API** solamente  
-2. Web / desktop / mobile = **local**, apuntando a la API HTTPS  
-3. Volume obligatorio para uploads  
-4. Guía de vars: `apps/api/.env.railway.example`
+2. **Central** + **una BD por empresa**  
+3. Web / desktop / mobile = **local**  
+4. Volume obligatorio para uploads  
+5. Vars: `apps/api/.env.railway.example`

@@ -56,7 +56,7 @@ describe('ventas-cart-draft', () => {
 
   it('persists and restores cart draft in sessionStorage', () => {
     saveVentasCartDraft({
-      cart: [{ id: 'line-1', product: sampleProduct, quantity: 2, formulaMaterials: null }],
+      cart: [{ id: 'line-1', kind: 'catalog', product: sampleProduct, quantity: 2, formulaMaterials: null }],
       customerId: 5,
       clientName: 'Cliente demo',
       customerCreditDays: 30,
@@ -80,6 +80,7 @@ describe('ventas-cart-draft', () => {
       cart: [
         {
           id: 'line-custom',
+          kind: 'catalog',
           product: sampleProduct,
           quantity: 1,
           formulaMaterials: [{ material_id: 9, quantity_per_unit: 2.5 }],
@@ -105,6 +106,7 @@ describe('ventas-cart-draft', () => {
       cart: [
         {
           id: 'line-priced',
+          kind: 'catalog',
           product: sampleProduct,
           quantity: 1,
           formulaMaterials: [{ material_id: 9, quantity_per_unit: 2.5 }],
@@ -129,6 +131,7 @@ describe('ventas-cart-draft', () => {
       cart: [
         {
           id: 'line-note',
+          kind: 'catalog',
           product: sampleProduct,
           quantity: 3,
           kitchenNote: '1 sin cebolla\n2 sin mostaza',
@@ -147,9 +150,26 @@ describe('ventas-cart-draft', () => {
     expect(restored?.cart[0]?.kitchenNote).toBe('1 sin cebolla\n2 sin mostaza')
   })
 
+  it('persists invoice discount in cart draft', () => {
+    saveVentasCartDraft({
+      cart: [{ id: 'line-disc', kind: 'catalog', product: sampleProduct, quantity: 1 }],
+      customerId: '',
+      clientName: '',
+      customerCreditDays: null,
+      paymentType: 'CASH',
+      billingMethod: 'FAST',
+      sourceSaleId: null,
+      sourceSaleLabel: null,
+      invoiceDiscountUsd: 3.5,
+    })
+
+    const restored = loadVentasCartDraft()
+    expect(restored?.invoiceDiscountUsd).toBe(3.5)
+  })
+
   it('clears stored draft', () => {
     saveVentasCartDraft({
-      cart: [{ id: 'line-2', product: sampleProduct, quantity: 1 }],
+      cart: [{ id: 'line-2', kind: 'catalog', product: sampleProduct, quantity: 1 }],
       customerId: '',
       clientName: '',
       customerCreditDays: null,

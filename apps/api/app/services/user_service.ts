@@ -2,6 +2,7 @@ import EmailDuplicadoException from '#exceptions/email_duplicado_exception'
 import UltimoAdminException from '#exceptions/ultimo_admin_exception'
 import UsuarioNoEncontradoException from '#exceptions/usuario_no_encontrado_exception'
 import User from '#models/user'
+import DirectorySyncService from '#services/directory_sync_service'
 import { sanitizePermissions, type PermissionKey } from '#permissions/catalog'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 
@@ -22,6 +23,8 @@ export type ListUsersFilters = {
 }
 
 export default class UserService {
+  #directorySync = new DirectorySyncService()
+
   async listar(filters: ListUsersFilters = {}): Promise<ModelPaginatorContract<User>> {
     const page = filters.page ?? 1
     const perPage = filters.perPage ?? 20
@@ -53,18 +56,29 @@ export default class UserService {
   async crear(input: UserInput): Promise<User> {
     await this.assertEmailUnico(input.email)
 
-    return User.create({
+    const email = input.email.trim().toLowerCase()
+    const user = await User.create({
       name: input.name.trim(),
-      email: input.email.trim().toLowerCase(),
+      email,
       password: input.password!,
       role: input.role,
       permissions: input.role === 'OPERATOR' ? sanitizePermissions(input.permissions) : null,
       active: input.active ?? true,
     })
+
+    await this.#directorySync.upsertFromTenantUser({
+      email,
+      password: input.password,
+      role: input.role,
+      active: user.active,
+    })
+
+    return user
   }
 
   async actualizar(id: number, input: Partial<UserInput>, actorId?: number): Promise<User> {
     const user = await this.obtener(id)
+    const previousEmail = user.email
 
     if (input.email && input.email.trim().toLowerCase() !== user.email) {
       await this.assertEmailUnico(input.email, id)
@@ -104,6 +118,15 @@ export default class UserService {
     }
 
     await user.save()
+
+    await this.#directorySync.upsertFromTenantUser({
+      email: user.email,
+      password: input.password,
+      role: user.role as 'ADMIN' | 'OPERATOR',
+      active: user.active,
+      previousEmail,
+    })
+
     return user
   }
 

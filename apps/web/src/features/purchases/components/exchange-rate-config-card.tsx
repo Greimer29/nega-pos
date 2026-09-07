@@ -7,14 +7,14 @@ import { Label } from '@/components/ui/label'
 import { useBaseCurrencyQuery } from '@/features/currencies/hooks/use-currencies'
 import { formatUsd } from '@/features/purchases/constants'
 import { useExchangeRateQuery, useUpdateExchangeRateMutation } from '@/features/purchases/hooks/use-settings'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
 
 export function ExchangeRateConfigCard() {
   const { data: currentRate, isLoading: loadingRate } = useExchangeRateQuery()
   const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
   const updateRateMutation = useUpdateExchangeRateMutation()
   const [rateInput, setRateInput] = useState('')
-  const [rateError, setRateError] = useState<string | null>(null)
 
   useEffect(() => {
     if (currentRate && !rateInput) {
@@ -23,16 +23,15 @@ export function ExchangeRateConfigCard() {
   }, [currentRate, rateInput])
 
   async function handleSaveRate() {
-    setRateError(null)
     const value = Number(rateInput)
     if (!Number.isFinite(value) || value <= 0) {
-      setRateError('Ingresá una tasa válida mayor a 0')
+      toast.warning('Ingresá una tasa válida mayor a 0')
       return
     }
     try {
       await updateRateMutation.mutateAsync(value)
     } catch (err) {
-      setRateError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -82,7 +81,6 @@ export function ExchangeRateConfigCard() {
             Guardar
           </Button>
         </div>
-        {rateError ? <p className="text-destructive text-sm whitespace-pre-line">{rateError}</p> : null}
       </CardContent>
     </Card>
   )

@@ -12,13 +12,12 @@ import {
   useUpdateCurrencyMutation,
 } from '@/features/currencies/hooks/use-currencies'
 import type { Currency } from '@/features/currencies/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 export function CurrenciesConfigCard() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedCurrency, setSelectedCurrency] = useState<Currency | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
 
   const { data: currencies = [], isLoading, isError, error } = useCurrenciesQuery()
   const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
@@ -38,34 +37,31 @@ export function CurrenciesConfigCard() {
 
   async function toggleActive(currency: Currency) {
     if (currency.code === baseCurrencyCode) return
-    setActionError(null)
     try {
       await updateMutation.mutateAsync({
         code: currency.code,
         payload: { is_active: !currency.isActive },
       })
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
   async function handleDelete(currency: Currency) {
     if (currency.code === baseCurrencyCode) return
     if (!window.confirm(`¿Eliminar la moneda ${currency.code}?`)) return
-    setActionError(null)
     try {
       await deleteMutation.mutateAsync(currency.code)
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
   async function handleBaseCurrencyChange(code: string) {
-    setActionError(null)
     try {
       await updateBaseMutation.mutateAsync(code)
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -90,8 +86,6 @@ export function CurrenciesConfigCard() {
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
-
         <div className="space-y-2 rounded-md border p-4">
           <Label htmlFor="base-currency">Moneda base del sistema</Label>
           <select
@@ -116,7 +110,7 @@ export function CurrenciesConfigCard() {
         {isLoading ? (
           <Loader2 className="text-muted-foreground size-5 animate-spin" />
         ) : isError ? (
-          <p className="text-destructive text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+          <QueryErrorState isError error={error} title="No se pudieron cargar las monedas" />
         ) : currencies.length === 0 ? (
           <p className="text-muted-foreground text-sm">No hay monedas configuradas.</p>
         ) : (

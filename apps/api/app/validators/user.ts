@@ -12,6 +12,10 @@ export const loginValidator = vine.create({
   password: vine.string(),
 })
 
+export const googleLoginValidator = vine.create({
+  id_token: vine.string().minLength(20),
+})
+
 export const listUsersValidator = vine.create({
   page: vine.number().min(1).optional(),
   per_page: vine.number().min(1).max(100).optional(),

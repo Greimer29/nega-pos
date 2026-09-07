@@ -17,7 +17,8 @@ import {
 } from '@/features/printing/types'
 import { upsertFormat } from '@/features/printing/utils/print-formats'
 import { useCanEditSettings } from '@/features/settings/hooks/use-can-edit-settings'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
 
 /** Qué parte del print-config actualiza cada panel al guardar. */
 export type PrintSaveScope = 'formats' | 'devices'
@@ -63,7 +64,6 @@ export function usePrintSettingsPanel() {
   const [saving, setSaving] = useState(false)
   const [testingKind, setTestingKind] = useState<PrintDocumentKind | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [isDirty, setIsDirty] = useState(false)
 
   const markDirty = useCallback(() => {
@@ -129,7 +129,6 @@ export function usePrintSettingsPanel() {
 
     async function load() {
       setLoading(true)
-      setError(null)
       try {
         const [{ printConfig: loadedConfig }, loadedPrinters] = await Promise.all([
           loadPrintConfigWithMigration(),
@@ -160,7 +159,7 @@ export function usePrintSettingsPanel() {
         setPrinters(loadedPrinters)
       } catch (loadError) {
         if (!cancelled) {
-          setError(getApiErrorMessage(loadError))
+          notifyApiError(loadError, 'No se pudo cargar la configuración de impresión')
         }
       } finally {
         if (!cancelled) {
@@ -177,19 +176,19 @@ export function usePrintSettingsPanel() {
 
   async function handleRefreshPrinters() {
     setRefreshingPrinters(true)
-    setError(null)
     try {
       const loadedPrinters = await loadPrinters()
       if (loadedPrinters.length === 0) {
         setMessage(null)
-        setError(
-          'No se encontraron impresoras. Confirmá que estás en la app de escritorio (no en el navegador) y que Windows tiene impresoras instaladas.'
+        toast.warning(
+          'Confirmá que estás en la app de escritorio (no en el navegador) y que Windows tiene impresoras instaladas.',
+          'No se encontraron impresoras'
         )
       } else {
         setMessage(`${loadedPrinters.length} impresora(s) detectada(s).`)
       }
     } catch (refreshError) {
-      setError(getApiErrorMessage(refreshError))
+      notifyApiError(refreshError, 'No se pudieron listar las impresoras')
     } finally {
       setRefreshingPrinters(false)
     }
@@ -223,7 +222,6 @@ export function usePrintSettingsPanel() {
   async function handleSave(scope: PrintSaveScope) {
     setSaving(true)
     setMessage(null)
-    setError(null)
     try {
       await persistDraft(scope, configRef.current)
       setMessage(
@@ -232,7 +230,7 @@ export function usePrintSettingsPanel() {
           : 'Configuración guardada en el servidor.'
       )
     } catch (saveError) {
-      setError(getApiErrorMessage(saveError))
+      notifyApiError(saveError, 'No se pudo guardar la configuración')
     } finally {
       savingRef.current = false
       setSaving(false)
@@ -242,7 +240,6 @@ export function usePrintSettingsPanel() {
   async function persistFormat(nextFormat: PrintFormatRecord): Promise<void> {
     setSaving(true)
     setMessage(null)
-    setError(null)
     try {
       const draft: PrintConfig = {
         ...configRef.current,
@@ -262,7 +259,7 @@ export function usePrintSettingsPanel() {
       await persistDraft('formats', draft)
       setMessage('Formato guardado en el servidor.')
     } catch (saveError) {
-      setError(getApiErrorMessage(saveError))
+      notifyApiError(saveError, 'No se pudo guardar el formato')
       throw saveError
     } finally {
       savingRef.current = false
@@ -273,12 +270,11 @@ export function usePrintSettingsPanel() {
   async function handleTestPrint(kind: PrintDocumentKind) {
     setTestingKind(kind)
     setMessage(null)
-    setError(null)
     try {
       await printTestDocument(kind)
       setMessage(`Impresión de prueba enviada (${PRINT_DOCUMENT_LABELS[kind]}).`)
     } catch (testError) {
-      setError(getApiErrorMessage(testError))
+      notifyApiError(testError, 'No se pudo imprimir la prueba')
     } finally {
       setTestingKind(null)
     }
@@ -293,7 +289,6 @@ export function usePrintSettingsPanel() {
     saving,
     testingKind,
     message,
-    error,
     isDirty,
     electronAvailable,
     refreshingPrinters,

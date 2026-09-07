@@ -12,7 +12,6 @@ type DashboardSalesChartProps = {
   series: VentasSeriePoint[]
   mode: 'daily' | 'weekly' | 'monthly'
   onModeChange: (mode: 'daily' | 'weekly' | 'monthly') => void
-  chartError?: string | null
   isUpdating?: boolean
   dailyEnabled?: boolean
 }
@@ -27,7 +26,6 @@ export function DashboardSalesChart({
   series,
   mode,
   onModeChange,
-  chartError,
   isUpdating = false,
   dailyEnabled = true,
 }: DashboardSalesChartProps) {
@@ -90,10 +88,6 @@ export function DashboardSalesChart({
           </div>
         </div>
       </div>
-
-      {chartError ? (
-        <p className="text-destructive mb-3 text-xs whitespace-pre-line">{chartError}</p>
-      ) : null}
 
       <div className={dashboardUi.chartBody}>
         <div className={dashboardUi.chartPlotRow}>

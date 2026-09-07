@@ -13,7 +13,7 @@ import {
 import { parseReportSearchParams } from '@/features/reports/report-search-params'
 import { reportUi } from '@/features/reports/report-ui'
 import { useAccountStatementQuery } from '@/features/reports/hooks/use-reports'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { QueryErrorState } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 export function ReportMovementsPage() {
@@ -90,7 +90,9 @@ export function ReportMovementsPage() {
           Cargando movimientos…
         </div>
       ) : isError ? (
-        <div className={reportUi.error}>{getApiErrorMessage(error)}</div>
+        <div className={reportUi.panel}>
+          <QueryErrorState isError error={error} title="No se pudieron cargar los movimientos" />
+        </div>
       ) : !data ? (
         <div className={reportUi.panel}>
           <p className={`${reportUi.body} px-5 py-12 text-center`}>

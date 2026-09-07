@@ -9,13 +9,12 @@ import {
   useUpdatePaymentMethodMutation,
 } from '@/features/payment-methods/hooks/use-payment-methods'
 import type { PaymentMethod } from '@/features/payment-methods/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 export function PaymentMethodsConfigCard() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
 
   const { data: methods = [], isLoading, isError, error } = usePaymentMethodsQuery()
   const updateMutation = useUpdatePaymentMethodMutation()
@@ -32,24 +31,22 @@ export function PaymentMethodsConfigCard() {
   }
 
   async function toggleActive(method: PaymentMethod) {
-    setActionError(null)
     try {
       await updateMutation.mutateAsync({
         code: method.code,
         payload: { is_active: !method.is_active },
       })
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
   async function handleDelete(method: PaymentMethod) {
     if (!window.confirm(`¿Eliminar o desactivar el método "${method.name}"?`)) return
-    setActionError(null)
     try {
       await deleteMutation.mutateAsync(method.code)
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -72,12 +69,10 @@ export function PaymentMethodsConfigCard() {
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
-
         {isLoading ? (
           <Loader2 className="text-muted-foreground size-5 animate-spin" />
         ) : isError ? (
-          <p className="text-destructive text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+          <QueryErrorState isError error={error} title="No se pudieron cargar los métodos de pago" />
         ) : methods.length === 0 ? (
           <p className="text-muted-foreground text-sm">No hay métodos de pago configurados.</p>
         ) : (

@@ -73,6 +73,24 @@ describe('renderSaleDocument', () => {
     expect(rendered.html).toContain('USD 25,00')
   })
 
+  it('renders invoice discount separate from line prices', () => {
+    const rendered = renderSaleDocument(
+      'invoice',
+      {
+        ...sale,
+        discount_usd: '5.0000',
+        total_usd: '20.0000',
+        amount_paid_usd: '20.0000',
+      },
+      config
+    )
+
+    expect(rendered.html).toContain('DESCUENTO')
+    expect(rendered.html).toContain('USD 5,00')
+    expect(rendered.html).toContain('USD 20,00')
+    expect(rendered.html).toContain('2 x 10,00 UND')
+  })
+
   it('renders credit invoice with credit row', () => {
     const rendered = renderSaleDocument(
       'invoice',

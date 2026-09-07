@@ -6,7 +6,8 @@ import { useApplyProfitMarginMutation, useUpdateProfitMarginMutation } from '@/f
 import { PROFIT_MARGIN_PANEL_ID } from '@/features/settings/constants'
 import { useCatalogProductQuery, useCatalogProductsQuery } from '@/features/ventas/hooks/use-catalog'
 import type { CatalogProduct } from '@/features/ventas/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
 
 type ProfitMarginConfigCardProps = {
   defaultMarginPercent?: string | null
@@ -28,7 +29,6 @@ export function ProfitMarginConfigCard({
   const [activeOnly, setActiveOnly] = useState(true)
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [actionError, setActionError] = useState<string | null>(null)
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
 
   const applyMutation = useApplyProfitMarginMutation()
@@ -150,21 +150,20 @@ export function ProfitMarginConfigCard({
   }
 
   async function handleApply() {
-    setActionError(null)
     setActionSuccess(null)
 
     if (!marginValid) {
-      setActionError('Ingresá un porcentaje válido (0 o mayor)')
+      toast.warning('Ingresá un porcentaje válido (0 o mayor)')
       return
     }
 
     if (selectedIds.size === 0) {
-      setActionError('Seleccioná al menos un producto')
+      toast.warning('Seleccioná al menos un producto')
       return
     }
 
     if (applicableSelected.length === 0) {
-      setActionError('Ningún producto seleccionado tiene precio costo registrado')
+      toast.warning('Ningún producto seleccionado tiene precio costo registrado')
       return
     }
 
@@ -183,7 +182,7 @@ export function ProfitMarginConfigCard({
         `Precio venta actualizado en ${result.updatedCount} producto${result.updatedCount === 1 ? '' : 's'}.${skippedNoCost > 0 ? ` ${skippedNoCost} sin precio costo.` : ''}${skippedNotFound > 0 ? ` ${skippedNotFound} no encontrado(s).` : ''}`
       )
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -212,14 +211,13 @@ export function ProfitMarginConfigCard({
             selectedCount={selectedIds.size}
             isApplying={applyMutation.isPending}
             onApply={() => void handleApply()}
-            actionError={actionError}
             actionSuccess={actionSuccess}
           />
           <ProfitMarginProductList
             products={products}
             isLoading={isLoading}
             isError={isError}
-            errorMessage={isError ? getApiErrorMessage(error) : undefined}
+            error={error}
             selectedIds={selectedIds}
             onToggleProduct={toggleProduct}
             allVisibleSelected={allVisibleSelected}

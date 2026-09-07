@@ -849,8 +849,8 @@ test.group('Ventas API — catálogo y ventas', (group) => {
     response.assertStatus(200)
 
     const saleLine = response.body().data.sale.lines[0]
-    assert.equal(Number(saleLine.unit_price_usd), 18.75)
-    assert.equal(Number(response.body().data.sale.total_usd), 18.75)
+    assert.equal(Number(saleLine.unit_price_usd), 30)
+    assert.equal(Number(response.body().data.sale.total_usd), 30)
 
     const baseStock = await InventoryMovement.query()
       .where('materialId', Number(baseMaterial.id))
@@ -865,7 +865,7 @@ test.group('Ventas API — catálogo y ventas', (group) => {
     assert.equal(Number(extraStock?.$extras.total), 9.5)
   })
 
-  test('POST sale ignores client catalog price when custom formula adds material', async ({
+  test('POST sale keeps client unit price when custom formula adds material', async ({
     client,
     assert,
   }) => {
@@ -921,8 +921,47 @@ test.group('Ventas API — catálogo y ventas', (group) => {
       })
 
     response.assertStatus(200)
-    assert.equal(Number(response.body().data.sale.lines[0].unit_price_usd), 18.75)
-    assert.equal(Number(response.body().data.sale.total_usd), 18.75)
+    assert.equal(Number(response.body().data.sale.lines[0].unit_price_usd), 30)
+    assert.equal(Number(response.body().data.sale.total_usd), 30)
+  })
+
+  test('POST sale applies invoice discount without changing line prices', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const catalog = await CatalogProduct.create({
+      name: 'Producto descuento factura',
+      category: 'Uniforme',
+      salePriceUsd: '40.0000',
+      costUsd: '10.0000',
+      stockQuantity: '5.000',
+      active: true,
+    })
+
+    const response = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        confirm: true,
+        guest_name: 'Cliente descuento factura',
+        payment_method_code: 'cash_usd',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        discount_usd: 10,
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 2,
+            unit_price_usd: 40,
+          },
+        ],
+      })
+
+    response.assertStatus(200)
+    assert.equal(Number(response.body().data.sale.lines[0].unit_price_usd), 40)
+    assert.equal(Number(response.body().data.sale.discount_usd), 10)
+    assert.equal(Number(response.body().data.sale.total_usd), 70)
   })
 
   test('draft sale persists and reloads custom formula materials', async ({ client, assert }) => {

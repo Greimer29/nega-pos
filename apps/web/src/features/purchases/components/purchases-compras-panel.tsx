@@ -13,7 +13,7 @@ import { ESTADO_LABELS, formatFecha } from '@/features/purchases/constants'
 import { usePurchasesQuery } from '@/features/purchases/hooks/use-purchases'
 import type { PurchaseEstado } from '@/features/purchases/constants'
 import { useSuppliersQuery } from '@/features/suppliers/hooks/use-suppliers'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { QueryErrorState } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 20
@@ -103,7 +103,7 @@ export function PurchasesComprasPanel() {
             Cargando compras…
           </div>
         ) : isError ? (
-          <p className="text-destructive text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+          <QueryErrorState isError error={error} title="No se pudieron cargar las compras" />
         ) : purchases.length === 0 ? (
           <p className="text-muted-foreground py-8 text-center text-sm">
             No hay compras registradas. Usá &quot;Comprar&quot; para empezar.

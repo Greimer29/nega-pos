@@ -9,6 +9,12 @@ export type PaymentMethodSummary = {
   currency_code: string
 }
 
+export type CatalogProductSize = {
+  id: number
+  size: string
+  stock_quantity: string | number
+}
+
 export type CatalogProduct = {
   id: number
   name: string
@@ -25,6 +31,7 @@ export type CatalogProduct = {
   minimum_stock?: string
   active: boolean
   sold_qty?: number
+  sizes?: CatalogProductSize[]
   created_at: string
   updated_at: string
   formula?: CatalogFormulaRef | null
@@ -175,6 +182,7 @@ export type Sale = {
   amount_paid_usd: string
   balance_usd: string
   credit_due_date: string | null
+  discount_usd?: string
   total_usd: string
   total_bs: string | null
   usd_rate: string | null
@@ -205,6 +213,7 @@ export type CreateSaleInput = {
   usd_rate?: number
   confirm?: boolean
   sold_by_user_id?: number
+  discount_usd?: number
   lines: {
     catalog_product_id?: number
     material_id?: number
@@ -222,6 +231,7 @@ export type UpdateSaleInput = {
   payment_type?: SalePaymentType
   billing_mode?: SaleBillingMode
   usd_rate?: number | null
+  discount_usd?: number
   lines?: CreateSaleInput['lines']
 }
 

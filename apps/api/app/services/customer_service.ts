@@ -8,6 +8,7 @@ import Order from '#models/order'
 import { normalizePhoneToE164 } from '#utils/phone'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
+import { tenantStorageKey } from '#utils/tenant_storage'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import { randomUUID } from 'node:crypto'
 
@@ -141,7 +142,7 @@ export default class CustomerService {
   async guardarImagen(customerId: number, file: MultipartFile): Promise<Customer> {
     const customer = await this.obtener(customerId)
     const extension = file.extname?.toLowerCase() ?? 'bin'
-    const key = `customers/${customerId}/${randomUUID()}.${extension}`
+    const key = tenantStorageKey(`customers/${customerId}/${randomUUID()}.${extension}`)
 
     if (customer.imagePath) {
       await drive

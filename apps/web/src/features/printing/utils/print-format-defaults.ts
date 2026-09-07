@@ -155,6 +155,7 @@ export const FORMAT_PLACEHOLDER_HELP = [
   '{{sale.lines}} — detalle de productos (factura)',
   '{{sale.delivery_lines}} — detalle de productos (nota de despacho)',
   '{{sale.total}} — total en USD',
+  '{{sale.discount}} — descuento de factura en USD',
   '{{sale.amount_paid}} — monto pagado en USD',
   '{{sale.balance}} — saldo pendiente en USD',
   '{{sale.totals_summary}} — total, pago y pago por método (factura)',

@@ -12,6 +12,7 @@ import { assertRegistroMonedaBase } from '#utils/monetary_registration'
 import { sumMachineExpenseRowsUsd } from '#utils/machine_expense_totals'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
+import { tenantStorageKey } from '#utils/tenant_storage'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
@@ -154,7 +155,7 @@ export default class MachineExpenseService {
     const expense = await this.obtener(expenseId)
 
     const extension = file.extname?.toLowerCase() ?? 'bin'
-    const key = `machine-expenses/${expenseId}/${randomUUID()}.${extension}`
+    const key = tenantStorageKey(`machine-expenses/${expenseId}/${randomUUID()}.${extension}`)
 
     if (expense.receiptFile) {
       await drive

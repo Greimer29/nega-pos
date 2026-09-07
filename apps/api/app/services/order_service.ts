@@ -41,6 +41,7 @@ import {
 } from '#services/order_state_machine'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
+import { tenantStorageKey } from '#utils/tenant_storage'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
@@ -771,7 +772,7 @@ export default class OrderService {
     const order = await this.obtener(orderId)
 
     const extension = file.extname?.toLowerCase() ?? 'bin'
-    const key = `orders/${orderId}/${randomUUID()}.${extension}`
+    const key = tenantStorageKey(`orders/${orderId}/${randomUUID()}.${extension}`)
 
     if (order.referenceFile) {
       await drive

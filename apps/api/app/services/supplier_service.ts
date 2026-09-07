@@ -9,6 +9,7 @@ import { normalizeRif } from '#utils/rif'
 import drive from '@adonisjs/drive/services/main'
 import db from '@adonisjs/lucid/services/db'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
+import { tenantStorageKey } from '#utils/tenant_storage'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import { randomUUID } from 'node:crypto'
 
@@ -150,7 +151,7 @@ export default class SupplierService {
   async guardarImagen(supplierId: number, file: MultipartFile): Promise<Supplier> {
     const supplier = await this.obtener(supplierId)
     const extension = file.extname?.toLowerCase() ?? 'bin'
-    const key = `suppliers/${supplierId}/${randomUUID()}.${extension}`
+    const key = tenantStorageKey(`suppliers/${supplierId}/${randomUUID()}.${extension}`)
 
     if (supplier.imagePath) {
       await drive

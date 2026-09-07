@@ -1,3 +1,4 @@
+import type { Material } from '@/features/materials/types'
 import type { BillingMethod } from '@/features/ventas/constants'
 import type { CatalogProduct } from '@/features/ventas/types'
 import {
@@ -6,11 +7,13 @@ import {
 } from '@/features/ventas/utils/sale-line-formula'
 
 const STORAGE_KEY = 'nega-pos:ventas-cart-draft'
-const DRAFT_VERSION = 4
+const DRAFT_VERSION = 6
 
 export type VentasCartDraftLine = {
   id: string
-  product: CatalogProduct
+  kind: 'catalog' | 'material'
+  product?: CatalogProduct
+  material?: Material
   quantity: number
   formulaMaterials?: SaleLineFormulaMaterial[] | null
   unitPriceUsd?: number
@@ -27,6 +30,7 @@ export type VentasCartDraft = {
   billingMethod: BillingMethod
   sourceSaleId: number | null
   sourceSaleLabel: string | null
+  invoiceDiscountUsd?: number
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -57,7 +61,7 @@ function normalizeFormulaMaterials(value: unknown): SaleLineFormulaMaterial[] | 
 }
 
 function normalizeCartLine(line: unknown): VentasCartDraftLine | null {
-  if (!isRecord(line) || !isRecord(line.product) || typeof line.product.id !== 'number') {
+  if (!isRecord(line)) {
     return null
   }
 
@@ -65,11 +69,18 @@ function normalizeCartLine(line: unknown): VentasCartDraftLine | null {
     return null
   }
 
-  return {
+  const kind =
+    line.kind === 'material'
+      ? 'material'
+      : line.kind === 'catalog'
+        ? 'catalog'
+        : isRecord(line.material)
+          ? 'material'
+          : 'catalog'
+
+  const base = {
     id: typeof line.id === 'string' && line.id.trim() ? line.id : createCartLineId(),
-    product: line.product as CatalogProduct,
     quantity: line.quantity,
-    formulaMaterials: normalizeFormulaMaterials(line.formulaMaterials),
     unitPriceUsd:
       typeof line.unitPriceUsd === 'number' && Number.isFinite(line.unitPriceUsd)
         ? line.unitPriceUsd
@@ -78,6 +89,28 @@ function normalizeCartLine(line: unknown): VentasCartDraftLine | null {
       typeof line.kitchenNote === 'string' && line.kitchenNote.trim()
         ? line.kitchenNote.trim()
         : null,
+  }
+
+  if (kind === 'material') {
+    if (!isRecord(line.material) || typeof line.material.id !== 'number') {
+      return null
+    }
+    return {
+      ...base,
+      kind: 'material',
+      material: line.material as Material,
+    }
+  }
+
+  if (!isRecord(line.product) || typeof line.product.id !== 'number') {
+    return null
+  }
+
+  return {
+    ...base,
+    kind: 'catalog',
+    product: line.product as CatalogProduct,
+    formulaMaterials: normalizeFormulaMaterials(line.formulaMaterials),
   }
 }
 
@@ -97,7 +130,9 @@ export function loadVentasCartDraft(): VentasCartDraft | null {
       parsed.version !== DRAFT_VERSION &&
       parsed.version !== 1 &&
       parsed.version !== 2 &&
-      parsed.version !== 3
+      parsed.version !== 3 &&
+      parsed.version !== 4 &&
+      parsed.version !== 5
     ) {
       return null
     }
@@ -112,9 +147,10 @@ export function loadVentasCartDraft(): VentasCartDraft | null {
       cart: normalizedCart,
       customerId:
         typeof parsed.customerId === 'number' && parsed.customerId > 0 ? parsed.customerId : '',
-      clientName: typeof parsed.clientName === 'string' && parsed.clientName.trim()
-        ? parsed.clientName
-        : 'Generico',
+      clientName:
+        typeof parsed.clientName === 'string' && parsed.clientName.trim()
+          ? parsed.clientName
+          : 'Generico',
       customerCreditDays:
         typeof parsed.customerCreditDays === 'number' ? parsed.customerCreditDays : null,
       paymentType: parsed.paymentType === 'CREDIT' ? 'CREDIT' : 'CASH',
@@ -122,6 +158,10 @@ export function loadVentasCartDraft(): VentasCartDraft | null {
       sourceSaleId: typeof parsed.sourceSaleId === 'number' ? parsed.sourceSaleId : null,
       sourceSaleLabel:
         typeof parsed.sourceSaleLabel === 'string' ? parsed.sourceSaleLabel : null,
+      invoiceDiscountUsd:
+        typeof parsed.invoiceDiscountUsd === 'number' && Number.isFinite(parsed.invoiceDiscountUsd)
+          ? parsed.invoiceDiscountUsd
+          : 0,
     }
   } catch {
     return null

@@ -8,6 +8,8 @@ import { DashboardDailyProductsPage } from '@/pages/dashboard-daily-products-pag
 import { DashboardDailyExpensesPage } from '@/pages/dashboard-daily-expenses-page'
 import { DashboardDailyClosingPage } from '@/pages/dashboard-daily-closing-page'
 import { LoginPage } from '@/pages/login-page'
+import { PlatformLoginPage } from '@/pages/platform-login-page'
+import { PlatformPage } from '@/pages/platform-page'
 import { MaterialsPage } from '@/pages/materials-page'
 import { MaterialDetallePage } from '@/pages/material-detail-page'
 import { ProductDetailPage } from '@/pages/product-detail-page'
@@ -26,6 +28,7 @@ import { MachinesPage } from '@/pages/machines-page'
 import { MachineDetailPage } from '@/pages/machine-detail-page'
 import { ReportsPage } from '@/pages/reports-page'
 import { ReportMovementsPage } from '@/pages/report-movements-page'
+import { InventoryProductMovementsPage } from '@/pages/inventory-product-movements-page'
 import { UsersPage } from '@/pages/users-page'
 import { SettingsPage } from '@/pages/settings-page'
 
@@ -37,6 +40,14 @@ export const router = createBrowserRouter([
         <LoginPage />
       </GuestRoute>
     ),
+  },
+  {
+    path: '/platform/login',
+    element: <PlatformLoginPage />,
+  },
+  {
+    path: '/platform',
+    element: <PlatformPage />,
   },
   {
     path: '/',
@@ -157,6 +168,10 @@ export const router = createBrowserRouter([
       {
         path: 'reportes',
         element: <ReportsPage />,
+      },
+      {
+        path: 'reportes/inventario/:productId',
+        element: <InventoryProductMovementsPage />,
       },
       {
         path: 'reportes/movimientos/:category',

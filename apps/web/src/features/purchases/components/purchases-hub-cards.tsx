@@ -6,7 +6,7 @@ import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-mo
 import type { PurchasesHubTab } from '@/features/purchases/constants'
 import type { ExpenseSummary, IncomeSummary, PurchaseSummary } from '@/features/purchases/types'
 import { settingsTabUrl } from '@/features/settings/constants'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { QueryErrorState } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 type HubCardQueryState = {
@@ -155,9 +155,13 @@ function HubCard({ active, onClick, icon, title, kpis, queryState }: HubCardProp
           {isLoading ? (
             <p className="text-muted-foreground text-sm">Cargando…</p>
           ) : isError ? (
-            <p className="text-destructive text-sm whitespace-pre-line">
-              {getApiErrorMessage(queryState?.error)}
-            </p>
+            <QueryErrorState
+              isError
+              error={queryState?.error}
+              title={`No se pudieron cargar ${title.toLowerCase()}`}
+              className="py-2"
+              fallbackLabel="No se pudieron cargar los datos."
+            />
           ) : (
             kpis.map((kpi) => (
               <div key={kpi.label} className="flex items-baseline justify-between gap-2 text-sm">

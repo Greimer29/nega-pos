@@ -2,7 +2,7 @@ import { Loader2 } from 'lucide-react'
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { useSaleQuery } from '@/features/ventas/hooks/use-sales'
 import { catalogProductCode } from '@/features/ventas/components/ventas-order-cart'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { QueryErrorState } from '@/features/notifications/query-error-state'
 
 type VentasHistoryOrderLinesProps = {
   saleId: number
@@ -25,7 +25,12 @@ export function VentasHistoryOrderLines({ saleId }: VentasHistoryOrderLinesProps
             Cargando productos…
           </div>
         ) : isError ? (
-          <p className="text-destructive py-2 text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+          <QueryErrorState
+            isError
+            error={error}
+            title="No se pudieron cargar los productos"
+            className="py-2"
+          />
         ) : lines.length === 0 ? (
           <p className="text-muted-foreground py-2 text-sm">Esta factura no tiene líneas.</p>
         ) : (

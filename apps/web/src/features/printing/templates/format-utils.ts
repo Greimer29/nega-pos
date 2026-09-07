@@ -244,11 +244,21 @@ export function renderSaleTotalsSummary(sale: Sale): string {
   const paidLabel = formatReceiptAmountLabel(sale, sale.amount_paid_usd)
   const balanceLabel = formatReceiptAmountLabel(sale, sale.balance_usd)
   const methodName = paymentMethodLabel(sale.payment_method)
+  const discountUsd = Number(sale.discount_usd ?? 0)
+  const discountLabel = formatReceiptAmountLabel(sale, sale.discount_usd ?? '0')
 
   const paymentRowValue = sale.payment_type === 'CREDIT' ? balanceLabel : paidLabel
 
   return `
     <div class="inv-totals">
+      ${
+        discountUsd > 0.0001
+          ? `<div class="inv-total-line">
+          <span class="inv-total-label">DESCUENTO</span>
+          <span class="inv-total-value">-${escapeHtml(discountLabel)}</span>
+        </div>`
+          : ''
+      }
       <div class="inv-total-line">
         <span class="inv-total-label">TOTAL</span>
         <span class="inv-total-value">${escapeHtml(totalLabel)}</span>

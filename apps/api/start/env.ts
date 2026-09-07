@@ -17,6 +17,13 @@ export default await Env.create(new URL('../', import.meta.url), {
   DB_USER: Env.schema.string(),
   DB_PASSWORD: Env.schema.string.optional(),
   DB_DATABASE: Env.schema.string(),
+  /** Control-plane DB (companies, directory, OTP, platform admins). */
+  DB_CENTRAL_DATABASE: Env.schema.string.optional(),
+  /**
+   * When true: login via central directory + per-company MySQL databases.
+   * When false/absent: legacy single-DB mode (used by automated tests).
+   */
+  MULTI_TENANT_ENABLED: Env.schema.boolean.optional(),
 
   FRONTEND_URL: Env.schema.string({ format: 'url', tld: false }),
   DESKTOP_APP_ORIGIN: Env.schema.string.optional(),
@@ -26,6 +33,16 @@ export default await Env.create(new URL('../', import.meta.url), {
   ADMIN_EMAIL: Env.schema.string({ format: 'email' }),
   ADMIN_PASSWORD: Env.schema.string(),
   ADMIN_NOMBRE: Env.schema.string(),
+
+  PLATFORM_ADMIN_EMAIL: Env.schema.string.optional(),
+  PLATFORM_ADMIN_PASSWORD: Env.schema.string.optional(),
+  PLATFORM_ADMIN_NAME: Env.schema.string.optional(),
+
+  RESEND_API_KEY: Env.schema.string.optional(),
+  MAIL_FROM: Env.schema.string.optional(),
+
+  GOOGLE_CLIENT_ID: Env.schema.string.optional(),
+  GOOGLE_CLIENT_SECRET: Env.schema.string.optional(),
 
   DRIVE_DISK: Env.schema.string.optional(),
   STORAGE_LOCAL_PATH: Env.schema.string.optional(),

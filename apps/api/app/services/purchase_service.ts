@@ -29,6 +29,7 @@ import type { CostWarning } from '#types/cost_warning'
 import type { FulfilledPendingOrder } from '#services/order_service'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
+import { tenantStorageKey } from '#utils/tenant_storage'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
@@ -643,7 +644,7 @@ export default class PurchaseService {
     this.assertBorrador(purchase)
 
     const extension = file.extname?.toLowerCase() ?? 'bin'
-    const key = `purchases/${purchaseId}/${randomUUID()}.${extension}`
+    const key = tenantStorageKey(`purchases/${purchaseId}/${randomUUID()}.${extension}`)
 
     if (purchase.invoiceFile) {
       await drive

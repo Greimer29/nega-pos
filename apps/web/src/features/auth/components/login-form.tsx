@@ -1,8 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,12 +34,16 @@ function safeRedirectPath(from: string | undefined): string {
   return from
 }
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
+
 export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { login } = useAuth()
+  const { login, loginWithGoogle } = useAuth()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const googleButtonRef = useRef<HTMLDivElement>(null)
 
   const {
     register,
@@ -52,6 +56,60 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
       password: '',
     },
   })
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID || !googleButtonRef.current) {
+      return
+    }
+
+    const scriptId = 'google-identity-services'
+    const existing = document.getElementById(scriptId)
+
+    const render = () => {
+      if (!window.google || !googleButtonRef.current) {
+        return
+      }
+
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: async (response) => {
+          setSubmitError(null)
+          setGoogleLoading(true)
+          try {
+            await loginWithGoogle(response.credential)
+            const redirectTo = safeRedirectPath(
+              (location.state as { from?: string } | null)?.from?.replace(/\/login\/?$/, '')
+            )
+            navigate(redirectTo, { replace: true })
+          } catch (error) {
+            setSubmitError(getApiErrorMessage(error))
+          } finally {
+            setGoogleLoading(false)
+          }
+        },
+      })
+
+      googleButtonRef.current.innerHTML = ''
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: 'outline',
+        size: 'large',
+        width: googleButtonRef.current.offsetWidth || 320,
+        text: 'continue_with',
+      })
+    }
+
+    if (existing) {
+      render()
+      return
+    }
+
+    const script = document.createElement('script')
+    script.id = scriptId
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.onload = () => render()
+    document.head.appendChild(script)
+  }, [loginWithGoogle, location.state, navigate])
 
   const onSubmit = handleSubmit(async (values) => {
     setSubmitError(null)
@@ -94,7 +152,7 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
               type="email"
               autoComplete="email"
               placeholder="tu@email.com"
-              disabled={isSubmitting}
+              disabled={isSubmitting || googleLoading}
               className="login-input h-11 pl-10 shadow-none"
               {...register('email')}
             />
@@ -115,7 +173,7 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
               type={showPassword ? 'text' : 'password'}
               autoComplete="current-password"
               placeholder="••••••••"
-              disabled={isSubmitting}
+              disabled={isSubmitting || googleLoading}
               className="login-input h-11 pr-10 pl-10 shadow-none"
               {...register('password')}
             />
@@ -145,8 +203,10 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
 
         <Button
           type="submit"
-          disabled={isSubmitting}
-          className={cn('h-11 w-full bg-white text-sm font-semibold text-neutral-900 hover:bg-neutral-100')}
+          disabled={isSubmitting || googleLoading}
+          className={cn(
+            'h-11 w-full bg-white text-sm font-semibold text-neutral-900 hover:bg-neutral-100'
+          )}
         >
           {isSubmitting ? (
             <>
@@ -159,7 +219,27 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
         </Button>
       </form>
 
-      <p className="mt-8 text-center text-xs text-neutral-400 lg:hidden">
+      {GOOGLE_CLIENT_ID ? (
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center gap-3 text-xs text-neutral-500">
+            <div className="h-px flex-1 bg-neutral-700" />
+            o
+            <div className="h-px flex-1 bg-neutral-700" />
+          </div>
+          <div ref={googleButtonRef} className="flex min-h-11 justify-center" />
+          {googleLoading ? (
+            <p className="text-center text-xs text-neutral-400">Conectando con Google…</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <p className="mt-6 text-center text-xs text-neutral-500">
+        <Link to="/platform/login" className="underline hover:text-neutral-300">
+          Acceso platform (super admin)
+        </Link>
+      </p>
+
+      <p className="mt-4 text-center text-xs text-neutral-400 lg:hidden">
         © {new Date().getFullYear()} Nega POS. Todos los derechos reservados.
       </p>
     </div>

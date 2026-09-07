@@ -12,7 +12,8 @@ import {
   useDeleteCustomerMutation,
 } from '@/features/customers/hooks/use-customers'
 import type { Customer, CustomerTipo } from '@/features/customers/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 20
@@ -26,8 +27,6 @@ export function CustomersPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
-
   const deleteMutation = useDeleteCustomerMutation()
 
   useEffect(() => {
@@ -69,20 +68,19 @@ export function CustomersPage() {
       return
     }
 
-    setActionError(null)
-
     try {
       const result = await deleteMutation.mutateAsync(customerToDelete.id)
       setDeleteDialogOpen(false)
       setCustomerToDelete(null)
 
       if (result.modo === 'soft') {
-        setActionError(
-          `"${customerToDelete.name}" fue desactivado porque tiene pedidos asociados.`
+        toast.warning(
+          `"${customerToDelete.name}" fue desactivado porque tiene pedidos asociados.`,
+          'Desactivado'
         )
       }
     } catch (deleteError) {
-      setActionError(getApiErrorMessage(deleteError))
+      notifyApiError(deleteError)
     }
   }
 
@@ -137,15 +135,13 @@ export function CustomersPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
-
           {isLoading ? (
             <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">
               <Loader2 className="size-4 animate-spin" />
               Cargando clientes…
             </div>
           ) : isError ? (
-            <p className="text-destructive py-8 text-center text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+            <QueryErrorState isError error={error} title="No se pudieron cargar los clientes" />
           ) : customers.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-muted-foreground text-sm">

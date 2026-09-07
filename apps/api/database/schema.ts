@@ -666,7 +666,7 @@ export class SalesShiftSchema extends BaseModel {
 }
 
 export class SaleSchema extends BaseModel {
-  static $columns = ['amountPaidUsd', 'balanceUsd', 'billingMode', 'code', 'confirmedAt', 'createdAt', 'creditDueDate', 'customerId', 'guestName', 'id', 'orderStatus', 'paymentMethodCode', 'paymentType', 'returnedAt', 'salesShiftId', 'soldAt', 'soldByUserId', 'status', 'totalBs', 'totalUsd', 'updatedAt', 'usdRate'] as const
+  static $columns = ['amountPaidUsd', 'balanceUsd', 'billingMode', 'code', 'confirmedAt', 'createdAt', 'creditDueDate', 'customerId', 'discountUsd', 'guestName', 'id', 'orderStatus', 'paymentMethodCode', 'paymentType', 'returnedAt', 'salesShiftId', 'soldAt', 'soldByUserId', 'status', 'totalBs', 'totalUsd', 'updatedAt', 'usdRate'] as const
   $columns = SaleSchema.$columns
   @column()
   declare amountPaidUsd: string
@@ -684,6 +684,8 @@ export class SaleSchema extends BaseModel {
   declare creditDueDate: DateTime | null
   @column()
   declare customerId: bigint | number | null
+  @column()
+  declare discountUsd: string
   @column()
   declare guestName: string | null
   @column({ isPrimary: true })

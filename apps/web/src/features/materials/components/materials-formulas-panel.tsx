@@ -9,7 +9,7 @@ import {
   useFormulasQuery,
 } from '@/features/formulas/hooks/use-formulas'
 import type { Formula } from '@/features/formulas/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 
 const PER_PAGE = 30
 
@@ -19,8 +19,6 @@ export function MaterialsFormulasPanel() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingFormula, setEditingFormula] = useState<Formula | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
-
   const deleteMutation = useDeleteFormulaMutation()
 
   useEffect(() => {
@@ -52,11 +50,10 @@ export function MaterialsFormulasPanel() {
   }
 
   async function handleDelete(formula: Formula) {
-    setActionError(null)
     try {
       await deleteMutation.mutateAsync(formula.id)
     } catch (deleteError) {
-      setActionError(getApiErrorMessage(deleteError))
+      notifyApiError(deleteError)
     }
   }
 
@@ -85,15 +82,13 @@ export function MaterialsFormulasPanel() {
             Creá fórmulas con materiales y asignalas a los productos que necesites.
           </CardDescription>
 
-          {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
-
           {isLoading ? (
             <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">
               <Loader2 className="size-4 animate-spin" />
               Cargando fórmulas…
             </div>
           ) : isError ? (
-            <p className="text-destructive py-8 text-center text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+            <QueryErrorState isError error={error} title="No se pudieron cargar las fórmulas" />
           ) : formulas.length === 0 ? (
             <p className="text-muted-foreground py-8 text-center text-sm">
               No hay fórmulas registradas.

@@ -16,7 +16,8 @@ import {
   isDashboardChartValidationError,
   markDailyDashboardChartSupported,
 } from '@/features/dashboard/utils/dashboard-chart-support'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
 
 function todayLabel() {
   return new Date().toLocaleDateString('es-VE', {
@@ -29,7 +30,6 @@ function todayLabel() {
 
 export function DashboardPage() {
   const [chartMode, setChartMode] = useState<DashboardChartMode>('weekly')
-  const [chartError, setChartError] = useState<string | null>(null)
   const lastSuccessfulChartModeRef = useRef<DashboardChartMode>('weekly')
   const { data, isLoading, isError, error, isFetching, isPlaceholderData } =
     useDashboardOverviewQuery(chartMode)
@@ -41,7 +41,6 @@ export function DashboardPage() {
   useEffect(() => {
     if (data && !isError && !isFetching) {
       lastSuccessfulChartModeRef.current = chartMode
-      setChartError(null)
 
       if (chartMode === 'daily') {
         markDailyDashboardChartSupported(true)
@@ -56,7 +55,7 @@ export function DashboardPage() {
 
     if (isDashboardChartValidationError(error)) {
       markDailyDashboardChartSupported(false)
-      setChartError(DASHBOARD_DAILY_CHART_MESSAGE)
+      toast.warning(DASHBOARD_DAILY_CHART_MESSAGE)
 
       if (chartMode === 'daily') {
         setChartMode(lastSuccessfulChartModeRef.current)
@@ -69,7 +68,7 @@ export function DashboardPage() {
       return
     }
 
-    setChartError(getApiErrorMessage(error))
+    notifyApiError(error, 'No se pudo cargar el gráfico')
 
     if (chartMode !== lastSuccessfulChartModeRef.current) {
       setChartMode(lastSuccessfulChartModeRef.current)
@@ -78,11 +77,10 @@ export function DashboardPage() {
 
   function handleChartModeChange(mode: DashboardChartMode) {
     if (!canSelectDashboardChartMode(mode)) {
-      setChartError(DASHBOARD_DAILY_CHART_MESSAGE)
+      toast.warning(DASHBOARD_DAILY_CHART_MESSAGE)
       return
     }
 
-    setChartError(null)
     setChartMode(mode)
   }
 
@@ -102,7 +100,7 @@ export function DashboardPage() {
       </div>
 
       {isPageError ? (
-        <p className="text-destructive text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+        <QueryErrorState isError={isPageError} error={error} title="No se pudo cargar el dashboard" />
       ) : null}
 
       {isInitialLoad || (chartValidationFailed && !data) ? (
@@ -120,7 +118,6 @@ export function DashboardPage() {
                 series={data.ventasSeries}
                 mode={chartMode}
                 onModeChange={handleChartModeChange}
-                chartError={chartError}
                 isUpdating={isFetching && isPlaceholderData}
                 dailyEnabled={isDailyDashboardChartSupported()}
               />

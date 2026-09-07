@@ -10,7 +10,7 @@ import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-mo
 import { useSalesQuery } from '@/features/ventas/hooks/use-sales'
 import { SALE_ORDER_STATUS_LABELS, paymentMethodLabel } from '@/features/ventas/constants'
 import type { SaleOrderStatus } from '@/features/ventas/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { QueryErrorState } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 20
@@ -201,9 +201,7 @@ export function VentasHistoryPanel() {
               Seleccioná la fecha desde para aplicar el rango personalizado.
             </p>
           ) : isError ? (
-            <p className="text-destructive py-8 text-center text-sm whitespace-pre-line">
-              {getApiErrorMessage(error)}
-            </p>
+            <QueryErrorState isError error={error} title="No se pudieron cargar las ventas" />
           ) : sales.length === 0 ? (
             <p className="text-muted-foreground py-12 text-center text-sm">
               No hay ventas que coincidan con los filtros.

@@ -12,7 +12,7 @@ export const MOVEMENT_TYPE_LABELS = {
   income: 'Ingreso',
 } as const
 
-export type ReportsHubTab = 'estado-cuenta'
+export type ReportsHubTab = 'estado-cuenta' | 'inventario'
 
 export function formatMoney(value: string | number | null | undefined, currency = 'USD') {
   if (value === null || value === undefined || value === '') return '—'

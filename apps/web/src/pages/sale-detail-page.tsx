@@ -12,6 +12,8 @@ import {
 import { VentasOrderReturnDialog } from '@/features/ventas/components/ventas-order-return-dialog'
 import { SALE_ORDER_STATUS_LABELS, paymentMethodLabel } from '@/features/ventas/constants'
 import type { SaleOrderStatus } from '@/features/ventas/types'
+import { notifyApiError } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
@@ -45,7 +47,6 @@ export function SaleDetailPage() {
   const transitionMutation = useTransitionSaleMutation()
   const confirmMutation = useConfirmSaleMutation()
   const [returnOpen, setReturnOpen] = useState(false)
-  const [actionError, setActionError] = useState<string | null>(null)
   const [printNotice, setPrintNotice] = useState<string | null>(
     (location.state as { printNotice?: string } | null)?.printNotice ?? null
   )
@@ -101,17 +102,15 @@ export function SaleDetailPage() {
   const nextStatuses = sale.billing_mode === 'ORDER' ? ORDER_TRANSITIONS[sale.order_status] : []
 
   async function handleTransition(orderStatus: SaleOrderStatus) {
-    setActionError(null)
     try {
       await transitionMutation.mutateAsync({ id: saleId, orderStatus })
       void refetch()
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
   async function handleConfirmDraft() {
-    setActionError(null)
     try {
       const confirmed = await confirmMutation.mutateAsync({ id: saleId })
       if (printingAvailable) {
@@ -136,7 +135,7 @@ export function SaleDetailPage() {
       }
       void navigate(`/ventas/${confirmed.id}`, { replace: true })
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -144,7 +143,6 @@ export function SaleDetailPage() {
     if (!sale) return
     setReprintingKind(kind)
     setPrintNotice(null)
-    setActionError(null)
     try {
       const result = await reprintSaleDocument(sale, kind)
       if (result.errors.length > 0) {
@@ -217,9 +215,6 @@ export function SaleDetailPage() {
         </div>
       </div>
 
-      {actionError ? (
-        <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p>
-      ) : null}
       {printNotice ? (
         <p className="text-amber-800 text-sm whitespace-pre-line">{printNotice}</p>
       ) : null}
@@ -254,6 +249,27 @@ export function SaleDetailPage() {
                 : paymentMethodLabel(sale.payment_method) || 'Contado'}
             </p>
           </div>
+          <div>
+            <p className="text-muted-foreground text-xs">Subtotal</p>
+            <p className="text-sm font-medium">
+              <DisplayMoneyFromUsd
+                amountUsd={
+                  (sale.lines ?? []).reduce(
+                    (sum, line) => sum + Number(line.quantity) * Number(line.unit_price_usd),
+                    0
+                  )
+                }
+              />
+            </p>
+          </div>
+          {Number(sale.discount_usd ?? 0) > 0 ? (
+            <div>
+              <p className="text-muted-foreground text-xs">Descuento</p>
+              <p className="text-sm font-medium text-violet-800">
+                −<DisplayMoneyFromUsd amountUsd={sale.discount_usd} />
+              </p>
+            </div>
+          ) : null}
           <div>
             <p className="text-muted-foreground text-xs">Total</p>
             <p className="text-sm font-medium">

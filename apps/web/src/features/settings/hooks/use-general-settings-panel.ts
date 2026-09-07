@@ -17,7 +17,7 @@ import {
   type BusinessProfile,
   type BusinessProfileInput,
 } from '@/features/settings/types/general-settings'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 
 export function useGeneralSettingsPanel() {
   const canEdit = useCanEditSettings()
@@ -34,7 +34,6 @@ export function useGeneralSettingsPanel() {
   const [saving, setSaving] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [logoVersion, setLogoVersion] = useState(0)
 
   useEffect(() => {
@@ -46,14 +45,13 @@ export function useGeneralSettingsPanel() {
 
   useEffect(() => {
     if (queryIsError && queryError) {
-      setError(getApiErrorMessage(queryError))
+      notifyApiError(queryError, 'No se pudo cargar la configuración general')
     }
   }, [queryIsError, queryError])
 
   async function handleSave() {
     setSaving(true)
     setMessage(null)
-    setError(null)
 
     const payload: BusinessProfileInput = {
       trade_name: profile.trade_name.trim(),
@@ -76,7 +74,7 @@ export function useGeneralSettingsPanel() {
       queryClient.setQueryData(businessProfileQueryKey, saved)
       setMessage('Configuración general guardada.')
     } catch (saveError) {
-      setError(getApiErrorMessage(saveError))
+      notifyApiError(saveError, 'No se pudo guardar la configuración')
     } finally {
       setSaving(false)
     }
@@ -85,7 +83,6 @@ export function useGeneralSettingsPanel() {
   async function handleLogoUpload(file: File) {
     setUploadingLogo(true)
     setMessage(null)
-    setError(null)
 
     try {
       const saved = await uploadBusinessLogo(file)
@@ -94,7 +91,7 @@ export function useGeneralSettingsPanel() {
       queryClient.setQueryData(businessProfileQueryKey, saved)
       setMessage('Logo actualizado.')
     } catch (uploadError) {
-      setError(getApiErrorMessage(uploadError))
+      notifyApiError(uploadError, 'No se pudo subir el logo')
     } finally {
       setUploadingLogo(false)
     }
@@ -106,7 +103,6 @@ export function useGeneralSettingsPanel() {
 
     setUploadingLogo(true)
     setMessage(null)
-    setError(null)
 
     try {
       const saved = await deleteBusinessLogo()
@@ -115,7 +111,7 @@ export function useGeneralSettingsPanel() {
       queryClient.setQueryData(businessProfileQueryKey, saved)
       setMessage('Logo eliminado.')
     } catch (deleteError) {
-      setError(getApiErrorMessage(deleteError))
+      notifyApiError(deleteError, 'No se pudo eliminar el logo')
     } finally {
       setUploadingLogo(false)
     }
@@ -136,7 +132,6 @@ export function useGeneralSettingsPanel() {
     saving,
     uploadingLogo,
     message,
-    error,
     logoVersion,
     handleSave,
     handleLogoUpload,

@@ -89,6 +89,7 @@ function buildPlaceholderMap(
     'sale.lines': renderSaleLines(sale, lines),
     'sale.delivery_lines': renderDeliveryNoteLines(sale, lines),
     'sale.total': formatMoneyUsd(sale.total_usd),
+    'sale.discount': formatMoneyUsd(sale.discount_usd ?? '0'),
     'sale.amount_paid': formatMoneyUsd(sale.amount_paid_usd),
     'sale.balance': formatMoneyUsd(sale.balance_usd),
     'sale.total_native': formatNativeMoney(sale, sale.total_usd),

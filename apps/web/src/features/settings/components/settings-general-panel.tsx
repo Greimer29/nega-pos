@@ -17,7 +17,6 @@ export function SettingsGeneralPanel() {
     saving,
     uploadingLogo,
     message,
-    error,
     logoVersion,
     handleSave,
     handleLogoUpload,
@@ -37,7 +36,6 @@ export function SettingsGeneralPanel() {
   return (
     <div className="flex flex-col gap-6">
       {message ? <p className="text-emerald-700 text-sm">{message}</p> : null}
-      {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>

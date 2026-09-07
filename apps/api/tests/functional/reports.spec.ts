@@ -4,6 +4,9 @@ import AppSetting from '#models/app_setting'
 import CatalogProduct from '#models/catalog_product'
 import Customer from '#models/customer'
 import CustomerPayment from '#models/customer_payment'
+import InventoryMovement from '#models/inventory_movement'
+import Material from '#models/material'
+import ProductInventoryMovement from '#models/product_inventory_movement'
 import Purchase from '#models/purchase'
 import Supplier from '#models/supplier'
 import SupplierPayment from '#models/supplier_payment'
@@ -17,6 +20,7 @@ const TEST_EMAIL = 'test-reports@negapos.local'
 const TEST_PASSWORD = 'password123'
 
 async function resetDatabase() {
+  await db.from('product_inventory_movements').delete()
   await db.from('inventory_movements').delete()
   await db.from('purchase_items').delete()
   await db.from('purchases').delete()
@@ -856,5 +860,115 @@ test.group('Reports API', (group) => {
     assert.equal(incomeMovement!.label, 'Capital inicial')
     assert.equal(incomeMovement!.isIncome, true)
     assert.equal(incomeMovement!.amountUsd, '500.0000')
+  })
+
+  test('GET /reports/inventory returns products and materials snapshot', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+
+    const product = await CatalogProduct.create({
+      name: 'Camisa stock',
+      category: 'Uniforme',
+      salePriceUsd: '25.0000',
+      costUsd: '10.0000',
+      stockQuantity: '8.000',
+      minimumStock: '2.000',
+      saleUnit: 'UND',
+      active: true,
+    })
+
+    const material = await Material.create({
+      code: 'MAT-INV-1',
+      name: 'Tela report',
+      category: 'Telas',
+      unit: 'MTS',
+      minimumStock: '5.000',
+      lastPurchasePriceUsd: '3.5000',
+      salePriceUsd: '0.0000',
+      active: true,
+    })
+
+    await InventoryMovement.create({
+      materialId: Number(material.id),
+      type: 'PURCHASE_IN',
+      quantity: '12.000',
+    })
+
+    const response = await client
+      .get('/api/v1/reports/inventory')
+      .qs({ active: true, sort_by: 'name', sort_dir: 'asc' })
+      .loginAs(user)
+
+    response.assertStatus(200)
+    const body = response.body() as {
+      data: {
+        products: Array<{
+          kind: string
+          product_id: number
+          description: string
+          total_quantity: string
+          lines: Array<{ size: string | null; quantity: string }>
+        }>
+        meta: { total: number }
+      }
+    }
+
+    assert.isAtLeast(body.data.meta.total, 2)
+    const productRow = body.data.products.find(
+      (row) => row.kind === 'product' && row.product_id === Number(product.id)
+    )
+    const materialRow = body.data.products.find(
+      (row) => row.kind === 'material' && row.description === 'Tela report'
+    )
+    assert.exists(productRow)
+    assert.equal(productRow!.total_quantity, '8.000')
+    assert.equal(productRow!.lines[0].size, null)
+    assert.exists(materialRow)
+    assert.equal(materialRow!.total_quantity, '12.000')
+  })
+
+  test('GET /reports/inventory/:id/movements returns product movements', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+
+    const product = await CatalogProduct.create({
+      name: 'Producto movimientos',
+      category: 'Uniforme',
+      salePriceUsd: '15.0000',
+      costUsd: '5.0000',
+      stockQuantity: '10.000',
+      minimumStock: '1.000',
+      saleUnit: 'UND',
+      active: true,
+    })
+
+    await ProductInventoryMovement.create({
+      catalogProductId: Number(product.id),
+      type: 'MANUAL_CARGO',
+      quantity: '10.000',
+      note: 'Ajuste inicial',
+    })
+
+    const response = await client
+      .get(`/api/v1/reports/inventory/${product.id}/movements`)
+      .qs({ month: DateTime.now().toFormat('yyyy-MM') })
+      .loginAs(user)
+
+    response.assertStatus(200)
+    const body = response.body() as {
+      data: {
+        product: { product_id: number; description: string }
+        movements: Array<{ type: string; note: string | null }>
+      }
+    }
+
+    assert.equal(body.data.product.product_id, Number(product.id))
+    assert.equal(body.data.product.description, 'Producto movimientos')
+    assert.isAtLeast(body.data.movements.length, 1)
+    assert.equal(body.data.movements[0].type, 'MANUAL_CARGO')
   })
 })

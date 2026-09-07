@@ -67,3 +67,92 @@ export type AccountStatementResponse = {
     movements: AccountStatementMovement[]
   }
 }
+
+export type InventoryReportSortBy = 'id' | 'name' | 'sale_price' | 'quantity'
+export type InventoryReportSortDir = 'asc' | 'desc'
+
+export type InventoryReportProduct = {
+  kind?: 'product' | 'material'
+  product_id: number
+  code: string
+  image_path: string | null
+  description: string
+  sale_price_usd: string
+  cost_usd: string | null
+  sale_unit: string
+  category: string
+  stock_source: 'manual' | 'formula'
+  low_stock: boolean
+  has_sizes: boolean
+  total_quantity: string
+  lines: Array<{ size: string | null; quantity: string }>
+}
+
+export type InventoryReportParams = {
+  search?: string
+  category?: string
+  sort_by?: InventoryReportSortBy
+  sort_dir?: InventoryReportSortDir
+  active?: boolean
+  low_stock?: boolean
+  hide_zero?: boolean
+  page?: number
+  per_page?: number
+  export?: boolean
+}
+
+export type InventoryReportMeta = {
+  total: number
+  perPage: number
+  currentPage: number
+  lastPage: number
+  firstPage: number
+}
+
+export type InventoryReportResponse = {
+  data: {
+    products: InventoryReportProduct[]
+    meta: InventoryReportMeta
+  }
+}
+
+export type InventoryMovementType =
+  | 'PURCHASE_IN'
+  | 'SALE_OUT'
+  | 'MANUAL_ADJUSTMENT'
+  | 'MANUAL_CARGO'
+  | 'MANUAL_DESCARGO'
+  | 'REVERSAL_ADJUSTMENT'
+
+export type InventoryProductMovement = {
+  id: number
+  type: InventoryMovementType
+  quantity: string
+  note: string | null
+  created_at: string | null
+  sale_id: number | null
+  sale_code: string | null
+  order_id: number | null
+  order_code: string | null
+  purchase_id: number | null
+  purchase_item_id: number | null
+}
+
+export type InventoryMovementsParams = {
+  from?: string
+  to?: string
+  month?: string
+  page?: number
+  per_page?: number
+  export?: boolean
+  types?: InventoryMovementType[]
+}
+
+export type InventoryMovementsResponse = {
+  data: {
+    product: InventoryReportProduct
+    movements: InventoryProductMovement[]
+    meta: InventoryReportMeta
+    period: { from: string | null; to: string | null }
+  }
+}

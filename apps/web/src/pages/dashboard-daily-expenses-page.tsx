@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { DailyExpenseList } from '@/features/dashboard/components/daily-expense-list'
 import { useDailyExpensesQuery } from '@/features/dashboard/hooks/use-dashboard'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { QueryErrorState } from '@/features/notifications/query-error-state'
 
 function todayLabel() {
   return new Date().toLocaleDateString('es-VE', {
@@ -38,7 +38,7 @@ export function DashboardDailyExpensesPage() {
           Cargando gastos del día…
         </div>
       ) : isError ? (
-        <p className="text-destructive text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+        <QueryErrorState isError error={error} title="No se pudieron cargar los gastos del día" />
       ) : !data ? (
         <p className="text-muted-foreground py-24 text-center text-sm">
           No se recibió información del reporte. Intentá actualizar la página.

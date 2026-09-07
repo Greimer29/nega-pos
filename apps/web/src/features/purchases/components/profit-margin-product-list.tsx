@@ -1,3 +1,4 @@
+import { QueryErrorState } from '@/features/notifications/query-error-state'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
@@ -29,7 +30,7 @@ type ProfitMarginProductListProps = {
   products: CatalogProduct[]
   isLoading: boolean
   isError: boolean
-  errorMessage?: string
+  error?: unknown
   selectedIds: Set<number>
   onToggleProduct: (id: number) => void
   allVisibleSelected: boolean
@@ -50,7 +51,7 @@ export function ProfitMarginProductList({
   products,
   isLoading,
   isError,
-  errorMessage,
+  error,
   selectedIds,
   onToggleProduct,
   allVisibleSelected,
@@ -97,7 +98,12 @@ export function ProfitMarginProductList({
             Cargando productos…
           </div>
         ) : isError ? (
-          <p className="text-destructive p-4 text-sm">{errorMessage}</p>
+          <QueryErrorState
+            isError
+            error={error}
+            title="No se pudieron cargar los productos"
+            className="p-4"
+          />
         ) : products.length === 0 ? (
           <p className="text-muted-foreground flex flex-1 items-center p-4 text-sm">
             No hay productos que coincidan con los filtros.

@@ -17,7 +17,8 @@ import {
   useMachinesQuery,
 } from '@/features/machines/hooks/use-machines'
 import type { Machine } from '@/features/machines/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 20
@@ -32,8 +33,6 @@ export function MachinesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null)
   const [machineToDelete, setMachineToDelete] = useState<Machine | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
-
   const deleteMutation = useDeleteMachineMutation()
 
   useEffect(() => {
@@ -76,20 +75,19 @@ export function MachinesPage() {
       return
     }
 
-    setActionError(null)
-
     try {
       const result = await deleteMutation.mutateAsync(machineToDelete.id)
       setDeleteDialogOpen(false)
       setMachineToDelete(null)
 
       if (result.modo === 'soft') {
-        setActionError(
-          `"${machineToDelete.name}" fue desactivada porque tiene gastos asociados.`
+        toast.warning(
+          `"${machineToDelete.name}" fue desactivada porque tiene gastos asociados.`,
+          'Desactivado'
         )
       }
     } catch (deleteError) {
-      setActionError(getApiErrorMessage(deleteError))
+      notifyApiError(deleteError)
     }
   }
 
@@ -156,15 +154,13 @@ export function MachinesPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
-
           {isLoading ? (
             <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">
               <Loader2 className="size-4 animate-spin" />
               Cargando máquinas…
             </div>
           ) : isError ? (
-            <p className="text-destructive py-8 text-center text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+            <QueryErrorState isError error={error} title="No se pudieron cargar las máquinas" />
           ) : machines.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-muted-foreground text-sm">

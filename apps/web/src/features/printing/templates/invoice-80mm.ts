@@ -27,6 +27,14 @@ export function renderInvoiceBody(sale: Sale, business: PrintBusinessConfig): st
     <div class="divider"></div>
     ${renderSaleLines(sale)}
     <div class="divider"></div>
+    ${
+      Number(sale.discount_usd ?? 0) > 0.0001
+        ? `<div class="line-row">
+      <span>DESCUENTO</span>
+      <span>-${formatMoneyUsd(sale.discount_usd ?? '0')}</span>
+    </div>`
+        : ''
+    }
     <div class="line-row bold">
       <span>TOTAL USD</span>
       <span>${formatMoneyUsd(sale.total_usd)}</span>

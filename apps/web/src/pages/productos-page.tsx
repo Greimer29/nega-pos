@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Layers, Loader2, Plus } from 'lucide-react'
+import { Layers, Loader2, Plus, SlidersHorizontal } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { CatalogFormDialog } from '@/features/ventas/components/catalog-form-dialog'
-import { CatalogProductCard } from '@/features/ventas/components/catalog-product-card'
+import {
+  CatalogProductCard,
+  catalogProductGridClassName,
+} from '@/features/ventas/components/catalog-product-card'
 import { PermissionGate } from '@/features/permissions/components/permission-gate'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import {
@@ -14,7 +17,9 @@ import {
   useDeleteCatalogProductMutation,
 } from '@/features/ventas/hooks/use-catalog'
 import type { CatalogProduct } from '@/features/ventas/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
+import { cn } from '@/lib/utils'
 
 const PER_PAGE = 30
 
@@ -26,11 +31,11 @@ export function ProductosPage() {
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [category, setCategory] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [actionError, setActionError] = useState<string | null>(null)
-
   const deleteMutation = useDeleteCatalogProductMutation()
   const { data: categories = [] } = useActiveCategoriesQuery()
+  const activeFilterCount = category ? 1 : 0
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -62,14 +67,16 @@ export function ProductosPage() {
   }
 
   async function handleDeleteProduct(product: CatalogProduct) {
-    setActionError(null)
     try {
       const result = await deleteMutation.mutateAsync(product.id)
       if (result.modo === 'soft') {
-        setActionError(`"${product.name}" fue desactivado porque tiene ventas asociadas.`)
+        toast.warning(
+          `"${product.name}" fue desactivado porque tiene ventas asociadas.`,
+          'Desactivado'
+        )
       }
     } catch (deleteError) {
-      setActionError(getApiErrorMessage(deleteError))
+      notifyApiError(deleteError)
     }
   }
 
@@ -83,54 +90,84 @@ export function ProductosPage() {
       </div>
 
       <Card>
-        <CardHeader className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
+        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+          <div className="min-w-0 space-y-1.5">
             <CardTitle className="text-base">Catálogo</CardTitle>
             <CardDescription>
               {meta ? `${meta.total} producto${meta.total === 1 ? '' : 's'}` : 'Cargando…'}
             </CardDescription>
           </div>
-          <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-            <Button variant="outline" asChild>
-              <Link to="/productos/materiales">
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="relative shrink-0"
+              title="Filtros"
+              aria-label="Filtros"
+              aria-expanded={filtersOpen}
+              aria-controls="productos-catalog-filters"
+              onClick={() => setFiltersOpen((open) => !open)}
+            >
+              <SlidersHorizontal className="size-4" />
+              {activeFilterCount > 0 ? (
+                <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-semibold text-white">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </Button>
+            <Button
+              variant="outline"
+              asChild
+              className="size-9 sm:h-9 sm:w-auto sm:px-4"
+            >
+              <Link to="/productos/materiales" title="Ver materiales" aria-label="Ver materiales">
                 <Layers className="size-4" />
-                Ver materiales
+                <span className="hidden sm:inline">Ver materiales</span>
               </Link>
             </Button>
             <PermissionGate permission="catalog.edit">
-              <Button onClick={openCreateDialog}>
+              <Button
+                onClick={openCreateDialog}
+                className="size-9 sm:h-9 sm:w-auto sm:px-4"
+                title="Nuevo producto"
+                aria-label="Nuevo producto"
+              >
                 <Plus />
-                Nuevo producto
+                <span className="hidden sm:inline">Nuevo producto</span>
               </Button>
             </PermissionGate>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-3">
+        <CardContent className="space-y-4 px-3 sm:px-6">
+          <div className="flex flex-col gap-3">
             <Input
               placeholder="Buscar producto…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="max-w-xs"
             />
-            <select
-              className="border-input flex h-9 rounded-md border bg-white px-3 text-sm"
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value)
-                setPage(1)
-              }}
+            <div
+              id="productos-catalog-filters"
+              className={cn('flex-wrap gap-3', filtersOpen ? 'flex' : 'hidden')}
             >
-              <option value="">Todas las categorías</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              <select
+                className="border-input flex h-9 rounded-md border bg-white px-3 text-sm"
+                value={category}
+                onChange={(e) => {
+                  setCategory(e.target.value)
+                  setPage(1)
+                }}
+              >
+                <option value="">Todas las categorías</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-
-          {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
 
           {isLoading ? (
             <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">
@@ -138,13 +175,13 @@ export function ProductosPage() {
               Cargando productos…
             </div>
           ) : isError ? (
-            <p className="text-destructive py-8 text-center text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+            <QueryErrorState isError error={error} title="No se pudieron cargar los productos" />
           ) : products.length === 0 ? (
             <p className="text-muted-foreground py-8 text-center text-sm">
               No hay productos registrados.
             </p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div className={catalogProductGridClassName}>
               {products.map((product) => (
                 <CatalogProductCard
                   key={product.id}

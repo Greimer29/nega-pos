@@ -25,6 +25,8 @@ export type Material = {
   lastPurchasePrice: string | null
   lastPurchasePriceUsd: string | null
   previousPurchasePriceUsd?: string | null
+  salePriceUsd?: string | null
+  previousSalePriceUsd?: string | null
   lastPurchaseDate: string | null
   imagePath: string | null
   active: boolean

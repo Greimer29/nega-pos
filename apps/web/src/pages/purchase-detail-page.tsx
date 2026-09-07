@@ -68,7 +68,7 @@ import { productSaleUnitAbrev } from '@/features/ventas/constants'
 import { useSuppliersQuery } from '@/features/suppliers/hooks/use-suppliers'
 import { supplierImageUrl } from '@/features/suppliers/constants'
 import { PublicImage } from '@/components/public-image'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { parseDecimalInput } from '@/lib/numeric-input'
@@ -210,8 +210,6 @@ export function PurchaseDetallePage() {
   const [materialDialogOpen, setMaterialDialogOpen] = useState(false)
   const [productDialogOpen, setProductDialogOpen] = useState(false)
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
-
   const { data: purchase, isLoading, isError, error } = usePurchaseQuery(purchaseId)
   const { data: globalRate } = useExchangeRateQuery()
   const { data: activeCurrencies = [] } = useActiveCurrenciesQuery()
@@ -407,14 +405,13 @@ export function PurchaseDetallePage() {
 
       void updateItemMutation
         .mutateAsync({ purchaseId, itemId, payload })
-        .catch((err) => setActionError(getApiErrorMessage(err)))
+        .catch((err) => notifyApiError(err))
     }, 500)
 
     itemSaveTimers.current.set(localId, timer)
   }
 
   async function addMaterialToItems(material: Material) {
-    setActionError(null)
     const existing = localItems.find(
       (i) => i.itemType === 'material' && i.materialId === material.id
     )
@@ -457,12 +454,11 @@ export function PurchaseDetallePage() {
       }
       markDirty()
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
   async function addProductToItems(product: CatalogProduct) {
-    setActionError(null)
     const existing = localItems.find(
       (i) => i.itemType === 'product' && i.catalogProductId === product.id
     )
@@ -505,7 +501,7 @@ export function PurchaseDetallePage() {
       }
       markDirty()
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -538,7 +534,6 @@ export function PurchaseDetallePage() {
   }
 
   async function removeLocalItem(localId: string) {
-    setActionError(null)
     const itemId = parseDbItemId(localId)
     const existingTimer = itemSaveTimers.current.get(localId)
     if (existingTimer) {
@@ -551,7 +546,7 @@ export function PurchaseDetallePage() {
       try {
         await deleteItemMutation.mutateAsync({ purchaseId, itemId })
       } catch (err) {
-        setActionError(getApiErrorMessage(err))
+        notifyApiError(err)
         return
       }
     }
@@ -638,7 +633,7 @@ export function PurchaseDetallePage() {
         },
       })
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -689,33 +684,30 @@ export function PurchaseDetallePage() {
 
   async function handleDeletePurchase() {
     if (!window.confirm('¿Eliminar esta compra en borrador?')) return
-    setActionError(null)
     try {
       await deleteMutation.mutateAsync(purchaseId)
       void navigate('/purchases')
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
   async function handleUploadFactura(file: File) {
-    setActionError(null)
     try {
       await uploadMutation.mutateAsync({ purchaseId, file })
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
   async function handleDownloadFactura() {
-    setActionError(null)
     try {
       const blob = await downloadFactura(purchaseId)
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank')
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -771,8 +763,6 @@ export function PurchaseDetallePage() {
           </Button>
         ) : null}
       </div>
-
-      {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
 
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-4">

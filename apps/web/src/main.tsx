@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { AuthProvider } from '@/features/auth/components/auth-provider'
 import { BusinessThemeProvider } from '@/features/branding/business-theme-provider'
+import { ToastViewport } from '@/features/notifications/toast-viewport'
 import { loadRuntimeApiConfig } from '@/lib/api'
 import { queryClient } from '@/lib/query-client'
 import { router } from '@/routes/router'
@@ -19,6 +20,7 @@ async function bootstrap() {
         <AuthProvider>
           <BusinessThemeProvider>
             <RouterProvider router={router} />
+            <ToastViewport />
           </BusinessThemeProvider>
         </AuthProvider>
       </QueryClientProvider>

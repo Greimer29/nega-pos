@@ -12,6 +12,7 @@ import type { InventoryUnit } from '#constants/inventory_units'
 import type { CostWarning } from '#types/cost_warning'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
+import { tenantStorageKey } from '#utils/tenant_storage'
 import db from '@adonisjs/lucid/services/db'
 import { randomUUID } from 'node:crypto'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
@@ -370,7 +371,7 @@ export default class CatalogProductService {
   async guardarImagen(id: number, file: MultipartFile): Promise<CatalogProduct> {
     const product = await this.obtener(id)
     const extension = file.extname?.toLowerCase() ?? 'bin'
-    const key = `catalog-products/${id}/${randomUUID()}.${extension}`
+    const key = tenantStorageKey(`catalog-products/${id}/${randomUUID()}.${extension}`)
 
     if (product.imagePath) {
       await drive

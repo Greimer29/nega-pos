@@ -23,10 +23,31 @@ const UsersController = () => import('#controllers/users_controller')
 
 router.get('/health', [controllers.Health, 'show'])
 
+const PlatformController = () => import('#controllers/platform_controller')
+
 router
   .group(() => {
     router.get('csrf', [CsrfController, 'show'])
     router.post('auth/login', [controllers.Auth, 'login'])
+    router.post('auth/google', [controllers.Auth, 'google'])
+
+    router
+      .group(() => {
+        router.post('auth/login', [PlatformController, 'login'])
+        router.post('auth/logout', [PlatformController, 'logout'])
+        router.get('auth/me', [PlatformController, 'me'])
+
+        router
+          .group(() => {
+            router.get('companies', [PlatformController, 'listCompanies'])
+            router.post('companies', [PlatformController, 'createCompany'])
+            router.post('companies/confirm', [PlatformController, 'confirmCompany'])
+            router.post('companies/resend-otp', [PlatformController, 'resendOtp'])
+            router.patch('companies/:id/status', [PlatformController, 'updateCompanyStatus'])
+          })
+          .use(middleware.platformAuth())
+      })
+      .prefix('platform')
 
     router
       .group(() => {
@@ -135,6 +156,8 @@ router
         router.delete('categories/:id', [CategoriesController, 'destroy'])
 
         router.get('reports/account-statement', [ReportsController, 'accountStatement'])
+        router.get('reports/inventory', [ReportsController, 'inventory'])
+        router.get('reports/inventory/:productId/movements', [ReportsController, 'inventoryMovements'])
 
         router.get('settings/exchange-rate', [SettingsController, 'getExchangeRate'])
         router.put('settings/exchange-rate', [SettingsController, 'updateExchangeRate'])

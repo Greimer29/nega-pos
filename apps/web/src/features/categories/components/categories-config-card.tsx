@@ -9,14 +9,13 @@ import {
   useUpdateCategoryMutation,
 } from '@/features/categories/hooks/use-categories'
 import type { Category } from '@/features/categories/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { INVENTORY_UNIT_OPTIONS } from '@/lib/inventory-units'
 import { cn } from '@/lib/utils'
 
 export function CategoriesConfigCard() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
 
   const { data: categories = [], isLoading, isError, error } = useCategoriesQuery()
   const updateMutation = useUpdateCategoryMutation()
@@ -33,24 +32,22 @@ export function CategoriesConfigCard() {
   }
 
   async function toggleActive(category: Category) {
-    setActionError(null)
     try {
       await updateMutation.mutateAsync({
         id: category.id,
         payload: { active: !category.active },
       })
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
   async function handleDelete(category: Category) {
     if (!window.confirm(`¿Eliminar la categoría "${category.name}"?`)) return
-    setActionError(null)
     try {
       await deleteMutation.mutateAsync(category.id)
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -72,12 +69,10 @@ export function CategoriesConfigCard() {
         </Button>
       </CardHeader>
       <CardContent className="space-y-6">
-        {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
-
         {isLoading ? (
           <Loader2 className="text-muted-foreground size-5 animate-spin" />
         ) : isError ? (
-          <p className="text-destructive text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+          <QueryErrorState isError error={error} title="No se pudieron cargar las categorías" />
         ) : categories.length === 0 ? (
           <p className="text-muted-foreground text-sm">No hay categorías configuradas.</p>
         ) : (

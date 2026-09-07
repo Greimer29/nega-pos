@@ -47,7 +47,7 @@ Referencia técnica **única y vigente** para desarrolladores. Derivada exclusiv
 
 ## 2. Arquitectura
 
-Monorepo **pnpm** con tres aplicaciones y MySQL como persistencia.
+Monorepo **pnpm** con clientes locales y API multi-empresa sobre MySQL.
 
 ```mermaid
 flowchart TB
@@ -56,18 +56,27 @@ flowchart TB
     Desktop[apps/desktop Electron]
   end
   API[apps/api AdonisJS]
-  DB[(MySQL 8.4)]
+  Central[(nega_pos_central)]
+  TenantA[(nega_pos_t_empresa)]
   Web -->|HTTP /api/v1| API
   Desktop -->|HTTP + IPC printing| API
-  API --> DB
+  API --> Central
+  API --> TenantA
 ```
+
+**Dos planos de datos:**
+
+| Plano | BD | Contenido |
+|-------|-----|-----------|
+| Control | `DB_CENTRAL_DATABASE` | `companies`, `directory_users`, `email_verification_codes`, `platform_admins` |
+| Tenant | `nega_pos_t_<slug>` | Schema POS completo (ventas, stock, users operativos, etc.) |
 
 **Flujo típico:**
 
-1. El navegador o Electron carga la SPA React (`apps/web`).
-2. La SPA llama a la API REST en `/api/v1` con cookies de sesión y token CSRF.
-3. AdonisJS valida auth + permisos, ejecuta servicios de dominio y persiste en MySQL.
-4. En desktop, la **impresión física** sale por IPC de Electron (`printing:listPrinters` / `printing:printHtml`); la **configuración** de impresión va por la API (`/settings/printing`).
+1. Login global (`POST /auth/login` o Google) consulta el directorio central y fija en la sesión `tenantId` / `dbName` (sin reconsultar el directorio en cada request).
+2. Middleware `tenant_context` cambia la conexión Lucid al MySQL de la empresa.
+3. La SPA llama `/api/v1` con cookies; los datos nunca cruzan entre tenants.
+4. Super admin en `/platform` provisiona empresas: OTP email → `CREATE DATABASE` → migrate → seed mínimo (FinancialBase + Admin).
 
 ---
 
@@ -122,6 +131,7 @@ flowchart TB
 ### Base de datos
 
 - **MySQL 8.4** (imagen Docker `mysql:8.4`)
+- **Multi-empresa:** BD central (`DB_CENTRAL_DATABASE`, ej. `nega_pos_central`) + una BD MySQL por empresa (`nega_pos_t_<slug>`) en el mismo servidor. Activar con `MULTI_TENANT_ENABLED=true`.
 
 ---
 
@@ -139,8 +149,9 @@ nega-pos/
 │   │   │   ├── validators/  # Vine
 │   │   │   └── transformers/
 │   │   ├── database/
-│   │   │   ├── migrations/  # 13 migraciones (1750000000001–13)
-│   │   │   └── seeders/
+│   │   │   ├── migrations/          # Schema tenant (POS)
+│   │   │   ├── migrations_central/  # Schema control plane
+│   │   │   └── seeders/             # TenantBootstrap = FinancialBase + Admin
 │   │   └── start/
 │   │       └── routes.ts    # Definición de rutas API
 │   ├── web/                 # SPA React + Vite
@@ -214,10 +225,19 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 | Dockerfile + entrypoint | `apps/api/Dockerfile`, `apps/api/bin/docker-entrypoint.sh` |
 | Config Railway | `apps/api/railway.toml` (solo servicio API) |
 | Vars plantilla | `apps/api/.env.railway.example` |
-| Seed seguro | `node ace db:bootstrap` — solo si `users` está vacío |
-| Uploads persistentes | Volume `/data/uploads` + `STORAGE_LOCAL_PATH=/data/uploads` |
+| Seed seguro | `node ace db:bootstrap` — platform admin en central (multi-tenant) o admin tenant si legacy |
+| Uploads persistentes | Volume `/data/uploads` + `STORAGE_LOCAL_PATH=/data/uploads` (paths `t_<companyId>/…`) |
 
-**Reglas:** no crear servicio web en Railway; `FRONTEND_URL=http://localhost:5173`; migraciones en pre-deploy; Volume para imágenes.
+**Reglas:** no crear servicio web en Railway; `FRONTEND_URL=http://localhost:5173`; pre-deploy migra **solo central**; empresas se crean desde `/platform` (OTP + `CREATE DATABASE`).
+
+### Cutover multi-empresa (producción limpia)
+
+1. Wipe MySQL actual (borrar/recrear plugin o `DROP DATABASE`).
+2. Crear `nega_pos_central`; set `DB_CENTRAL_DATABASE`, `MULTI_TENANT_ENABLED=true`.
+3. El user MySQL debe poder `CREATE DATABASE`.
+4. Redeploy API → migraciones central + bootstrap platform admin.
+5. Abrir web local → `/platform/login` → crear empresas (OTP email).
+6. Login de usuarios de empresa en `/login` (email global, sin código de empresa).
 
 ### Variables de entorno relevantes
 
@@ -229,11 +249,16 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 | `PORT` / `HOST` | Puerto y bind (default 3333 / 0.0.0.0) |
 | `SESSION_DRIVER` | `cookie` en dev |
 | `SESSION_MAX_AGE` | Expiración por inactividad (ej. `365d`) |
-| `DB_*` | Conexión MySQL |
+| `DB_*` | Conexión MySQL (host/user compartidos) |
+| `DB_CENTRAL_DATABASE` | BD control plane (`companies`, directorio, OTP, platform admins) |
+| `MULTI_TENANT_ENABLED` | `true` = login global + BD por empresa; `false` = legacy single-DB (tests) |
 | `FRONTEND_URL` | CORS web (ej. `http://localhost:5173`) |
 | `DESKTOP_APP_ORIGIN` | CORS Electron (`http://127.0.0.1:51740`) |
 | `MOBILE_APP_ORIGIN` | CORS Capacitor APK (`https://localhost`) |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Seeder de usuario admin |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Seeder admin tenant / defaults de provisión |
+| `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD` | Super admin central (`db:bootstrap`) |
+| `RESEND_API_KEY` / `MAIL_FROM` | OTP email (sin key → OTP en logs API) |
+| `GOOGLE_CLIENT_ID` | Login Google (id_token) |
 | `DRIVE_DISK` / `STORAGE_LOCAL_PATH` | Archivos subidos (imágenes, facturas). En Railway: Volume + `/data/uploads` |
 | `RUN_MIGRATIONS_ON_START` | Solo Docker local/`docker-compose` (`true`). En Railway: `false` (usa pre-deploy) |
 | `SKIP_BOOTSTRAP_SEED` | `true` para omitir `db:bootstrap` en el entrypoint |
@@ -243,6 +268,7 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 | Variable | Propósito |
 |----------|-----------|
 | `VITE_API_URL` | URL base API sin `/api/v1` (ej. `http://localhost:3333`; en APK usar la URL pública HTTPS) |
+| `VITE_GOOGLE_CLIENT_ID` | Mismo client id que la API (botón Continuar con Google) |
 
 ---
 
@@ -251,9 +277,11 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 ### Sesión
 
 - Guard `web` de Adonis Auth con **cookies** (`SESSION_DRIVER=cookie`).
-- Login: `POST /api/v1/auth/login` → establece cookie de sesión.
+- Login: `POST /api/v1/auth/login` → con multi-tenant: directorio central → sesión con `tenantId`/`tenantDb` → user en BD empresa. **No** se consulta el directorio en cada request.
+- Google: `POST /api/v1/auth/google` `{ id_token }` (emails ya en `directory_users`).
 - Logout: `POST /api/v1/auth/logout` (requiere sesión).
 - Perfil: `GET /api/v1/auth/me`.
+- Platform: `/api/v1/platform/*` + UI `/platform` (super admin, solo BD central).
 
 ### CSRF
 
@@ -291,7 +319,9 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 
 ## 7. Modelo de datos
 
-13 migraciones base + migraciones incrementales en `apps/api/database/migrations/`. Modelos Lucid en `apps/api/app/models/`.
+Migraciones tenant en `apps/api/database/migrations/`. Control plane en `database/migrations_central/` (`companies`, `directory_users`, `platform_admins`, `email_verification_codes`). Modelos Lucid en `apps/api/app/models/`.
+
+Al provisionar una empresa: migraciones tenant + seed mínimo (`FinancialBase` + admin). **Sin** categorías ni proveedores de demo.
 
 ### Agrupación de tablas
 
@@ -371,7 +401,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 | Tabla | Campos clave |
 |-------|--------------|
 | `sales_shifts` | `opened_at`, `closed_at`, `opened_by_user_id`, `closed_by_user_id`, `status` (OPEN/CLOSED), `notes` |
-| `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), totales |
+| `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), `discount_usd` (descuento de factura, default 0), `total_usd` (subtotal de líneas − descuento) |
 | `sale_lines` | `catalog_product_id?`, `material_id?`, `description`, `kitchen_note?` (indicaciones de cocina para comanda), cantidades y precios |
 
 **Turnos de venta:** solo puede haber un turno `OPEN`. Confirmar venta (`POST /sales/:id/confirm` o `POST /sales` con `confirm: true`) exige turno abierto; sin turno → `TURNO_NO_ABIERTO` (409). La venta confirmada guarda `sales.sales_shift_id`.
@@ -439,18 +469,20 @@ catalog_products ──< product_inventory_movements
 
 ### Ventas (`sale_service.ts`)
 
-1. **Borrador** (`DRAFT`): líneas de catálogo o material, cliente opcional.
+1. **Borrador** (`DRAFT`): líneas de catálogo o material, cliente opcional. En el POS de facturar se puede agregar **productos** o **materiales** (tabs en el catálogo); al confirmar, los materiales descuentan stock con movimiento `SALE_OUT`. El precio unitario de cada línea es el enviado por el cliente (se puede cambiar en el carrito; atajos −5/−10/−20 % vs precio de lista). Si el producto tiene fórmula, se pueden ajustar materiales de esa venta. El descuento de factura (`discount_usd`) es independiente del precio por línea: `total_usd = suma(líneas) − discount_usd` (nunca negativo).
 2. **Confirmar** (`POST .../confirm`):
    - Genera `code`, `status → COMPLETED`, `sold_at` / `confirmed_at`.
    - `billing_mode FAST` → `order_status DELIVERED`; `ORDER` → `order_status PENDING`.
-   - Descuenta stock (materiales vía fórmula o producto directo).
+   - Descuenta stock (producto directo, materiales de fórmula, o línea de material).
    - Aplica método de pago y saldo si es crédito.
 3. **Transición de pedido de venta** (`billing_mode ORDER`): `PENDING → IN_PROCESS → DELIVERED` (solo ventas completadas).
 4. **Devolución** (`POST .../return`): parcial o total; revierte stock y actualiza `RETURNED`.
 
-### Reportes (`report_service.ts`)
+### Reportes (`report_service.ts` / `inventory_report_service.ts`)
 
 - **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **ingresos** (aportes), compras, gastos, gastos de máquina, abonos de clientes/proveedores en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). Balance neto: `ventas + ingresos − compras − gastos − gastos_máquina`.
+- **Inventario** (`GET /reports/inventory`): snapshot de stock de productos de catálogo y materiales en una sola lista (paginada). Filtros: `search`, `category`, `sort_by`/`sort_dir` (`id`|`name`|`sale_price`|`quantity`), `active`, `low_stock`, `hide_zero`, `page`, `per_page`, `export=true` (set completo para Excel). Cada ítem incluye `kind` (`product`|`material`), precios/costos, unidad, `stock_source`, `low_stock` y `lines[]` (tallas; hoy una línea con `size: null` y cantidad total). UI: `/reportes?vista=inventario` (query `inv_*`).
+- **Movimientos de producto** (`GET /reports/inventory/:productId/movements`): historial de `product_inventory_movements` de un producto de catálogo (no materiales). Filtros de período (`month`|`from`/`to`) y `types` (PURCHASE_IN, SALE_OUT, ajustes manuales, REVERSAL_ADJUSTMENT). UI: `/reportes/inventario/:productId`.
 
 ### Dashboard (`dashboard_service.ts`)
 
@@ -465,7 +497,7 @@ catalog_products ──< product_inventory_movements
 ## 9. API REST — referencia
 
 **Prefijo:** `/api/v1`  
-**Total de rutas definidas:** 145 (incluye `/health` fuera del prefijo).
+**Total de rutas definidas:** 147 (incluye `/health` fuera del prefijo).
 
 **Leyenda auth:**
 
@@ -485,8 +517,22 @@ catalog_products ──< product_inventory_movements
 |--------|------|------|-------------|
 | GET | `/api/v1/csrf` | Público | `CsrfController.show` |
 | POST | `/api/v1/auth/login` | Público | `Auth.login` |
+| POST | `/api/v1/auth/google` | Público | `Auth.google` |
 | POST | `/api/v1/auth/logout` | Auth | `Auth.logout` |
 | GET | `/api/v1/auth/me` | Auth | `Auth.me` |
+
+### Platform (super admin)
+
+| Método | Ruta | Auth | Controlador |
+|--------|------|------|-------------|
+| POST | `/api/v1/platform/auth/login` | Público | `Platform.login` |
+| POST | `/api/v1/platform/auth/logout` | Platform | `Platform.logout` |
+| GET | `/api/v1/platform/auth/me` | Platform | `Platform.me` |
+| GET | `/api/v1/platform/companies` | Platform | `Platform.listCompanies` |
+| POST | `/api/v1/platform/companies` | Platform | `Platform.createCompany` (OTP) |
+| POST | `/api/v1/platform/companies/confirm` | Platform | `Platform.confirmCompany` |
+| POST | `/api/v1/platform/companies/resend-otp` | Platform | `Platform.resendOtp` |
+| PATCH | `/api/v1/platform/companies/:id/status` | Platform | `Platform.updateCompanyStatus` |
 
 ### Usuarios (`users.*`)
 
@@ -537,7 +583,7 @@ catalog_products ──< product_inventory_movements
 
 ### Ventas / facturación (`ventas.*`)
 
-Carrito y líneas en moneda base. Al confirmar **contado**, `POST .../confirm` acepta `payment_method_code`, y opcionalmente `currency_code` + `usd_rate` (override solo del documento; default = moneda/tasa del método). Crédito no usa tasa. Persiste `sales.usd_rate` y `sales.total_bs`.
+Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descuento de factura, independiente del `unit_price_usd` de cada línea). El precio unitario lo envía el cliente; una fórmula personalizada no lo recalcula en el servidor. Al confirmar **contado**, `POST .../confirm` acepta `payment_method_code`, y opcionalmente `currency_code` + `usd_rate` (override solo del documento; default = moneda/tasa del método). Crédito no usa tasa. Persiste `sales.usd_rate` y `sales.total_bs`.
 
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
@@ -725,6 +771,8 @@ Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuent
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
 | GET | `/api/v1/reports/account-statement` | `reports.view` | `ReportsController.accountStatement` |
+| GET | `/api/v1/reports/inventory` | `reports.view` | `ReportsController.inventory` |
+| GET | `/api/v1/reports/inventory/:productId/movements` | `reports.view` | `ReportsController.inventoryMovements` |
 
 ### Dashboard (`dashboard.view`)
 
@@ -769,10 +817,10 @@ Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuent
 | `/customers` | Listado clientes |
 | `/customers/:id` | Detalle cliente |
 | `/customers/:id/cuenta` | Estado de cuenta cliente |
-| `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), cliente walk-in por defecto «Generico», en móvil carrito en drawer y filtros de catálogo en botón desplegable |
+| `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), botón de registrar gasto de empresa (sin salir del POS; permiso `expenses.edit`), cliente walk-in por defecto «Generico», precio por línea (atajos −5/−10/−20 %), fórmula por línea si el producto tiene, descuento de factura aparte; en móvil carrito en drawer y filtros de catálogo en botón desplegable |
 | `/ventas/:id` | Detalle factura |
 | `/orders/:id` | Detalle pedido |
-| `/productos` | Catálogo |
+| `/productos` | Catálogo. Filtros de categoría en botón desplegable (mismo patrón que ventas) |
 | `/productos/:id` | Detalle producto |
 | `/productos/materiales` | Materiales |
 | `/productos/materiales/:id` | Detalle material |
@@ -782,8 +830,9 @@ Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuent
 | `/suppliers/:id/cuenta` | Estado de cuenta proveedor |
 | `/machines` | Máquinas |
 | `/machines/:id` | Detalle máquina |
-| `/reportes` | Reportes |
-| `/reportes/movimientos/:category` | Movimientos por categoría |
+| `/reportes` | Reportes (`?vista=inventario` → snapshot de inventario) |
+| `/reportes/inventario/:productId` | Movimientos de inventario de un producto |
+| `/reportes/movimientos/:category` | Movimientos por categoría (estado de cuenta) |
 | `/users` | Usuarios |
 | `/settings` | Configuración (tabs: general, ventas, formatos, compras, etc.) |
 
@@ -803,7 +852,7 @@ Cada feature encapsula servicios API (axios), hooks TanStack Query, componentes 
 | `materials` | materials |
 | `purchases` | purchases |
 | `dashboard` | dashboard/* |
-| `reports` | reports/account-statement |
+| `reports` | reports/account-statement, reports/inventory |
 | `settings` | settings/*, payment-methods |
 | `users` | users |
 | `printing` | render local + IPC desktop |
@@ -898,9 +947,12 @@ pnpm test
 
 ```powershell
 cd apps/api
+node ace migration:run_central --force
 node ace migration:run
 node ace migration:rollback
 node ace db:seed
+node ace db:bootstrap
+node ace platform:bootstrap
 node ace serve --hmr
 node ace test
 node ace generate:key
@@ -908,8 +960,8 @@ node ace generate:key
 
 ### Docker API + migraciones
 
-- **Local (`docker-compose`):** entrypoint con `RUN_MIGRATIONS_ON_START=true` + `db:bootstrap` (seed solo si no hay users) + volumen `api_uploads`.
-- **Railway:** `apps/api/railway.toml` → `preDeployCommand = node ace migration:run --force`; entrypoint hace bootstrap condicional. Guía: `docs/RAILWAY_DEPLOY.md`.
+- **Local (`docker-compose`):** init SQL crea `nega_pos_central` + grants; entrypoint con `RUN_MIGRATIONS_ON_START=true` corre `migration:run_central` si multi-tenant; `db:bootstrap` crea platform admin.
+- **Railway:** `preDeployCommand = node ace migration:run_central --force`; cutover limpio (wipe MySQL). Guía: `docs/RAILWAY_DEPLOY.md`.
 
 ---
 

@@ -11,12 +11,37 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
+import { getMaterial } from '@/features/materials/services/material-service'
+import type { Material } from '@/features/materials/types'
 import { useSalesQuery } from '@/features/ventas/hooks/use-sales'
 import { getCatalogProduct } from '@/features/ventas/services/catalog-service'
 import { getSale } from '@/features/ventas/services/sales-service'
 import type { CatalogProduct, Sale } from '@/features/ventas/types'
-import { createCartLineId, getBaseFormulaMaterialIds, hasAddedMaterialsBeyondBase, mapApiFormulaMaterialsToLine, type SaleLineFormulaMaterial } from '@/features/ventas/utils/sale-line-formula'
-import { getApiErrorMessage } from '@/lib/api-error'
+import {
+  createCartLineId,
+  mapApiFormulaMaterialsToLine,
+  type SaleLineFormulaMaterial,
+} from '@/features/ventas/utils/sale-line-formula'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
+
+export type LoadedDraftCartLine =
+  | {
+      id: string
+      kind: 'catalog'
+      product: CatalogProduct
+      quantity: number
+      formulaMaterials?: SaleLineFormulaMaterial[] | null
+      unitPriceUsd?: number
+      kitchenNote?: string | null
+    }
+  | {
+      id: string
+      kind: 'material'
+      material: Material
+      quantity: number
+      unitPriceUsd?: number
+    }
 
 export type LoadedDraft = {
   saleId: number
@@ -27,14 +52,8 @@ export type LoadedDraft = {
   guestName: string | null
   paymentType: 'CASH' | 'CREDIT'
   billingMethod: 'FAST' | 'ORDER'
-  cart: {
-    id: string
-    product: CatalogProduct
-    quantity: number
-    formulaMaterials?: SaleLineFormulaMaterial[] | null
-    unitPriceUsd?: number
-    kitchenNote?: string | null
-  }[]
+  cart: LoadedDraftCartLine[]
+  invoiceDiscountUsd?: number
 }
 
 type VentasLoadDraftDialogProps = {
@@ -47,7 +66,6 @@ export function VentasLoadDraftDialog({ open, onOpenChange, onLoaded }: VentasLo
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [loadingId, setLoadingId] = useState<number | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 300)
@@ -68,36 +86,47 @@ export function VentasLoadDraftDialog({ open, onOpenChange, onLoaded }: VentasLo
 
   async function handleSelect(sale: Sale) {
     setLoadingId(sale.id)
-    setLoadError(null)
     try {
       const detail = await getSale(sale.id)
       const lines = detail.lines ?? []
       if (lines.length === 0) {
-        setLoadError('El borrador no tiene productos.')
+        toast.warning('El borrador no tiene líneas.')
         return
       }
 
       const cart: LoadedDraft['cart'] = []
       for (const line of lines) {
+        if (line.material_id) {
+          const material = await getMaterial(line.material_id)
+          cart.push({
+            id: createCartLineId(),
+            kind: 'material',
+            material,
+            quantity: Number(line.quantity),
+            unitPriceUsd: Number(line.unit_price_usd),
+          })
+          continue
+        }
+
         if (!line.catalog_product_id) continue
         const product = await getCatalogProduct(line.catalog_product_id)
         const formulaMaterials = line.has_custom_formula
           ? mapApiFormulaMaterialsToLine(line.formula_materials ?? [])
           : null
-        const baseIds = getBaseFormulaMaterialIds(product)
-        const customMaterials = formulaMaterials ?? []
         cart.push({
           id: createCartLineId(),
+          kind: 'catalog',
           product,
           quantity: Number(line.quantity),
           formulaMaterials,
           kitchenNote: line.kitchen_note?.trim() ? line.kitchen_note.trim() : null,
-          unitPriceUsd:
-            line.has_custom_formula &&
-            hasAddedMaterialsBeyondBase(baseIds, customMaterials)
-              ? Number(line.unit_price_usd)
-              : undefined,
+          unitPriceUsd: Number(line.unit_price_usd),
         })
+      }
+
+      if (cart.length === 0) {
+        toast.warning('El borrador no tiene líneas cargables.')
+        return
       }
 
       onLoaded({
@@ -110,10 +139,11 @@ export function VentasLoadDraftDialog({ open, onOpenChange, onLoaded }: VentasLo
         paymentType: detail.payment_type === 'CREDIT' ? 'CREDIT' : 'CASH',
         billingMethod: detail.billing_mode,
         cart,
+        invoiceDiscountUsd: Number(detail.discount_usd ?? 0),
       })
       onOpenChange(false)
     } catch (loadErr) {
-      setLoadError(getApiErrorMessage(loadErr))
+      notifyApiError(loadErr)
     } finally {
       setLoadingId(null)
     }
@@ -145,9 +175,7 @@ export function VentasLoadDraftDialog({ open, onOpenChange, onLoaded }: VentasLo
               <Loader2 className="text-muted-foreground size-5 animate-spin" />
             </div>
           ) : isError ? (
-            <p className="text-destructive py-8 text-center text-sm whitespace-pre-line">
-              {getApiErrorMessage(error)}
-            </p>
+            <QueryErrorState isError error={error} title="No se pudieron cargar los borradores" />
           ) : drafts.length === 0 ? (
             <p className="text-muted-foreground py-8 text-center text-sm">
               No hay borradores disponibles.
@@ -177,8 +205,6 @@ export function VentasLoadDraftDialog({ open, onOpenChange, onLoaded }: VentasLo
             ))
           )}
         </div>
-
-        {loadError ? <p className="text-destructive text-sm whitespace-pre-line">{loadError}</p> : null}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

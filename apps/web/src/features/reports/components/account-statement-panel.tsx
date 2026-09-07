@@ -11,7 +11,7 @@ import { defaultReportPeriodState, periodLabelFromState, periodStateToAccountPar
 import { buildReportSearchParams } from '@/features/reports/report-search-params'
 import { reportUi } from '@/features/reports/report-ui'
 import { useAccountStatementQuery } from '@/features/reports/hooks/use-reports'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { QueryErrorState } from '@/features/notifications/query-error-state'
 
 export function AccountStatementPanel() {
   const { displayCurrency } = useDisplayCurrency()
@@ -81,7 +81,9 @@ export function AccountStatementPanel() {
           Generando reporte…
         </div>
       ) : isError ? (
-        <div className={reportUi.error}>{getApiErrorMessage(error)}</div>
+        <div className={reportUi.panel}>
+          <QueryErrorState isError error={error} title="No se pudo generar el reporte" />
+        </div>
       ) : !data ? (
         <div className={reportUi.panel}>
           <p className={`${reportUi.body} px-5 py-12 text-center`}>

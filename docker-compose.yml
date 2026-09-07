@@ -21,6 +21,7 @@ services:
       MYSQL_PASSWORD: nega_pos
     volumes:
       - nega_pos_mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-unega_pos', '-pnega_pos']
       interval: 5s
@@ -48,9 +49,10 @@ services:
       FRONTEND_URL: http://localhost:5173
       DESKTOP_APP_ORIGIN: http://127.0.0.1:51740
       MOBILE_APP_ORIGIN: https://localhost
-      # Local Docker: migrate on start; seed only if users table empty (entrypoint)
+      # Local Docker: migrate central on start when multi-tenant; seed platform admin
       RUN_MIGRATIONS_ON_START: 'true'
       SKIP_BOOTSTRAP_SEED: 'false'
+      MULTI_TENANT_ENABLED: 'true'
       STORAGE_LOCAL_PATH: /app/storage/uploads
     volumes:
       - api_uploads:/app/storage/uploads

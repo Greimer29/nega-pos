@@ -24,6 +24,7 @@ export const createSaleValidator = vine.create({
   billing_mode: vine.enum(['FAST', 'ORDER']).optional(),
   usd_rate: vine.number().min(0).optional(),
   confirm: vine.boolean().optional(),
+  discount_usd: vine.number().min(0).optional(),
   lines: vine.array(saleLineSchema).minLength(1),
 })
 
@@ -34,6 +35,7 @@ export const updateSaleValidator = vine.create({
   payment_type: vine.enum(['CASH', 'CREDIT']).optional(),
   billing_mode: vine.enum(['FAST', 'ORDER']).optional(),
   usd_rate: vine.number().min(0).optional().nullable(),
+  discount_usd: vine.number().min(0).optional(),
   lines: vine.array(saleLineSchema).minLength(1).optional(),
 })
 

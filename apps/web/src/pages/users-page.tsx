@@ -11,7 +11,7 @@ import {
 } from '@/features/users/hooks/use-users'
 import type { AppUser } from '@/features/users/types'
 import { isAppUserActionable, isAppUserListIncomplete } from '@/features/users/parse-app-user'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 20
@@ -36,7 +36,6 @@ export function UsersPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
 
   const setActiveMutation = useSetUserActiveMutation()
 
@@ -66,7 +65,7 @@ export function UsersPage() {
 
   function openEditDialog(user: AppUser) {
     if (!isAppUserActionable(user)) {
-      setActionError(
+      notifyApiError(
         'No se puede editar este usuario: la API no devolvió un identificador válido. Redeploy de la API requerido.'
       )
       return
@@ -77,16 +76,15 @@ export function UsersPage() {
 
   async function toggleActive(user: AppUser) {
     if (!isAppUserActionable(user)) {
-      setActionError(
+      notifyApiError(
         'No se puede cambiar el estado: la API no devolvió un identificador válido. Redeploy de la API requerido.'
       )
       return
     }
-    setActionError(null)
     try {
       await setActiveMutation.mutateAsync({ id: user.id, active: !user.active })
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -106,8 +104,6 @@ export function UsersPage() {
           </Button>
         </PermissionGate>
       </div>
-
-      {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
 
       {listIncomplete ? (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -142,9 +138,7 @@ export function UsersPage() {
               Cargando usuarios…
             </div>
           ) : isError ? (
-            <p className="text-destructive py-12 text-center text-sm whitespace-pre-line">
-              {getApiErrorMessage(error)}
-            </p>
+            <QueryErrorState isError error={error} title="No se pudieron cargar los usuarios" />
           ) : users.length === 0 ? (
             <p className="text-muted-foreground py-12 text-center text-sm">
               No hay usuarios que coincidan con la búsqueda.

@@ -29,6 +29,8 @@ export default class MaterialTransformer extends BaseTransformer<Material> {
         'lastPurchasePriceUsd',
         'lastPurchaseDate',
         'previousPurchasePriceUsd',
+        'salePriceUsd',
+        'previousSalePriceUsd',
         'imagePath',
         'createdAt',
         'updatedAt',

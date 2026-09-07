@@ -3,9 +3,7 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -23,8 +21,6 @@ type SaleLineKitchenNoteDialogProps = {
 export function SaleLineKitchenNoteDialog({
   open,
   onOpenChange,
-  productName,
-  quantity,
   initialNote,
   onSave,
 }: SaleLineKitchenNoteDialogProps) {
@@ -50,13 +46,7 @@ export function SaleLineKitchenNoteDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Indicación para cocina</DialogTitle>
-          <DialogDescription>
-            Se imprime debajo de {productName} (x{quantity}) en la comanda. Un renglón por grupo de
-            indicaciones.
-          </DialogDescription>
-        </DialogHeader>
+        <DialogTitle className="sr-only">Indicación para cocina</DialogTitle>
 
         <div className="space-y-2">
           <Label htmlFor="kitchen-note">Nota</Label>
@@ -65,15 +55,9 @@ export function SaleLineKitchenNoteDialog({
             rows={5}
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            placeholder={
-              '1 sin cebolla, sin mayonesa, sin zanahoria\n2 sin mostaza\n1 sin cebolla'
-            }
             maxLength={1000}
             autoFocus
           />
-          <p className="text-muted-foreground text-xs">
-            Enter = nueva línea en la comanda. Máximo 1000 caracteres.
-          </p>
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between">

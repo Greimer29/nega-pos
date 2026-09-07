@@ -15,7 +15,8 @@ import {
   useMaterialsQuery,
 } from '@/features/materials/hooks/use-materials'
 import type { Material, MaterialCategoria, MaterialStatusFilter } from '@/features/materials/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 30
@@ -37,8 +38,6 @@ export function MaterialsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [materialToDelete, setMaterialToDelete] = useState<Material | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
-
   const deleteMutation = useDeleteMaterialMutation()
   const { data: categories = [] } = useActiveCategoriesQuery()
 
@@ -91,20 +90,19 @@ export function MaterialsPage() {
       return
     }
 
-    setActionError(null)
-
     try {
       const result = await deleteMutation.mutateAsync(materialToDelete.id)
       setDeleteDialogOpen(false)
       setMaterialToDelete(null)
 
       if (result.modo === 'soft') {
-        setActionError(
-          `"${materialToDelete.name}" fue desactivado porque tiene movimientos asociados.`
+        toast.warning(
+          `"${materialToDelete.name}" fue desactivado porque tiene movimientos asociados.`,
+          'Desactivado'
         )
       }
     } catch (deleteError) {
-      setActionError(getApiErrorMessage(deleteError))
+      notifyApiError(deleteError)
     }
   }
 
@@ -182,15 +180,13 @@ export function MaterialsPage() {
               categories={categories}
             />
 
-            {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
-
             {isLoading ? (
               <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">
                 <Loader2 className="size-4 animate-spin" />
                 Cargando materiales…
               </div>
             ) : isError ? (
-              <p className="text-destructive py-8 text-center text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+              <QueryErrorState isError error={error} title="No se pudieron cargar los materiales" />
             ) : materials.length === 0 ? (
               <div className="py-12 text-center">
                 <p className="text-muted-foreground text-sm">No hay materiales que coincidan.</p>

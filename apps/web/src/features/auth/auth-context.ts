@@ -14,6 +14,7 @@ export type AuthContextValue = {
   can: (permission: PermissionKey) => boolean
   canAny: (...permissions: PermissionKey[]) => boolean
   login: (email: string, password: string) => Promise<void>
+  loginWithGoogle: (idToken: string) => Promise<void>
   logout: () => Promise<void>
 }
 

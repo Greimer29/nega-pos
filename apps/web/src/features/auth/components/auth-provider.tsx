@@ -179,6 +179,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(authenticatedUser)
   }, [])
 
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    const authenticatedUser = await authService.loginWithGoogle(idToken)
+    await refreshCsrfToken()
+    setSessionBootstrapError(false)
+    setUser(authenticatedUser)
+  }, [])
+
   const logout = useCallback(async () => {
     try {
       await authService.logout()
@@ -202,6 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       can,
       canAny,
       login,
+      loginWithGoogle,
       logout,
     }),
     [
@@ -214,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       can,
       canAny,
       login,
+      loginWithGoogle,
       logout,
     ]
   )

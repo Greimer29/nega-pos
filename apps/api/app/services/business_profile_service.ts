@@ -9,6 +9,7 @@ import drive from '@adonisjs/drive/services/main'
 import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
+import { tenantStorageKey } from '#utils/tenant_storage'
 
 const KEY_BUSINESS_PROFILE = 'business_profile'
 const LOGO_KEY = 'business/logo'
@@ -63,7 +64,7 @@ export default class BusinessProfileService {
   async guardarLogo(file: MultipartFile): Promise<BusinessProfile> {
     const profile = await this.obtener()
     const extension = file.extname?.toLowerCase() ?? 'png'
-    const key = `${LOGO_KEY}/${randomUUID()}.${extension}`
+    const key = tenantStorageKey(`${LOGO_KEY}/${randomUUID()}.${extension}`)
 
     if (profile.logo_path) {
       await drive

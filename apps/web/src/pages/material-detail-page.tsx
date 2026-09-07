@@ -30,7 +30,7 @@ import {
 
 } from '@/features/materials/hooks/use-materials'
 
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 
@@ -69,8 +69,6 @@ export function MaterialDetallePage() {
   const [ajusteOpen, setAjusteOpen] = useState(false)
 
   const [deleteOpen, setDeleteOpen] = useState(false)
-
-  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const deleteMutation = useDeleteMaterialMutation()
 
@@ -164,7 +162,6 @@ export function MaterialDetallePage() {
 
   async function confirmDelete() {
     if (!material) return
-    setDeleteError(null)
     try {
       const result = await deleteMutation.mutateAsync(materialId)
       setDeleteOpen(false)
@@ -176,7 +173,7 @@ export function MaterialDetallePage() {
         void navigate('/productos/materiales')
       }
     } catch (err) {
-      setDeleteError(getApiErrorMessage(err))
+      notifyApiError(err)
       setDeleteOpen(false)
     }
   }
@@ -392,9 +389,12 @@ export function MaterialDetallePage() {
             </div>
 
           ) : historialError ? (
-
-            <p className="text-destructive text-sm whitespace-pre-line">{getApiErrorMessage(historialErr)}</p>
-
+            <QueryErrorState
+              isError
+              error={historialErr}
+              title="No se pudo cargar el historial"
+              className="py-4"
+            />
           ) : !historial?.length ? (
 
             <p className="text-muted-foreground text-sm">
@@ -519,8 +519,6 @@ export function MaterialDetallePage() {
         isPending={deleteMutation.isPending}
         onConfirm={() => void confirmDelete()}
       />
-
-      {deleteError ? <p className="text-destructive text-sm whitespace-pre-line">{deleteError}</p> : null}
 
     </div>
 

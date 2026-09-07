@@ -11,7 +11,7 @@ import { useDailyClosingQuery } from '@/features/dashboard/hooks/use-dashboard'
 import { useSalesShiftsQuery } from '@/features/ventas/hooks/use-sales-shifts'
 import type { SalesShift } from '@/features/ventas/services/sales-shift-service'
 import { paymentMethodLabel } from '@/features/ventas/constants'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { QueryErrorState } from '@/features/notifications/query-error-state'
 
 function formatShiftRange(shift: SalesShift) {
   const opened = new Date(shift.opened_at).toLocaleString('es-VE', {
@@ -122,7 +122,7 @@ export function DashboardDailyClosingPage() {
           Cargando cierre diario…
         </div>
       ) : isError ? (
-        <p className="text-destructive text-sm whitespace-pre-line">{getApiErrorMessage(error)}</p>
+        <QueryErrorState isError error={error} title="No se pudo cargar el cierre diario" />
       ) : !data ? (
         <p className="text-muted-foreground py-24 text-center text-sm">
           {selectedShiftId == null

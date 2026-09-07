@@ -48,7 +48,9 @@ import {
 } from '@/features/orders/utils/order-line-totals'
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { useFormatMoney } from '@/features/currencies/context/display-currency-context'
-import { getApiError, getApiErrorMessage, parseStockInsuficienteDetails } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
+import { getApiError, parseStockInsuficienteDetails } from '@/lib/api-error'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { cn } from '@/lib/utils'
@@ -176,7 +178,6 @@ export function OrderDetallePage() {
   const { can } = useAuth()
   const canCreditSale = can('ventas.credit')
 
-  const [actionError, setActionError] = useState<string | null>(null)
   const [paymentType, setPaymentType] = useState<OrderPaymentType>('CASH')
   const [transicionPending, setTransicionPending] = useState<OrderEstado | null>(null)
   const [stockModalOpen, setStockModalOpen] = useState(false)
@@ -318,12 +319,11 @@ export function OrderDetallePage() {
       : Number(order.totalPrice ?? 0)
 
   const onSaveHeader = handleSubmit(async (values) => {
-    setActionError(null)
     try {
       await updateMutation.mutateAsync({ id: orderId, payload: toHeaderPayload(values) })
       reset(values)
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   })
 
@@ -331,12 +331,11 @@ export function OrderDetallePage() {
     if (!window.confirm('¿Eliminar este pedido en borrador?')) {
       return
     }
-    setActionError(null)
     try {
       await deleteMutation.mutateAsync(orderId)
       void navigate('/ventas')
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -347,7 +346,7 @@ export function OrderDetallePage() {
     ) {
       const creditError = validateCreditPayment(paymentType, activeOrder)
       if (creditError) {
-        setActionError(creditError)
+        toast.warning(creditError)
         return
       }
     }
@@ -362,7 +361,6 @@ export function OrderDetallePage() {
       return
     }
 
-    setActionError(null)
     setTransicionPending(nuevoEstado)
     try {
       await transicionMutation.mutateAsync({
@@ -381,7 +379,7 @@ export function OrderDetallePage() {
         setForceConfirmOpen(false)
         setStockModalOpen(true)
       } else {
-        setActionError(getApiErrorMessage(err))
+        notifyApiError(err)
       }
     } finally {
       setTransicionPending(null)
@@ -389,7 +387,6 @@ export function OrderDetallePage() {
   }
 
   async function handleForceTransition() {
-    setActionError(null)
     setTransitionForcePending(true)
     try {
       await transicionMutation.mutateAsync({
@@ -400,7 +397,7 @@ export function OrderDetallePage() {
       setForceConfirmOpen(false)
       setStockInsuficiente([])
     } catch (err) {
-      setActionError(getApiErrorMessage(err))
+      notifyApiError(err)
     } finally {
       setTransitionForcePending(false)
     }
@@ -466,7 +463,6 @@ export function OrderDetallePage() {
         </div>
       </div>
 
-      {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
       {isBorrador ? (
         <div className="flex flex-wrap items-end justify-between gap-4 rounded-md border bg-neutral-50 p-4">
           <div className="space-y-2">

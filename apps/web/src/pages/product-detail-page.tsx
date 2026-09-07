@@ -14,7 +14,7 @@ import { PublicImage } from '@/components/public-image'
 import { PRODUCT_MOVIMIENTO_LABELS } from '@/features/ventas/product-inventory-constants'
 import { productSaleUnitAbrev } from '@/features/ventas/constants'
 import { useCatalogProductQuery, useDeleteCatalogProductMutation } from '@/features/ventas/hooks/use-catalog'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { isBelowCost } from '@/lib/cost-warnings'
@@ -40,7 +40,6 @@ export function ProductDetailPage() {
   const [ajusteOpen, setAjusteOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const deleteMutation = useDeleteCatalogProductMutation()
   const { data: product, isLoading, isError, error, refetch } = useCatalogProductQuery(productId)
@@ -109,7 +108,6 @@ export function ProductDetailPage() {
 
   async function confirmDelete() {
     if (!product) return
-    setDeleteError(null)
     try {
       const result = await deleteMutation.mutateAsync(productId)
       setDeleteOpen(false)
@@ -121,7 +119,7 @@ export function ProductDetailPage() {
         void navigate('/productos')
       }
     } catch (err) {
-      setDeleteError(getApiErrorMessage(err))
+      notifyApiError(err)
       setDeleteOpen(false)
     }
   }
@@ -326,7 +324,6 @@ export function ProductDetailPage() {
         onConfirm={() => void confirmDelete()}
       />
 
-      {deleteError ? <p className="text-destructive text-sm whitespace-pre-line">{deleteError}</p> : null}
     </div>
   )
 }

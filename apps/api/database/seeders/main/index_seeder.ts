@@ -1,14 +1,15 @@
-import AdminUserSeeder from '../admin_user_seeder.js'
-import CategoriesSeeder from '../categories_seeder.js'
 import FinancialBaseSeeder from '../financial_base_seeder.js'
-import SupplierCastilloSeeder from '../supplier_castillo_seeder.js'
 import { BaseSeeder } from '@adonisjs/lucid/seeders'
 
+/**
+ * @deprecated Prefer TenantBootstrapSeeder for new tenants.
+ * Kept for local/dev single-DB bootstrap until multi-tenant cutover.
+ * Categories and Castillo supplier are intentionally omitted.
+ */
 export default class extends BaseSeeder {
   async run() {
     await new FinancialBaseSeeder(this.client).run()
-    await new CategoriesSeeder(this.client).run()
+    const { default: AdminUserSeeder } = await import('../admin_user_seeder.js')
     await new AdminUserSeeder(this.client).run()
-    await new SupplierCastilloSeeder(this.client).run()
   }
 }

@@ -12,6 +12,11 @@ export async function login(payload: LoginPayload) {
   return parseAppUser(data.data.user)
 }
 
+export async function loginWithGoogle(idToken: string) {
+  const { data } = await api.post<AuthUserResponse>('/auth/google', { id_token: idToken })
+  return parseAppUser(data.data.user)
+}
+
 export async function logout() {
   await api.post<AuthMessageResponse>('/auth/logout')
 }

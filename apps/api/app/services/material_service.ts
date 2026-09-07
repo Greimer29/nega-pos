@@ -14,6 +14,7 @@ import CategoryService from '#services/category_service'
 import type { CostWarning } from '#types/cost_warning'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
+import { tenantStorageKey } from '#utils/tenant_storage'
 import db from '@adonisjs/lucid/services/db'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import { randomUUID } from 'node:crypto'
@@ -475,7 +476,7 @@ export default class MaterialService {
   async guardarImagen(materialId: number, file: MultipartFile): Promise<Material> {
     const material = await this.obtener(materialId)
     const extension = file.extname?.toLowerCase() ?? 'bin'
-    const key = `materials/${materialId}/${randomUUID()}.${extension}`
+    const key = tenantStorageKey(`materials/${materialId}/${randomUUID()}.${extension}`)
 
     if (material.imagePath) {
       await drive

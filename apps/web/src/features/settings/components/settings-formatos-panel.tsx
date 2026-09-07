@@ -29,7 +29,6 @@ export function SettingsFormatosPanel() {
     loading,
     saving,
     message,
-    error,
     isDirty,
     electronAvailable,
     handleSave,
@@ -39,7 +38,6 @@ export function SettingsFormatosPanel() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedFormat, setSelectedFormat] = useState<PrintFormatRecord | null>(null)
   const [previewFormatId, setPreviewFormatId] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
 
   function openCreate(documentKind: PrintDocumentKind) {
     setSelectedFormat(createBlankFormat(documentKind))
@@ -68,7 +66,6 @@ export function SettingsFormatosPanel() {
     if (format.isBuiltin) return
     if (!window.confirm(`¿Eliminar el formato "${format.name}"?`)) return
 
-    setActionError(null)
     setConfig((current) => {
       const { formats, removed } = removeFormat(current.formats, format.id)
       if (!removed) {
@@ -163,8 +160,6 @@ export function SettingsFormatosPanel() {
   return (
     <div className="flex flex-col gap-6">
       {message ? <p className="text-emerald-700 text-sm whitespace-pre-line">{message}</p> : null}
-      {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
-      {actionError ? <p className="text-destructive text-sm whitespace-pre-line">{actionError}</p> : null}
       {!electronAvailable ? (
         <p className="text-amber-800 bg-amber-50 border-amber-200 rounded-md border px-3 py-2 text-sm">
           Estás en el navegador. Los formatos se guardan en el servidor; la impresión física solo
