@@ -13,6 +13,11 @@ function generateCode(): string {
   return String(randomInt(100000, 999999))
 }
 
+/** MySQL DATETIME rejects Luxon `toSQL()` offset suffix (`… Z`). */
+function mysqlUtcNow(dt: DateTime = DateTime.utc()): string {
+  return dt.toSQL({ includeOffset: false })!
+}
+
 function centralCodes() {
   return db.connection('central').from('email_verification_codes')
 }
@@ -43,17 +48,17 @@ export default class OtpService {
       .where('email', email)
       .where('purpose', params.purpose)
       .whereNull('consumed_at')
-      .update({ consumed_at: now.toSQL() })
+      .update({ consumed_at: mysqlUtcNow(now) })
 
     const [id] = await centralCodesTable().insert({
       email,
       code,
       purpose: params.purpose,
       payload: params.payload ? JSON.stringify(params.payload) : null,
-      expires_at: now.plus({ minutes: OTP_TTL_MINUTES }).toSQL(),
+      expires_at: mysqlUtcNow(now.plus({ minutes: OTP_TTL_MINUTES })),
       consumed_at: null,
-      created_at: now.toSQL(),
-      updated_at: now.toSQL(),
+      created_at: mysqlUtcNow(now),
+      updated_at: mysqlUtcNow(now),
     })
 
     const row = { id: Number(id), email, code }
@@ -109,11 +114,12 @@ export default class OtpService {
   }
 
   async markConsumed(id: number) {
+    const now = mysqlUtcNow()
     await centralCodes()
       .where('id', id)
       .update({
-        consumed_at: DateTime.utc().toSQL(),
-        updated_at: DateTime.utc().toSQL(),
+        consumed_at: now,
+        updated_at: now,
       })
   }
 
