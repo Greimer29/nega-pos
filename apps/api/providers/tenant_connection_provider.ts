@@ -4,12 +4,11 @@ import { getTenantStore } from '#utils/tenant_context'
 import { isMultiTenantEnabled } from '#utils/multi_tenant'
 import type { Database } from '@adonisjs/lucid/database'
 
+const CENTRAL_CONNECTION = 'central'
+
 /**
- * Makes Lucid models and `db.*` helpers use the per-request tenant connection
- * when AsyncLocalStorage is set. Models with `static connection = 'central'` keep central.
- *
- * Uses `start` (not `boot`) so Lucid's Database service is already bound in the container.
- * Ace preDeploy / migration commands also go through this path safely.
+ * Per-request tenant binding for Lucid.
+ * Central models keep connection "central" via an own data property (never the ALS getter).
  */
 export default class TenantConnectionProvider {
   constructor(protected app: ApplicationService) {}
@@ -23,22 +22,11 @@ export default class TenantConnectionProvider {
       configurable: true,
       enumerable: true,
       get() {
-        if (Object.prototype.hasOwnProperty.call(this, '__ownConnection')) {
-          return (this as { __ownConnection: string }).__ownConnection
-        }
         const store = getTenantStore()
         if (store?.connectionName) {
           return store.connectionName
         }
         return 'mysql'
-      },
-      set(value: string) {
-        Object.defineProperty(this, '__ownConnection', {
-          configurable: true,
-          enumerable: false,
-          writable: true,
-          value,
-        })
       },
     })
 
@@ -48,9 +36,16 @@ export default class TenantConnectionProvider {
       import('#models/platform_admin'),
       import('#models/email_verification_code'),
     ])
+
     for (const mod of centralModels) {
-      const Model = mod.default as typeof BaseModel & { connection?: string }
-      Model.connection = 'central'
+      const Model = mod.default as typeof BaseModel
+      // Own DATA property so Lucid never falls through to BaseModel's tenant getter.
+      Object.defineProperty(Model, 'connection', {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value: CENTRAL_CONNECTION,
+      })
     }
 
     let database: (Database & { __tenantPrimary?: string }) | null = null

@@ -89,7 +89,7 @@ export default class TenantProvisionService {
       }
     }
 
-    await this.#otp.issue({
+    const issued = await this.#otp.issue({
       email: adminEmail,
       purpose: 'COMPANY_CREATE',
       subject: 'Confirmá el alta de empresa — Nega POS',
@@ -102,7 +102,13 @@ export default class TenantProvisionService {
       },
     })
 
-    return { email: adminEmail, slug }
+    return {
+      email: adminEmail,
+      slug,
+      debugCode: issued.emailDelivered ? undefined : issued.code,
+      emailDelivered: issued.emailDelivered,
+      emailError: issued.emailError,
+    }
   }
 
   async confirmCreate(email: string, code: string) {

@@ -133,9 +133,14 @@ export default class PlatformController {
         adminName: payload.admin_name,
       })
       return serialize({
-        message: 'Código enviado al email del administrador',
+        message: result.emailDelivered
+          ? 'Código enviado al email del administrador'
+          : 'Código generado. El email no se pudo enviar; usá el código mostrado o los logs.',
         email: result.email,
         slug: result.slug,
+        debugCode: result.debugCode,
+        emailDelivered: result.emailDelivered,
+        emailError: result.emailError,
       })
     } catch (error) {
       return mapServiceError(error, response)
@@ -159,9 +164,14 @@ export default class PlatformController {
     try {
       const result = await this.#provision.resendCreateOtp(payload.email)
       return serialize({
-        message: 'Código reenviado',
+        message: result.emailDelivered
+          ? 'Código reenviado'
+          : 'Código regenerado. El email no se pudo enviar; usá el código mostrado o los logs.',
         email: result.email,
         slug: result.slug,
+        debugCode: result.debugCode,
+        emailDelivered: result.emailDelivered,
+        emailError: result.emailError,
       })
     } catch (error) {
       return mapServiceError(error, response)

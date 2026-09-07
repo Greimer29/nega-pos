@@ -22,6 +22,7 @@ export function PlatformPage() {
   })
   const [pendingEmail, setPendingEmail] = useState<string | null>(null)
   const [otp, setOtp] = useState('')
+  const [debugCode, setDebugCode] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -50,7 +51,11 @@ export function PlatformPage() {
     try {
       const result = await platformService.createCompany(form)
       setPendingEmail(result.email)
-      setOtp('')
+      setOtp(result.debugCode ?? '')
+      setDebugCode(result.debugCode ?? null)
+      if (result.emailError) {
+        setError(`Email no enviado: ${result.emailError}`)
+      }
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -66,6 +71,7 @@ export function PlatformPage() {
     try {
       await platformService.confirmCompany(pendingEmail, otp)
       setPendingEmail(null)
+      setDebugCode(null)
       setForm({
         slug: '',
         name: '',
@@ -189,9 +195,14 @@ export function PlatformPage() {
           {pendingEmail ? (
             <form className="mt-4 space-y-4" onSubmit={onConfirm}>
               <p className="text-sm text-neutral-400">
-                Código enviado a <span className="text-neutral-200">{pendingEmail}</span>. Si no hay
-                Resend configurado, mirá los logs de la API.
+                Código enviado a <span className="text-neutral-200">{pendingEmail}</span>. Si el
+                email falla, el código aparece abajo o en los logs de la API.
               </p>
+              {debugCode ? (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                  Código OTP (debug): <span className="font-mono text-lg tracking-widest">{debugCode}</span>
+                </div>
+              ) : null}
               <Input
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
@@ -207,15 +218,35 @@ export function PlatformPage() {
                   type="button"
                   variant="outline"
                   disabled={busy}
-                  onClick={() =>
-                    void platformService.resendCompanyOtp(pendingEmail).catch((err) => {
-                      setError(getApiErrorMessage(err))
-                    })
-                  }
+                  onClick={() => {
+                    void (async () => {
+                      setBusy(true)
+                      setError(null)
+                      try {
+                        const result = await platformService.resendCompanyOtp(pendingEmail)
+                        setOtp(result.debugCode ?? '')
+                        setDebugCode(result.debugCode ?? null)
+                        if (result.emailError) {
+                          setError(`Email no enviado: ${result.emailError}`)
+                        }
+                      } catch (err) {
+                        setError(getApiErrorMessage(err))
+                      } finally {
+                        setBusy(false)
+                      }
+                    })()
+                  }}
                 >
                   Reenviar código
                 </Button>
-                <Button type="button" variant="ghost" onClick={() => setPendingEmail(null)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setPendingEmail(null)
+                    setDebugCode(null)
+                  }}
+                >
                   Cancelar
                 </Button>
               </div>

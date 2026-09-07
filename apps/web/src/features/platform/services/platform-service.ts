@@ -45,10 +45,16 @@ export async function createCompany(payload: {
   admin_password: string
   admin_name: string
 }) {
-  const { data } = await api.post<{ data: { email: string; slug: string; message: string } }>(
-    '/platform/companies',
-    payload
-  )
+  const { data } = await api.post<{
+    data: {
+      email: string
+      slug: string
+      message: string
+      debugCode?: string
+      emailDelivered?: boolean
+      emailError?: string
+    }
+  }>('/platform/companies', payload)
   return data.data
 }
 
@@ -61,10 +67,16 @@ export async function confirmCompany(email: string, code: string) {
 }
 
 export async function resendCompanyOtp(email: string) {
-  const { data } = await api.post<{ data: { email: string; slug: string; message: string } }>(
-    '/platform/companies/resend-otp',
-    { email }
-  )
+  const { data } = await api.post<{
+    data: {
+      email: string
+      slug: string
+      message: string
+      debugCode?: string
+      emailDelivered?: boolean
+      emailError?: string
+    }
+  }>('/platform/companies/resend-otp', { email })
   return data.data
 }
 

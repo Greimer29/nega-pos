@@ -8,11 +8,15 @@ export type SendMailInput = {
   html?: string
 }
 
+export type SendMailResult = {
+  delivered: boolean
+}
+
 /**
  * Sends email via Resend HTTP API when RESEND_API_KEY is set.
- * In development without a key, logs the message (OTP still works for local tests).
+ * Without a key, logs the message and returns delivered=false (OTP still usable).
  */
-export async function sendMail(input: SendMailInput): Promise<void> {
+export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   const apiKey = env.get('RESEND_API_KEY')
   const from = env.get('MAIL_FROM') ?? 'Nega POS <onboarding@resend.dev>'
 
@@ -21,7 +25,7 @@ export async function sendMail(input: SendMailInput): Promise<void> {
       { to: input.to, subject: input.subject, text: input.text },
       'Email skipped (RESEND_API_KEY unset) — message logged'
     )
-    return
+    return { delivered: false }
   }
 
   const response = await fetch('https://api.resend.com/emails', {
@@ -43,4 +47,6 @@ export async function sendMail(input: SendMailInput): Promise<void> {
     const body = await response.text()
     throw new Error(`No se pudo enviar el email (${response.status}): ${body}`)
   }
+
+  return { delivered: true }
 }
