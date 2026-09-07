@@ -8,11 +8,9 @@ import {
   readPlatformClaims,
 } from '#middleware/platform_auth_middleware'
 import {
-  confirmCompanyValidator,
   createCompanyValidator,
   platformLoginValidator,
-  resendCompanyOtpValidator,
-  retryCompanyOtpValidator,
+  retryCompanyValidator,
   updateCompanyStatusValidator,
 } from '#validators/platform'
 
@@ -126,7 +124,7 @@ export default class PlatformController {
     const payload = await request.validateUsing(createCompanyValidator)
 
     try {
-      const result = await this.#provision.requestCreate({
+      const company = await this.#provision.createCompany({
         slug: payload.slug,
         name: payload.name,
         adminEmail: payload.admin_email,
@@ -134,69 +132,26 @@ export default class PlatformController {
         adminName: payload.admin_name,
       })
       return serialize({
-        message: result.emailDelivered
-          ? 'Código enviado al email del administrador'
-          : 'Código generado. El email no se pudo enviar; usá el código mostrado o los logs.',
-        email: result.email,
-        slug: result.slug,
-        debugCode: result.debugCode,
-        emailDelivered: result.emailDelivered,
-        emailError: result.emailError,
+        message: 'Empresa creada y provisionada',
+        company: serializeCompany(company),
       })
     } catch (error) {
       return mapServiceError(error, response)
     }
   }
 
-  async confirmCompany({ request, serialize, response }: HttpContext) {
-    const payload = await request.validateUsing(confirmCompanyValidator)
+  async retryProvision({ params, request, serialize, response }: HttpContext) {
+    const payload = await request.validateUsing(retryCompanyValidator)
 
     try {
-      const company = await this.#provision.confirmCreate(payload.email, payload.code)
-      return serialize({ company: serializeCompany(company) })
-    } catch (error) {
-      return mapServiceError(error, response)
-    }
-  }
-
-  async resendOtp({ request, serialize, response }: HttpContext) {
-    const payload = await request.validateUsing(resendCompanyOtpValidator)
-
-    try {
-      const result = await this.#provision.resendCreateOtp(payload.email)
-      return serialize({
-        message: result.emailDelivered
-          ? 'Código reenviado'
-          : 'Código regenerado. El email no se pudo enviar; usá el código mostrado o los logs.',
-        email: result.email,
-        slug: result.slug,
-        debugCode: result.debugCode,
-        emailDelivered: result.emailDelivered,
-        emailError: result.emailError,
-      })
-    } catch (error) {
-      return mapServiceError(error, response)
-    }
-  }
-
-  async retryOtp({ params, request, serialize, response }: HttpContext) {
-    const payload = await request.validateUsing(retryCompanyOtpValidator)
-
-    try {
-      const result = await this.#provision.retryProvisionOtp(Number(params.id), {
+      const company = await this.#provision.retryProvision(Number(params.id), {
         adminEmail: payload.admin_email,
         adminPassword: payload.admin_password,
         adminName: payload.admin_name,
       })
       return serialize({
-        message: result.emailDelivered
-          ? 'Código enviado para reintentar el alta'
-          : 'Código regenerado para reintentar el alta. Usá el código mostrado si el email falla.',
-        email: result.email,
-        slug: result.slug,
-        debugCode: result.debugCode,
-        emailDelivered: result.emailDelivered,
-        emailError: result.emailError,
+        message: 'Empresa reprovisionada',
+        company: serializeCompany(company),
       })
     } catch (error) {
       return mapServiceError(error, response)

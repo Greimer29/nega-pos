@@ -68,7 +68,7 @@ flowchart TB
 
 | Plano | BD | Contenido |
 |-------|-----|-----------|
-| Control | `DB_CENTRAL_DATABASE` | `companies`, `directory_users`, `email_verification_codes`, `platform_admins` |
+| Control | `DB_CENTRAL_DATABASE` | `companies`, `directory_users`, `platform_admins` |
 | Tenant | `nega_pos_t_<slug>` | Schema POS completo (ventas, stock, users operativos, etc.) |
 
 **Flujo típico:**
@@ -76,7 +76,7 @@ flowchart TB
 1. Login global (`POST /auth/login` o Google) consulta el directorio central y fija en la sesión `tenantId` / `dbName` (sin reconsultar el directorio en cada request).
 2. Middleware `tenant_context` cambia la conexión Lucid al MySQL de la empresa.
 3. La SPA llama `/api/v1` con cookies; los datos nunca cruzan entre tenants.
-4. Super admin en `/platform` provisiona empresas: OTP email → `CREATE DATABASE` → migrate → seed mínimo (FinancialBase + Admin).
+4. Super admin en `/platform` provisiona empresas al instante (sin email/OTP): `CREATE DATABASE` → migrate → seed mínimo (FinancialBase + Admin).
 
 ---
 
@@ -228,7 +228,7 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 | Seed seguro | `node ace db:bootstrap` — platform admin en central (multi-tenant) o admin tenant si legacy |
 | Uploads persistentes | Volume `/data/uploads` + `STORAGE_LOCAL_PATH=/data/uploads` (paths `t_<companyId>/…`) |
 
-**Reglas:** no crear servicio web en Railway; `FRONTEND_URL=http://localhost:5173`; pre-deploy migra **solo central**; empresas se crean desde `/platform` (OTP + `CREATE DATABASE`).
+**Reglas:** no crear servicio web en Railway; `FRONTEND_URL=http://localhost:5173`; pre-deploy migra **solo central**; empresas se crean desde `/platform` (`CREATE DATABASE` + migrate + seed, sin OTP).
 
 ### Cutover multi-empresa (producción limpia)
 
@@ -236,7 +236,7 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 2. Crear `nega_pos_central`; set `DB_CENTRAL_DATABASE`, `MULTI_TENANT_ENABLED=true`.
 3. El user MySQL debe poder `CREATE DATABASE`.
 4. Redeploy API → migraciones central + bootstrap platform admin.
-5. Abrir web local → `/platform/login` → crear empresas (OTP email).
+5. Abrir web local → `/platform/login` → crear empresas (provision inmediato).
 6. Login de usuarios de empresa en `/login` (email global, sin código de empresa).
 
 ### Variables de entorno relevantes
@@ -250,14 +250,13 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 | `SESSION_DRIVER` | `cookie` en dev |
 | `SESSION_MAX_AGE` | Expiración por inactividad (ej. `365d`) |
 | `DB_*` | Conexión MySQL (host/user compartidos) |
-| `DB_CENTRAL_DATABASE` | BD control plane (`companies`, directorio, OTP, platform admins) |
+| `DB_CENTRAL_DATABASE` | BD control plane (`companies`, directorio, platform admins) |
 | `MULTI_TENANT_ENABLED` | `true` = login global + BD por empresa; `false` = legacy single-DB (tests) |
 | `FRONTEND_URL` | CORS web (ej. `http://localhost:5173`) |
 | `DESKTOP_APP_ORIGIN` | CORS Electron (`http://127.0.0.1:51740`) |
 | `MOBILE_APP_ORIGIN` | CORS Capacitor APK (`https://localhost`) |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Seeder admin tenant / defaults de provisión |
 | `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD` | Super admin central (`db:bootstrap`) |
-| `RESEND_API_KEY` / `MAIL_FROM` | OTP email (sin key → OTP en logs API) |
 | `GOOGLE_CLIENT_ID` | Login Google (id_token) |
 | `DRIVE_DISK` / `STORAGE_LOCAL_PATH` | Archivos subidos (imágenes, facturas). En Railway: Volume + `/data/uploads` |
 | `RUN_MIGRATIONS_ON_START` | Solo Docker local/`docker-compose` (`true`). En Railway: `false` (usa pre-deploy) |
@@ -319,7 +318,7 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 
 ## 7. Modelo de datos
 
-Migraciones tenant en `apps/api/database/migrations/`. Control plane en `database/migrations_central/` (`companies`, `directory_users`, `platform_admins`, `email_verification_codes`). Modelos Lucid en `apps/api/app/models/`.
+Migraciones tenant en `apps/api/database/migrations/`. Control plane en `database/migrations_central/` (`companies`, `directory_users`, `platform_admins`). Modelos Lucid en `apps/api/app/models/`.
 
 Al provisionar una empresa: migraciones tenant + seed mínimo (`FinancialBase` + admin). **Sin** categorías ni proveedores de demo.
 
@@ -529,9 +528,8 @@ catalog_products ──< product_inventory_movements
 | POST | `/api/v1/platform/auth/logout` | Platform | `Platform.logout` |
 | GET | `/api/v1/platform/auth/me` | Platform | `Platform.me` |
 | GET | `/api/v1/platform/companies` | Platform | `Platform.listCompanies` |
-| POST | `/api/v1/platform/companies` | Platform | `Platform.createCompany` (OTP) |
-| POST | `/api/v1/platform/companies/confirm` | Platform | `Platform.confirmCompany` |
-| POST | `/api/v1/platform/companies/resend-otp` | Platform | `Platform.resendOtp` |
+| POST | `/api/v1/platform/companies` | Platform | `Platform.createCompany` (provision inmediato) |
+| POST | `/api/v1/platform/companies/:id/retry` | Platform | `Platform.retryProvision` |
 | PATCH | `/api/v1/platform/companies/:id/status` | Platform | `Platform.updateCompanyStatus` |
 
 ### Usuarios (`users.*`)

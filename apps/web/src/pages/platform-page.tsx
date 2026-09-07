@@ -7,12 +7,12 @@ import { getApiErrorMessage } from '@/lib/api-error'
 import * as platformService from '@/features/platform/services/platform-service'
 import type { PlatformAdmin, PlatformCompany } from '@/features/platform/services/platform-service'
 
-type OtpResult = {
-  email: string
-  slug: string
-  debugCode?: string
-  emailDelivered?: boolean
-  emailError?: string
+const emptyForm = {
+  slug: '',
+  name: '',
+  admin_email: '',
+  admin_password: '',
+  admin_name: '',
 }
 
 export function PlatformPage() {
@@ -21,6 +21,7 @@ export function PlatformPage() {
   const [companies, setCompanies] = useState<PlatformCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [retryCompany, setRetryCompany] = useState<PlatformCompany | null>(null)
   const [retryForm, setRetryForm] = useState({
@@ -28,17 +29,7 @@ export function PlatformPage() {
     admin_password: '',
     admin_name: '',
   })
-  const [form, setForm] = useState({
-    slug: '',
-    name: '',
-    admin_email: '',
-    admin_password: '',
-    admin_name: '',
-  })
-  const [pendingEmail, setPendingEmail] = useState<string | null>(null)
-  const [pendingSlug, setPendingSlug] = useState<string | null>(null)
-  const [otp, setOtp] = useState('')
-  const [debugCode, setDebugCode] = useState<string | null>(null)
+  const [form, setForm] = useState(emptyForm)
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -60,54 +51,17 @@ export function PlatformPage() {
     void load()
   }, [load])
 
-  function applyOtpResult(result: OtpResult) {
-    setPendingEmail(result.email)
-    setPendingSlug(result.slug)
-    setShowCreateForm(false)
-    setRetryCompany(null)
-    setOtp(result.debugCode ?? '')
-    setDebugCode(result.debugCode ?? null)
-    if (result.emailError) {
-      setError(`Email no enviado: ${result.emailError}`)
-    }
-  }
-
   async function onCreate(event: React.FormEvent) {
     event.preventDefault()
     setBusy(true)
     setError(null)
+    setSuccess(null)
     try {
-      const result = await platformService.createCompany(form)
-      applyOtpResult(result)
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function onConfirm(event: React.FormEvent) {
-    event.preventDefault()
-    if (!pendingEmail) return
-    setBusy(true)
-    setError(null)
-    try {
-      await platformService.confirmCompany(pendingEmail, otp)
-      setPendingEmail(null)
-      setPendingSlug(null)
-      setDebugCode(null)
+      const company = await platformService.createCompany(form)
+      setForm(emptyForm)
       setShowCreateForm(false)
-      setRetryCompany(null)
-      setForm({
-        slug: '',
-        name: '',
-        admin_email: '',
-        admin_password: '',
-        admin_name: '',
-      })
-      setRetryForm({ admin_email: '', admin_password: '', admin_name: '' })
-      setOtp('')
       setCompanies(await platformService.listCompanies())
+      setSuccess(`Empresa ${company.name} creada (ACTIVE). Ya podés entrar en /login con el admin.`)
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -120,9 +74,13 @@ export function PlatformPage() {
     if (!retryCompany) return
     setBusy(true)
     setError(null)
+    setSuccess(null)
     try {
-      const result = await platformService.retryCompanyOtp(retryCompany.id, retryForm)
-      applyOtpResult(result)
+      const company = await platformService.retryCompanyProvision(retryCompany.id, retryForm)
+      setRetryCompany(null)
+      setRetryForm({ admin_email: '', admin_password: '', admin_name: '' })
+      setCompanies(await platformService.listCompanies())
+      setSuccess(`Empresa ${company.name} reprovisionada (ACTIVE).`)
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -132,18 +90,16 @@ export function PlatformPage() {
 
   function startRetry(company: PlatformCompany) {
     setError(null)
+    setSuccess(null)
     setShowCreateForm(false)
     setRetryCompany(company)
-    setRetryForm({
-      admin_email: '',
-      admin_password: '',
-      admin_name: '',
-    })
+    setRetryForm({ admin_email: '', admin_password: '', admin_name: '' })
   }
 
   async function onSuspendActive(company: PlatformCompany) {
     setBusy(true)
     setError(null)
+    setSuccess(null)
     try {
       await platformService.updateCompanyStatus(company.id, 'SUSPENDED')
       setCompanies(await platformService.listCompanies())
@@ -161,14 +117,14 @@ export function PlatformPage() {
 
   if (loading) {
     return (
-      <div className="dark flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-300">
+      <div className="flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-300">
         <Loader2 className="size-6 animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="dark min-h-screen bg-neutral-950 px-4 py-8 text-neutral-100">
+    <div className="min-h-screen bg-neutral-950 px-4 py-8 text-neutral-100">
       <div className="mx-auto max-w-4xl space-y-8">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -191,14 +147,21 @@ export function PlatformPage() {
           </div>
         ) : null}
 
+        {success ? (
+          <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+            {success}
+          </div>
+        ) : null}
+
         <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-medium">Empresas</h2>
-            {!pendingEmail && !showCreateForm && !retryCompany ? (
+            {!showCreateForm && !retryCompany ? (
               <Button
                 type="button"
                 onClick={() => {
                   setError(null)
+                  setSuccess(null)
                   setShowCreateForm(true)
                 }}
               >
@@ -238,10 +201,10 @@ export function PlatformPage() {
                             <Button
                               size="sm"
                               variant="default"
-                              disabled={busy || Boolean(pendingEmail)}
+                              disabled={busy}
                               onClick={() => startRetry(company)}
                             >
-                              Continuar alta
+                              Reintentar alta
                             </Button>
                           ) : null}
                           {company.status === 'ACTIVE' ? (
@@ -264,14 +227,14 @@ export function PlatformPage() {
           </div>
         </section>
 
-        {retryCompany && !pendingEmail ? (
+        {retryCompany ? (
           <section className="rounded-xl border border-amber-500/30 bg-neutral-900 p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-medium">Continuar alta</h2>
+                <h2 className="text-lg font-medium">Reintentar alta</h2>
                 <p className="mt-1 text-sm text-neutral-400">
-                  {retryCompany.name} ({retryCompany.slug}) — ingresá de nuevo los datos del admin
-                  para emitir el OTP.
+                  {retryCompany.name} ({retryCompany.slug}) — se crea/migra la BD y el admin al
+                  confirmar. Sin email ni OTP.
                 </p>
               </div>
               <Button type="button" variant="ghost" onClick={() => setRetryCompany(null)}>
@@ -305,80 +268,21 @@ export function PlatformPage() {
                 className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500 sm:col-span-2"
               />
               <Button type="submit" disabled={busy} className="sm:col-span-2">
-                {busy ? <Loader2 className="animate-spin" /> : 'Enviar código OTP'}
+                {busy ? <Loader2 className="animate-spin" /> : 'Provisionar ahora'}
               </Button>
             </form>
           </section>
         ) : null}
 
-        {pendingEmail ? (
-          <section className="rounded-xl border border-amber-500/30 bg-neutral-900 p-6">
-            <h2 className="text-lg font-medium">Confirmar alta (OTP)</h2>
-            <p className="mt-1 text-sm text-neutral-400">
-              Empresa <span className="text-neutral-200">{pendingSlug}</span> — código para{' '}
-              <span className="text-neutral-200">{pendingEmail}</span>
-            </p>
-
-            <form className="mt-4 space-y-4" onSubmit={onConfirm}>
-              {debugCode ? (
-                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-                  Código OTP (debug):{' '}
-                  <span className="font-mono text-lg tracking-widest">{debugCode}</span>
-                </div>
-              ) : null}
-              <Input
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                placeholder="Código de 6 dígitos"
-                required
-                className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500"
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={busy}>
-                  {busy ? <Loader2 className="animate-spin" /> : 'Confirmar y provisionar'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => {
-                    void (async () => {
-                      setBusy(true)
-                      setError(null)
-                      try {
-                        const result = await platformService.resendCompanyOtp(pendingEmail)
-                        applyOtpResult(result)
-                      } catch (err) {
-                        setError(getApiErrorMessage(err))
-                      } finally {
-                        setBusy(false)
-                      }
-                    })()
-                  }}
-                >
-                  Reenviar código
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setPendingEmail(null)
-                    setPendingSlug(null)
-                    setDebugCode(null)
-                    setOtp('')
-                  }}
-                >
-                  Cerrar
-                </Button>
-              </div>
-            </form>
-          </section>
-        ) : null}
-
-        {showCreateForm && !pendingEmail && !retryCompany ? (
+        {showCreateForm && !retryCompany ? (
           <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-medium">Nueva empresa</h2>
+              <div>
+                <h2 className="text-lg font-medium">Nueva empresa</h2>
+                <p className="mt-1 text-sm text-neutral-400">
+                  Al enviar se crea la BD, migraciones y usuario admin. Sin email ni OTP.
+                </p>
+              </div>
               <Button
                 type="button"
                 variant="ghost"
@@ -393,7 +297,7 @@ export function PlatformPage() {
 
             <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={onCreate}>
               <Input
-                placeholder="Slug (ej. coreva)"
+                placeholder="Slug (ej. k-g)"
                 value={form.slug}
                 onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
                 required
@@ -431,7 +335,7 @@ export function PlatformPage() {
                 className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500 sm:col-span-2"
               />
               <Button type="submit" disabled={busy} className="sm:col-span-2">
-                {busy ? <Loader2 className="animate-spin" /> : 'Enviar código OTP'}
+                {busy ? <Loader2 className="animate-spin" /> : 'Crear y provisionar'}
               </Button>
             </form>
           </section>

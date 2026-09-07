@@ -46,55 +46,19 @@ export async function createCompany(payload: {
   admin_name: string
 }) {
   const { data } = await api.post<{
-    data: {
-      email: string
-      slug: string
-      message: string
-      debugCode?: string
-      emailDelivered?: boolean
-      emailError?: string
-    }
+    data: { message: string; company: PlatformCompany }
   }>('/platform/companies', payload)
-  return data.data
-}
-
-export async function confirmCompany(email: string, code: string) {
-  const { data } = await api.post<{ data: { company: PlatformCompany } }>(
-    '/platform/companies/confirm',
-    { email, code }
-  )
   return data.data.company
 }
 
-export async function resendCompanyOtp(email: string) {
-  const { data } = await api.post<{
-    data: {
-      email: string
-      slug: string
-      message: string
-      debugCode?: string
-      emailDelivered?: boolean
-      emailError?: string
-    }
-  }>('/platform/companies/resend-otp', { email })
-  return data.data
-}
-
-export async function retryCompanyOtp(
+export async function retryCompanyProvision(
   companyId: number,
   payload: { admin_email: string; admin_password: string; admin_name?: string }
 ) {
   const { data } = await api.post<{
-    data: {
-      email: string
-      slug: string
-      message: string
-      debugCode?: string
-      emailDelivered?: boolean
-      emailError?: string
-    }
-  }>(`/platform/companies/${companyId}/retry-otp`, payload)
-  return data.data
+    data: { message: string; company: PlatformCompany }
+  }>(`/platform/companies/${companyId}/retry`, payload)
+  return data.data.company
 }
 
 export async function updateCompanyStatus(id: number, status: 'ACTIVE' | 'SUSPENDED') {

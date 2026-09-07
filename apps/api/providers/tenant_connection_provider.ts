@@ -34,7 +34,6 @@ export default class TenantConnectionProvider {
       import('#models/company'),
       import('#models/directory_user'),
       import('#models/platform_admin'),
-      import('#models/email_verification_code'),
     ])
 
     for (const mod of centralModels) {

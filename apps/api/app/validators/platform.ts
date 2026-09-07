@@ -13,16 +13,7 @@ export const createCompanyValidator = vine.create({
   admin_name: vine.string().trim().minLength(2).maxLength(100),
 })
 
-export const confirmCompanyValidator = vine.create({
-  email: vine.string().email().maxLength(150),
-  code: vine.string().trim().minLength(4).maxLength(12),
-})
-
-export const resendCompanyOtpValidator = vine.create({
-  email: vine.string().email().maxLength(150),
-})
-
-export const retryCompanyOtpValidator = vine.create({
+export const retryCompanyValidator = vine.create({
   admin_email: vine.string().email().maxLength(150),
   admin_password: vine.string().minLength(8).maxLength(255),
   admin_name: vine.string().trim().minLength(2).maxLength(100).optional(),

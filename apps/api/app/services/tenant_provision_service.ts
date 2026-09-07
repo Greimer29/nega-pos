@@ -8,7 +8,6 @@ import Company from '#models/company'
 import DirectoryUser from '#models/directory_user'
 import FinancialBaseSeeder from '#database/seeders/financial_base_seeder'
 import AdminUserSeeder from '#database/seeders/admin_user_seeder'
-import OtpService from '#services/otp_service'
 import {
   ensureTenantConnection,
   tenantDbNameForSlug,
@@ -61,9 +60,11 @@ function asHttpError(error: unknown, fallbackMessage: string) {
 }
 
 export default class TenantProvisionService {
-  #otp = new OtpService()
-
-  async requestCreate(draft: CreateCompanyDraft) {
+  /**
+   * Creates (or retries) a company and provisions its tenant DB immediately.
+   * No email / OTP — only platform admins call this.
+   */
+  async createCompany(draft: CreateCompanyDraft) {
     const slug = normalizeSlug(draft.slug)
     if (!slug || slug.length < 2) {
       throw Object.assign(new Error('Slug inválido'), { code: 'SLUG_INVALID', status: 422 })
@@ -81,7 +82,7 @@ export default class TenantProvisionService {
     const existingUser = await DirectoryUser.findBy('email', adminEmail)
     if (existingUser) {
       const company = await Company.find(existingUser.companyId)
-      if (company?.status === 'ACTIVE') {
+      if (company?.status === 'ACTIVE' && company.slug !== slug) {
         throw Object.assign(new Error('Ese email ya está registrado en otra empresa'), {
           code: 'EMAIL_TAKEN',
           status: 409,
@@ -89,98 +90,26 @@ export default class TenantProvisionService {
       }
     }
 
-    const issued = await this.#otp.issue({
-      email: adminEmail,
-      purpose: 'COMPANY_CREATE',
-      subject: 'Confirmá el alta de empresa — Nega POS',
-      payload: {
+    try {
+      return await this.provision({
         slug,
         name: draft.name.trim(),
         adminEmail,
         adminPassword: draft.adminPassword,
-        adminName: draft.adminName.trim(),
-      },
-    })
-
-    return {
-      email: adminEmail,
-      slug,
-      debugCode: issued.emailDelivered ? undefined : issued.code,
-      emailDelivered: issued.emailDelivered,
-      emailError: issued.emailError,
-    }
-  }
-
-  async confirmCreate(email: string, code: string) {
-    // Validate OTP first without consuming, so a failed provision can retry the same code.
-    const verification = await this.#otp.verify({
-      email,
-      purpose: 'COMPANY_CREATE',
-      code,
-    })
-
-    const payload = verification.payload as CreateCompanyDraft | null
-    if (!payload?.slug || !payload.name || !payload.adminEmail || !payload.adminPassword) {
-      throw Object.assign(new Error('Payload de verificación incompleto'), {
-        code: 'OTP_PAYLOAD_INVALID',
-        status: 400,
+        adminName: draft.adminName.trim() || 'Administrador',
       })
-    }
-
-    try {
-      const company = await this.provision(payload)
-      await this.#otp.markConsumed(verification.id)
-      return company
     } catch (error) {
-      logger.error({ err: error, email, slug: payload.slug }, 'Company provision failed')
+      logger.error({ err: error, email: adminEmail, slug }, 'Company provision failed')
       throw asHttpError(error, 'No se pudo provisionar la empresa')
     }
   }
 
-  async resendCreateOtp(email: string) {
-    const normalized = email.trim().toLowerCase()
-    let pending = await db
-      .connection('central')
-      .from('email_verification_codes')
-      .where('email', normalized)
-      .where('purpose', 'COMPANY_CREATE')
-      .whereNull('consumed_at')
-      .orderBy('id', 'desc')
-      .first()
-
-    // After a failed provision the OTP may already be consumed — reuse last payload.
-    if (!pending?.payload) {
-      pending = await db
-        .connection('central')
-        .from('email_verification_codes')
-        .where('email', normalized)
-        .where('purpose', 'COMPANY_CREATE')
-        .orderBy('id', 'desc')
-        .first()
-    }
-
-    if (!pending?.payload) {
-      throw Object.assign(new Error('No hay un alta pendiente para ese email'), {
-        code: 'OTP_NOT_FOUND',
-        status: 404,
-      })
-    }
-
-    const payload =
-      typeof pending.payload === 'string'
-        ? (JSON.parse(pending.payload) as CreateCompanyDraft)
-        : (pending.payload as CreateCompanyDraft)
-
-    return this.requestCreate(payload)
-  }
-
   /**
-   * Re-issues OTP for a company stuck in PROVISIONING/SUSPENDED (failed first provision).
-   * Prefer explicit admin credentials from the platform UI so we don't depend on old OTP rows.
+   * Re-runs provision for a company stuck in PROVISIONING/SUSPENDED.
    */
-  async retryProvisionOtp(
+  async retryProvision(
     companyId: number,
-    admin?: { adminEmail: string; adminPassword: string; adminName?: string }
+    admin: { adminEmail: string; adminPassword: string; adminName?: string }
   ) {
     const company = await Company.findOrFail(companyId)
     if (company.status === 'ACTIVE') {
@@ -190,46 +119,13 @@ export default class TenantProvisionService {
       })
     }
 
-    if (admin?.adminEmail && admin.adminPassword) {
-      return this.requestCreate({
-        slug: company.slug,
-        name: company.name,
-        adminEmail: admin.adminEmail,
-        adminPassword: admin.adminPassword,
-        adminName: admin.adminName?.trim() || 'Administrador',
-      })
-    }
-
-    const rows = await db
-      .connection('central')
-      .from('email_verification_codes')
-      .where('purpose', 'COMPANY_CREATE')
-      .orderBy('id', 'desc')
-      .limit(50)
-
-    for (const row of rows) {
-      const payload =
-        typeof row.payload === 'string'
-          ? (JSON.parse(row.payload) as CreateCompanyDraft)
-          : (row.payload as CreateCompanyDraft | null)
-
-      if (!payload?.slug || normalizeSlug(payload.slug) !== company.slug) {
-        continue
-      }
-
-      return this.requestCreate({
-        ...payload,
-        name: company.name,
-        slug: company.slug,
-      })
-    }
-
-    throw Object.assign(
-      new Error(
-        'Para continuar el alta necesitás el email y password del admin de la empresa. Completá el formulario “Continuar alta”.'
-      ),
-      { code: 'RETRY_CREDENTIALS_REQUIRED', status: 422 }
-    )
+    return this.createCompany({
+      slug: company.slug,
+      name: company.name,
+      adminEmail: admin.adminEmail,
+      adminPassword: admin.adminPassword,
+      adminName: admin.adminName?.trim() || 'Administrador',
+    })
   }
 
   async provision(draft: CreateCompanyDraft) {

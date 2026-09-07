@@ -17,7 +17,7 @@ export default await Env.create(new URL('../', import.meta.url), {
   DB_USER: Env.schema.string(),
   DB_PASSWORD: Env.schema.string.optional(),
   DB_DATABASE: Env.schema.string(),
-  /** Control-plane DB (companies, directory, OTP, platform admins). */
+  /** Control-plane DB (companies, directory, platform admins). */
   DB_CENTRAL_DATABASE: Env.schema.string.optional(),
   /**
    * When true: login via central directory + per-company MySQL databases.
@@ -37,9 +37,6 @@ export default await Env.create(new URL('../', import.meta.url), {
   PLATFORM_ADMIN_EMAIL: Env.schema.string.optional(),
   PLATFORM_ADMIN_PASSWORD: Env.schema.string.optional(),
   PLATFORM_ADMIN_NAME: Env.schema.string.optional(),
-
-  RESEND_API_KEY: Env.schema.string.optional(),
-  MAIL_FROM: Env.schema.string.optional(),
 
   GOOGLE_CLIENT_ID: Env.schema.string.optional(),
   GOOGLE_CLIENT_SECRET: Env.schema.string.optional(),
