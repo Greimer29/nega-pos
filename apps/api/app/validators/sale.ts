@@ -6,6 +6,8 @@ const saleLineSchema = vine.object({
   quantity: vine.number().min(0.001),
   unit_price_usd: vine.number().min(0),
   kitchen_note: vine.string().trim().maxLength(1000).nullable().optional(),
+  catalog_product_size_id: vine.number().min(1).nullable().optional(),
+  size: vine.string().trim().maxLength(20).nullable().optional(),
   formula_materials: vine
     .array(
       vine.object({

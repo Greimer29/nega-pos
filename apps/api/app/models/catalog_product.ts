@@ -1,4 +1,5 @@
 import { CatalogProductSchema } from '#database/schema'
+import CatalogProductSize from '#models/catalog_product_size'
 import Formula from '#models/formula'
 import ProductInventoryMovement from '#models/product_inventory_movement'
 import { belongsTo, hasMany } from '@adonisjs/lucid/orm'
@@ -12,4 +13,7 @@ export default class CatalogProduct extends CatalogProductSchema {
 
   @hasMany(() => ProductInventoryMovement)
   declare movimientos: HasMany<typeof ProductInventoryMovement>
+
+  @hasMany(() => CatalogProductSize)
+  declare sizes: HasMany<typeof CatalogProductSize>
 }

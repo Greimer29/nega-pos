@@ -68,3 +68,16 @@ export async function updateCompanyStatus(id: number, status: 'ACTIVE' | 'SUSPEN
   )
   return data.data.company
 }
+
+/** Irreversible: DROP tenant DB + directory + uploads. confirmSlug must match company.slug. */
+export async function destroyCompany(id: number, confirmSlug: string) {
+  const { data } = await api.delete<{
+    data: {
+      message: string
+      deleted: { id: number; slug: string; dbName: string | null }
+    }
+  }>(`/platform/companies/${id}`, {
+    data: { confirm_slug: confirmSlug },
+  })
+  return data.data
+}

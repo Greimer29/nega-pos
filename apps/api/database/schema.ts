@@ -70,6 +70,23 @@ export class CatalogProductSchema extends BaseModel {
   declare updatedAt: DateTime
 }
 
+export class CatalogProductSizeSchema extends BaseModel {
+  static $columns = ['catalogProductId', 'createdAt', 'id', 'size', 'stockQuantity', 'updatedAt'] as const
+  $columns = CatalogProductSizeSchema.$columns
+  @column()
+  declare catalogProductId: bigint | number
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: bigint | number
+  @column()
+  declare size: string
+  @column()
+  declare stockQuantity: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
 export class CategorySchema extends BaseModel {
   static $columns = ['active', 'createdAt', 'id', 'name', 'sortOrder', 'updatedAt'] as const
   $columns = CategorySchema.$columns
@@ -388,10 +405,12 @@ export class MaterialSchema extends BaseModel {
 }
 
 export class OrderLineSchema extends BaseModel {
-  static $columns = ['catalogProductId', 'costUsd', 'createdAt', 'id', 'orderId', 'quantity', 'returnedQuantity', 'subtotalUsd', 'unitPriceUsd', 'updatedAt'] as const
+  static $columns = ['catalogProductId', 'catalogProductSizeId', 'costUsd', 'createdAt', 'id', 'notes', 'orderId', 'quantity', 'returnedQuantity', 'size', 'subtotalUsd', 'unitPriceUsd', 'updatedAt'] as const
   $columns = OrderLineSchema.$columns
   @column()
   declare catalogProductId: bigint | number
+  @column()
+  declare catalogProductSizeId: bigint | number | null
   @column()
   declare costUsd: string | null
   @column.dateTime({ autoCreate: true })
@@ -399,11 +418,15 @@ export class OrderLineSchema extends BaseModel {
   @column({ isPrimary: true })
   declare id: bigint | number
   @column()
+  declare notes: string | null
+  @column()
   declare orderId: bigint | number
   @column()
   declare quantity: string
   @column()
   declare returnedQuantity: string
+  @column()
+  declare size: string | null
   @column()
   declare subtotalUsd: string
   @column()
@@ -612,10 +635,12 @@ export class SaleLineMaterialSchema extends BaseModel {
 }
 
 export class SaleLineSchema extends BaseModel {
-  static $columns = ['catalogProductId', 'costUsd', 'createdAt', 'description', 'id', 'kitchenNote', 'materialId', 'quantity', 'returnedQuantity', 'saleId', 'subtotalUsd', 'unitPriceUsd', 'updatedAt'] as const
+  static $columns = ['catalogProductId', 'catalogProductSizeId', 'costUsd', 'createdAt', 'description', 'id', 'kitchenNote', 'materialId', 'quantity', 'returnedQuantity', 'saleId', 'size', 'subtotalUsd', 'unitPriceUsd', 'updatedAt'] as const
   $columns = SaleLineSchema.$columns
   @column()
   declare catalogProductId: bigint | number | null
+  @column()
+  declare catalogProductSizeId: bigint | number | null
   @column()
   declare costUsd: string | null
   @column.dateTime({ autoCreate: true })
@@ -634,6 +659,8 @@ export class SaleLineSchema extends BaseModel {
   declare returnedQuantity: string
   @column()
   declare saleId: bigint | number
+  @column()
+  declare size: string | null
   @column()
   declare subtotalUsd: string
   @column()

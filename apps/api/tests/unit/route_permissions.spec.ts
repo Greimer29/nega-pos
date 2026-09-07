@@ -128,6 +128,7 @@ const PROTECTED_API_ROUTES: Array<[string, string]> = [
   ['POST', '/catalog-products/42/adjustment'],
   ['POST', '/catalog-products'],
   ['PUT', '/catalog-products/42'],
+  ['PUT', '/catalog-products/42/sizes'],
   ['DELETE', '/catalog-products/42'],
   ['POST', '/catalog-products/42/image'],
   ['GET', '/catalog-products/42/image'],

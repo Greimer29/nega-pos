@@ -11,7 +11,7 @@ import {
   useSuppliersQuery,
 } from '@/features/suppliers/hooks/use-suppliers'
 import type { Supplier } from '@/features/suppliers/types'
-import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { notifyApiError, QueryErrorState, EmptyListState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
 import { cn } from '@/lib/utils'
 
@@ -129,19 +129,26 @@ export function SuppliersPage() {
           ) : isError ? (
             <QueryErrorState isError error={error} title="No se pudieron cargar los proveedores" />
           ) : suppliers.length === 0 ? (
-            <div className="py-12 text-center">
-              <p className="text-muted-foreground text-sm">
-                {debouncedSearch
-                  ? 'No hay proveedores que coincidan con la búsqueda.'
-                  : 'Todavía no hay proveedores cargados.'}
-              </p>
-              {!debouncedSearch ? (
-                <Button className="mt-4" variant="outline" onClick={openCreateDialog}>
-                  <Plus />
-                  Crear el primero
-                </Button>
-              ) : null}
-            </div>
+            <EmptyListState
+              title={
+                debouncedSearch
+                  ? 'No hay proveedores que coincidan con la búsqueda'
+                  : 'Todavía no hay proveedores'
+              }
+              description={
+                debouncedSearch
+                  ? undefined
+                  : 'Es normal en una empresa nueva. Creá el primero cuando quieras comprar.'
+              }
+              action={
+                !debouncedSearch ? (
+                  <Button variant="outline" onClick={openCreateDialog}>
+                    <Plus />
+                    Crear el primero
+                  </Button>
+                ) : null
+              }
+            />
           ) : (
             <div className="overflow-x-auto rounded-md border">
               <table className="w-full min-w-[640px] text-sm">

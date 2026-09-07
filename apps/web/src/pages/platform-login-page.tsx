@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 import { refreshCsrfToken } from '@/lib/api'
 import * as platformService from '@/features/platform/services/platform-service'
 import type { PlatformAdmin } from '@/features/platform/services/platform-service'
@@ -12,7 +12,6 @@ export function PlatformLoginPage() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
 
@@ -26,14 +25,13 @@ export function PlatformLoginPage() {
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault()
-    setError(null)
     setLoading(true)
     try {
       await platformService.platformLogin(email, password)
       await refreshCsrfToken()
       navigate('/platform', { replace: true })
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      notifyApiError(err, 'No se pudo iniciar sesión')
     } finally {
       setLoading(false)
     }
@@ -41,14 +39,14 @@ export function PlatformLoginPage() {
 
   if (checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-300">
+      <div className="dark flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-300">
         <Loader2 className="size-6 animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-950 px-4">
+    <div className="dark flex min-h-screen items-center justify-center bg-neutral-950 px-4">
       <div className="w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-900 p-8">
         <h1 className="text-xl font-semibold text-white">Nega POS — Platform</h1>
         <p className="mt-1 text-sm text-neutral-400">Acceso super admin</p>
@@ -61,11 +59,10 @@ export function PlatformLoginPage() {
             <Input
               id="platform-email"
               type="email"
-              autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500"
+              className="bg-neutral-950"
             />
           </div>
           <div className="space-y-2">
@@ -75,14 +72,12 @@ export function PlatformLoginPage() {
             <Input
               id="platform-password"
               type="password"
-              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500"
+              className="bg-neutral-950"
             />
           </div>
-          {error ? <p className="text-sm text-red-300">{error}</p> : null}
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? <Loader2 className="animate-spin" /> : 'Ingresar'}
           </Button>

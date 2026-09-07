@@ -9,6 +9,13 @@ export type User = {
   updatedAt: string
 }
 
+export type AuthCompany = {
+  id: number
+  slug: string
+  name: string
+  status: string
+}
+
 export type VineValidationDetail = {
   message: string
   field?: string
@@ -50,6 +57,7 @@ export type ApiErrorResponse = {
 export type AuthUserResponse = {
   data: {
     user: User
+    company?: AuthCompany | null
   }
 }
 
@@ -57,4 +65,9 @@ export type AuthMessageResponse = {
   data: {
     message: string
   }
+}
+
+export type AuthSession = {
+  user: User
+  company: AuthCompany | null
 }

@@ -8,6 +8,7 @@ import type { CatalogProduct } from '@/features/ventas/types'
 import { cn } from '@/lib/utils'
 import { isBelowCost } from '@/lib/cost-warnings'
 import { isProductStockLow } from '@/features/ventas/utils/product-stock'
+import { formatSizeStockSummary } from '@/features/ventas/utils/product-sizes'
 import {
   calcProfitMarginPercent,
   formatSignedProfitMarginPercent,
@@ -373,6 +374,9 @@ function CatalogStockBadge({
           onClick={(event) => event.stopPropagation()}
         >
           <ul className="min-w-[8.5rem] space-y-1">
+            <li className="text-muted-foreground border-b pb-1 text-[10px]">
+              {formatSizeStockSummary(product)}
+            </li>
             {sizes.map((size) => (
               <li
                 key={size.id}

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Pencil, Plus } from 'lucide-react'
+import { Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { CircularImageField } from '@/components/circular-image-field'
 import { DecimalInput, MoneyInput } from '@/components/decimal-input'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -51,6 +52,20 @@ function formatMarginValue(cost: number, sale: string) {
   return margin !== null ? margin.toFixed(1) : ''
 }
 
+type SizeRow = {
+  key: string
+  size: string
+  stock_quantity: string
+}
+
+function newSizeRow(): SizeRow {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    size: '',
+    stock_quantity: '0',
+  }
+}
+
 export function CatalogFormDialog({
   open,
   onOpenChange,
@@ -69,6 +84,8 @@ export function CatalogFormDialog({
   const [marginPercent, setMarginPercent] = useState('')
   const [formulaId, setFormulaId] = useState<number | ''>('')
   const [stockQuantity, setStockQuantity] = useState('0')
+  const [useSizes, setUseSizes] = useState(false)
+  const [sizeRows, setSizeRows] = useState<SizeRow[]>([newSizeRow()])
   const [error, setError] = useState<string | null>(null)
   const [costWarning, setCostWarning] = useState<string | null>(null)
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null)
@@ -93,6 +110,14 @@ export function CatalogFormDialog({
   const isPending = createMutation.isPending || updateMutation.isPending
   const imagePending = uploadImageMutation.isPending || deleteImageMutation.isPending
   const { formatFromUsd } = useFormatMoney()
+  const sizesStockTotal = useMemo(
+    () =>
+      sizeRows.reduce((sum, row) => {
+        if (!row.size.trim()) return sum
+        return sum + Math.max(0, Number(row.stock_quantity) || 0)
+      }, 0),
+    [sizeRows]
+  )
 
   useEffect(() => {
     return () => {
@@ -176,6 +201,20 @@ export function CatalogFormDialog({
       setMarginPercent(formatMarginValue(Number(product.cost_usd), product.sale_price_usd))
       setFormulaId(product.formula_id ?? '')
       setStockQuantity(product.stock_quantity)
+      const productSizes = product.sizes ?? []
+      if (productSizes.length > 0) {
+        setUseSizes(true)
+        setSizeRows(
+          productSizes.map((size) => ({
+            key: String(size.id),
+            size: size.size,
+            stock_quantity: String(size.stock_quantity),
+          }))
+        )
+      } else {
+        setUseSizes(false)
+        setSizeRows([newSizeRow()])
+      }
     } else {
       setName('')
       setDescription('')
@@ -186,6 +225,8 @@ export function CatalogFormDialog({
       setMarginPercent('')
       setFormulaId('')
       setStockQuantity('0')
+      setUseSizes(false)
+      setSizeRows([newSizeRow()])
     }
   }, [open, product, categories])
 
@@ -197,13 +238,15 @@ export function CatalogFormDialog({
     const cost = formulaCost
     setCostPrice(cost.toFixed(2))
 
-    if (marginPercent.trim()) {
+    // Costo de fórmula cambió: conservar venta y actualizar margen.
+    // Solo si aún no hay venta, proyectar venta desde el margen.
+    if (salePrice.trim()) {
+      setMarginPercent(formatMarginValue(cost, salePrice))
+    } else if (marginPercent.trim()) {
       const sale = calcSalePriceFromMargin(cost, Number(marginPercent))
       if (sale !== null) {
         setSalePrice(sale.toFixed(2))
       }
-    } else if (salePrice.trim()) {
-      setMarginPercent(formatMarginValue(cost, salePrice))
     }
   }, [hasFormula, formulaCost, formulaMaterials])
 
@@ -232,9 +275,9 @@ export function CatalogFormDialog({
     const cost = Number(value)
     if (!Number.isFinite(cost) || cost <= 0) return
 
-    if (marginPercent.trim()) {
-      applySaleFromMargin(cost, marginPercent)
-    } else if (salePrice.trim()) {
+    // Regla: editar costo → actualizar margen (conservar precio de venta).
+    // Nunca proyectar venta desde un margen previo (producía montos absurdos).
+    if (salePrice.trim()) {
       applyMarginFromSale(cost, salePrice)
     }
   }
@@ -268,11 +311,65 @@ export function CatalogFormDialog({
 
   function handleFormulaSaved(saved: Pick<Formula, 'id' | 'name'>) {
     setFormulaId(saved.id)
+    setUseSizes(false)
+  }
+
+  function clearFormula() {
+    setFormulaId('')
+  }
+
+  function validateSizeRows(): string | null {
+    const seen = new Set<string>()
+    for (const row of sizeRows) {
+      const label = row.size.trim()
+      if (!label) continue
+      if (label.length > 20) {
+        return 'Cada talla puede tener como máximo 20 caracteres.'
+      }
+      const key = label.toLowerCase()
+      if (seen.has(key)) {
+        return `La talla "${label}" está duplicada.`
+      }
+      seen.add(key)
+      if (Number(row.stock_quantity) < 0) {
+        return 'El stock por talla no puede ser negativo.'
+      }
+    }
+    if (seen.size === 0) {
+      return 'Agregá al menos una talla o desactivá «Usar tallas».'
+    }
+    return null
   }
 
   async function handleSave() {
     setError(null)
     setCostWarning(null)
+
+    if (useSizes && hasFormula) {
+      setError('Un producto con fórmula no puede usar tallas.')
+      return
+    }
+
+    if (useSizes) {
+      const sizeError = validateSizeRows()
+      if (sizeError) {
+        setError(sizeError)
+        return
+      }
+    }
+
+    const hadSizes =
+      Boolean(product?.has_sizes) || (product?.sizes?.length ?? 0) > 0 || Boolean(displayProduct?.has_sizes)
+    const sizesPayload = useSizes
+      ? sizeRows
+          .filter((row) => row.size.trim())
+          .map((row) => ({
+            size: row.size.trim(),
+            stock_quantity: Math.max(0, Number(row.stock_quantity) || 0),
+          }))
+      : hadSizes && !hasFormula
+        ? []
+        : undefined
 
     const payload = {
       name: name.trim(),
@@ -285,7 +382,12 @@ export function CatalogFormDialog({
         : {
             cost_usd: Number(costPrice),
             formula_id: null,
-            stock_quantity: purchaseFlow && !isEditing ? 0 : Number(stockQuantity),
+            stock_quantity: useSizes
+              ? sizesStockTotal
+              : purchaseFlow && !isEditing
+                ? 0
+                : Number(stockQuantity),
+            ...(sizesPayload !== undefined ? { sizes: sizesPayload } : {}),
           }),
     }
 
@@ -416,6 +518,17 @@ export function CatalogFormDialog({
                     </p>
                   </div>
                 ) : null
+              ) : useSizes ? (
+                <div className="space-y-2">
+                  <Label>Stock total</Label>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {sizesStockTotal.toLocaleString('es-VE')}{' '}
+                    {productSaleUnitLabel(saleUnit).toLowerCase()}
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    Suma automática del stock por talla.
+                  </p>
+                </div>
               ) : (
                 <div className="space-y-2">
                   <Label htmlFor="catalog-stock">Stock inicial</Label>
@@ -433,49 +546,143 @@ export function CatalogFormDialog({
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="catalog-formula">Fórmula (opcional)</Label>
-                <div className="flex gap-2">
-                  <select
-                    id="catalog-formula"
-                    className="border-input bg-background flex h-9 min-w-0 flex-1 rounded-md border px-3 text-sm"
-                    value={formulaId}
-                    onChange={(e) => setFormulaId(e.target.value ? Number(e.target.value) : '')}
-                  >
-                    <option value="">Sin fórmula</option>
-                    {formulas.map((formula) => (
-                      <option key={formula.id} value={formula.id}>
-                        {formula.name}
-                      </option>
-                    ))}
-                  </select>
+                <Label>Fórmula (opcional)</Label>
+                {hasFormula ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="border-input bg-muted/30 flex min-w-0 flex-1 items-center rounded-md border px-3 py-2 text-sm">
+                      <span className="truncate font-medium">
+                        {selectedFormula?.name ?? `Fórmula #${selectedFormulaId}`}
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-9 shrink-0"
+                      aria-label="Editar fórmula"
+                      onClick={openEditFormulaDialog}
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-9 shrink-0"
+                      aria-label="Quitar fórmula"
+                      onClick={clearFormula}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                ) : (
                   <Button
                     type="button"
                     variant="outline"
-                    size="icon"
-                    className="size-9 shrink-0"
-                    aria-label="Nueva fórmula"
+                    className="w-full justify-start"
+                    disabled={useSizes}
                     onClick={openCreateFormulaDialog}
                   >
-                    <Plus className="size-4" />
+                    Usar fórmula
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="size-9 shrink-0"
-                    aria-label="Editar fórmula"
-                    disabled={!hasFormula}
-                    onClick={openEditFormulaDialog}
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
-                </div>
+                )}
+                {useSizes ? (
+                  <p className="text-muted-foreground text-xs">
+                    Desactivá las tallas para poder usar fórmula.
+                  </p>
+                ) : null}
                 {hasFormula ? (
                   <p className="text-muted-foreground text-xs">
                     Costo desde fórmula: {formatFromUsd(formulaCost)}
                   </p>
                 ) : null}
               </div>
+            </div>
+
+            <div className="space-y-3">
+              <label
+                className={cn(
+                  'flex items-center gap-2 text-sm',
+                  hasFormula && 'text-muted-foreground'
+                )}
+              >
+                <Checkbox
+                  checked={useSizes}
+                  disabled={hasFormula}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setUseSizes(checked)
+                    if (checked && sizeRows.length === 0) {
+                      setSizeRows([newSizeRow()])
+                    }
+                  }}
+                />
+                Usar tallas
+              </label>
+              {hasFormula ? (
+                <p className="text-muted-foreground text-xs">
+                  Los productos con fórmula no admiten tallas.
+                </p>
+              ) : null}
+              {useSizes && !hasFormula ? (
+                <div className="space-y-2">
+                  {sizeRows.map((row) => (
+                    <div key={row.key} className="flex items-center gap-2">
+                      <Input
+                        className="h-9 w-24 shrink-0"
+                        placeholder="Talla"
+                        maxLength={20}
+                        value={row.size}
+                        onChange={(e) =>
+                          setSizeRows((rows) =>
+                            rows.map((item) =>
+                              item.key === row.key ? { ...item, size: e.target.value } : item
+                            )
+                          )
+                        }
+                      />
+                      <DecimalInput
+                        className="h-9 min-w-0 flex-1"
+                        min={0}
+                        decimals={2}
+                        placeholder="Stock"
+                        value={row.stock_quantity}
+                        onChange={(e) =>
+                          setSizeRows((rows) =>
+                            rows.map((item) =>
+                              item.key === row.key
+                                ? { ...item, stock_quantity: e.target.value }
+                                : item
+                            )
+                          )
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-9 shrink-0"
+                        aria-label="Quitar talla"
+                        disabled={sizeRows.length <= 1}
+                        onClick={() =>
+                          setSizeRows((rows) => rows.filter((item) => item.key !== row.key))
+                        }
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSizeRows((rows) => [...rows, newSizeRow()])}
+                  >
+                    <Plus className="size-4" />
+                    Agregar talla
+                  </Button>
+                </div>
+              ) : null}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
@@ -562,6 +769,8 @@ export function CatalogFormDialog({
       open={formulaDialogOpen}
       onOpenChange={setFormulaDialogOpen}
       formula={editingFormula}
+      pickableFormulas={editingFormula ? [] : formulas}
+      onPickExisting={handleFormulaSaved}
       onSaved={handleFormulaSaved}
     />
     </>

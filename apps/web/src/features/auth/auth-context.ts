@@ -1,9 +1,10 @@
 import { createContext } from 'react'
 import type { PermissionKey } from '@/features/permissions/catalog'
-import type { User } from '@/types/auth'
+import type { AuthCompany, User } from '@/types/auth'
 
 export type AuthContextValue = {
   user: User | null
+  company: AuthCompany | null
   permissions: string[]
   isLoading: boolean
   isAuthenticated: boolean

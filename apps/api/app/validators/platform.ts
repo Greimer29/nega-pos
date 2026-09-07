@@ -22,3 +22,8 @@ export const retryCompanyValidator = vine.create({
 export const updateCompanyStatusValidator = vine.create({
   status: vine.enum(['ACTIVE', 'SUSPENDED'] as const),
 })
+
+/** Hard delete: body must repeat the company slug to avoid accidents. */
+export const destroyCompanyValidator = vine.create({
+  confirm_slug: vine.string().trim().minLength(2).maxLength(64),
+})

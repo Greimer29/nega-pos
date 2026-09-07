@@ -12,7 +12,7 @@ import {
   useDeleteCustomerMutation,
 } from '@/features/customers/hooks/use-customers'
 import type { Customer, CustomerTipo } from '@/features/customers/types'
-import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { notifyApiError, QueryErrorState, EmptyListState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
 import { cn } from '@/lib/utils'
 
@@ -143,19 +143,26 @@ export function CustomersPage() {
           ) : isError ? (
             <QueryErrorState isError error={error} title="No se pudieron cargar los clientes" />
           ) : customers.length === 0 ? (
-            <div className="py-12 text-center">
-              <p className="text-muted-foreground text-sm">
-                {debouncedSearch || type
-                  ? 'No hay clientes que coincidan con los filtros.'
-                  : 'Todavía no hay clientes cargados.'}
-              </p>
-              {!debouncedSearch && !type ? (
-                <Button className="mt-4" variant="outline" onClick={openCreateDialog}>
-                  <Plus />
-                  Crear el primero
-                </Button>
-              ) : null}
-            </div>
+            <EmptyListState
+              title={
+                debouncedSearch || type
+                  ? 'No hay clientes que coincidan con los filtros'
+                  : 'Todavía no hay clientes'
+              }
+              description={
+                debouncedSearch || type
+                  ? undefined
+                  : 'Es normal en una empresa nueva. Creá el primero cuando lo necesites.'
+              }
+              action={
+                !debouncedSearch && !type ? (
+                  <Button variant="outline" onClick={openCreateDialog}>
+                    <Plus />
+                    Crear el primero
+                  </Button>
+                ) : null
+              }
+            />
           ) : (
             <div className="overflow-x-auto rounded-md border">
               <table className="w-full min-w-[720px] text-sm">

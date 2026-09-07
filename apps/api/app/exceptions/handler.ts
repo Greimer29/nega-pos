@@ -55,6 +55,9 @@ import FormulaNoEncontradaException from '#exceptions/formula_no_encontrada_exce
 import PrecioVentaMenorCostoException from '#exceptions/precio_venta_menor_costo_exception'
 import ProductoCatalogoEnPedidosActivosException from '#exceptions/producto_catalogo_en_pedidos_activos_exception'
 import ProductoCatalogoStockFormulaException from '#exceptions/producto_catalogo_stock_formula_exception'
+import ProductoTallaDuplicadaException from '#exceptions/producto_talla_duplicada_exception'
+import ProductoTallaRequeridaException from '#exceptions/producto_talla_requerida_exception'
+import ProductoConFormulaNoPermiteTallasException from '#exceptions/producto_con_formula_no_permite_tallas_exception'
 import ArchivoImagenNoDisponibleException from '#exceptions/archivo_imagen_no_disponible_exception'
 import VentaNoEditableException from '#exceptions/venta_no_editable_exception'
 import VentaNoEncontradaException from '#exceptions/venta_no_encontrada_exception'
@@ -585,6 +588,33 @@ export default class HttpExceptionHandler extends ExceptionHandler {
         error: {
           code: ProductoCatalogoStockFormulaException.code,
           message: error.message || ProductoCatalogoStockFormulaException.message,
+        },
+      })
+    }
+
+    if (error instanceof ProductoTallaDuplicadaException) {
+      return ctx.response.status(ProductoTallaDuplicadaException.status).json({
+        error: {
+          code: ProductoTallaDuplicadaException.code,
+          message: error.message || ProductoTallaDuplicadaException.message,
+        },
+      })
+    }
+
+    if (error instanceof ProductoTallaRequeridaException) {
+      return ctx.response.status(ProductoTallaRequeridaException.status).json({
+        error: {
+          code: ProductoTallaRequeridaException.code,
+          message: error.message || ProductoTallaRequeridaException.message,
+        },
+      })
+    }
+
+    if (error instanceof ProductoConFormulaNoPermiteTallasException) {
+      return ctx.response.status(ProductoConFormulaNoPermiteTallasException.status).json({
+        error: {
+          code: ProductoConFormulaNoPermiteTallasException.code,
+          message: error.message || ProductoConFormulaNoPermiteTallasException.message,
         },
       })
     }

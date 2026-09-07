@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Company from '#models/company'
 import PlatformAdmin from '#models/platform_admin'
 import TenantProvisionService from '#services/tenant_provision_service'
+import TenantPurgeService from '#services/tenant_purge_service'
 import { clearTenantClaims } from '#services/directory_auth_service'
 import {
   PLATFORM_SESSION_KEY,
@@ -9,6 +10,7 @@ import {
 } from '#middleware/platform_auth_middleware'
 import {
   createCompanyValidator,
+  destroyCompanyValidator,
   platformLoginValidator,
   retryCompanyValidator,
   updateCompanyStatusValidator,
@@ -64,6 +66,7 @@ function mapServiceError(error: unknown, response: HttpContext['response']) {
 
 export default class PlatformController {
   #provision = new TenantProvisionService()
+  #purge = new TenantPurgeService()
 
   async login({ request, session, auth, serialize, response }: HttpContext) {
     const { email, password } = await request.validateUsing(platformLoginValidator)
@@ -172,5 +175,23 @@ export default class PlatformController {
     await company.save()
 
     return serialize({ company: serializeCompany(company) })
+  }
+
+  /**
+   * DELETE /api/v1/platform/companies/:id
+   * Irreversible: DROP DATABASE + directory + uploads. Requires confirm_slug.
+   */
+  async destroyCompany({ params, request, serialize, response }: HttpContext) {
+    const payload = await request.validateUsing(destroyCompanyValidator)
+
+    try {
+      const deleted = await this.#purge.destroyCompany(Number(params.id), payload.confirm_slug)
+      return serialize({
+        message: 'Empresa eliminada por completo',
+        deleted,
+      })
+    } catch (error) {
+      return mapServiceError(error, response)
+    }
   }
 }

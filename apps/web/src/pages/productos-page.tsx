@@ -17,7 +17,7 @@ import {
   useDeleteCatalogProductMutation,
 } from '@/features/ventas/hooks/use-catalog'
 import type { CatalogProduct } from '@/features/ventas/types'
-import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { notifyApiError, QueryErrorState, EmptyListState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
 import { cn } from '@/lib/utils'
 
@@ -177,9 +177,10 @@ export function ProductosPage() {
           ) : isError ? (
             <QueryErrorState isError error={error} title="No se pudieron cargar los productos" />
           ) : products.length === 0 ? (
-            <p className="text-muted-foreground py-8 text-center text-sm">
-              No hay productos registrados.
-            </p>
+            <EmptyListState
+              title="Todavía no hay productos"
+              description="Es normal en una empresa nueva. Creá el catálogo cuando quieras vender."
+            />
           ) : (
             <div className={catalogProductGridClassName}>
               {products.map((product) => (

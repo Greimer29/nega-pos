@@ -15,7 +15,13 @@ export function isMaterialStockLow(material: Material): boolean {
 }
 
 export type CartStockLine =
-  | { kind?: 'catalog'; product: CatalogProduct; quantity: number }
+  | {
+      kind?: 'catalog'
+      product: CatalogProduct
+      quantity: number
+      catalogProductSizeId?: number | null
+      size?: string | null
+    }
   | { kind: 'material'; material: Material; quantity: number }
 
 export function cartLineHasStockIssue(line: CartStockLine): boolean {
@@ -25,6 +31,13 @@ export function cartLineHasStockIssue(line: CartStockLine): boolean {
     }
     const { disponible } = materialStockDisponible(line.material)
     return line.quantity > disponible
+  }
+
+  if (line.catalogProductSizeId) {
+    const sizeRow = line.product.sizes?.find((s) => Number(s.id) === Number(line.catalogProductSizeId))
+    const stock = sizeRow ? Number(sizeRow.stock_quantity) : 0
+    if (stock <= 0) return true
+    return line.quantity > stock
   }
 
   if (isProductStockLow(line.product)) {

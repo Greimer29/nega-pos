@@ -11,8 +11,14 @@ export type PaymentMethodSummary = {
 
 export type CatalogProductSize = {
   id: number
+  catalog_product_id?: number
   size: string
   stock_quantity: string | number
+}
+
+export type CatalogProductSizeInput = {
+  size: string
+  stock_quantity: number
 }
 
 export type CatalogProduct = {
@@ -31,6 +37,7 @@ export type CatalogProduct = {
   minimum_stock?: string
   active: boolean
   sold_qty?: number
+  has_sizes?: boolean
   sizes?: CatalogProductSize[]
   created_at: string
   updated_at: string
@@ -82,6 +89,7 @@ export type CatalogProductInput = {
   cost_usd?: number
   formula_id?: number | null
   stock_quantity?: number
+  sizes?: CatalogProductSizeInput[]
 }
 
 export type CatalogListParams = {
@@ -89,6 +97,7 @@ export type CatalogListParams = {
   perPage?: number
   search?: string
   category?: string
+  size?: string
   active?: boolean
   sortBy?: 'name' | 'most_sold'
   sortDir?: 'asc' | 'desc'
@@ -133,6 +142,8 @@ export type SaleLineFormulaMaterial = {
 export type SaleLine = {
   id: number
   catalog_product_id: number | null
+  catalog_product_size_id?: number | null
+  size?: string | null
   material_id: number | null
   description: string
   quantity: string
@@ -220,6 +231,8 @@ export type CreateSaleInput = {
     quantity: number
     unit_price_usd: number
     kitchen_note?: string | null
+    catalog_product_size_id?: number | null
+    size?: string | null
     formula_materials?: SaleLineFormulaMaterialInput[]
   }[]
 }

@@ -228,14 +228,14 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 | Seed seguro | `node ace db:bootstrap` — platform admin en central (multi-tenant) o admin tenant si legacy |
 | Uploads persistentes | Volume `/data/uploads` + `STORAGE_LOCAL_PATH=/data/uploads` (paths `t_<companyId>/…`) |
 
-**Reglas:** no crear servicio web en Railway; `FRONTEND_URL=http://localhost:5173`; pre-deploy migra **solo central**; empresas se crean desde `/platform` (`CREATE DATABASE` + migrate + seed, sin OTP).
+**Reglas:** no crear servicio web en Railway; `FRONTEND_URL=http://localhost:5173`; pre-deploy migra **central y todos los tenants** (`migration:run_central` + `migration:run_tenants`); empresas nuevas se crean desde `/platform` (`CREATE DATABASE` + migrate + seed, sin OTP). Si un tenant falla en pre-deploy, Railway aborta el deploy (revisar logs: slug / `db_name` / error). Desde `/platform` también se puede **suspender** o **eliminar por completo** una empresa (DROP de su MySQL + filas en central + uploads); la eliminación pide confirmar el slug.
 
 ### Cutover multi-empresa (producción limpia)
 
 1. Wipe MySQL actual (borrar/recrear plugin o `DROP DATABASE`).
 2. Crear `nega_pos_central`; set `DB_CENTRAL_DATABASE`, `MULTI_TENANT_ENABLED=true`.
 3. El user MySQL debe poder `CREATE DATABASE`.
-4. Redeploy API → migraciones central + bootstrap platform admin.
+4. Redeploy API → migraciones central + tenants (si hay) + bootstrap platform admin.
 5. Abrir web local → `/platform/login` → crear empresas (provision inmediato).
 6. Login de usuarios de empresa en `/login` (email global, sin código de empresa).
 
@@ -362,6 +362,7 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda b
 | `formulas` | `name`, `active` |
 | `formula_materials` | `formula_id`, `material_id`, `quantity` |
 | `catalog_products` | `name`, `category`, `sale_unit`, `formula_id?`, `sale_price_usd`, `cost_usd`, `stock_quantity`, `minimum_stock`, `active` |
+| `catalog_product_sizes` | Tallas opcionales por producto: `catalog_product_id`, `size` (texto libre ≤20), `stock_quantity`; UNIQUE `(catalog_product_id, size)`. Si hay filas, el stock del producto es la suma de tallas. Incompatible con `formula_id`. |
 
 Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 
@@ -390,7 +391,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 |-------|--------------|
 | `counters` | `scope` (PK), `value` — correlativos |
 | `orders` | `code`, `customer_id?`, `guest_name`, `modality` (WHITE_LABEL/CORPORATE), `status`, `payment_type`, totales, fechas |
-| `order_lines` | `catalog_product_id`, `quantity`, precios, `returned_quantity` |
+| `order_lines` | `catalog_product_id`, `catalog_product_size_id?`, `size?` (snapshot), `quantity`, precios, `returned_quantity`, `notes?` |
 | `order_materials` | `material_id`, `quantity_per_garment` |
 
 **Estados de pedido:** `DRAFT` → `CONFIRMED` → `IN_PRODUCTION` → `DELIVERED`; también `CANCELLED`, `RETURNED`.
@@ -401,7 +402,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 |-------|--------------|
 | `sales_shifts` | `opened_at`, `closed_at`, `opened_by_user_id`, `closed_by_user_id`, `status` (OPEN/CLOSED), `notes` |
 | `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), `discount_usd` (descuento de factura, default 0), `total_usd` (subtotal de líneas − descuento) |
-| `sale_lines` | `catalog_product_id?`, `material_id?`, `description`, `kitchen_note?` (indicaciones de cocina para comanda), cantidades y precios |
+| `sale_lines` | `catalog_product_id?`, `catalog_product_size_id?`, `size?` (snapshot), `material_id?`, `description`, `kitchen_note?` (indicaciones de cocina para comanda), cantidades y precios |
 
 **Turnos de venta:** solo puede haber un turno `OPEN`. Confirmar venta (`POST /sales/:id/confirm` o `POST /sales` con `confirm: true`) exige turno abierto; sin turno → `TURNO_NO_ABIERTO` (409). La venta confirmada guarda `sales.sales_shift_id`.
 
@@ -422,6 +423,7 @@ sales_shifts ──< sales
 suppliers ──< purchases ──< purchase_items ──> materials | catalog_products
 formulas ──< formula_materials ──> materials
 catalog_products ──> formulas (opcional)
+catalog_products ──< catalog_product_sizes (opcional; stock por talla)
 materials ──< inventory_movements
 catalog_products ──< product_inventory_movements
 ```
@@ -441,10 +443,12 @@ catalog_products ──< product_inventory_movements
    - `status → CONFIRMED`; si es crédito, registra saldo en proveedor.
    - Tras confirmar compra, pedidos en `DRAFT` pendientes de material pueden pasar automáticamente a `IN_PRODUCTION` si hay stock suficiente.
 
-### Catálogo y fórmulas
+### Catálogo, fórmulas y tallas
 
-- Producto **con** `formula_id`: el stock de venta/pedido se descuenta de **materiales** según `formula_materials`, no de `stock_quantity`.
+- Producto **con** `formula_id`: el stock de venta/pedido se descuenta de **materiales** según `formula_materials`, no de `stock_quantity`. No admite tallas.
 - Producto **sin** fórmula: stock en `catalog_products.stock_quantity` vía `product_inventory_movements`.
+- Producto **con tallas** (`catalog_product_sizes`): stock por talla; `stock_quantity` del producto = suma. Ventas/pedidos exigen `catalog_product_size_id` o `size`; al confirmar se descuenta la talla y el total global (movimiento `SALE_OUT` con nota `… talla {size}`). Compras v1 no desglosan por talla.
+- API: create/update aceptan `sizes[]`; `PUT /catalog-products/:id/sizes` reemplaza el set (`[]` limpia). Listado `?size=` filtra productos con esa talla y stock > 0. Serialización siempre incluye `has_sizes` + `sizes[]`.
 - Ajustes manuales: `POST catalog-products/:id/adjustment` y `POST materials/:id/adjustment`.
 
 ### Pedidos (`order_service.ts` + `order_state_machine.ts`)
@@ -480,7 +484,7 @@ catalog_products ──< product_inventory_movements
 ### Reportes (`report_service.ts` / `inventory_report_service.ts`)
 
 - **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **ingresos** (aportes), compras, gastos, gastos de máquina, abonos de clientes/proveedores en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). Balance neto: `ventas + ingresos − compras − gastos − gastos_máquina`.
-- **Inventario** (`GET /reports/inventory`): snapshot de stock de productos de catálogo y materiales en una sola lista (paginada). Filtros: `search`, `category`, `sort_by`/`sort_dir` (`id`|`name`|`sale_price`|`quantity`), `active`, `low_stock`, `hide_zero`, `page`, `per_page`, `export=true` (set completo para Excel). Cada ítem incluye `kind` (`product`|`material`), precios/costos, unidad, `stock_source`, `low_stock` y `lines[]` (tallas; hoy una línea con `size: null` y cantidad total). UI: `/reportes?vista=inventario` (query `inv_*`).
+- **Inventario** (`GET /reports/inventory`): snapshot de stock de productos de catálogo y materiales en una sola lista (paginada). Filtros: `search`, `category`, `sort_by`/`sort_dir` (`id`|`name`|`sale_price`|`quantity`), `active`, `low_stock`, `hide_zero`, `page`, `per_page`, `export=true` (set completo para Excel). Cada ítem incluye `kind` (`product`|`material`), precios/costos, unidad, `stock_source`, `low_stock`, `has_sizes` y `lines[]` (por talla si aplica; si no, una línea con `size: null`). Con `hide_zero`, se omiten tallas con cantidad ≤ 0 y productos/materiales con total 0. UI: `/reportes?vista=inventario` (query `inv_*`).
 - **Movimientos de producto** (`GET /reports/inventory/:productId/movements`): historial de `product_inventory_movements` de un producto de catálogo (no materiales). Filtros de período (`month`|`from`/`to`) y `types` (PURCHASE_IN, SALE_OUT, ajustes manuales, REVERSAL_ADJUSTMENT). UI: `/reportes/inventario/:productId`.
 
 ### Dashboard (`dashboard_service.ts`)
@@ -531,6 +535,7 @@ catalog_products ──< product_inventory_movements
 | POST | `/api/v1/platform/companies` | Platform | `Platform.createCompany` (provision inmediato) |
 | POST | `/api/v1/platform/companies/:id/retry` | Platform | `Platform.retryProvision` |
 | PATCH | `/api/v1/platform/companies/:id/status` | Platform | `Platform.updateCompanyStatus` |
+| DELETE | `/api/v1/platform/companies/:id` | Platform | `Platform.destroyCompany` (borrado forzado: `confirm_slug` + DROP BD + directorio + uploads) |
 
 ### Usuarios (`users.*`)
 
@@ -612,6 +617,7 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 | GET | `/api/v1/catalog-products/:id` | `catalog.view` | `CatalogProductsController.show` |
 | POST | `/api/v1/catalog-products` | `catalog.edit` | `CatalogProductsController.store` |
 | PUT | `/api/v1/catalog-products/:id` | `catalog.edit` | `CatalogProductsController.update` |
+| PUT | `/api/v1/catalog-products/:id/sizes` | `catalog.edit` | `CatalogProductsController.replaceSizes` |
 | DELETE | `/api/v1/catalog-products/:id` | `catalog.edit` | `CatalogProductsController.destroy` |
 | POST | `/api/v1/catalog-products/apply-profit-margin` | `catalog.pricing` | `CatalogProductsController.applyProfitMargin` |
 | POST | `/api/v1/catalog-products/:id/adjustment` | `catalog.edit` | `CatalogProductsController.ajuste` |
@@ -946,6 +952,7 @@ pnpm test
 ```powershell
 cd apps/api
 node ace migration:run_central --force
+node ace migration:run_tenants --force
 node ace migration:run
 node ace migration:rollback
 node ace db:seed
@@ -958,8 +965,8 @@ node ace generate:key
 
 ### Docker API + migraciones
 
-- **Local (`docker-compose`):** init SQL crea `nega_pos_central` + grants; entrypoint con `RUN_MIGRATIONS_ON_START=true` corre `migration:run_central` si multi-tenant; `db:bootstrap` crea platform admin.
-- **Railway:** `preDeployCommand = node ace migration:run_central --force`; cutover limpio (wipe MySQL). Guía: `docs/RAILWAY_DEPLOY.md`.
+- **Local (`docker-compose`):** init SQL crea `nega_pos_central` + grants; entrypoint con `RUN_MIGRATIONS_ON_START=true` corre `migration:run_central` si multi-tenant; `db:bootstrap` crea platform admin. Para alinear tenants locales: `node ace migration:run_tenants --force`.
+- **Railway:** `preDeployCommand` = `migration:run_central --force` **y** `migration:run_tenants --force` (todas las empresas con `db_name`); si alguna falla, exit ≠ 0 y no se promociona la API. Alta de empresa: provision sigue creando BD + migrate + seed. Guía: `docs/RAILWAY_DEPLOY.md`.
 
 ---
 

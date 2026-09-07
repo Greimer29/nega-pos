@@ -12,7 +12,7 @@ import { clearVentasCartDraft } from '@/features/ventas/utils/ventas-cart-draft'
 import { canAccess, type PermissionKey } from '@/features/permissions/catalog'
 import { refreshCsrfToken, setUnauthorizedHandler } from '@/lib/api'
 import { queryClient } from '@/lib/query-client'
-import type { User } from '@/types/auth'
+import type { AuthCompany, User } from '@/types/auth'
 
 const SESSION_KEEPALIVE_MS = 25 * 60 * 1000
 const SESSION_VISIBILITY_MIN_MS = 5 * 60 * 1000
@@ -36,6 +36,7 @@ function isApiUnreachableError(error: unknown): boolean {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [company, setCompany] = useState<AuthCompany | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [sessionBootstrapError, setSessionBootstrapError] = useState(false)
 
@@ -57,13 +58,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const clearSession = useCallback(() => {
+    setUser(null)
+    setCompany(null)
+  }, [])
+
   const applySessionFailure = useCallback(
     (error: unknown, options?: { bootstrap?: boolean }) => {
       logSessionError(error)
 
       if (isUnauthorizedError(error)) {
         queryClient.clear()
-        setUser(null)
+        clearSession()
         setSessionBootstrapError(false)
         return
       }
@@ -72,16 +78,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSessionBootstrapError(true)
       }
     },
-    [logSessionError]
+    [clearSession, logSessionError]
   )
 
   const fetchCurrentUser = useCallback(async () => {
-    const currentUser = await authService.getCurrentUser()
+    const session = await authService.getCurrentUser()
     // No refrescar CSRF aquí: /auth/me es GET y la cookie XSRF ya suele existir.
     // El interceptor pide CSRF solo en el primer POST/PUT si hace falta.
-    setUser(currentUser)
+    setUser(session.user)
+    setCompany(session.company)
     setSessionBootstrapError(false)
-    return currentUser
+    return session
   }, [])
 
   const loadUser = useCallback(async () => {
@@ -112,8 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const dismissBootstrapError = useCallback(() => {
     setSessionBootstrapError(false)
-    setUser(null)
-  }, [])
+    clearSession()
+  }, [clearSession])
 
   const revalidateSession = useCallback(async () => {
     try {
@@ -128,25 +135,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // so a missing railway.users table never blocks the super-admin UI.
     if (typeof window !== 'undefined' && window.location.pathname.startsWith('/platform')) {
       setIsLoading(false)
-      setUser(null)
+      clearSession()
       setSessionBootstrapError(false)
       return
     }
 
     void loadUser()
-  }, [loadUser])
+  }, [clearSession, loadUser])
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
       setSessionBootstrapError(false)
       queryClient.clear()
-      setUser(null)
+      clearSession()
     })
 
     return () => {
       setUnauthorizedHandler(null)
     }
-  }, [])
+  }, [clearSession])
 
   useEffect(() => {
     if (!user) {
@@ -181,18 +188,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, revalidateSession])
 
   const login = useCallback(async (email: string, password: string) => {
-    const authenticatedUser = await authService.login({ email, password })
+    const session = await authService.login({ email, password })
     // Tras login la sesión/cookies cambian: renovar CSRF una sola vez.
     await refreshCsrfToken()
     setSessionBootstrapError(false)
-    setUser(authenticatedUser)
+    setUser(session.user)
+    setCompany(session.company)
   }, [])
 
   const loginWithGoogle = useCallback(async (idToken: string) => {
-    const authenticatedUser = await authService.loginWithGoogle(idToken)
+    const session = await authService.loginWithGoogle(idToken)
     await refreshCsrfToken()
     setSessionBootstrapError(false)
-    setUser(authenticatedUser)
+    setUser(session.user)
+    setCompany(session.company)
   }, [])
 
   const logout = useCallback(async () => {
@@ -202,13 +211,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearVentasCartDraft()
       setSessionBootstrapError(false)
       queryClient.clear()
-      setUser(null)
+      clearSession()
     }
-  }, [])
+  }, [clearSession])
 
   const value = useMemo(
     () => ({
       user,
+      company,
       permissions,
       isLoading,
       isAuthenticated: user !== null,
@@ -223,6 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }),
     [
       user,
+      company,
       permissions,
       isLoading,
       sessionBootstrapError,

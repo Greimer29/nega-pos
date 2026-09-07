@@ -20,7 +20,7 @@ export function ApiErrorMessage({
   message,
   className,
   mode = 'toast',
-  title = 'Error',
+  title = 'No se pudo completar',
 }: ApiErrorMessageProps) {
   const text = message ?? (error !== undefined ? getApiErrorMessage(error) : null)
 

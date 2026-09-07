@@ -5,7 +5,7 @@ import db from '@adonisjs/lucid/services/db'
 
 /**
  * Runs migrations against the central (control-plane) database only.
- * Tenant databases are migrated at provision time.
+ * Tenant DBs: use migration:run_tenants (Railway pre-deploy runs both).
  */
 export default class MigrationRunCentral extends BaseCommand {
   static commandName = 'migration:run_central'

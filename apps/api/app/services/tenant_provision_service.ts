@@ -1,18 +1,12 @@
-import app from '@adonisjs/core/services/app'
-import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
 import hash from '@adonisjs/core/services/hash'
-import { MigrationRunner } from '@adonisjs/lucid/migration'
 import mysql from 'mysql2/promise'
 import type { RowDataPacket } from 'mysql2/promise'
 import env from '#start/env'
 import Company from '#models/company'
 import DirectoryUser from '#models/directory_user'
-import {
-  ensureTenantConnection,
-  tenantDbNameForSlug,
-} from '#utils/tenant_connection'
-import { runWithTenant } from '#utils/tenant_context'
+import TenantMigrationService from '#services/tenant_migration_service'
+import { tenantDbNameForSlug } from '#utils/tenant_connection'
 
 export type CreateCompanyDraft = {
   slug: string
@@ -158,8 +152,21 @@ export default class TenantProvisionService {
     try {
       await this.#createDatabase(dbName)
 
-      const connectionName = ensureTenantConnection(dbName)
-      await this.#runTenantMigrations(connectionName, dbName, company.id)
+      const migration = await new TenantMigrationService().migrateCompany({
+        id: company.id,
+        slug: company.slug,
+        dbName,
+      })
+      if (migration.status !== 'ok') {
+        throw Object.assign(
+          new Error(
+            migration.errorMessage ??
+              `No se pudieron aplicar migraciones en "${dbName}" (status=${migration.status})`
+          ),
+          { code: 'TENANT_MIGRATION_FAILED', status: 500 }
+        )
+      }
+
       await this.#assertTenantHasTable(dbName, 'app_settings')
       await this.#assertTenantHasTable(dbName, 'users')
       await this.#assertTenantMigrationComplete(dbName)
@@ -167,6 +174,7 @@ export default class TenantProvisionService {
         email: adminEmail,
         password: draft.adminPassword,
         name: draft.adminName.trim() || 'Administrador',
+        tradeName: company.name.trim() || slug,
       })
 
       await DirectoryUser.updateOrCreate(
@@ -267,59 +275,13 @@ export default class TenantProvisionService {
     }
   }
 
-  async #runTenantMigrations(connectionName: string, dbName: string, companyId: number) {
-    // Bind ALS so any accidental global `db` usage during migrations hits the tenant.
-    await runWithTenant(
-      {
-        companyId,
-        dbName,
-        connectionName,
-        directoryUserId: 0,
-      },
-      async () => {
-        const migrator = new MigrationRunner(db, app, {
-          direction: 'up',
-          connectionName,
-          dryRun: false,
-          disableLocks: false,
-        })
-
-        await migrator.run()
-
-        if (migrator.error) {
-          logger.error(
-            {
-              err: migrator.error,
-              connectionName,
-              dbName,
-              status: migrator.status,
-              migratedFiles: migrator.migratedFiles,
-            },
-            'Tenant MigrationRunner failed'
-          )
-          throw migrator.error
-        }
-
-        logger.info(
-          {
-            connectionName,
-            dbName,
-            status: migrator.status,
-            migratedFiles: Object.keys(migrator.migratedFiles ?? {}),
-          },
-          'Tenant MigrationRunner finished'
-        )
-      }
-    )
-  }
-
   /**
    * Seeds the tenant using a direct mysql2 connection to `dbName`.
    * Idempotent: safe when schema already exists from a previous failed attempt.
    */
   async #seedTenantMysql(
     dbName: string,
-    admin: { email: string; password: string; name: string }
+    admin: { email: string; password: string; name: string; tradeName: string }
   ) {
     const connection = await this.#openMysql(dbName)
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
@@ -336,6 +298,32 @@ export default class TenantProvisionService {
          VALUES ('base_currency_code', 'USD', ?)
          ON DUPLICATE KEY UPDATE \`value\` = VALUES(\`value\`), updated_at = VALUES(updated_at)`,
         [now]
+      )
+
+      const businessProfile = JSON.stringify({
+        trade_name: admin.tradeName,
+        tagline: '',
+        ticket_footer: 'Gracias por su compra',
+        legal_name: '',
+        rif: '',
+        address: '',
+        phone: '',
+        email: '',
+        website: '',
+        logo_path: null,
+        use_custom_palette: false,
+        palette: {
+          primary: '#1a1a1a',
+          secondary: '#f5f5f5',
+          accent: '#f5f5f5',
+        },
+      })
+
+      await connection.query(
+        `INSERT INTO app_settings (\`key\`, \`value\`, updated_at)
+         VALUES ('business_profile', ?, ?)
+         ON DUPLICATE KEY UPDATE updated_at = updated_at`,
+        [businessProfile, now]
       )
 
       // rate_per_usd = unidades de esa moneda por 1 unidad de la moneda base (USD).

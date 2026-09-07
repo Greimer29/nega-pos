@@ -30,7 +30,9 @@ type FormulaFormDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   formula?: Formula | null
+  pickableFormulas?: Formula[]
   onSaved?: (formula: Pick<Formula, 'id' | 'name'>) => void
+  onPickExisting?: (formula: Pick<Formula, 'id' | 'name'>) => void
 }
 
 type MaterialRow = {
@@ -45,7 +47,9 @@ export function FormulaFormDialog({
   open,
   onOpenChange,
   formula,
+  pickableFormulas = [],
   onSaved,
+  onPickExisting,
 }: FormulaFormDialogProps) {
   const isEditing = formula != null
   const [name, setName] = useState('')
@@ -53,6 +57,7 @@ export function FormulaFormDialog({
   const [materialRows, setMaterialRows] = useState<MaterialRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [costWarning, setCostWarning] = useState<string | null>(null)
+  const [pickExistingId, setPickExistingId] = useState('')
 
   const createMutation = useCreateFormulaMutation()
   const updateMutation = useUpdateFormulaMutation()
@@ -78,6 +83,7 @@ export function FormulaFormDialog({
       setName('')
       setDescription('')
       setMaterialRows([])
+      setPickExistingId('')
     }
   }, [open, formula])
 
@@ -193,6 +199,43 @@ export function FormulaFormDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {!isEditing && pickableFormulas.length > 0 && onPickExisting ? (
+            <div className="space-y-2 rounded-lg border border-dashed p-3">
+              <Label htmlFor="formula-pick-existing">Elegir fórmula existente</Label>
+              <div className="flex gap-2">
+                <select
+                  id="formula-pick-existing"
+                  className="border-input bg-background flex h-9 min-w-0 flex-1 rounded-md border px-3 text-sm"
+                  value={pickExistingId}
+                  onChange={(e) => setPickExistingId(e.target.value)}
+                >
+                  <option value="">Seleccionar…</option>
+                  {pickableFormulas.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!pickExistingId}
+                  onClick={() => {
+                    const selected = pickableFormulas.find(
+                      (item) => String(item.id) === pickExistingId
+                    )
+                    if (!selected) return
+                    onPickExisting({ id: selected.id, name: selected.name })
+                    onOpenChange(false)
+                  }}
+                >
+                  Usar
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">O creá una nueva abajo.</p>
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             <Label htmlFor="formula-name">Nombre</Label>
             <Input

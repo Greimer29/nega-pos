@@ -26,7 +26,7 @@ const DEFAULT_DURATION: Record<ToastVariant, number> = {
 }
 
 const DEFAULT_TITLE: Record<ToastVariant, string> = {
-  error: 'Error',
+  error: 'No se pudo completar',
   warning: 'Atención',
   info: 'Aviso',
   success: 'Listo',

@@ -129,7 +129,10 @@ export default class InventoryReportService {
   }
 
   async productMovements(productId: number, filters: InventoryMovementsFilters = {}) {
-    const product = await CatalogProduct.find(productId)
+    const product = await CatalogProduct.query()
+      .where('id', productId)
+      .preload('sizes', (q) => q.orderBy('size', 'asc'))
+      .first()
     if (!product) {
       throw new ProductoCatalogoNoEncontradoException()
     }
@@ -138,6 +141,14 @@ export default class InventoryReportService {
     const { from, to } = resolvePeriod(filters)
     const page = filters.page ?? 1
     const perPage = filters.per_page ?? 30
+    const sizes = product.sizes ?? []
+    const hasSizes = sizes.length > 0
+    const lines = hasSizes
+      ? sizes.map((row) => ({
+          size: row.size,
+          quantity: qtyString(Number(row.stockQuantity)),
+        }))
+      : [{ size: null, quantity: qtyString(stock.quantity) }]
 
     const query = ProductInventoryMovement.query()
       .where('catalog_product_id', productId)
@@ -174,9 +185,9 @@ export default class InventoryReportService {
         category: product.category,
         stock_source: stock.source,
         low_stock: stock.quantity < Number(product.minimumStock),
-        has_sizes: false,
+        has_sizes: hasSizes,
         total_quantity: qtyString(stock.quantity),
-        lines: [{ size: null, quantity: qtyString(stock.quantity) }],
+        lines,
       },
       movements: pageRows.map((row) => ({
         id: Number(row.id),
@@ -230,12 +241,13 @@ export default class InventoryReportService {
       })
     }
 
-    const products = await query
+    const products = await query.preload('sizes', (q) => q.orderBy('size', 'asc'))
     if (products.length === 0) {
       return []
     }
 
     const stockMap = await this.stockService.calcularStockForProducts(products)
+    const hideZero = Boolean(filters.hide_zero)
 
     return products.map((product) => {
       const stock = stockMap.get(Number(product.id)) ?? {
@@ -244,6 +256,20 @@ export default class InventoryReportService {
       }
       const quantity = stock.quantity
       const lowStock = quantity < Number(product.minimumStock)
+      const sizes = product.sizes ?? []
+      const hasSizes = sizes.length > 0
+
+      let lines: Array<{ size: string | null; quantity: string }>
+      if (hasSizes) {
+        lines = sizes
+          .map((row) => ({
+            size: row.size,
+            quantity: qtyString(Number(row.stockQuantity)),
+          }))
+          .filter((line) => !hideZero || Number(line.quantity) > 0)
+      } else {
+        lines = [{ size: null, quantity: qtyString(quantity) }]
+      }
 
       return {
         kind: 'product' as const,
@@ -257,9 +283,9 @@ export default class InventoryReportService {
         category: product.category,
         stock_source: stock.source,
         low_stock: lowStock,
-        has_sizes: false,
+        has_sizes: hasSizes,
         total_quantity: qtyString(quantity),
-        lines: [{ size: null, quantity: qtyString(quantity) }],
+        lines,
       }
     })
   }

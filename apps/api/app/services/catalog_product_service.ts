@@ -7,6 +7,7 @@ import Formula from '#models/formula'
 import OrderLine from '#models/order_line'
 import CategoryService from '#services/category_service'
 import FormulaService from '#services/formula_service'
+import CatalogProductSizeService from '#services/catalog_product_size_service'
 import ProductCodeService from '#services/product_code_service'
 import type { InventoryUnit } from '#constants/inventory_units'
 import type { CostWarning } from '#types/cost_warning'
@@ -28,6 +29,7 @@ export type CatalogProductInput = {
   stock_quantity?: number
   minimum_stock?: number
   active?: boolean
+  sizes?: Array<{ size: string; stock_quantity: number }>
 }
 
 export type CatalogProductUpdateInput = Partial<CatalogProductInput>
@@ -37,6 +39,7 @@ export type ListCatalogProductsFilters = {
   perPage?: number
   search?: string
   category?: string
+  size?: string
   active?: boolean
   sortBy?: 'name' | 'most_sold'
   sortDir?: 'asc' | 'desc'
@@ -92,6 +95,7 @@ export default class CatalogProductService {
   private formulaService = new FormulaService()
   private categoryService = new CategoryService()
   private productCodeService = new ProductCodeService()
+  private sizeService = new CatalogProductSizeService()
 
   async listar(
     filters: ListCatalogProductsFilters = {}
@@ -101,7 +105,7 @@ export default class CatalogProductService {
     const sortBy = filters.sortBy ?? 'name'
     const sortDir = filters.sortDir ?? 'asc'
 
-    const query = CatalogProduct.query()
+    const query = CatalogProduct.query().preload('sizes', (q) => q.orderBy('size', 'asc'))
 
     if (filters.search) {
       const term = `%${filters.search.trim()}%`
@@ -112,6 +116,13 @@ export default class CatalogProductService {
 
     if (filters.category) {
       query.where('category', filters.category)
+    }
+
+    if (filters.size?.trim()) {
+      const sizeTerm = filters.size.trim()
+      query.whereHas('sizes', (sizesQuery) => {
+        sizesQuery.whereILike('size', sizeTerm).where('stock_quantity', '>', 0)
+      })
     }
 
     if (filters.active !== undefined) {
@@ -130,7 +141,10 @@ export default class CatalogProductService {
   }
 
   async obtener(id: number): Promise<CatalogProduct> {
-    const product = await CatalogProduct.find(id)
+    const product = await CatalogProduct.query()
+      .where('id', id)
+      .preload('sizes', (q) => q.orderBy('size', 'asc'))
+      .first()
     if (!product) {
       throw new ProductoCatalogoNoEncontradoException()
     }
@@ -143,6 +157,7 @@ export default class CatalogProductService {
       .preload('formula', (q) =>
         q.preload('materials', (mq) => mq.preload('material').orderBy('id', 'asc'))
       )
+      .preload('sizes', (q) => q.orderBy('size', 'asc'))
       .first()
 
     if (!product) {
@@ -164,6 +179,13 @@ export default class CatalogProductService {
 
     await this.categoryService.assertCategoriaActiva(input.category)
 
+    if (input.sizes && input.sizes.length > 0 && input.formula_id) {
+      const { default: ProductoConFormulaNoPermiteTallasException } = await import(
+        '#exceptions/producto_con_formula_no_permite_tallas_exception'
+      )
+      throw new ProductoConFormulaNoPermiteTallasException()
+    }
+
     return db.transaction(async (trx) => {
       const product = await CatalogProduct.create(
         {
@@ -184,6 +206,11 @@ export default class CatalogProductService {
 
       await this.productCodeService.assertCatalogProductCodeAvailable(Number(product.id))
 
+      if (input.sizes !== undefined && !input.formula_id) {
+        await this.sizeService.replaceSizes(product, input.sizes, trx)
+      }
+
+      await product.load('sizes', (q) => q.orderBy('size', 'asc'))
       return product
     })
   }
@@ -192,76 +219,122 @@ export default class CatalogProductService {
     id: number,
     input: CatalogProductUpdateInput
   ): Promise<CatalogProductUpdateResult> {
-    const product = await this.obtener(id)
-    const costWarnings: CostWarning[] = []
-    const previousFormulaId = product.formulaId
+    return db.transaction(async (trx) => {
+      const product = await CatalogProduct.query({ client: trx })
+        .where('id', id)
+        .forUpdate()
+        .first()
 
-    if (input.formula_id !== undefined) {
-      if (input.formula_id === null) {
-        product.formulaId = null
-      } else {
-        await this.assertFormulaExiste(input.formula_id)
-        product.formulaId = input.formula_id
-        if (input.formula_id !== previousFormulaId) {
-          product.stockQuantity = '0.000'
+      if (!product) {
+        throw new ProductoCatalogoNoEncontradoException()
+      }
+
+      const costWarnings: CostWarning[] = []
+      const previousFormulaId = product.formulaId
+
+      if (input.formula_id !== undefined) {
+        if (input.formula_id === null) {
+          product.formulaId = null
+        } else {
+          await this.assertFormulaExiste(input.formula_id)
+          product.formulaId = input.formula_id
+          if (input.formula_id !== previousFormulaId) {
+            product.stockQuantity = '0.000'
+            await this.sizeService.replaceSizes(product, [], trx)
+          }
         }
       }
-    }
 
-    if (input.sale_price_usd !== undefined) {
-      const newPrice = input.sale_price_usd.toFixed(4)
-      const currentPrice = product.salePriceUsd
+      if (input.sale_price_usd !== undefined) {
+        const newPrice = input.sale_price_usd.toFixed(4)
+        const currentPrice = product.salePriceUsd
 
-      if (newPrice !== currentPrice && input.sale_price_usd < Number(currentPrice)) {
-        product.previousSalePriceUsd = currentPrice
+        if (newPrice !== currentPrice && input.sale_price_usd < Number(currentPrice)) {
+          product.previousSalePriceUsd = currentPrice
+        }
+
+        product.salePriceUsd = newPrice
       }
 
-      product.salePriceUsd = newPrice
-    }
+      if (input.name !== undefined) {
+        product.name = input.name.trim()
+      }
 
-    if (input.name !== undefined) {
-      product.name = input.name.trim()
-    }
+      if (input.description !== undefined) {
+        product.description = input.description?.trim() || null
+      }
 
-    if (input.description !== undefined) {
-      product.description = input.description?.trim() || null
-    }
+      if (input.category !== undefined) {
+        await this.categoryService.assertCategoriaActiva(input.category)
+        product.category = input.category.trim()
+      }
 
-    if (input.category !== undefined) {
-      await this.categoryService.assertCategoriaActiva(input.category)
-      product.category = input.category.trim()
-    }
+      if (input.sale_unit !== undefined) {
+        product.saleUnit = input.sale_unit
+      }
 
-    if (input.sale_unit !== undefined) {
-      product.saleUnit = input.sale_unit
-    }
+      if (input.minimum_stock !== undefined) {
+        product.minimumStock = input.minimum_stock.toFixed(3)
+      }
 
-    if (input.stock_quantity !== undefined && !product.formulaId) {
-      product.stockQuantity = input.stock_quantity.toFixed(3)
-    }
+      if (input.active !== undefined) {
+        product.active = input.active
+      }
 
-    if (input.minimum_stock !== undefined) {
-      product.minimumStock = input.minimum_stock.toFixed(3)
-    }
+      if (input.cost_usd !== undefined) {
+        product.costUsd = input.cost_usd.toFixed(4)
+      } else if (product.formulaId) {
+        product.costUsd = await this.calcularCostoFormulaPersistible(product)
+      }
 
-    if (input.active !== undefined) {
-      product.active = input.active
-    }
+      const touchingSizes = input.sizes !== undefined
 
-    if (input.cost_usd !== undefined) {
-      product.costUsd = input.cost_usd.toFixed(4)
-    } else if (product.formulaId) {
-      product.costUsd = await this.calcularCostoFormulaPersistible(product)
-    }
+      if (touchingSizes) {
+        if (product.formulaId) {
+          const { default: ProductoConFormulaNoPermiteTallasException } = await import(
+            '#exceptions/producto_con_formula_no_permite_tallas_exception'
+          )
+          throw new ProductoConFormulaNoPermiteTallasException()
+        }
+        await this.sizeService.replaceSizes(product, input.sizes ?? [], trx)
+      } else if (input.stock_quantity !== undefined && !product.formulaId) {
+        const existingSizes = await this.sizeService.loadSizes(Number(product.id), trx)
+        if (existingSizes.length === 0) {
+          product.stockQuantity = input.stock_quantity.toFixed(3)
+        }
+      }
 
-    const effectiveCostUsd = Number(product.costUsd)
-    const warning = this.buildCostWarningIfNeeded(product, effectiveCostUsd)
-    if (warning) {
-      costWarnings.push(warning)
-    }
+      const effectiveCostUsd = Number(product.costUsd)
+      const warning = this.buildCostWarningIfNeeded(product, effectiveCostUsd)
+      if (warning) {
+        costWarnings.push(warning)
+      }
 
-    await product.save()
-    return { product, costWarnings }
+      product.useTransaction(trx)
+      await product.save()
+      await product.load('sizes', (q) => q.orderBy('size', 'asc'))
+      return { product, costWarnings }
+    })
+  }
+
+  async replaceSizes(
+    id: number,
+    sizes: Array<{ size: string; stock_quantity: number }>
+  ): Promise<CatalogProduct> {
+    return db.transaction(async (trx) => {
+      const product = await CatalogProduct.query({ client: trx })
+        .where('id', id)
+        .forUpdate()
+        .first()
+
+      if (!product) {
+        throw new ProductoCatalogoNoEncontradoException()
+      }
+
+      await this.sizeService.replaceSizes(product, sizes, trx)
+      await product.load('sizes', (q) => q.orderBy('size', 'asc'))
+      return product
+    })
   }
 
   async eliminar(id: number): Promise<{ id: number; modo: 'soft' | 'hard' }> {

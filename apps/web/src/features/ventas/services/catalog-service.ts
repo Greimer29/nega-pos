@@ -5,6 +5,7 @@ import type {
   CatalogProduct,
   CatalogProductInput,
   CatalogProductResponse,
+  CatalogProductSizeInput,
 } from '@/features/ventas/types'
 import type { CostWarning } from '@/lib/cost-warnings'
 
@@ -15,6 +16,7 @@ export async function listCatalogProducts(params: CatalogListParams = {}) {
       per_page: params.perPage,
       search: params.search || undefined,
       category: params.category,
+      size: params.size || undefined,
       active: params.active,
       sort_by: params.sortBy,
       sort_dir: params.sortDir,
@@ -78,6 +80,13 @@ export async function ajustarStockProducto(
     data: { movimiento: import('@/features/ventas/types').ProductInventoryMovement }
   }>(`/catalog-products/${id}/adjustment`, payload)
   return data.data.movimiento
+}
+
+export async function replaceCatalogProductSizes(id: number, sizes: CatalogProductSizeInput[]) {
+  const { data } = await api.put<CatalogProductResponse>(`/catalog-products/${id}/sizes`, {
+    sizes,
+  })
+  return data.data.catalog_product
 }
 
 export type { CatalogProduct }

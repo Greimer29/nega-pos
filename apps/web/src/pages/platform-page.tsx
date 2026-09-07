@@ -24,6 +24,8 @@ export function PlatformPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [retryCompany, setRetryCompany] = useState<PlatformCompany | null>(null)
+  const [deleteCompany, setDeleteCompany] = useState<PlatformCompany | null>(null)
+  const [confirmSlug, setConfirmSlug] = useState('')
   const [retryForm, setRetryForm] = useState({
     admin_email: '',
     admin_password: '',
@@ -92,6 +94,7 @@ export function PlatformPage() {
     setError(null)
     setSuccess(null)
     setShowCreateForm(false)
+    setDeleteCompany(null)
     setRetryCompany(company)
     setRetryForm({ admin_email: '', admin_password: '', admin_name: '' })
   }
@@ -103,6 +106,37 @@ export function PlatformPage() {
     try {
       await platformService.updateCompanyStatus(company.id, 'SUSPENDED')
       setCompanies(await platformService.listCompanies())
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function startDelete(company: PlatformCompany) {
+    setError(null)
+    setSuccess(null)
+    setShowCreateForm(false)
+    setRetryCompany(null)
+    setDeleteCompany(company)
+    setConfirmSlug('')
+  }
+
+  async function onDeleteSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    if (!deleteCompany) return
+    setBusy(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const result = await platformService.destroyCompany(deleteCompany.id, confirmSlug)
+      setDeleteCompany(null)
+      setConfirmSlug('')
+      setCompanies(await platformService.listCompanies())
+      setSuccess(
+        `Empresa ${result.deleted.slug} eliminada por completo` +
+          (result.deleted.dbName ? ` (BD ${result.deleted.dbName} eliminada).` : '.')
+      )
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -156,7 +190,7 @@ export function PlatformPage() {
         <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-medium">Empresas</h2>
-            {!showCreateForm && !retryCompany ? (
+            {!showCreateForm && !retryCompany && !deleteCompany ? (
               <Button
                 type="button"
                 onClick={() => {
@@ -217,6 +251,14 @@ export function PlatformPage() {
                               Suspender
                             </Button>
                           ) : null}
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            disabled={busy}
+                            onClick={() => startDelete(company)}
+                          >
+                            Eliminar
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -226,6 +268,49 @@ export function PlatformPage() {
             </table>
           </div>
         </section>
+
+        {deleteCompany ? (
+          <section className="rounded-xl border border-red-500/40 bg-neutral-900 p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-medium text-red-200">Eliminar empresa por completo</h2>
+                <p className="mt-1 text-sm text-neutral-400">
+                  {deleteCompany.name} ({deleteCompany.slug}) — se borra la BD MySQL{' '}
+                  <span className="font-mono text-xs text-neutral-300">{deleteCompany.dbName}</span>,
+                  usuarios del directorio y archivos subidos. No se puede deshacer.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setDeleteCompany(null)
+                  setConfirmSlug('')
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+
+            <form className="mt-4 grid gap-3" onSubmit={onDeleteSubmit}>
+              <label className="text-sm text-neutral-300">
+                Escribí el slug <span className="font-mono text-red-200">{deleteCompany.slug}</span>{' '}
+                para confirmar
+              </label>
+              <Input
+                placeholder={deleteCompany.slug}
+                value={confirmSlug}
+                onChange={(e) => setConfirmSlug(e.target.value)}
+                required
+                autoComplete="off"
+                className="border-red-500/40 bg-neutral-950 text-white placeholder:text-neutral-500"
+              />
+              <Button type="submit" variant="destructive" disabled={busy || !confirmSlug.trim()}>
+                {busy ? <Loader2 className="animate-spin" /> : 'Eliminar definitivamente'}
+              </Button>
+            </form>
+          </section>
+        ) : null}
 
         {retryCompany ? (
           <section className="rounded-xl border border-amber-500/30 bg-neutral-900 p-6">
@@ -274,7 +359,7 @@ export function PlatformPage() {
           </section>
         ) : null}
 
-        {showCreateForm && !retryCompany ? (
+        {showCreateForm && !retryCompany && !deleteCompany ? (
           <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
             <div className="flex items-center justify-between gap-3">
               <div>

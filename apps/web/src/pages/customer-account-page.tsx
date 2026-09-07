@@ -11,6 +11,7 @@ import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-mo
 import { CreditPurchaseBadge } from '@/features/purchases/components/credit-purchase-badge'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
+import { cn } from '@/lib/utils'
 
 function formatFecha(value: string | null | undefined) {
   if (!value) return '—'
@@ -42,7 +43,7 @@ export function CustomerAccountPage() {
   if (!isValidCustomerId) {
     return (
       <div className="flex flex-col items-center gap-4 py-24">
-        <p className="text-destructive text-sm">
+        <p className="text-muted-foreground text-sm">
           {detailPageErrorMessage({
             isValidId: false,
             isError: false,
@@ -69,7 +70,7 @@ export function CustomerAccountPage() {
   if (isError || !data) {
     return (
       <div className="flex flex-col items-center gap-4 py-24">
-        <p className="text-destructive text-sm whitespace-pre-line">
+        <p className={cn('text-sm whitespace-pre-line', isError ? 'text-destructive' : 'text-muted-foreground')}>
           {detailPageErrorMessage({
             isValidId: true,
             isError,

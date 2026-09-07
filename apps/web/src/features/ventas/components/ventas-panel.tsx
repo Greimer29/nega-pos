@@ -39,8 +39,10 @@ import type { Material } from '@/features/materials/types'
 import { catalogImageUrl } from '@/features/ventas/constants'
 import type { BillingMethod } from '@/features/ventas/constants'
 import { useCatalogProductsQuery } from '@/features/ventas/hooks/use-catalog'
-import type { CatalogProduct } from '@/features/ventas/types'
+import type { CatalogProduct, CatalogProductSize } from '@/features/ventas/types'
 import { cartHasStockIssues } from '@/features/ventas/utils/product-stock'
+import { productHasSizes, sizesWithStock } from '@/features/ventas/utils/product-sizes'
+import { SizePickDialog } from '@/features/ventas/components/size-pick-dialog'
 import { materialSaleUnitPriceUsd } from '@/features/ventas/utils/material-sale-price'
 import {
   clearVentasCartDraft,
@@ -53,7 +55,7 @@ import {
   printSaleDocumentsOnConfirm,
 } from '@/features/printing/services/printing-service'
 import { getSale } from '@/features/ventas/services/sales-service'
-import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { notifyApiError, QueryErrorState, EmptyListState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { isValidEntityId } from '@/lib/route-id'
@@ -83,6 +85,8 @@ type CartLine =
       formulaMaterials?: SaleLineFormulaMaterial[] | null
       unitPriceUsd?: number
       kitchenNote?: string | null
+      catalogProductSizeId?: number | null
+      size?: string | null
     }
   | {
       id: string
@@ -122,6 +126,8 @@ function normalizeDraftCartLine(
       formulaMaterials: line.formulaMaterials ?? null,
       unitPriceUsd: line.unitPriceUsd,
       kitchenNote: line.kitchenNote ?? null,
+      catalogProductSizeId: line.catalogProductSizeId ?? null,
+      size: line.size ?? null,
     }
   }
   return null
@@ -148,8 +154,12 @@ function VentasCreateView() {
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [category, setCategory] = useState('')
+  const [sizeFilter, setSizeFilter] = useState('')
+  const [debouncedSizeFilter, setDebouncedSizeFilter] = useState('')
   const [page, setPage] = useState(1)
   const [catalogSource, setCatalogSource] = useState<CatalogSource>('products')
+  const [sizePickProduct, setSizePickProduct] = useState<CatalogProduct | null>(null)
+  const [sizePickOpen, setSizePickOpen] = useState(false)
   const [customerId, setCustomerId] = useState<number | ''>(() => initialDraft?.customerId ?? '')
   const [clientName, setClientName] = useState(() =>
     initialDraft?.clientName?.trim() ? initialDraft.clientName : 'Generico'
@@ -208,6 +218,7 @@ function VentasCreateView() {
       perPage: CATALOG_PER_PAGE,
       search: debouncedSearch || undefined,
       category: category || undefined,
+      size: debouncedSizeFilter || undefined,
       active: true,
       sortBy: 'most_sold',
       sortDir: 'desc',
@@ -240,6 +251,14 @@ function VentasCreateView() {
     }, 300)
     return () => window.clearTimeout(timer)
   }, [searchInput])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSizeFilter(sizeFilter.trim())
+      setPage(1)
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [sizeFilter])
 
   useEffect(() => {
     if (!cartOpen) return
@@ -301,7 +320,7 @@ function VentasCreateView() {
   const catalogMeta = catalogData?.meta
   const materials = materialsData?.materials ?? []
   const materialsMeta = materialsData?.meta
-  const activeFilterCount = category ? 1 : 0
+  const activeFilterCount = (category ? 1 : 0) + (sizeFilter.trim() ? 1 : 0)
   const cartItemCount = useMemo(
     () => cart.reduce((sum, line) => sum + line.quantity, 0),
     [cart]
@@ -342,6 +361,7 @@ function VentasCreateView() {
           saleUnit: line.product.sale_unit ?? 'UND',
           imageUrl: line.product.image_path ? catalogImageUrl(line.product.id) : null,
           imageTone: catalogImageTone(line.product.id),
+          metaLabel: line.size ? `Talla ${line.size}` : undefined,
           hasFormula: Boolean(line.product.formula_id),
           hasCustomFormula: line.formulaMaterials != null && line.formulaMaterials.length > 0,
           kitchenNote: line.kitchenNote ?? null,
@@ -370,13 +390,14 @@ function VentasCreateView() {
       ? `Factura N° ${nextCode}`
       : 'Factura nueva'
 
-  function addToCart(product: CatalogProduct) {
+  function addSizedProductToCart(product: CatalogProduct, size: CatalogProductSize) {
     setSuccessMessage(null)
     setCart((prev) => {
       const existing = prev.find(
         (line) =>
           line.kind === 'catalog' &&
           line.product.id === product.id &&
+          Number(line.catalogProductSizeId) === Number(size.id) &&
           formulaMaterialsSignature(line.formulaMaterials) === formulaMaterialsSignature(null)
       )
       if (existing) {
@@ -392,6 +413,49 @@ function VentasCreateView() {
           product,
           quantity: 1,
           formulaMaterials: null,
+          catalogProductSizeId: size.id,
+          size: size.size,
+        },
+      ]
+    })
+  }
+
+  function addToCart(product: CatalogProduct) {
+    if (productHasSizes(product)) {
+      const available = sizesWithStock(product)
+      if (available.length === 0) {
+        toast.error('Este producto no tiene tallas con stock.')
+        return
+      }
+      setSizePickProduct(product)
+      setSizePickOpen(true)
+      return
+    }
+
+    setSuccessMessage(null)
+    setCart((prev) => {
+      const existing = prev.find(
+        (line) =>
+          line.kind === 'catalog' &&
+          line.product.id === product.id &&
+          !line.catalogProductSizeId &&
+          formulaMaterialsSignature(line.formulaMaterials) === formulaMaterialsSignature(null)
+      )
+      if (existing) {
+        return prev.map((line) =>
+          line.id === existing.id ? { ...line, quantity: line.quantity + 1 } : line
+        )
+      }
+      return [
+        ...prev,
+        {
+          id: createCartLineId(),
+          kind: 'catalog' as const,
+          product,
+          quantity: 1,
+          formulaMaterials: null,
+          catalogProductSizeId: null,
+          size: null,
         },
       ]
     })
@@ -571,6 +635,12 @@ function VentasCreateView() {
         catalog_product_id: item.product.id,
         quantity: item.quantity,
         unit_price_usd: cartLineUnitPrice(item),
+        ...(item.catalogProductSizeId
+          ? {
+              catalog_product_size_id: item.catalogProductSizeId,
+              size: item.size ?? undefined,
+            }
+          : {}),
         ...(item.kitchenNote?.trim() ? { kitchen_note: item.kitchenNote.trim() } : {}),
         ...(item.formulaMaterials && item.formulaMaterials.length > 0
           ? {
@@ -1024,6 +1094,30 @@ function VentasCreateView() {
                   </option>
                 ))}
               </select>
+              {catalogSource === 'products' ? (
+                <>
+                  <Input
+                    list="ventas-size-filter-options"
+                    placeholder="Filtrar talla…"
+                    value={sizeFilter}
+                    onChange={(e) => setSizeFilter(e.target.value)}
+                    className="h-9 w-36 bg-white"
+                  />
+                  <datalist id="ventas-size-filter-options">
+                    {Array.from(
+                      new Set(
+                        products.flatMap((product) =>
+                          (product.sizes ?? []).map((size) => size.size)
+                        )
+                      )
+                    )
+                      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+                      .map((size) => (
+                        <option key={size} value={size} />
+                      ))}
+                  </datalist>
+                </>
+              ) : null}
               </div>
             </div>
 
@@ -1040,9 +1134,11 @@ function VentasCreateView() {
                     title="No se pudo cargar el catálogo"
                   />
                 ) : products.length === 0 ? (
-                  <p className="text-muted-foreground py-8 text-center text-sm">
-                    No hay productos en el catálogo.
-                  </p>
+                  <EmptyListState
+                    className="py-8"
+                    title="Todavía no hay productos en el catálogo"
+                    description="Es normal en una empresa nueva. Creá productos desde Productos o acá con Nuevo."
+                  />
                 ) : (
                   <div className={cn(catalogProductGridClassName, 'pb-1')}>
                     {products.map((product) => (
@@ -1243,6 +1339,21 @@ function VentasCreateView() {
           product={editProduct}
         />
       ) : null}
+      <SizePickDialog
+        open={sizePickOpen}
+        product={sizePickProduct}
+        onOpenChange={(open) => {
+          setSizePickOpen(open)
+          if (!open) {
+            setSizePickProduct(null)
+          }
+        }}
+        onPick={(size) => {
+          if (sizePickProduct) {
+            addSizedProductToCart(sizePickProduct, size)
+          }
+        }}
+      />
     </div>
   )
 }

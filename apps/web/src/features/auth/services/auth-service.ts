@@ -1,27 +1,41 @@
 import { parseAppUser } from '@/features/users/parse-app-user'
 import { api } from '@/lib/api'
-import type { AuthMessageResponse, AuthUserResponse } from '@/types/auth'
+import type {
+  AuthCompany,
+  AuthMessageResponse,
+  AuthSession,
+  AuthUserResponse,
+} from '@/types/auth'
 
 export type LoginPayload = {
   email: string
   password: string
 }
 
-export async function login(payload: LoginPayload) {
-  const { data } = await api.post<AuthUserResponse>('/auth/login', payload)
-  return parseAppUser(data.data.user)
+function parseAuthSession(payload: AuthUserResponse['data']): AuthSession {
+  return {
+    user: parseAppUser(payload.user),
+    company: payload.company ?? null,
+  }
 }
 
-export async function loginWithGoogle(idToken: string) {
+export async function login(payload: LoginPayload): Promise<AuthSession> {
+  const { data } = await api.post<AuthUserResponse>('/auth/login', payload)
+  return parseAuthSession(data.data)
+}
+
+export async function loginWithGoogle(idToken: string): Promise<AuthSession> {
   const { data } = await api.post<AuthUserResponse>('/auth/google', { id_token: idToken })
-  return parseAppUser(data.data.user)
+  return parseAuthSession(data.data)
 }
 
 export async function logout() {
   await api.post<AuthMessageResponse>('/auth/logout')
 }
 
-export async function getCurrentUser() {
+export async function getCurrentUser(): Promise<AuthSession> {
   const { data } = await api.get<AuthUserResponse>('/auth/me')
-  return parseAppUser(data.data.user)
+  return parseAuthSession(data.data)
 }
+
+export type { AuthCompany, AuthSession }

@@ -85,6 +85,8 @@ export function serializeSaleLine(line: SaleLine) {
   return {
     id: Number(line.id),
     catalog_product_id: line.catalogProductId ? Number(line.catalogProductId) : null,
+    catalog_product_size_id: line.catalogProductSizeId ? Number(line.catalogProductSizeId) : null,
+    size: line.size ?? null,
     material_id: line.materialId ? Number(line.materialId) : null,
     description: line.description,
     kitchen_note: line.kitchenNote ?? null,

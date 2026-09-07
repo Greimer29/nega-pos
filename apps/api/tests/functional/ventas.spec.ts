@@ -29,6 +29,7 @@ async function resetDatabase() {
   await db.from('product_inventory_movements').delete()
   await db.from('inventory_movements').delete()
   await db.from('purchase_items').delete()
+  await db.from('catalog_product_sizes').delete()
   await db.from('catalog_products').delete()
   await db.from('order_materials').delete()
   await db.from('purchases').delete()

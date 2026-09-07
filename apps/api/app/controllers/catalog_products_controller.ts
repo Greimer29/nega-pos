@@ -13,6 +13,7 @@ import {
   updateCatalogProductValidator,
   applyCatalogProfitMarginValidator,
   ajusteCatalogProductValidator,
+  replaceCatalogProductSizesValidator,
 } from '#validators/catalog_product'
 import { serializeCostWarning } from '#types/cost_warning'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -47,6 +48,7 @@ export default class CatalogProductsController {
       perPage: filters.per_page,
       search: filters.search,
       category: filters.category,
+      size: filters.size,
       active: filters.active,
       sortBy: filters.sort_by,
       sortDir: filters.sort_dir,
@@ -98,6 +100,15 @@ export default class CatalogProductsController {
     return serialize({
       catalog_product: await this.serializeWithStock(product),
       cost_warnings: costWarnings.map(serializeCostWarning),
+    })
+  }
+
+  async replaceSizes({ params, request, serialize }: HttpContext) {
+    const payload = await request.validateUsing(replaceCatalogProductSizesValidator)
+    const product = await this.service.replaceSizes(Number(params.id), payload.sizes)
+
+    return serialize({
+      catalog_product: await this.serializeWithStock(product),
     })
   }
 

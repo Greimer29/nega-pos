@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { DisplayCurrencyToggle } from '@/features/currencies/components/display-currency-toggle'
 import { useAuth } from '@/features/auth/hooks/use-auth'
+import { useBusinessProfileQuery } from '@/features/branding/business-theme-provider'
 import { useAppRefresh } from '@/lib/use-app-refresh'
 
 type AppHeaderProps = {
@@ -11,10 +12,17 @@ type AppHeaderProps = {
 }
 
 export function AppHeader({ leading }: AppHeaderProps) {
-  const { user, logout } = useAuth()
+  const { user, company, logout, isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const { refresh, isRefreshing } = useAppRefresh()
+  const { data: profile } = useBusinessProfileQuery(isAuthenticated)
+
+  const companyName =
+    profile?.trade_name?.trim() ||
+    company?.name?.trim() ||
+    company?.slug?.trim() ||
+    null
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -31,7 +39,14 @@ export function AppHeader({ leading }: AppHeaderProps) {
     <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-3 md:px-6">
       <div className="flex min-w-0 items-center gap-2 md:gap-3">
         {leading}
-        <p className="text-muted-foreground hidden text-sm sm:block">Gestión comercial</p>
+        {companyName ? (
+          <p
+            className="max-w-[min(100%,22rem)] truncate text-[13px] leading-tight font-semibold tracking-[-0.01em] text-foreground sm:max-w-[26rem] md:max-w-[32rem]"
+            title={companyName}
+          >
+            {companyName}
+          </p>
+        ) : null}
         <DisplayCurrencyToggle />
       </div>
       <div className="flex shrink-0 items-center gap-2 md:gap-3">

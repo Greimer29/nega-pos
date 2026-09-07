@@ -173,7 +173,8 @@ export function SidebarBrandFooter({ className }: { className?: string }) {
         className
       )}
     >
-      <p>© {copyrightYear} Nega POS</p>
+      <p className="text-sidebar-foreground/80 font-medium">Gestión comercial</p>
+      <p className="mt-0.5">© {copyrightYear} Nega POS</p>
       <p className="mt-0.5 tabular-nums">{appVersion ? `v${appVersion}` : 'v—'}</p>
     </footer>
   )

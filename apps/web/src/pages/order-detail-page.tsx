@@ -261,7 +261,7 @@ export function OrderDetallePage() {
   if (!isValidOrderId) {
     return (
       <div className="flex flex-col items-center gap-4 py-24">
-        <p className="text-destructive text-sm">
+        <p className="text-muted-foreground text-sm">
           {detailPageErrorMessage({
             isValidId: false,
             isError: false,
@@ -288,7 +288,7 @@ export function OrderDetallePage() {
   if (isError || !order) {
     return (
       <div className="flex flex-col items-center gap-4 py-24">
-        <p className="text-destructive text-sm whitespace-pre-line">
+        <p className={cn('text-sm whitespace-pre-line', isError ? 'text-destructive' : 'text-muted-foreground')}>
           {detailPageErrorMessage({
             isValidId: true,
             isError,

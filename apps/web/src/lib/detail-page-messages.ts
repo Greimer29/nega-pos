@@ -14,5 +14,5 @@ export function detailPageErrorMessage(options: {
     return getApiErrorMessage(options.error)
   }
 
-  return `No se encontró ${options.entityLabel.toLowerCase()}.`
+  return `${options.entityLabel} no está en el sistema (puede haberse eliminado).`
 }

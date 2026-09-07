@@ -18,6 +18,7 @@ import OrderMaterial from '#models/order_material'
 import OrderLine from '#models/order_line'
 import CatalogProduct from '#models/catalog_product'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
+import CatalogProductSizeService from '#services/catalog_product_size_service'
 import ProductInventoryService from '#services/product_inventory_service'
 import ProductInventoryMovement from '#models/product_inventory_movement'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
@@ -70,6 +71,8 @@ export type OrderInput = {
 export type OrderLineInput = {
   catalog_product_id: number
   quantity: number
+  catalog_product_size_id?: number | null
+  size?: string | null
 }
 
 export type OrderLineUpdateInput = {
@@ -155,6 +158,7 @@ export default class OrderService {
   private codeService = new OrderCodigoService()
   private productInventoryService = new ProductInventoryService()
   private catalogProductStockService = new CatalogProductStockService()
+  private sizeService = new CatalogProductSizeService()
 
   async listar(filters: ListOrdersFilters = {}): Promise<ModelPaginatorContract<Order>> {
     const page = filters.page ?? 1
@@ -692,6 +696,14 @@ export default class OrderService {
           note
         )
 
+        if (line.catalogProductSizeId) {
+          await this.sizeService.restoreSizeStock(
+            Number(line.catalogProductSizeId),
+            request.quantity,
+            trx
+          )
+        }
+
         await this.revertirMaterialesLineaParcial(order, line, request.quantity, trx, note)
       }
 
@@ -1146,11 +1158,21 @@ export default class OrderService {
   ): Promise<OrderLine> {
     const product = await CatalogProduct.query({ client: trx })
       .where('id', input.catalog_product_id)
+      .preload('sizes')
       .first()
 
     if (!product) {
       throw new ProductoCatalogoNoEncontradoException()
     }
+
+    const resolvedSize = await this.sizeService.resolveForLine(
+      product,
+      {
+        catalog_product_size_id: input.catalog_product_size_id,
+        size: input.size,
+      },
+      trx
+    )
 
     const unitPrice = product.salePriceUsd
     const subtotal = (input.quantity * Number(unitPrice)).toFixed(4)
@@ -1159,6 +1181,8 @@ export default class OrderService {
       {
         orderId: Number(order.id),
         catalogProductId: input.catalog_product_id,
+        catalogProductSizeId: resolvedSize.sizeId,
+        size: resolvedSize.sizeLabel,
         quantity: input.quantity.toFixed(3),
         returnedQuantity: '0.000',
         unitPriceUsd: unitPrice,
@@ -1266,9 +1290,30 @@ export default class OrderService {
         (await CatalogProduct.query({ client: trx })
           .where('id', Number(line.catalogProductId))
           .preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
+          .preload('sizes')
           .first())
 
       if (!product) {
+        continue
+      }
+
+      const qty = Number(line.quantity)
+
+      if (line.catalogProductSizeId) {
+        const sizeRow = await this.sizeService
+          .loadSizes(Number(product.id), trx)
+          .then((sizes) => sizes.find((s) => Number(s.id) === Number(line.catalogProductSizeId)))
+
+        const disponible = sizeRow ? Number(sizeRow.stockQuantity) : 0
+        if (qty > disponible) {
+          faltantes.push({
+            material_id: Number(product.id),
+            name: `${product.name}${sizeRow ? ` (${sizeRow.size})` : ''}`,
+            stock_actual: disponible,
+            consumo_proyectado: qty,
+            faltante: qty - disponible,
+          })
+        }
         continue
       }
 
@@ -1277,7 +1322,6 @@ export default class OrderService {
           trx,
           excludeOrderId: Number(order.id),
         })
-      const qty = Number(line.quantity)
 
       if (qty > disponible) {
         faltantes.push({
@@ -1327,6 +1371,26 @@ export default class OrderService {
       }
 
       if (product.formulaId) {
+        continue
+      }
+
+      if (line.catalogProductSizeId) {
+        const sizeRow = await this.sizeService.deductSizeStock(
+          Number(line.catalogProductSizeId),
+          qty,
+          trx
+        )
+        const sizeLabel = line.size ?? sizeRow.size
+        await this.productInventoryService.registrarMovimiento(
+          {
+            catalogProductId: Number(line.catalogProductId),
+            type: 'SALE_OUT',
+            quantity: -qty,
+            orderId: Number(order.id),
+            note: `Venta ${order.code} talla ${sizeLabel}`,
+          },
+          trx
+        )
         continue
       }
 
@@ -1395,6 +1459,17 @@ export default class OrderService {
         },
         trx
       )
+    }
+
+    const lines =
+      order.orderLines ??
+      (await OrderLine.query({ client: trx }).where('orderId', Number(order.id)))
+
+    for (const line of lines) {
+      if (!line.catalogProductSizeId) continue
+      const remaining = Number(line.quantity) - Number(line.returnedQuantity ?? 0)
+      if (remaining <= 0) continue
+      await this.sizeService.restoreSizeStock(Number(line.catalogProductSizeId), remaining, trx)
     }
   }
 

@@ -1,5 +1,6 @@
 import { SaleLineSchema } from '#database/schema'
 import CatalogProduct from '#models/catalog_product'
+import CatalogProductSize from '#models/catalog_product_size'
 import Material from '#models/material'
 import Sale from '#models/sale'
 import SaleLineMaterial from '#models/sale_line_material'
@@ -14,6 +15,9 @@ export default class SaleLine extends SaleLineSchema {
 
   @belongsTo(() => CatalogProduct)
   declare catalogProduct: BelongsTo<typeof CatalogProduct>
+
+  @belongsTo(() => CatalogProductSize)
+  declare catalogProductSize: BelongsTo<typeof CatalogProductSize>
 
   @belongsTo(() => Material)
   declare material: BelongsTo<typeof Material>

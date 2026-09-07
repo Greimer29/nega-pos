@@ -1,5 +1,5 @@
-import { AlertCircle } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { AlertTriangle, Inbox } from 'lucide-react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { toast } from '@/features/notifications/toast'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { cn } from '@/lib/utils'
@@ -47,8 +47,8 @@ type QueryErrorStateProps = {
 }
 
 /**
- * Toast con el detalle del error + empty state compacto en el body.
- * Reemplaza los bloques `text-destructive` largos en listados.
+ * Fallo real de carga (red/servidor). No usar para listas vacías:
+ * vacío = EmptyListState; este bloque solo si isError === true.
  */
 export function QueryErrorState({
   isError,
@@ -68,13 +68,39 @@ export function QueryErrorState({
         'text-muted-foreground flex flex-col items-center justify-center gap-2 py-12 text-center text-sm',
         className
       )}
-      role="status"
+      role="alert"
     >
-      <AlertCircle className="size-5 text-red-400" />
+      <AlertTriangle className="size-5 text-amber-500" />
       <p className="font-medium text-neutral-700">{fallbackLabel}</p>
       <p className="max-w-sm text-xs text-neutral-500">
-        Revisá la notificación arriba a la derecha para más detalle.
+        Si la empresa es nueva y aún no tiene datos, esto no debería aparecer: recargá la página. Si
+        persiste, revisá la notificación para el detalle técnico.
       </p>
+    </div>
+  )
+}
+
+type EmptyListStateProps = {
+  title: string
+  description?: string
+  action?: ReactNode
+  className?: string
+}
+
+/** Estado vacío normal (empresa nueva / sin registros). Nunca es un error. */
+export function EmptyListState({ title, description, action, className }: EmptyListStateProps) {
+  return (
+    <div
+      className={cn(
+        'text-muted-foreground flex flex-col items-center justify-center gap-2 py-12 text-center text-sm',
+        className
+      )}
+      role="status"
+    >
+      <Inbox className="size-5 text-neutral-400" />
+      <p className="font-medium text-neutral-700">{title}</p>
+      {description ? <p className="max-w-sm text-xs text-neutral-500">{description}</p> : null}
+      {action ? <div className="mt-2">{action}</div> : null}
     </div>
   )
 }

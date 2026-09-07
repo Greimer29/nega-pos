@@ -12,6 +12,7 @@ import TransicionInvalidaException from '#exceptions/transicion_invalida_excepti
 import VentaNoEditableException from '#exceptions/venta_no_editable_exception'
 import VentaNoEncontradaException from '#exceptions/venta_no_encontrada_exception'
 import CatalogProduct from '#models/catalog_product'
+import CatalogProductSize from '#models/catalog_product_size'
 import Customer from '#models/customer'
 import InventoryMovement from '#models/inventory_movement'
 import Material from '#models/material'
@@ -20,6 +21,7 @@ import Sale from '#models/sale'
 import SaleLine from '#models/sale_line'
 import SaleLineMaterial from '#models/sale_line_material'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
+import CatalogProductSizeService from '#services/catalog_product_size_service'
 import CurrencyService from '#services/currency_service'
 import MaterialService from '#services/material_service'
 import PaymentMethodService from '#services/payment_method_service'
@@ -53,6 +55,8 @@ export type SaleLineInput = {
   quantity: number
   unit_price_usd: number
   kitchen_note?: string | null
+  catalog_product_size_id?: number | null
+  size?: string | null
   formula_materials?: SaleLineFormulaMaterialInput[]
 }
 
@@ -108,6 +112,8 @@ export type ListSalesFilters = {
 type ResolvedLine = {
   catalogProductId: number | null
   materialId: number | null
+  catalogProductSizeId: number | null
+  size: string | null
   description: string
   quantity: string
   unitPriceUsd: string
@@ -136,6 +142,7 @@ export default class SaleService {
   private materialService = new MaterialService()
   private productInventoryService = new ProductInventoryService()
   private catalogProductStockService = new CatalogProductStockService()
+  private sizeService = new CatalogProductSizeService()
   private paymentMethodService = new PaymentMethodService()
   private currencyService = new CurrencyService()
   private salesShiftService = new SalesShiftService()
@@ -540,6 +547,13 @@ export default class SaleService {
             trx,
             note
           )
+          if (line.catalogProductSizeId) {
+            await this.sizeService.restoreSizeStock(
+              Number(line.catalogProductSizeId),
+              request.quantity,
+              trx
+            )
+          }
           await this.revertirMaterialesLineaParcial(sale, line, request.quantity, trx, note)
         }
 
@@ -611,6 +625,7 @@ export default class SaleService {
         const product = await CatalogProduct.query({ client: trx })
           .where('id', line.catalog_product_id!)
           .preload('formula', (f) => f.preload('materials'))
+          .preload('sizes')
           .first()
 
         if (!product) {
@@ -619,6 +634,14 @@ export default class SaleService {
 
         await assertFormulaMaterialsAllowed(product, line.formula_materials)
         const formulaMaterials = normalizeFormulaMaterialsInput(line.formula_materials)
+        const resolvedSize = await this.sizeService.resolveForLine(
+          product,
+          {
+            catalog_product_size_id: line.catalog_product_size_id,
+            size: line.size,
+          },
+          trx
+        )
 
         const subtotal = quantity * unitPrice
         totalUsd += subtotal
@@ -626,6 +649,8 @@ export default class SaleService {
         resolvedLines.push({
           catalogProductId: line.catalog_product_id!,
           materialId: null,
+          catalogProductSizeId: resolvedSize.sizeId,
+          size: resolvedSize.sizeLabel,
           description: product.name,
           quantity: quantity.toFixed(3),
           unitPriceUsd: unitPrice.toFixed(4),
@@ -652,6 +677,8 @@ export default class SaleService {
         resolvedLines.push({
           catalogProductId: null,
           materialId: line.material_id!,
+          catalogProductSizeId: null,
+          size: null,
           description: material.name,
           quantity: quantity.toFixed(3),
           unitPriceUsd: unitPrice.toFixed(4),
@@ -676,6 +703,8 @@ export default class SaleService {
         {
           saleId,
           catalogProductId: line.catalogProductId,
+          catalogProductSizeId: line.catalogProductSizeId,
+          size: line.size,
           materialId: line.materialId,
           description: line.description,
           quantity: line.quantity,
@@ -778,6 +807,25 @@ export default class SaleService {
           ])
         }
 
+        if (line.catalogProductSizeId) {
+          const sizeRow = await CatalogProductSize.query({ client: trx })
+            .where('id', Number(line.catalogProductSizeId))
+            .forUpdate()
+            .first()
+          const sizeStock = sizeRow ? Number(sizeRow.stockQuantity) : 0
+          if (quantity > sizeStock) {
+            throw new StockInsuficienteException([
+              {
+                material_id: Number(product.id),
+                name: `${product.name}${sizeRow ? ` (${sizeRow.size})` : ''}`,
+                stock_actual: sizeStock,
+                consumo_proyectado: quantity,
+                faltante: quantity - sizeStock,
+              },
+            ])
+          }
+        }
+
         if (product.formulaId) {
           const formulaMaterials = resolveEffectiveFormulaMaterials(line, product)
           for (const formulaItem of formulaMaterials) {
@@ -814,13 +862,21 @@ export default class SaleService {
           continue
         }
 
+        const sizeLabel = line.size?.trim()
+        const sizeNote = sizeLabel ? ` talla ${sizeLabel}` : ''
+        const movementNote = `Venta ${sale.code}${sizeNote}`
+
+        if (line.catalogProductSizeId) {
+          await this.sizeService.deductSizeStock(Number(line.catalogProductSizeId), quantity, trx)
+        }
+
         await this.productInventoryService.registrarMovimiento(
           {
             catalogProductId: Number(line.catalogProductId),
             type: 'SALE_OUT',
             quantity: -quantity,
             saleId,
-            note: `Factura ${sale.code}`,
+            note: movementNote,
           },
           trx
         )

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NegaPosIdentity } from '@/features/auth/components/nega-pos-identity'
 import { useAuth } from '@/features/auth/hooks/use-auth'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 const loginSchema = z.object({
@@ -40,7 +40,6 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const { login, loginWithGoogle } = useAuth()
-  const [submitError, setSubmitError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const googleButtonRef = useRef<HTMLDivElement>(null)
@@ -73,7 +72,6 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: async (response) => {
-          setSubmitError(null)
           setGoogleLoading(true)
           try {
             await loginWithGoogle(response.credential)
@@ -82,7 +80,7 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
             )
             navigate(redirectTo, { replace: true })
           } catch (error) {
-            setSubmitError(getApiErrorMessage(error))
+            notifyApiError(error, 'No se pudo iniciar sesión')
           } finally {
             setGoogleLoading(false)
           }
@@ -112,8 +110,6 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
   }, [loginWithGoogle, location.state, navigate])
 
   const onSubmit = handleSubmit(async (values) => {
-    setSubmitError(null)
-
     try {
       await login(values.email, values.password)
       const redirectTo = safeRedirectPath(
@@ -121,7 +117,7 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
       )
       navigate(redirectTo, { replace: true })
     } catch (error) {
-      setSubmitError(getApiErrorMessage(error))
+      notifyApiError(error, 'No se pudo iniciar sesión')
     }
   })
 
@@ -190,16 +186,6 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
             <p className="text-sm text-red-300">{errors.password.message}</p>
           ) : null}
         </div>
-
-        {submitError ? (
-          <div
-            className="rounded-lg border border-red-400/40 bg-red-500/15 px-3 py-2 text-sm text-red-200 whitespace-pre-line"
-            role="alert"
-            aria-live="polite"
-          >
-            {submitError}
-          </div>
-        ) : null}
 
         <Button
           type="submit"
