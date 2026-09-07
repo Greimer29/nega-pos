@@ -1,18 +1,17 @@
 import app from '@adonisjs/core/services/app'
 import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
+import hash from '@adonisjs/core/services/hash'
 import { MigrationRunner } from '@adonisjs/lucid/migration'
 import mysql from 'mysql2/promise'
+import type { RowDataPacket } from 'mysql2/promise'
 import env from '#start/env'
 import Company from '#models/company'
 import DirectoryUser from '#models/directory_user'
-import FinancialBaseSeeder from '#database/seeders/financial_base_seeder'
-import AdminUserSeeder from '#database/seeders/admin_user_seeder'
 import {
   ensureTenantConnection,
   tenantDbNameForSlug,
 } from '#utils/tenant_connection'
-import { runWithTenant } from '#utils/tenant_context'
 
 export type CreateCompanyDraft = {
   slug: string
@@ -159,8 +158,11 @@ export default class TenantProvisionService {
       await this.#createDatabase(dbName)
 
       const connectionName = ensureTenantConnection(dbName)
+      await this.#assertLucidPointsToTenant(connectionName, dbName)
       await this.#runTenantMigrations(connectionName)
-      await this.#seedTenant(connectionName, dbName, company.id, {
+      await this.#assertTenantHasTable(dbName, 'app_settings')
+      await this.#assertTenantHasTable(dbName, 'users')
+      await this.#seedTenantMysql(dbName, {
         email: adminEmail,
         password: draft.adminPassword,
         name: draft.adminName.trim() || 'Administrador',
@@ -190,19 +192,63 @@ export default class TenantProvisionService {
     }
   }
 
-  async #createDatabase(dbName: string) {
-    const connection = await mysql.createConnection({
+  async #openMysql(database?: string) {
+    return mysql.createConnection({
       host: env.get('DB_HOST'),
       port: env.get('DB_PORT'),
       user: env.get('DB_USER'),
       password: env.get('DB_PASSWORD') ?? '',
+      database,
       multipleStatements: false,
     })
+  }
 
+  async #createDatabase(dbName: string) {
+    const connection = await this.#openMysql()
     try {
       await connection.query(
         `CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
       )
+    } finally {
+      await connection.end()
+    }
+  }
+
+  /**
+   * Guarantees the Lucid named connection is bound to the tenant schema,
+   * not the Railway plugin default DB (`railway`).
+   */
+  async #assertLucidPointsToTenant(connectionName: string, dbName: string) {
+    const result = await db.connection(connectionName).rawQuery('SELECT DATABASE() AS current_db')
+    const rows = (Array.isArray(result) ? result[0] : result) as Array<{ current_db?: string }>
+    const currentDb = rows?.[0]?.current_db
+    if (currentDb !== dbName) {
+      throw Object.assign(
+        new Error(
+          `La conexión Lucid "${connectionName}" apunta a "${currentDb ?? 'null'}" en vez de "${dbName}". Revisá DB_* / ensureTenantConnection.`
+        ),
+        { code: 'TENANT_CONNECTION_MISMATCH', status: 500 }
+      )
+    }
+  }
+
+  async #assertTenantHasTable(dbName: string, tableName: string) {
+    const connection = await this.#openMysql()
+    try {
+      const [rows] = await connection.query<RowDataPacket[]>(
+        `SELECT COUNT(*) AS c
+         FROM information_schema.tables
+         WHERE table_schema = ? AND table_name = ?`,
+        [dbName, tableName]
+      )
+      if (Number(rows[0]?.c ?? 0) === 0) {
+        throw Object.assign(
+          new Error(
+            `Tras migrar, la tabla "${tableName}" no existe en la BD tenant "${dbName}". El MigrationRunner no aplicó el schema en esa base.`
+          ),
+          { code: 'TENANT_MIGRATION_MISSING_TABLE', status: 500 }
+        )
+      }
     } finally {
       await connection.end()
     }
@@ -223,27 +269,84 @@ export default class TenantProvisionService {
     }
   }
 
-  async #seedTenant(
-    connectionName: string,
+  /**
+   * Seeds the tenant using a direct mysql2 connection to `dbName`.
+   * Do NOT use Lucid models here: pool/ALS quirks were writing into `railway`.
+   */
+  async #seedTenantMysql(
     dbName: string,
-    companyId: number,
     admin: { email: string; password: string; name: string }
   ) {
-    const client = db.connection(connectionName)
+    const connection = await this.#openMysql(dbName)
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
 
-    // Pass connection explicitly: Lucid/mysql2 pool callbacks can drop ALS,
-    // which made seeders write into the default `railway` DB instead of the tenant.
-    await runWithTenant(
-      {
-        companyId,
-        dbName,
-        connectionName,
-        directoryUserId: 0,
-      },
-      async () => {
-        await new FinancialBaseSeeder(client).run({ connection: connectionName })
-        await new AdminUserSeeder(client).run(admin, { connection: connectionName })
+    try {
+      const [dbRow] = await connection.query<RowDataPacket[]>('SELECT DATABASE() AS current_db')
+      if (dbRow[0]?.current_db !== dbName) {
+        throw new Error(`Seed mysql2 abrió "${dbRow[0]?.current_db}" en vez de "${dbName}"`)
       }
-    )
+
+      await connection.query(
+        `INSERT INTO app_settings (\`key\`, \`value\`, updated_at)
+         VALUES ('base_currency_code', 'XAU', ?)
+         ON DUPLICATE KEY UPDATE \`value\` = VALUES(\`value\`), updated_at = VALUES(updated_at)`,
+        [now]
+      )
+
+      const currencies = [
+        ['XAU', 'Oro', '1.0000'],
+        ['USD', 'Dólar estadounidense', '100.0000'],
+        ['VES', 'Bolívar', '100.0000'],
+      ] as const
+      for (const [code, name, rate] of currencies) {
+        await connection.query(
+          `INSERT INTO currencies (code, name, rate_per_usd, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, 1, ?, ?)
+           ON DUPLICATE KEY UPDATE name = VALUES(name), rate_per_usd = VALUES(rate_per_usd),
+             is_active = 1, updated_at = VALUES(updated_at)`,
+          [code, name, rate, now, now]
+        )
+      }
+
+      const methods = [
+        ['cash_usd', 'Efectivo USD', 'USD', 1],
+        ['cash_bs', 'Efectivo Bs', 'VES', 2],
+        ['transfer', 'Transferencia', 'VES', 3],
+        ['mobile_payment', 'Pago móvil', 'VES', 4],
+        ['zelle', 'Zelle', 'USD', 5],
+        ['binance', 'Binance', 'USD', 6],
+      ] as const
+      for (const [code, name, currencyCode, sortOrder] of methods) {
+        await connection.query(
+          `INSERT INTO payment_methods (code, name, currency_code, is_active, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, 1, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE name = VALUES(name), currency_code = VALUES(currency_code),
+             is_active = 1, sort_order = VALUES(sort_order), updated_at = VALUES(updated_at)`,
+          [code, name, currencyCode, sortOrder, now, now]
+        )
+      }
+
+      const passwordHash = await hash.make(admin.password)
+      const [existing] = await connection.query<RowDataPacket[]>(
+        'SELECT id FROM users WHERE email = ? LIMIT 1',
+        [admin.email]
+      )
+      if (existing[0]?.id) {
+        await connection.query(
+          `UPDATE users SET password = ?, name = ?, role = 'ADMIN', active = 1, updated_at = ? WHERE id = ?`,
+          [passwordHash, admin.name, now, existing[0].id]
+        )
+      } else {
+        await connection.query(
+          `INSERT INTO users (email, password, name, role, permissions, active, created_at, updated_at)
+           VALUES (?, ?, ?, 'ADMIN', NULL, 1, ?, ?)`,
+          [admin.email, passwordHash, admin.name, now, now]
+        )
+      }
+
+      logger.info({ dbName, adminEmail: admin.email }, 'Tenant seeded via mysql2')
+    } finally {
+      await connection.end()
+    }
   }
 }

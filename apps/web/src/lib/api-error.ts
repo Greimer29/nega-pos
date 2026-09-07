@@ -411,7 +411,9 @@ export function getApiErrorMessage(error: unknown): string {
     apiError.code === 'DB_CREATE_DENIED' ||
     apiError.code === 'PLATFORM_ERROR' ||
     apiError.code === 'SLUG_TAKEN' ||
-    apiError.code === 'EMAIL_TAKEN'
+    apiError.code === 'EMAIL_TAKEN' ||
+    apiError.code === 'TENANT_CONNECTION_MISMATCH' ||
+    apiError.code === 'TENANT_MIGRATION_MISSING_TABLE'
   ) {
     return lines.length > 0 ? lines.join('\n') : apiError.message
   }
