@@ -12,6 +12,7 @@ import {
   createCompanyValidator,
   platformLoginValidator,
   resendCompanyOtpValidator,
+  retryCompanyOtpValidator,
   updateCompanyStatusValidator,
 } from '#validators/platform'
 
@@ -178,9 +179,15 @@ export default class PlatformController {
     }
   }
 
-  async retryOtp({ params, serialize, response }: HttpContext) {
+  async retryOtp({ params, request, serialize, response }: HttpContext) {
+    const payload = await request.validateUsing(retryCompanyOtpValidator)
+
     try {
-      const result = await this.#provision.retryProvisionOtp(Number(params.id))
+      const result = await this.#provision.retryProvisionOtp(Number(params.id), {
+        adminEmail: payload.admin_email,
+        adminPassword: payload.admin_password,
+        adminName: payload.admin_name,
+      })
       return serialize({
         message: result.emailDelivered
           ? 'Código enviado para reintentar el alta'

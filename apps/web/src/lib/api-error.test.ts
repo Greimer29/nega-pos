@@ -180,6 +180,24 @@ describe('getApiErrorMessage', () => {
 
     expect(getApiErrorMessage(error)).toBe('email: Email inválido')
   })
+
+  it('sanitizes raw SQL / missing table messages', () => {
+    const error = axiosErrorWithBody(500, {
+      message: "select * from `orders` where `id` = 1 limit 1 - Table 'railway.orders' doesn't exist",
+    })
+
+    expect(getApiErrorMessage(error)).toBe(
+      'El servidor no está listo o la base de datos no está migrada. Contactá al administrador o revisá el despliegue.'
+    )
+  })
+
+  it('explains missing users table after multi-tenant cutover', () => {
+    const error = axiosErrorWithBody(500, {
+      message: "select * from `users` where `id` = 1 limit 1 - Table 'railway.users' doesn't exist",
+    })
+
+    expect(getApiErrorMessage(error)).toContain('sesión de empresa quedó inconsistente')
+  })
 })
 
 describe('formatApiErrorDetails mixed arrays', () => {

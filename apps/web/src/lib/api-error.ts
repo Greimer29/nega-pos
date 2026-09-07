@@ -379,14 +379,21 @@ function sanitizeUserFacingMessage(message: string): string {
     /\bselect\s+.+\s+from\s+/i.test(trimmed) ||
     /\b(insert|update|delete)\s+.+\s+(into|from|set)\b/i.test(trimmed)
   ) {
-    // Keep actionable provision / MySQL privilege messages visible.
+    // Keep actionable provision / MySQL / platform messages visible.
     if (
       lower.includes('create database') ||
       lower.includes('grant create') ||
       lower.includes('mysql') ||
-      lower.includes('railway')
+      lower.includes('railway') ||
+      lower.includes('email_verification') ||
+      lower.includes('companies') ||
+      lower.includes('directory_users') ||
+      lower.includes('platform_admins')
     ) {
       return trimmed
+    }
+    if (lower.includes('users')) {
+      return 'La sesión de empresa quedó inconsistente tras el cutover multi-tenant. Cerrá sesión, borrá cookies de este sitio y volvé a entrar por /platform/login.'
     }
     return 'El servidor no está listo o la base de datos no está migrada. Contactá al administrador o revisá el despliegue.'
   }

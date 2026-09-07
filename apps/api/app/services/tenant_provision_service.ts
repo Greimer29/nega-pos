@@ -176,13 +176,27 @@ export default class TenantProvisionService {
 
   /**
    * Re-issues OTP for a company stuck in PROVISIONING/SUSPENDED (failed first provision).
+   * Prefer explicit admin credentials from the platform UI so we don't depend on old OTP rows.
    */
-  async retryProvisionOtp(companyId: number) {
+  async retryProvisionOtp(
+    companyId: number,
+    admin?: { adminEmail: string; adminPassword: string; adminName?: string }
+  ) {
     const company = await Company.findOrFail(companyId)
     if (company.status === 'ACTIVE') {
       throw Object.assign(new Error('La empresa ya está activa'), {
         code: 'COMPANY_ALREADY_ACTIVE',
         status: 409,
+      })
+    }
+
+    if (admin?.adminEmail && admin.adminPassword) {
+      return this.requestCreate({
+        slug: company.slug,
+        name: company.name,
+        adminEmail: admin.adminEmail,
+        adminPassword: admin.adminPassword,
+        adminName: admin.adminName?.trim() || 'Administrador',
       })
     }
 
@@ -210,25 +224,11 @@ export default class TenantProvisionService {
       })
     }
 
-    const directoryUser = await DirectoryUser.query({ connection: 'central' })
-      .where('company_id', company.id)
-      .orderBy('id', 'asc')
-      .first()
-
-    if (!directoryUser) {
-      throw Object.assign(
-        new Error(
-          'No hay datos de alta pendientes para esta empresa. Creá de nuevo el alta con el mismo slug o contactá soporte.'
-        ),
-        { code: 'RETRY_PAYLOAD_MISSING', status: 404 }
-      )
-    }
-
     throw Object.assign(
       new Error(
-        `No se encontró el password del alta original. Reenviá OTP al email ${directoryUser.email} desde "Nueva empresa" con el mismo slug, o pedí un alta nueva.`
+        'Para continuar el alta necesitás el email y password del admin de la empresa. Completá el formulario “Continuar alta”.'
       ),
-      { code: 'RETRY_PASSWORD_MISSING', status: 404 }
+      { code: 'RETRY_CREDENTIALS_REQUIRED', status: 422 }
     )
   }
 

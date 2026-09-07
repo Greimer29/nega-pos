@@ -124,6 +124,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [applySessionFailure, fetchCurrentUser])
 
   useEffect(() => {
+    // Platform uses its own session (/platform/*). Skip tenant /auth/me bootstrap
+    // so a missing railway.users table never blocks the super-admin UI.
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/platform')) {
+      setIsLoading(false)
+      setUser(null)
+      setSessionBootstrapError(false)
+      return
+    }
+
     void loadUser()
   }, [loadUser])
 

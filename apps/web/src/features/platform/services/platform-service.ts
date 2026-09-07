@@ -80,7 +80,10 @@ export async function resendCompanyOtp(email: string) {
   return data.data
 }
 
-export async function retryCompanyOtp(companyId: number) {
+export async function retryCompanyOtp(
+  companyId: number,
+  payload: { admin_email: string; admin_password: string; admin_name?: string }
+) {
   const { data } = await api.post<{
     data: {
       email: string
@@ -90,7 +93,7 @@ export async function retryCompanyOtp(companyId: number) {
       emailDelivered?: boolean
       emailError?: string
     }
-  }>(`/platform/companies/${companyId}/retry-otp`)
+  }>(`/platform/companies/${companyId}/retry-otp`, payload)
   return data.data
 }
 

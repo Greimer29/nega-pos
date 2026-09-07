@@ -22,6 +22,12 @@ export function PlatformPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [retryCompany, setRetryCompany] = useState<PlatformCompany | null>(null)
+  const [retryForm, setRetryForm] = useState({
+    admin_email: '',
+    admin_password: '',
+    admin_name: '',
+  })
   const [form, setForm] = useState({
     slug: '',
     name: '',
@@ -58,6 +64,7 @@ export function PlatformPage() {
     setPendingEmail(result.email)
     setPendingSlug(result.slug)
     setShowCreateForm(false)
+    setRetryCompany(null)
     setOtp(result.debugCode ?? '')
     setDebugCode(result.debugCode ?? null)
     if (result.emailError) {
@@ -90,6 +97,7 @@ export function PlatformPage() {
       setPendingSlug(null)
       setDebugCode(null)
       setShowCreateForm(false)
+      setRetryCompany(null)
       setForm({
         slug: '',
         name: '',
@@ -97,6 +105,7 @@ export function PlatformPage() {
         admin_password: '',
         admin_name: '',
       })
+      setRetryForm({ admin_email: '', admin_password: '', admin_name: '' })
       setOtp('')
       setCompanies(await platformService.listCompanies())
     } catch (err) {
@@ -106,17 +115,30 @@ export function PlatformPage() {
     }
   }
 
-  async function onRetryCompany(company: PlatformCompany) {
+  async function onRetrySubmit(event: React.FormEvent) {
+    event.preventDefault()
+    if (!retryCompany) return
     setBusy(true)
     setError(null)
     try {
-      const result = await platformService.retryCompanyOtp(company.id)
+      const result = await platformService.retryCompanyOtp(retryCompany.id, retryForm)
       applyOtpResult(result)
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
       setBusy(false)
     }
+  }
+
+  function startRetry(company: PlatformCompany) {
+    setError(null)
+    setShowCreateForm(false)
+    setRetryCompany(company)
+    setRetryForm({
+      admin_email: '',
+      admin_password: '',
+      admin_name: '',
+    })
   }
 
   async function onSuspendActive(company: PlatformCompany) {
@@ -139,14 +161,14 @@ export function PlatformPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-300">
+      <div className="dark flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-300">
         <Loader2 className="size-6 animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 px-4 py-8 text-neutral-100">
+    <div className="dark min-h-screen bg-neutral-950 px-4 py-8 text-neutral-100">
       <div className="mx-auto max-w-4xl space-y-8">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -172,7 +194,7 @@ export function PlatformPage() {
         <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-medium">Empresas</h2>
-            {!pendingEmail && !showCreateForm ? (
+            {!pendingEmail && !showCreateForm && !retryCompany ? (
               <Button
                 type="button"
                 onClick={() => {
@@ -217,7 +239,7 @@ export function PlatformPage() {
                               size="sm"
                               variant="default"
                               disabled={busy || Boolean(pendingEmail)}
-                              onClick={() => void onRetryCompany(company)}
+                              onClick={() => startRetry(company)}
                             >
                               Continuar alta
                             </Button>
@@ -241,6 +263,53 @@ export function PlatformPage() {
             </table>
           </div>
         </section>
+
+        {retryCompany && !pendingEmail ? (
+          <section className="rounded-xl border border-amber-500/30 bg-neutral-900 p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-medium">Continuar alta</h2>
+                <p className="mt-1 text-sm text-neutral-400">
+                  {retryCompany.name} ({retryCompany.slug}) — ingresá de nuevo los datos del admin
+                  para emitir el OTP.
+                </p>
+              </div>
+              <Button type="button" variant="ghost" onClick={() => setRetryCompany(null)}>
+                Cancelar
+              </Button>
+            </div>
+
+            <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={onRetrySubmit}>
+              <Input
+                placeholder="Email admin"
+                type="email"
+                value={retryForm.admin_email}
+                onChange={(e) => setRetryForm((f) => ({ ...f, admin_email: e.target.value }))}
+                required
+                className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500"
+              />
+              <Input
+                placeholder="Nombre admin"
+                value={retryForm.admin_name}
+                onChange={(e) => setRetryForm((f) => ({ ...f, admin_name: e.target.value }))}
+                required
+                className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500"
+              />
+              <Input
+                placeholder="Password admin (mín. 8)"
+                type="password"
+                value={retryForm.admin_password}
+                onChange={(e) => setRetryForm((f) => ({ ...f, admin_password: e.target.value }))}
+                required
+                minLength={8}
+                className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500 sm:col-span-2"
+              />
+              <Button type="submit" disabled={busy} className="sm:col-span-2">
+                {busy ? <Loader2 className="animate-spin" /> : 'Enviar código OTP'}
+              </Button>
+            </form>
+          </section>
+        ) : null}
 
         {pendingEmail ? (
           <section className="rounded-xl border border-amber-500/30 bg-neutral-900 p-6">
@@ -306,7 +375,7 @@ export function PlatformPage() {
           </section>
         ) : null}
 
-        {showCreateForm && !pendingEmail ? (
+        {showCreateForm && !pendingEmail && !retryCompany ? (
           <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-medium">Nueva empresa</h2>
