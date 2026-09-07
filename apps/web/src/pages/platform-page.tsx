@@ -197,7 +197,7 @@ export function PlatformPage() {
                 onChange={(e) => setOtp(e.target.value)}
                 placeholder="Código de 6 dígitos"
                 required
-                className="bg-neutral-950"
+                className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500"
               />
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={busy}>
@@ -227,14 +227,14 @@ export function PlatformPage() {
                 value={form.slug}
                 onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
                 required
-                className="bg-neutral-950"
+                className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500"
               />
               <Input
                 placeholder="Nombre comercial"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 required
-                className="bg-neutral-950"
+                className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500"
               />
               <Input
                 placeholder="Email admin"
@@ -242,14 +242,14 @@ export function PlatformPage() {
                 value={form.admin_email}
                 onChange={(e) => setForm((f) => ({ ...f, admin_email: e.target.value }))}
                 required
-                className="bg-neutral-950"
+                className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500"
               />
               <Input
                 placeholder="Nombre admin"
                 value={form.admin_name}
                 onChange={(e) => setForm((f) => ({ ...f, admin_name: e.target.value }))}
                 required
-                className="bg-neutral-950"
+                className="border-neutral-700 bg-neutral-950 text-white placeholder:text-neutral-500"
               />
               <Input
                 placeholder="Password admin (mín. 8)"
