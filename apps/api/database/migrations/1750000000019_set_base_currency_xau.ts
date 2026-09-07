@@ -18,6 +18,54 @@ export default class extends BaseSchema {
 
     await this.defer(async () => {
       await this.db.transaction(async (trx) => {
+        const salesCountRow = await trx.from('sales').count('* as total').first()
+        const salesTotal = Number(
+          (salesCountRow as { total?: number | string } | null)?.total ?? 0
+        )
+
+        // Fresh company DB (no historical sales): default base = USD.
+        // Legacy cutover to XAU only applies when there is existing transactional data.
+        if (salesTotal === 0) {
+          await trx
+            .table('app_settings')
+            .insert({
+              key: 'base_currency_code',
+              value: 'USD',
+              updated_at: now,
+            })
+            .onConflict('key')
+            .merge({ value: 'USD', updated_at: now })
+
+          const ensureCurrency = async (
+            code: string,
+            name: string,
+            ratePerUsd: string
+          ) => {
+            const existing = await trx.from('currencies').where('code', code).first()
+            if (existing) {
+              await trx.from('currencies').where('code', code).update({
+                name,
+                rate_per_usd: ratePerUsd,
+                is_active: true,
+                updated_at: now,
+              })
+            } else {
+              await trx.table('currencies').insert({
+                code,
+                name,
+                rate_per_usd: ratePerUsd,
+                is_active: true,
+                created_at: now,
+                updated_at: now,
+              })
+            }
+          }
+
+          await ensureCurrency('USD', 'Dólar estadounidense', '1.0000')
+          await ensureCurrency('VES', 'Bolívar', '36.0000')
+          return
+        }
+
         await trx
           .table('app_settings')
           .insert({

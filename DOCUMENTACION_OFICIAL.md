@@ -320,7 +320,7 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 
 Migraciones tenant en `apps/api/database/migrations/`. Control plane en `database/migrations_central/` (`companies`, `directory_users`, `platform_admins`). Modelos Lucid en `apps/api/app/models/`.
 
-Al provisionar una empresa: migraciones tenant + seed mínimo (`FinancialBase` + admin). **Sin** categorías ni proveedores de demo.
+Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda base, monedas/métodos iniciales editables + admin). **Sin** categorías ni proveedores de demo. Cada empresa configura luego su propia moneda base y catálogo financiero.
 
 ### Agrupación de tablas
 
@@ -344,13 +344,13 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (`FinancialBase` +
 | `accounts` | `name`, `description`, `is_active` |
 | `currencies` | `code` (PK), `name`, `rate_per_usd` (unidades por 1 unidad de moneda base), `is_active` |
 | `payment_methods` | `code`, `name`, `is_active`, `sort_order` |
-| `app_settings` | `key` (PK); incluye `base_currency_code` (default/cutover `XAU`), tasa VES legacy, margen, `business_profile`, `print_config` |
+| `app_settings` | `key` (PK); incluye `base_currency_code` (**por empresa**; en alta nueva default `USD`), tasa VES, margen, `business_profile`, `print_config` |
 | `customer_payments` | `customer_id`, `order_id?`, `sale_id?`, `amount_usd` (monto en moneda base), `payment_method_code`, `account_id` |
 | `supplier_payments` | `supplier_id`, `purchase_id?`, `amount_usd` (monto en moneda base), … |
 | `expenses` | `account_id`, `date`, `description`, `amount_usd` (monto canónico en moneda base), `currency_code` (moneda de ingreso), `entry_rate` (unidades de moneda de ingreso por 1 de base; `null` si es base) |
 | `incomes` | `account_id`, `date`, `description`, `amount_usd` (monto canónico en moneda base), `currency_code`, `entry_rate` — aportes / entradas de dinero |
 
-**Moneda base del sistema:** configurable (`GET/PUT /api/v1/currencies/base`, permiso `settings.edit`). Tras el cutover la base es **XAU (Oro)** con semántica *unidades de moneda por 1 unidad de base* (`XAU.rate=1`, `USD.rate=100` → 1 XAU = 100 USD). Las columnas `*_usd` **conservan el nombre** pero almacenan montos en la moneda base. Conversión: `base = nativo / tasa`, `nativo = base * tasa`.
+**Moneda base:** configurable **por empresa** (`GET/PUT /api/v1/currencies/base`, permiso `settings.edit`). Al provisionar un tenant nuevo la base por defecto es **USD**; la empresa puede crear monedas/métodos de pago y cambiar la base. Semántica de tasas: *unidades de moneda por 1 unidad de base* (`base = nativo / tasa`, `nativo = base * tasa`). Las columnas `*_usd` conservan el nombre pero almacenan montos en la moneda base. (Cutover histórico a XAU aplica solo a BD con data transaccional previa.)
 
 **Tasa por documento (gastos, ingresos, compras, cobro contado):** el monto se ingresa en una moneda activa; la tasa default es `currencies.rate_per_usd`. Si el usuario la cambia, queda solo en ese registro (`entry_rate` en gastos/ingresos, `usd_rate` en compras/ventas) y **no** modifica el catálogo ni Configuración.
 

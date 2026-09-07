@@ -333,15 +333,15 @@ export default class TenantProvisionService {
 
       await connection.query(
         `INSERT INTO app_settings (\`key\`, \`value\`, updated_at)
-         VALUES ('base_currency_code', 'XAU', ?)
+         VALUES ('base_currency_code', 'USD', ?)
          ON DUPLICATE KEY UPDATE \`value\` = VALUES(\`value\`), updated_at = VALUES(updated_at)`,
         [now]
       )
 
+      // rate_per_usd = unidades de esa moneda por 1 unidad de la moneda base (USD).
       const currencies = [
-        ['XAU', 'Oro', '1.0000'],
-        ['USD', 'Dólar estadounidense', '100.0000'],
-        ['VES', 'Bolívar', '100.0000'],
+        ['USD', 'Dólar estadounidense', '1.0000'],
+        ['VES', 'Bolívar', '36.0000'],
       ] as const
       for (const [code, name, rate] of currencies) {
         await connection.query(
@@ -353,13 +353,12 @@ export default class TenantProvisionService {
         )
       }
 
+      // Métodos de pago iniciales; la empresa puede crear/editar más desde la app.
       const methods = [
         ['cash_usd', 'Efectivo USD', 'USD', 1],
-        ['cash_bs', 'Efectivo Bs', 'VES', 2],
-        ['transfer', 'Transferencia', 'VES', 3],
-        ['mobile_payment', 'Pago móvil', 'VES', 4],
-        ['zelle', 'Zelle', 'USD', 5],
-        ['binance', 'Binance', 'USD', 6],
+        ['transfer', 'Transferencia', 'VES', 2],
+        ['mobile_payment', 'Pago móvil', 'VES', 3],
+        ['zelle', 'Zelle', 'USD', 4],
       ] as const
       for (const [code, name, currencyCode, sortOrder] of methods) {
         await connection.query(
