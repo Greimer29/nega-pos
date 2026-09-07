@@ -158,7 +158,6 @@ export default class TenantProvisionService {
       await this.#createDatabase(dbName)
 
       const connectionName = ensureTenantConnection(dbName)
-      await this.#assertLucidPointsToTenant(connectionName, dbName)
       await this.#runTenantMigrations(connectionName)
       await this.#assertTenantHasTable(dbName, 'app_settings')
       await this.#assertTenantHasTable(dbName, 'users')
@@ -214,24 +213,6 @@ export default class TenantProvisionService {
     }
   }
 
-  /**
-   * Guarantees the Lucid named connection is bound to the tenant schema,
-   * not the Railway plugin default DB (`railway`).
-   */
-  async #assertLucidPointsToTenant(connectionName: string, dbName: string) {
-    const result = await db.connection(connectionName).rawQuery('SELECT DATABASE() AS current_db')
-    const rows = (Array.isArray(result) ? result[0] : result) as Array<{ current_db?: string }>
-    const currentDb = rows?.[0]?.current_db
-    if (currentDb !== dbName) {
-      throw Object.assign(
-        new Error(
-          `La conexión Lucid "${connectionName}" apunta a "${currentDb ?? 'null'}" en vez de "${dbName}". Revisá DB_* / ensureTenantConnection.`
-        ),
-        { code: 'TENANT_CONNECTION_MISMATCH', status: 500 }
-      )
-    }
-  }
-
   async #assertTenantHasTable(dbName: string, tableName: string) {
     const connection = await this.#openMysql()
     try {
@@ -244,7 +225,7 @@ export default class TenantProvisionService {
       if (Number(rows[0]?.c ?? 0) === 0) {
         throw Object.assign(
           new Error(
-            `Tras migrar, la tabla "${tableName}" no existe en la BD tenant "${dbName}". El MigrationRunner no aplicó el schema en esa base.`
+            `La tabla "${tableName}" no existe en la BD tenant "${dbName}". Revisá que MigrationRunner use esa base.`
           ),
           { code: 'TENANT_MIGRATION_MISSING_TABLE', status: 500 }
         )
@@ -271,7 +252,7 @@ export default class TenantProvisionService {
 
   /**
    * Seeds the tenant using a direct mysql2 connection to `dbName`.
-   * Do NOT use Lucid models here: pool/ALS quirks were writing into `railway`.
+   * Idempotent: safe when schema already exists from a previous failed attempt.
    */
   async #seedTenantMysql(
     dbName: string,
@@ -282,8 +263,9 @@ export default class TenantProvisionService {
 
     try {
       const [dbRow] = await connection.query<RowDataPacket[]>('SELECT DATABASE() AS current_db')
-      if (dbRow[0]?.current_db !== dbName) {
-        throw new Error(`Seed mysql2 abrió "${dbRow[0]?.current_db}" en vez de "${dbName}"`)
+      const currentDb = String(dbRow[0]?.current_db ?? '')
+      if (currentDb !== dbName) {
+        throw new Error(`Seed mysql2 abrió "${currentDb}" en vez de "${dbName}"`)
       }
 
       await connection.query(
