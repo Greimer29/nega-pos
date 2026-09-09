@@ -389,7 +389,9 @@ export default class PurchaseService {
         .where('purchaseId', Number(purchase.id))
         .forUpdate()
 
-      if (items.length === 0) {
+      const affectsInventory = purchase.affectsInventory !== false
+
+      if (items.length === 0 && affectsInventory) {
         throw new PurchaseSinItemsException()
       }
 
@@ -402,6 +404,10 @@ export default class PurchaseService {
         const subtotalUsd = item.subtotalUsd ?? '0'
 
         totalUsd += Number(subtotalUsd)
+
+        if (!affectsInventory) {
+          continue
+        }
 
         if (item.materialId) {
           await InventoryMovement.create(
@@ -475,20 +481,26 @@ export default class PurchaseService {
 
       const costWarnings: CostWarning[] = []
       const seenProductIds = new Set<number>()
-      for (const materialId of materialIds) {
-        const warnings = await this.formulaService.recalcularCostosPorMaterial(materialId, trx)
-        for (const warning of warnings) {
-          if (!seenProductIds.has(warning.product_id)) {
-            seenProductIds.add(warning.product_id)
-            costWarnings.push(warning)
+      if (affectsInventory) {
+        for (const materialId of materialIds) {
+          const warnings = await this.formulaService.recalcularCostosPorMaterial(materialId, trx)
+          for (const warning of warnings) {
+            if (!seenProductIds.has(warning.product_id)) {
+              seenProductIds.add(warning.product_id)
+              costWarnings.push(warning)
+            }
           }
         }
       }
 
-      purchase.totalUsd = totalUsd.toFixed(4)
+      if (items.length > 0) {
+        purchase.totalUsd = totalUsd.toFixed(4)
+      }
 
-      if (usdRate !== null && usdRate > 0) {
-        purchase.totalBs = (totalUsd * usdRate).toFixed(2)
+      const resolvedTotalUsd = items.length > 0 ? totalUsd : Number(purchase.totalUsd ?? 0)
+
+      if (usdRate !== null && usdRate > 0 && items.length > 0) {
+        purchase.totalBs = (resolvedTotalUsd * usdRate).toFixed(2)
       }
 
       const isCredit = input.is_credit ?? purchase.isCredit
@@ -506,14 +518,14 @@ export default class PurchaseService {
 
         purchase.isCredit = true
         purchase.creditDueDate = DateTime.fromISO(dueDate)
-        purchase.balanceUsd = totalUsd.toFixed(4)
+        purchase.balanceUsd = resolvedTotalUsd.toFixed(4)
         purchase.amountPaidUsd = '0.0000'
         purchase.accountId = input.account_id === undefined ? purchase.accountId : input.account_id
       } else {
         purchase.isCredit = false
         purchase.creditDueDate = null
         purchase.balanceUsd = '0.0000'
-        purchase.amountPaidUsd = totalUsd.toFixed(4)
+        purchase.amountPaidUsd = resolvedTotalUsd.toFixed(4)
       }
 
       purchase.status = 'CONFIRMED'

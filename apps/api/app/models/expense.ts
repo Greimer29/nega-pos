@@ -1,6 +1,7 @@
 import { ExpenseSchema } from '#database/schema'
 import Account from '#models/account'
 import Currency from '#models/currency'
+import Supplier from '#models/supplier'
 import { belongsTo } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 
@@ -12,4 +13,7 @@ export default class Expense extends ExpenseSchema {
 
   @belongsTo(() => Currency, { foreignKey: 'currencyCode' })
   declare currency: BelongsTo<typeof Currency>
+
+  @belongsTo(() => Supplier)
+  declare supplier: BelongsTo<typeof Supplier>
 }

@@ -1,4 +1,7 @@
+import ExpenseService from '#services/expense_service'
+import IncomeService from '#services/income_service'
 import PurchaseService from '#services/purchase_service'
+import { userHasPermission } from '#permissions/catalog'
 import { serializePurchase, serializePurchaseItems } from '#transformers/purchase_transformer'
 import {
   confirmPurchaseValidator,
@@ -13,6 +16,8 @@ import { serializeCostWarning } from '#types/cost_warning'
 
 export default class PurchasesControleler {
   private service = new PurchaseService()
+  private expenseService = new ExpenseService()
+  private incomeService = new IncomeService()
 
   /**
    * GET /api/v1/purchases
@@ -43,6 +48,29 @@ export default class PurchasesControleler {
     const summary = await this.service.resumen()
 
     return serialize({ summary })
+  }
+
+  /**
+   * GET /api/v1/purchases/hub-summary
+   * One round-trip for Compras hub KPIs (purchases + optional expenses/incomes).
+   */
+  async hubSummary({ auth, serialize }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const permissions = Array.isArray(user.permissions) ? user.permissions : null
+    const canExpenses = userHasPermission(user.role, permissions, 'expenses.view')
+    const canIncomes = userHasPermission(user.role, permissions, 'incomes.view')
+
+    const [purchases, expenses, incomes] = await Promise.all([
+      this.service.resumen(),
+      canExpenses ? this.expenseService.resumen() : Promise.resolve(undefined),
+      canIncomes ? this.incomeService.resumen() : Promise.resolve(undefined),
+    ])
+
+    return serialize({
+      purchases,
+      ...(expenses !== undefined ? { expenses } : {}),
+      ...(incomes !== undefined ? { incomes } : {}),
+    })
   }
 
   /**

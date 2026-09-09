@@ -78,8 +78,18 @@ export type SupplierAccountStatement = {
     creditDueDate: string | null
     status: string
     isCredit: boolean
+    affectsInventory: boolean
   }[]
   payments: SupplierPayment[]
+  expenses: {
+    id: number
+    date: string
+    description: string
+    amountUsd: string
+    invoiceNumber: string | null
+    accountId: number | null
+    account?: { id: number; name: string } | null
+  }[]
   saldoPendienteUsd: string
 }
 
@@ -89,4 +99,16 @@ export type SupplierPaymentInput = {
   amount_usd: number
   date: string
   note?: string
+}
+
+export type SupplierInvoiceInput = {
+  date: string
+  amount: number
+  currency_code?: string
+  entry_rate?: number
+  invoice_number?: string
+  note?: string
+  is_credit: boolean
+  account_id?: number | null
+  credit_due_date?: string | null
 }

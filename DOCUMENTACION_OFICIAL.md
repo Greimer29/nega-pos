@@ -347,7 +347,7 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda b
 | `app_settings` | `key` (PK); incluye `base_currency_code` (**por empresa**; en alta nueva default `USD`), tasa VES, margen, `business_profile`, `print_config` |
 | `customer_payments` | `customer_id`, `order_id?`, `sale_id?`, `amount_usd` (monto en moneda base), `payment_method_code`, `account_id` |
 | `supplier_payments` | `supplier_id`, `purchase_id?`, `amount_usd` (monto en moneda base), … |
-| `expenses` | `account_id`, `date`, `description`, `amount_usd` (monto canónico en moneda base), `currency_code` (moneda de ingreso), `entry_rate` (unidades de moneda de ingreso por 1 de base; `null` si es base) |
+| `expenses` | `account_id`, `supplier_id?`, `date`, `description`, `invoice_number?`, `amount_usd` (monto canónico en moneda base), `currency_code` (moneda de ingreso), `entry_rate` (unidades de moneda de ingreso por 1 de base; `null` si es base) |
 | `incomes` | `account_id`, `date`, `description`, `amount_usd` (monto canónico en moneda base), `currency_code`, `entry_rate` — aportes / entradas de dinero |
 
 **Moneda base:** configurable **por empresa** (`GET/PUT /api/v1/currencies/base`, permiso `settings.edit`). Al provisionar un tenant nuevo la base por defecto es **USD**; la empresa puede crear monedas/métodos de pago y cambiar la base. Semántica de tasas: *unidades de moneda por 1 unidad de base* (`base = nativo / tasa`, `nativo = base * tasa`). Las columnas `*_usd` conservan el nombre pero almacenan montos en la moneda base. (Cutover histórico a XAU aplica solo a BD con data transaccional previa.)
@@ -382,7 +382,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 
 | Tabla | Campos clave |
 |-------|--------------|
-| `purchases` | `supplier_id`, `account_id`, fechas, `invoice_number`, `status` (DRAFT/CONFIRMED/VOIDED), `is_credit`, totales USD/BS, saldos |
+| `purchases` | `supplier_id`, `account_id`, fechas, `invoice_number`, `status` (DRAFT/CONFIRMED/VOIDED), `is_credit`, `affects_inventory` (default true; false = factura financiera sin stock), totales USD/BS, saldos |
 | `purchase_items` | `material_id?`, `catalog_product_id?`, cantidades y precios |
 
 #### Pedidos
@@ -437,11 +437,18 @@ catalog_products ──< product_inventory_movements
 1. **Crear borrador** (`status: DRAFT`) con proveedor y cuenta opcional.
 2. **Agregar ítems** — material y/o producto de catálogo (productos con fórmula no admiten compra directa de stock).
 3. **Confirmar** (`POST .../confirm`):
-   - Requiere `invoice_number` y al menos un ítem.
-   - Por cada ítem material: movimiento `PURCHASE_IN` + actualización de `last_purchase_price_usd`.
-   - Por cada ítem producto sin fórmula: movimiento `PURCHASE_IN` en `product_inventory_movements` + `cost_usd`.
+   - Requiere `invoice_number` y al menos un ítem (salvo `affects_inventory = false`).
+   - Si `affects_inventory` es true (default): por cada ítem material → movimiento `PURCHASE_IN` + actualización de `last_purchase_price_usd`; por cada ítem producto sin fórmula → `PURCHASE_IN` en `product_inventory_movements` + `cost_usd`.
+   - Si `affects_inventory` es false: no mueve stock (factura financiera / deuda sin mercadería).
    - `status → CONFIRMED`; si es crédito, registra saldo en proveedor.
-   - Tras confirmar compra, pedidos en `DRAFT` pendientes de material pueden pasar automáticamente a `IN_PRODUCTION` si hay stock suficiente.
+   - Tras confirmar compra con stock, pedidos en `DRAFT` pendientes de material pueden pasar automáticamente a `IN_PRODUCTION` si hay stock suficiente.
+
+### Factura desde ficha de proveedor (`supplier_invoice_service.ts`)
+
+`POST /api/v1/suppliers/:id/invoices` (permiso `suppliers.payments`):
+
+- **Contado** (`is_credit: false`): crea un `expense` con `supplier_id`, `account_id` obligatorio, `invoice_number` opcional. No toca inventario. Aparece en Gastos y en el estado de cuenta del proveedor.
+- **Crédito** (`is_credit: true`): crea un `purchase` ya `CONFIRMED` con `affects_inventory: false`, sin ítems, `balance_usd = total`. El **Abono** existente baja ese saldo. No toca inventario.
 
 ### Catálogo, fórmulas y tallas
 
@@ -676,11 +683,13 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 | GET | `/api/v1/suppliers/:id/image` | `suppliers.view` | `Suppliers.downloadImage` |
 | DELETE | `/api/v1/suppliers/:id/image` | `suppliers.edit` | `Suppliers.deleteImage` |
 | POST | `/api/v1/suppliers/:id/payments` | `suppliers.payments` | `Suppliers.storePayment` |
+| POST | `/api/v1/suppliers/:id/invoices` | `suppliers.payments` | `Suppliers.storeInvoice` |
 
 ### Compras (`purchases.*`)
 
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
+| GET | `/api/v1/purchases/hub-summary` | `purchases.view` (+ `expenses.view` / `incomes.view` opcionales en el payload) | `Purchases.hubSummary` |
 | GET | `/api/v1/purchases/summary` | `purchases.view` | `Purchases.summary` |
 | GET | `/api/v1/purchases` | `purchases.view` | `Purchases.index` |
 | GET | `/api/v1/purchases/:id` | `purchases.view` | `Purchases.show` |

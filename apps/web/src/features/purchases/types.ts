@@ -47,6 +47,7 @@ export type Purchase = {
   totalUsd: string | null
   status: PurchaseEstado
   isCredit: boolean
+  affectsInventory?: boolean
   creditDueDate: string | null
   amountPaidUsd: string
   balanceUsd: string
@@ -147,6 +148,8 @@ export type Expense = {
   entryRate: string | null
   amountUsd: string
   accountId: number | null
+  supplierId?: number | null
+  invoiceNumber?: string | null
   createdAt: string
   updatedAt: string
   account?: AccountResumen
@@ -192,6 +195,16 @@ export type IncomeSummary = {
   totalUsd: string
   count: number
   weeklyReceivedUsd: string
+}
+
+export type PurchasesHubSummary = {
+  purchases: PurchaseSummary
+  expenses?: ExpenseSummary
+  incomes?: IncomeSummary
+}
+
+export type PurchasesHubSummaryResponse = {
+  data: PurchasesHubSummary
 }
 
 export type IncomeInput = {

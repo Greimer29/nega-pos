@@ -83,6 +83,29 @@ function resolveApiUrl(): string {
   return ''
 }
 
+/** Best-effort: open TLS + wake Railway before the UI's first authenticated calls. */
+function warmupApiConnection(apiUrl: string): void {
+  if (!apiUrl) {
+    return
+  }
+
+  try {
+    const target = new URL('/health', `${apiUrl.replace(/\/$/, '')}/`)
+    const transport = target.protocol === 'https:' ? https : http
+    const req = transport.get(target, (res) => {
+      res.resume()
+    })
+    req.setTimeout(15_000, () => {
+      req.destroy()
+    })
+    req.on('error', () => {
+      // Warm-up must never block app start.
+    })
+  } catch {
+    // Invalid URL or transport error — ignore.
+  }
+}
+
 function rewriteProxyCookies(raw: string | string[] | undefined): string[] | undefined {
   if (!raw) {
     return undefined
@@ -261,6 +284,7 @@ if (!gotSingleInstanceLock) {
     try {
       registerPrintingHandlers()
       await startStaticServer()
+      warmupApiConnection(runtimeApiUrl)
       createWindow()
     } catch (err) {
       dialog.showErrorBox(

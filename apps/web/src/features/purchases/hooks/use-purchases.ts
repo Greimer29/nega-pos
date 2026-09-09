@@ -6,6 +6,7 @@ import {
   deletePurchase,
   deletePurchaseItem,
   getPurchase,
+  getPurchasesHubSummary,
   getPurchasesSummary,
   listPurchases,
   returnPurchase,
@@ -23,6 +24,7 @@ import { invalidatePurchasesFinancials, invalidatePurchasesHub } from '@/lib/que
 import { useAuthenticatedQuery } from '@/lib/use-authenticated-query'
 
 export const purchasesQueryKey = ['purchases'] as const
+export const purchasesHubSummaryQueryKey = [...purchasesQueryKey, 'hub-summary'] as const
 
 export function usePurchasesQuery(params: PurchaseListParams) {
   return useAuthenticatedQuery({
@@ -35,6 +37,15 @@ export function usePurchasesSummaryQuery() {
   return useAuthenticatedQuery({
     queryKey: [...purchasesQueryKey, 'summary'],
     queryFn: getPurchasesSummary,
+  })
+}
+
+/** KPIs del hub Compras: 1 request (compras + gastos/ingresos según permisos). */
+export function usePurchasesHubSummaryQuery() {
+  return useAuthenticatedQuery({
+    queryKey: purchasesHubSummaryQueryKey,
+    queryFn: getPurchasesHubSummary,
+    staleTime: 60_000,
   })
 }
 

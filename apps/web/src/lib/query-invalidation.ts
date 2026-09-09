@@ -15,7 +15,7 @@ export function invalidateDashboardAndReports(queryClient: QueryClient) {
   invalidateReports(queryClient)
 }
 
-/** Tarjetas resumen del hub de Compras (compras + gastos). */
+/** Tarjetas resumen del hub de Compras (compras + gastos + ingresos / hub-summary). */
 export function invalidatePurchasesHub(queryClient: QueryClient) {
   void queryClient.invalidateQueries({ queryKey: ['purchases'] })
   void queryClient.invalidateQueries({ queryKey: ['expenses'] })

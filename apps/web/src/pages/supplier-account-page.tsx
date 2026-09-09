@@ -1,4 +1,4 @@
-import { ArrowLeft, Loader2, Plus } from 'lucide-react'
+import { ArrowLeft, Loader2, Plus, Receipt } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { CreditPurchaseBadge } from '@/features/purchases/components/credit-purc
 import { PurchasePaymentFormDialog } from '@/features/purchases/components/purchase-payment-form-dialog'
 import { ESTADO_LABELS, formatFecha, type PurchaseEstado } from '@/features/purchases/constants'
 import { SupplierAccountSummaryCards } from '@/features/suppliers/components/supplier-account-summary-cards'
+import { SupplierInvoiceFormDialog } from '@/features/suppliers/components/supplier-invoice-form-dialog'
 import { useSupplierAccountStatementQuery } from '@/features/suppliers/hooks/use-suppliers'
 import { computeSupplierAccountSummary } from '@/features/suppliers/utils/supplier-account-summary'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
@@ -46,6 +47,7 @@ export function SupplierAccountPage() {
   const { id } = useParams<{ id: string }>()
   const { id: supplierId, isValid: isValidSupplierId } = parsePositiveIntRouteParam(id)
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false)
   const [paymentPurchaseId, setPaymentPurchaseId] = useState<number | undefined>()
   const [paymentMaxUsd, setPaymentMaxUsd] = useState<number | undefined>()
 
@@ -54,7 +56,7 @@ export function SupplierAccountPage() {
   const summary = useMemo(
     () =>
       data
-        ? computeSupplierAccountSummary(data.purchases, data.payments)
+        ? computeSupplierAccountSummary(data.purchases, data.payments, data.expenses ?? [])
         : null,
     [data]
   )
@@ -104,7 +106,7 @@ export function SupplierAccountPage() {
     )
   }
 
-  const { supplier, purchases, payments } = data
+  const { supplier, purchases, payments, expenses = [] } = data
 
   function openPayment(purchaseId?: number, maxUsd?: number) {
     setPaymentPurchaseId(purchaseId)
@@ -130,10 +132,16 @@ export function SupplierAccountPage() {
             </p>
           ) : null}
         </div>
-        <Button onClick={() => openPayment()}>
-          <Plus />
-          Registrar abono
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setInvoiceDialogOpen(true)}>
+            <Receipt />
+            Factura
+          </Button>
+          <Button onClick={() => openPayment()}>
+            <Plus />
+            Registrar abono
+          </Button>
+        </div>
       </div>
 
       <SupplierAccountSummaryCards summary={summary!} />
@@ -142,7 +150,8 @@ export function SupplierAccountPage() {
         <CardHeader>
           <CardTitle className="text-base">Historial de compras</CardTitle>
           <CardDescription>
-            Borradores, confirmadas, anuladas y compras a crédito o contado.
+            Borradores, confirmadas, anuladas y compras a crédito o contado. Las facturas sin stock
+            aparecen con la etiqueta correspondiente.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -173,13 +182,28 @@ export function SupplierAccountPage() {
                       : null
                     const balance = Number(purchase.balanceUsd)
                     const canPay = isCreditConfirmed && balance > 0
+                    const noStock = purchase.affectsInventory === false
 
                     return (
                       <tr key={purchase.id} className="border-b last:border-b-0">
                         <td className="px-4 py-3 font-medium">
-                          <Link to={`/purchases/${purchase.id}`} className="hover:underline">
-                            #{purchase.id}
-                          </Link>
+                          <div className="flex flex-col gap-1">
+                            {noStock ? (
+                              <span>#{purchase.id}</span>
+                            ) : (
+                              <Link
+                                to={`/purchases/${purchase.id}`}
+                                className="hover:underline"
+                              >
+                                #{purchase.id}
+                              </Link>
+                            )}
+                            {noStock ? (
+                              <span className="inline-flex w-fit rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800">
+                                Sin stock
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="text-muted-foreground px-4 py-3">
                           {purchase.invoiceNumber ?? '—'}
@@ -245,6 +269,51 @@ export function SupplierAccountPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">Facturas de contado (gastos)</CardTitle>
+          <CardDescription>
+            Facturas pagadas registradas desde este proveedor. No afectan inventario.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {expenses.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No hay facturas de contado registradas.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead>
+                  <tr className="bg-muted/50 border-b text-left">
+                    <th className="px-4 py-3 font-medium">Fecha</th>
+                    <th className="px-4 py-3 font-medium">Factura</th>
+                    <th className="px-4 py-3 font-medium">Descripción</th>
+                    <th className="px-4 py-3 font-medium">Cuenta</th>
+                    <th className="px-4 py-3 text-right font-medium">Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenses.map((expense) => (
+                    <tr key={expense.id} className="border-b last:border-b-0">
+                      <td className="px-4 py-3">{formatFecha(expense.date)}</td>
+                      <td className="text-muted-foreground px-4 py-3">
+                        {expense.invoiceNumber ?? '—'}
+                      </td>
+                      <td className="px-4 py-3">{expense.description}</td>
+                      <td className="text-muted-foreground px-4 py-3">
+                        {expense.account?.name ?? '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <DisplayMoneyFromUsd amountUsd={expense.amountUsd} size="sm" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">Abonos registrados</CardTitle>
         </CardHeader>
         <CardContent>
@@ -293,6 +362,14 @@ export function SupplierAccountPage() {
         supplierId={supplierId}
         purchaseId={paymentPurchaseId}
         maxAmountUsd={paymentMaxUsd}
+        onSuccess={() => void refetch()}
+      />
+
+      <SupplierInvoiceFormDialog
+        open={invoiceDialogOpen}
+        onOpenChange={setInvoiceDialogOpen}
+        supplierId={supplierId}
+        defaultCreditDays={supplier.creditDays}
         onSuccess={() => void refetch()}
       />
     </div>

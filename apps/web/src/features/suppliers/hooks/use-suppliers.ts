@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createSupplier,
+  createSupplierInvoice,
   createSupplierPayment,
   deleteSupplier,
   deleteSupplierImage,
@@ -9,8 +10,13 @@ import {
   updateSupplier,
   uploadSupplierImage,
 } from '@/features/suppliers/services/supplier-service'
-import type { SupplierInput, SupplierListParams, SupplierPaymentInput } from '@/features/suppliers/types'
-import { invalidateSupplierPayments } from '@/lib/query-invalidation'
+import type {
+  SupplierInput,
+  SupplierInvoiceInput,
+  SupplierListParams,
+  SupplierPaymentInput,
+} from '@/features/suppliers/types'
+import { invalidateExpensesFinancials, invalidateSupplierPayments } from '@/lib/query-invalidation'
 
 export const suppliersQueryKey = ['suppliers'] as const
 
@@ -79,6 +85,27 @@ export function useCreateSupplierPaymentMutation() {
         queryKey: [...suppliersQueryKey, 'account-statement', supplierId],
       })
       invalidateSupplierPayments(queryClient)
+    },
+  })
+}
+
+export function useCreateSupplierInvoiceMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      supplierId,
+      payload,
+    }: {
+      supplierId: number
+      payload: SupplierInvoiceInput
+    }) => createSupplierInvoice(supplierId, payload),
+    onSuccess: (_, { supplierId }) => {
+      void queryClient.invalidateQueries({
+        queryKey: [...suppliersQueryKey, 'account-statement', supplierId],
+      })
+      invalidateSupplierPayments(queryClient)
+      invalidateExpensesFinancials(queryClient)
     },
   })
 }

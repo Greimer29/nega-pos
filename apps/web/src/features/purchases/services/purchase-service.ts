@@ -8,6 +8,7 @@ import type {
   PurchaseListParams,
   PurchaseListResponse,
   PurchaseResponse,
+  PurchasesHubSummaryResponse,
   PurchaseSummaryResponse,
 } from '@/features/purchases/types'
 import type { CostWarning } from '@/lib/cost-warnings'
@@ -32,6 +33,11 @@ export async function listPurchases(params: PurchaseListParams = {}) {
 export async function getPurchasesSummary() {
   const { data } = await api.get<PurchaseSummaryResponse>('/purchases/summary')
   return data.data.summary
+}
+
+export async function getPurchasesHubSummary() {
+  const { data } = await api.get<PurchasesHubSummaryResponse>('/purchases/hub-summary')
+  return data.data
 }
 
 export async function getPurchase(id: number) {

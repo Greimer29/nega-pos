@@ -189,7 +189,7 @@ export class CustomerSchema extends BaseModel {
 }
 
 export class ExpenseSchema extends BaseModel {
-  static $columns = ['accountId', 'amountUsd', 'createdAt', 'currencyCode', 'date', 'description', 'entryRate', 'id', 'updatedAt'] as const
+  static $columns = ['accountId', 'amountUsd', 'createdAt', 'currencyCode', 'date', 'description', 'entryRate', 'id', 'invoiceNumber', 'supplierId', 'updatedAt'] as const
   $columns = ExpenseSchema.$columns
   @column()
   declare accountId: bigint | number | null
@@ -207,6 +207,10 @@ export class ExpenseSchema extends BaseModel {
   declare entryRate: string | null
   @column({ isPrimary: true })
   declare id: bigint | number
+  @column()
+  declare invoiceNumber: string | null
+  @column()
+  declare supplierId: bigint | number | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
 }
@@ -575,10 +579,12 @@ export class PurchaseItemSchema extends BaseModel {
 }
 
 export class PurchaseSchema extends BaseModel {
-  static $columns = ['accountId', 'amountPaidUsd', 'balanceUsd', 'createdAt', 'creditDueDate', 'date', 'entryCurrencyCode', 'id', 'invoiceFile', 'invoiceNumber', 'isCredit', 'notes', 'receivedDate', 'status', 'supplierId', 'totalBs', 'totalUsd', 'updatedAt', 'usdRate', 'voidedAt'] as const
+  static $columns = ['accountId', 'affectsInventory', 'amountPaidUsd', 'balanceUsd', 'createdAt', 'creditDueDate', 'date', 'entryCurrencyCode', 'id', 'invoiceFile', 'invoiceNumber', 'isCredit', 'notes', 'receivedDate', 'status', 'supplierId', 'totalBs', 'totalUsd', 'updatedAt', 'usdRate', 'voidedAt'] as const
   $columns = PurchaseSchema.$columns
   @column()
   declare accountId: bigint | number | null
+  @column()
+  declare affectsInventory: boolean
   @column()
   declare amountPaidUsd: string
   @column()

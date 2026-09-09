@@ -1,17 +1,22 @@
 import SupplierService from '#services/supplier_service'
 import SupplierPaymentService from '#services/supplier_payment_service'
+import SupplierInvoiceService from '#services/supplier_invoice_service'
 import { serializeSupplier } from '#transformers/supplier_transformer'
+import { serializeExpense } from '#transformers/expense_transformer'
+import { serializePurchase } from '#transformers/purchase_transformer'
 import {
   createSupplierValidator,
   listSuppliersValidator,
   updateSupplierValidator,
 } from '#validators/supplier'
 import { createSupplierPaymentValidator } from '#validators/payment'
+import { createSupplierInvoiceValidator } from '#validators/supplier_invoice'
 import type { HttpContext } from '@adonisjs/core/http'
 
 export default class SuppliersControleler {
   private service = new SupplierService()
   private paymentService = new SupplierPaymentService()
+  private invoiceService = new SupplierInvoiceService()
 
   /**
    * GET /api/v1/suppliers
@@ -93,6 +98,7 @@ export default class SuppliersControleler {
         creditDueDate: purchase.creditDueDate?.toISODate() ?? null,
         status: purchase.status,
         isCredit: Boolean(purchase.isCredit),
+        affectsInventory: purchase.affectsInventory !== false,
       })),
       payments: data.payments.map((payment) => ({
         id: Number(payment.id),
@@ -101,7 +107,25 @@ export default class SuppliersControleler {
         date: payment.date.toISODate(),
         note: payment.note,
       })),
+      expenses: await Promise.all(data.expenses.map((expense) => serializeExpense(expense))),
       saldoPendienteUsd: data.saldoPendienteUsd,
+    })
+  }
+
+  async storeInvoice({ params, request, serialize }: HttpContext) {
+    const payload = await request.validateUsing(createSupplierInvoiceValidator)
+    const result = await this.invoiceService.registrar(Number(params.id), payload)
+
+    if (result.kind === 'expense') {
+      return serialize({
+        kind: 'expense' as const,
+        expense: await serializeExpense(result.expense),
+      })
+    }
+
+    return serialize({
+      kind: 'purchase' as const,
+      purchase: serializePurchase(result.purchase),
     })
   }
 

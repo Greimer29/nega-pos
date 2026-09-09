@@ -1,6 +1,7 @@
 import PagoProveedorExcedeSaldoException from '#exceptions/pago_proveedor_excede_saldo_exception'
 import SupplierNoEncontradoException from '#exceptions/proveedor_no_encontrado_exception'
 import PurchaseNoEncontradaException from '#exceptions/compra_no_encontrada_exception'
+import Expense from '#models/expense'
 import Supplier from '#models/supplier'
 import SupplierPayment from '#models/supplier_payment'
 import Purchase from '#models/purchase'
@@ -21,6 +22,7 @@ export type SupplierAccountStatement = {
   supplier: Supplier
   purchases: Purchase[]
   payments: SupplierPayment[]
+  expenses: Expense[]
   saldoPendienteUsd: string
 }
 
@@ -118,6 +120,13 @@ export default class SupplierPaymentService {
       .orderBy('date', 'desc')
       .orderBy('id', 'desc')
 
+    const expenses = await Expense.query()
+      .where('supplierId', supplierId)
+      .preload('account')
+      .preload('currency')
+      .orderBy('date', 'desc')
+      .orderBy('id', 'desc')
+
     const saldo = purchases
       .filter((purchase) => purchase.isCredit && purchase.status === 'CONFIRMED')
       .reduce((sum, purchase) => sum + Number(purchase.balanceUsd), 0)
@@ -126,6 +135,7 @@ export default class SupplierPaymentService {
       supplier,
       purchases,
       payments,
+      expenses,
       saldoPendienteUsd: saldo.toFixed(4),
     }
   }

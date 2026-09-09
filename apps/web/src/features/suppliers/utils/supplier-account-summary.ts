@@ -32,13 +32,17 @@ function purchasePaidUsd(purchase: SupplierAccountStatement['purchases'][number]
 
 export function computeSupplierAccountSummary(
   purchases: SupplierAccountStatement['purchases'],
-  payments: SupplierAccountStatement['payments']
+  payments: SupplierAccountStatement['payments'],
+  expenses: SupplierAccountStatement['expenses'] = []
 ): SupplierAccountSummary {
   const confirmed = purchases.filter((purchase) => purchase.status === 'CONFIRMED')
   const confirmedCredit = confirmed.filter((purchase) => purchase.isCredit)
+  const expensesTotal = expenses.reduce((sum, expense) => sum + Number(expense.amountUsd ?? 0), 0)
 
-  const montoComprado = confirmed.reduce((sum, purchase) => sum + purchaseTotalUsd(purchase), 0)
-  const montoPagado = confirmed.reduce((sum, purchase) => sum + purchasePaidUsd(purchase), 0)
+  const montoComprado =
+    confirmed.reduce((sum, purchase) => sum + purchaseTotalUsd(purchase), 0) + expensesTotal
+  const montoPagado =
+    confirmed.reduce((sum, purchase) => sum + purchasePaidUsd(purchase), 0) + expensesTotal
   const creditoSaldoUsd = confirmedCredit.reduce(
     (sum, purchase) => sum + Number(purchase.balanceUsd ?? 0),
     0
@@ -49,7 +53,9 @@ export function computeSupplierAccountSummary(
   )
 
   const pagadoOperaciones =
-    payments.length + confirmed.filter((purchase) => !purchase.isCredit).length
+    payments.length +
+    confirmed.filter((purchase) => !purchase.isCredit).length +
+    expenses.length
 
   const porcentajePagado = montoComprado > 0 ? (montoPagado / montoComprado) * 100 : 0
   const porcentajeSaldo = montoComprado > 0 ? (creditoSaldoUsd / montoComprado) * 100 : 0
@@ -57,7 +63,7 @@ export function computeSupplierAccountSummary(
   return {
     comprado: {
       montoUsd: montoComprado,
-      operacionesTotal: purchases.length,
+      operacionesTotal: purchases.length + expenses.length,
       creditoMontoUsd,
       creditoOperaciones: confirmedCredit.length,
       pagadoUsd: montoPagado,

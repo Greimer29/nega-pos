@@ -33,6 +33,7 @@ const ROUTE_RULES: RouteRule[] = [
 
   { method: 'GET', pattern: /^\/suppliers(\/|$)/, permission: 'suppliers.view' },
   { method: 'POST', pattern: /^\/suppliers\/[^/]+\/payments$/, permission: 'suppliers.payments' },
+  { method: 'POST', pattern: /^\/suppliers\/[^/]+\/invoices$/, permission: 'suppliers.payments' },
   { method: 'POST', pattern: /^\/suppliers(\/|$)/, permission: 'suppliers.edit' },
   { method: 'PUT', pattern: /^\/suppliers(\/|$)/, permission: 'suppliers.edit' },
   { method: 'DELETE', pattern: /^\/suppliers(\/|$)/, permission: 'suppliers.edit' },

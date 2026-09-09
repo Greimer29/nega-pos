@@ -3,6 +3,7 @@ import type {
   SupplierAccountStatement,
   SupplierDeleteResponse,
   SupplierInput,
+  SupplierInvoiceInput,
   SupplierListParams,
   SupplierListResponse,
   SupplierPaymentInput,
@@ -55,6 +56,15 @@ export async function createSupplierPayment(supplierId: number, payload: Supplie
     payload
   )
   return data.data.payment
+}
+
+export async function createSupplierInvoice(supplierId: number, payload: SupplierInvoiceInput) {
+  const { data } = await api.post<{
+    data:
+      | { kind: 'expense'; expense: { id: number } }
+      | { kind: 'purchase'; purchase: { id: number } }
+  }>(`/suppliers/${supplierId}/invoices`, payload)
+  return data.data
 }
 
 export async function uploadSupplierImage(id: number, file: File) {

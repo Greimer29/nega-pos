@@ -65,6 +65,7 @@ export default class PurchaseTransformer extends BaseTransformer<Purchase> {
       totalUsd: this.resource.totalUsd,
       status: this.resource.status,
       isCredit: Boolean(this.resource.isCredit),
+      affectsInventory: this.resource.affectsInventory !== false,
       creditDueDate: this.resource.creditDueDate?.toISODate() ?? null,
       amountPaidUsd: this.resource.amountPaidUsd,
       balanceUsd: this.resource.balanceUsd,

@@ -93,6 +93,7 @@ router
         router.delete('suppliers/:id/image', [controllers.Suppliers, 'deleteImage'])
         router.get('suppliers/:id/account-statement', [controllers.Suppliers, 'accountStatement'])
         router.post('suppliers/:id/payments', [controllers.Suppliers, 'storePayment'])
+        router.post('suppliers/:id/invoices', [controllers.Suppliers, 'storeInvoice'])
 
         router.get('materials', [controllers.Materials, 'index'])
         router.get('materials/:id', [controllers.Materials, 'show'])
@@ -105,6 +106,7 @@ router
         router.get('materials/:id/image', [controllers.Materials, 'downloadImage'])
         router.delete('materials/:id/image', [controllers.Materials, 'deleteImage'])
 
+        router.get('purchases/hub-summary', [controllers.Purchases, 'hubSummary'])
         router.get('purchases/summary', [controllers.Purchases, 'summary'])
         router.get('purchases', [controllers.Purchases, 'index'])
         router.get('purchases/:id', [controllers.Purchases, 'show'])

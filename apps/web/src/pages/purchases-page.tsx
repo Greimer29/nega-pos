@@ -6,9 +6,7 @@ import { canAccess } from '@/features/permissions/catalog'
 import type { PurchasesHubTab } from '@/features/purchases/constants'
 import { PurchasesHubCards } from '@/features/purchases/components/purchases-hub-cards'
 import { PurchasesHubPanelTransition } from '@/features/purchases/components/purchases-hub-panel-transition'
-import { usePurchasesSummaryQuery } from '@/features/purchases/hooks/use-purchases'
-import { useExpensesSummaryQuery } from '@/features/purchases/hooks/use-expenses'
-import { useIncomesSummaryQuery } from '@/features/purchases/hooks/use-incomes'
+import { usePurchasesHubSummaryQuery } from '@/features/purchases/hooks/use-purchases'
 
 function parseTab(value: string | null): PurchasesHubTab {
   if (value === 'gastos' || value === 'ingresos') {
@@ -35,28 +33,24 @@ export function PurchasesPage() {
     setSearchParams(next, { replace: true })
   }
 
-  const purchasesQueryState = usePurchasesSummaryQuery()
-  const expensesQueryState = useExpensesSummaryQuery({ enabled: canViewExpenses })
-  const incomesQueryState = useIncomesSummaryQuery({ enabled: canViewIncomes })
+  const {
+    data: hubSummary,
+    isLoading,
+    isError,
+    error,
+  } = usePurchasesHubSummaryQuery()
 
-  const {
-    data: purchasesSummary,
-    isLoading: loadingPurchases,
-    isError: purchasesError,
-    error: purchasesQueryError,
-  } = purchasesQueryState
-  const {
-    data: expensesSummary,
-    isLoading: loadingExpenses,
-    isError: expensesError,
-    error: expensesQueryError,
-  } = expensesQueryState
-  const {
-    data: incomesSummary,
-    isLoading: loadingIncomes,
-    isError: incomesError,
-    error: incomesQueryError,
-  } = incomesQueryState
+  const purchasesQuery = { isLoading, isError, error }
+  const expensesQuery = {
+    isLoading: canViewExpenses && isLoading,
+    isError: canViewExpenses && isError,
+    error,
+  }
+  const incomesQuery = {
+    isLoading: canViewIncomes && isLoading,
+    isError: canViewIncomes && isError,
+    error,
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -68,24 +62,12 @@ export function PurchasesPage() {
       <PurchasesHubCards
         activeTab={activeTab}
         onTabChange={handleTabChange}
-        purchasesSummary={purchasesSummary}
-        expensesSummary={expensesSummary}
-        incomesSummary={incomesSummary}
-        purchasesQuery={{
-          isLoading: loadingPurchases,
-          isError: purchasesError,
-          error: purchasesQueryError,
-        }}
-        expensesQuery={{
-          isLoading: canViewExpenses && loadingExpenses,
-          isError: canViewExpenses && expensesError,
-          error: expensesQueryError,
-        }}
-        incomesQuery={{
-          isLoading: canViewIncomes && loadingIncomes,
-          isError: canViewIncomes && incomesError,
-          error: incomesQueryError,
-        }}
+        purchasesSummary={hubSummary?.purchases}
+        expensesSummary={hubSummary?.expenses}
+        incomesSummary={hubSummary?.incomes}
+        purchasesQuery={purchasesQuery}
+        expensesQuery={expensesQuery}
+        incomesQuery={incomesQuery}
       />
 
       <PurchasesHubPanelTransition activeTab={activeTab} />
