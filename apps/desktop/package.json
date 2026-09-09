@@ -1,6 +1,6 @@
 {
   "name": "desktop",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "App de escritorio Nega POS (Electron)",
   "author": "Nega POS",
   "main": "dist/main.js",

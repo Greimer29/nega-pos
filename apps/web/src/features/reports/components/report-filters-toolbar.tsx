@@ -1,11 +1,15 @@
 import { SlidersHorizontal } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { AccountSelect } from '@/features/accounts/components/account-select'
+import { Label } from '@/components/ui/label'
+import { useActiveAccountsQuery } from '@/features/accounts/hooks/use-accounts'
 import { ReportPeriodFilters } from '@/features/reports/components/report-period-filters'
 import type { ReportPeriodState } from '@/features/reports/report-period'
 import { reportUi } from '@/features/reports/report-ui'
 import { cn } from '@/lib/utils'
+
+const ALL_ACCOUNTS = ''
+const UNASSIGNED = '__unassigned__'
 
 export type ReportTypeFilters = {
   sales: boolean
@@ -45,11 +49,29 @@ export function ReportFiltersToolbar({
   onTypesChange,
 }: ReportFiltersToolbarProps) {
   const [expanded, setExpanded] = useState(false)
+  const { data: accountsData, isLoading: accountsLoading } = useActiveAccountsQuery()
+  const accounts = accountsData?.accounts ?? []
+
+  const accountFilterValue = unassignedOnly
+    ? UNASSIGNED
+    : accountId != null
+      ? String(accountId)
+      : ALL_ACCOUNTS
 
   function toggleType(key: keyof ReportTypeFilters) {
     const next = { ...types, [key]: !types[key] }
     if (!Object.values(next).some(Boolean)) return
     onTypesChange(next)
+  }
+
+  function onAccountFilterChange(raw: string) {
+    if (raw === UNASSIGNED) {
+      onUnassignedOnlyChange(true)
+      onAccountIdChange(null)
+      return
+    }
+    onUnassignedOnlyChange(false)
+    onAccountIdChange(raw === ALL_ACCOUNTS ? null : Number(raw))
   }
 
   return (
@@ -71,29 +93,25 @@ export function ReportFiltersToolbar({
 
       {expanded ? (
         <div className={cn('mt-5 space-y-4 border-t pt-5', reportUi.divider)}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <AccountSelect
-              value={unassignedOnly ? null : accountId}
-              onChange={(value) => {
-                onUnassignedOnlyChange(false)
-                onAccountIdChange(value)
-              }}
-              disabled={unassignedOnly}
-              label="Cuenta"
-              className="[&_label]:text-neutral-600 [&_select]:rounded-lg [&_select]:border-neutral-300 [&_select]:bg-white"
-            />
-            <label className={`flex items-end gap-2 pb-2 ${reportUi.body}`}>
-              <input
-                type="checkbox"
-                checked={unassignedOnly}
-                onChange={(e) => {
-                  onUnassignedOnlyChange(e.target.checked)
-                  if (e.target.checked) onAccountIdChange(null)
-                }}
-                className="accent-neutral-900"
-              />
-              Solo movimientos sin cuenta
-            </label>
+          <div className="max-w-md space-y-2">
+            <Label htmlFor="report-account-filter" className="text-neutral-600">
+              Cuenta
+            </Label>
+            <select
+              id="report-account-filter"
+              disabled={accountsLoading}
+              value={accountFilterValue}
+              onChange={(e) => onAccountFilterChange(e.target.value)}
+              className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-lg border border-neutral-300 bg-white px-3 py-1 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value={ALL_ACCOUNTS}>Todas las cuentas</option>
+              <option value={UNASSIGNED}>Solo sin cuenta</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -110,8 +128,8 @@ export function ReportFiltersToolbar({
           </div>
 
           <p className={reportUi.muted}>
-            Ventas e ingresos (aportes) entran al balance cuando están activos. Los egresos se
-            filtran por cuenta cuando aplica.
+            Compras, gastos e ingresos se filtran por cuenta. Ventas no tienen cuenta asignada y
+            siguen visibles salvo que desactives el tipo Ventas.
           </p>
         </div>
       ) : null}
