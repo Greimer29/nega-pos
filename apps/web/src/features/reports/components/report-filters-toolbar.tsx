@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 
 export type ReportTypeFilters = {
   sales: boolean
+  incomes: boolean
   purchases: boolean
   expenses: boolean
   machine_expenses: boolean
@@ -27,6 +28,7 @@ type ReportFiltersToolbarProps = {
 
 const TYPE_OPTIONS: Array<{ key: keyof ReportTypeFilters; label: string }> = [
   { key: 'sales', label: 'Ventas' },
+  { key: 'incomes', label: 'Ingresos' },
   { key: 'purchases', label: 'Compras' },
   { key: 'expenses', label: 'Gastos empresa' },
   { key: 'machine_expenses', label: 'Gastos máquina' },
@@ -108,7 +110,8 @@ export function ReportFiltersToolbar({
           </div>
 
           <p className={reportUi.muted}>
-            Los ingresos por ventas son globales. Los egresos se filtran por cuenta cuando aplica.
+            Ventas e ingresos (aportes) entran al balance cuando están activos. Los egresos se
+            filtran por cuenta cuando aplica.
           </p>
         </div>
       ) : null}

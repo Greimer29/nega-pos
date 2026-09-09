@@ -194,8 +194,8 @@ function HeroKpiCard({
 
           <p className="mt-3 max-w-md text-xs leading-relaxed text-neutral-400">
 
-            Consolidación en {baseCurrencyCode} con visualización en {currency}. Todos los
-            movimientos se convierten con las tasas configuradas.
+            Consolidación en {baseCurrencyCode} con visualización en {currency}. Cada movimiento
+            usa el monto guardado del documento; la tasa del catálogo solo convierte la vista.
 
           </p>
 

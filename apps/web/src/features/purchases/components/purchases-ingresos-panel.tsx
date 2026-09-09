@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AccountSelect } from '@/features/accounts/components/account-select'
 import { IncomeFormDialog } from '@/features/purchases/components/income-form-dialog'
-import { DisplayMoney } from '@/features/currencies/components/display-money'
+import { DisplayDocumentMoney } from '@/features/currencies/components/display-money'
 import { formatFecha } from '@/features/purchases/constants'
 import { useIncomesQuery } from '@/features/purchases/hooks/use-incomes'
 import type { Income } from '@/features/purchases/types'
@@ -114,10 +114,11 @@ export function PurchasesIngresosPanel() {
                         {income.account?.name ?? '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <DisplayMoney
-                          amount={income.amount}
+                        <DisplayDocumentMoney
+                          amountUsd={income.amountUsd}
+                          amountNative={income.amount}
                           currencyCode={income.currencyCode}
-                          showNative
+                          size="sm"
                         />
                       </td>
                       <td className="px-4 py-3 text-right">

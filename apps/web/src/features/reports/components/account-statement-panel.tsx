@@ -20,6 +20,7 @@ export function AccountStatementPanel() {
   const [unassignedOnly, setUnassignedOnly] = useState(false)
   const [types, setTypes] = useState({
     sales: true,
+    incomes: true,
     purchases: true,
     expenses: true,
     machine_expenses: true,

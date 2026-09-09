@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AccountSelect } from '@/features/accounts/components/account-select'
 import { ExpenseFormDialog } from '@/features/purchases/components/expense-form-dialog'
-import { DisplayMoney } from '@/features/currencies/components/display-money'
+import { DisplayDocumentMoney } from '@/features/currencies/components/display-money'
 import { formatFecha } from '@/features/purchases/constants'
 import { useExpensesQuery } from '@/features/purchases/hooks/use-expenses'
 import type { Expense } from '@/features/purchases/types'
@@ -112,10 +112,11 @@ export function PurchasesGastosPanel() {
                         {expense.account?.name ?? '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <DisplayMoney
-                          amount={expense.amount}
+                        <DisplayDocumentMoney
+                          amountUsd={expense.amountUsd}
+                          amountNative={expense.amount}
                           currencyCode={expense.currencyCode}
-                          showNative
+                          size="sm"
                         />
                       </td>
                       <td className="px-4 py-3 text-right">
