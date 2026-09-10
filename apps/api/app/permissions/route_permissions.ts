@@ -102,6 +102,8 @@ const ROUTE_RULES: RouteRule[] = [
     permission: ['settings.edit', 'settings.view'],
   },
 
+  { method: 'GET', pattern: /^\/app-updates(\/|$)/, permission: 'settings.view' },
+
   { method: 'GET', pattern: /^\/users(\/|$)/, permission: 'users.view' },
   { method: 'POST', pattern: /^\/users(\/|$)/, permission: 'users.manage' },
   { method: 'PUT', pattern: /^\/users(\/|$)/, permission: 'users.manage' },
