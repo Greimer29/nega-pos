@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { TIPO_LABELS } from '@/features/customers/constants'
 import { CustomerDeleteDialog } from '@/features/customers/components/customer-delete-dialog'
 import { CustomerFormDialog } from '@/features/customers/components/customer-form-dialog'
@@ -14,15 +15,30 @@ import {
 import type { Customer, CustomerTipo } from '@/features/customers/types'
 import { notifyApiError, QueryErrorState, EmptyListState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 20
 
+type CustomersFilters = {
+  search: string
+  type: CustomerTipo | ''
+  page: number
+}
+
+const DEFAULT_CUSTOMERS_FILTERS: CustomersFilters = {
+  search: '',
+  type: '',
+  page: 1,
+}
+
 export function CustomersPage() {
-  const [page, setPage] = useState(1)
-  const [searchInput, setSearchInput] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [type, setTipo] = useState<CustomerTipo | ''>('')
+  const { company } = useAuth()
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey('customers', company?.id),
+    DEFAULT_CUSTOMERS_FILTERS
+  )
+  const [searchInput, setSearchInput] = useState(filters.search)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -30,19 +46,27 @@ export function CustomersPage() {
   const deleteMutation = useDeleteCustomerMutation()
 
   useEffect(() => {
+    setSearchInput(filters.search)
+  }, [filters.search])
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim())
-      setPage(1)
+      const nextSearch = searchInput.trim()
+      setFilters((prev) => ({
+        ...prev,
+        search: nextSearch,
+        page: nextSearch === prev.search ? prev.page : 1,
+      }))
     }, 300)
 
     return () => window.clearTimeout(timer)
-  }, [searchInput])
+  }, [searchInput, setFilters])
 
   const { data, isLoading, isError, error } = useCustomersQuery({
-    page,
+    page: filters.page,
     perPage: PER_PAGE,
-    search: debouncedSearch || undefined,
-    type: type || undefined,
+    search: filters.search || undefined,
+    type: filters.type || undefined,
   })
 
   const customers = data?.customers ?? []
@@ -110,10 +134,10 @@ export function CustomersPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <select
               className="border-input bg-background flex h-9 min-w-[140px] rounded-md border px-3 text-sm"
-              value={type}
+              value={filters.type}
               onChange={(e) => {
-                setTipo(e.target.value as CustomerTipo | '')
-                setPage(1)
+                const type = e.target.value as CustomerTipo | ''
+                setFilters((prev) => ({ ...prev, type, page: 1 }))
               }}
             >
               <option value="">Todos los tipos</option>
@@ -145,17 +169,17 @@ export function CustomersPage() {
           ) : customers.length === 0 ? (
             <EmptyListState
               title={
-                debouncedSearch || type
+                filters.search || filters.type
                   ? 'No hay clientes que coincidan con los filtros'
                   : 'Todavía no hay clientes'
               }
               description={
-                debouncedSearch || type
+                filters.search || filters.type
                   ? undefined
                   : 'Es normal en una empresa nueva. Creá el primero cuando lo necesites.'
               }
               action={
-                !debouncedSearch && !type ? (
+                !filters.search && !filters.type ? (
                   <Button variant="outline" onClick={openCreateDialog}>
                     <Plus />
                     Crear el primero
@@ -248,7 +272,9 @@ export function CustomersPage() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage <= 1}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  onClick={() =>
+                    setFilters((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))
+                  }
                 >
                   Anterior
                 </Button>
@@ -256,7 +282,7 @@ export function CustomersPage() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage >= meta.lastPage}
-                  onClick={() => setPage((current) => current + 1)}
+                  onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                 >
                   Siguiente
                 </Button>

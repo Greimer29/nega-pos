@@ -21,36 +21,58 @@ import {
   QueryErrorState,
 } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 30
 
+type ServiciosFilters = {
+  search: string
+  category: string
+  page: number
+}
+
+const DEFAULT_SERVICIOS_FILTERS: ServiciosFilters = {
+  search: '',
+  category: '',
+  page: 1,
+}
+
 export function ServiciosPage() {
-  const { can } = useAuth()
+  const { can, company } = useAuth()
   const canEditCatalog = can('catalog.edit')
-  const [page, setPage] = useState(1)
-  const [searchInput, setSearchInput] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [category, setCategory] = useState('')
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey('servicios', company?.id),
+    DEFAULT_SERVICIOS_FILTERS
+  )
+  const [searchInput, setSearchInput] = useState(filters.search)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<CatalogProduct | null>(null)
   const deleteMutation = useDeleteCatalogProductMutation()
-  const activeFilterCount = category ? 1 : 0
+  const activeFilterCount = filters.category ? 1 : 0
+
+  useEffect(() => {
+    setSearchInput(filters.search)
+  }, [filters.search])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim())
-      setPage(1)
+      const nextSearch = searchInput.trim()
+      setFilters((prev) => ({
+        ...prev,
+        search: nextSearch,
+        page: nextSearch === prev.search ? prev.page : 1,
+      }))
     }, 300)
     return () => window.clearTimeout(timer)
-  }, [searchInput])
+  }, [searchInput, setFilters])
 
   const { data, isLoading, isError, error, refetch } = useCatalogProductsQuery({
-    page,
+    page: filters.page,
     perPage: PER_PAGE,
-    search: debouncedSearch || undefined,
-    category: category || undefined,
+    search: filters.search || undefined,
+    category: filters.category || undefined,
     active: true,
     itemKind: 'SERVICE',
     sortBy: 'name',
@@ -147,10 +169,10 @@ export function ServiciosPage() {
             >
               <Input
                 placeholder="Categoría…"
-                value={category}
+                value={filters.category}
                 onChange={(e) => {
-                  setCategory(e.target.value)
-                  setPage(1)
+                  const category = e.target.value
+                  setFilters((prev) => ({ ...prev, category, page: 1 }))
                 }}
                 className="max-w-xs"
               />
@@ -194,7 +216,9 @@ export function ServiciosPage() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage <= 1 || isLoading}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  onClick={() =>
+                    setFilters((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))
+                  }
                 >
                   Anterior
                 </Button>
@@ -203,7 +227,7 @@ export function ServiciosPage() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage >= meta.lastPage || isLoading}
-                  onClick={() => setPage((current) => current + 1)}
+                  onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                 >
                   Siguiente
                 </Button>

@@ -1,15 +1,17 @@
 import { Download, Loader2, Package, SlidersHorizontal } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PublicImage } from '@/components/public-image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { useDisplayCurrency } from '@/features/currencies/context/display-currency-context'
 import { useInventoryReportQuery } from '@/features/reports/hooks/use-reports'
 import {
   INVENTORY_SORT_OPTIONS,
   applyInventoryListFiltersToSearchParams,
+  defaultInventoryListFilters,
   inventoryFiltersSummary,
   inventoryFiltersToApiParams,
   inventoryProductHref,
@@ -24,7 +26,16 @@ import { materialImageUrl } from '@/features/materials/constants'
 import { catalogImageUrl } from '@/features/ventas/constants'
 import { inventoryQuantityDecimals, inventoryUnitAbrev } from '@/lib/inventory-units'
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import {
+  hydrateSessionValue,
+  sessionFilterKey,
+  writeSessionJson,
+} from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
+
+function hasInventoryFilterParams(searchParams: URLSearchParams): boolean {
+  return [...searchParams.keys()].some((key) => key.startsWith('inv_'))
+}
 
 function formatQty(value: string, unit: string) {
   const num = Number(value)
@@ -45,14 +56,51 @@ function productImageSrc(product: InventoryReportProduct) {
 
 export function InventoryReportPanel() {
   const navigate = useNavigate()
+  const { company } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const { formatFromUsd } = useDisplayCurrency()
   const { data: categories = [] } = useActiveCategoriesQuery()
+  const storageKey = sessionFilterKey('reports-inventory', company?.id)
+  const sessionHydratedRef = useRef(false)
 
   const filters = useMemo(() => parseInventoryListFilters(searchParams), [searchParams])
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [searchInput, setSearchInput] = useState(filters.search)
   const [exporting, setExporting] = useState(false)
+
+  // Restore from session when landing without inv_* (e.g. hub tab switch cleared URL).
+  useEffect(() => {
+    if (sessionHydratedRef.current) return
+    sessionHydratedRef.current = true
+
+    if (hasInventoryFilterParams(searchParams)) {
+      writeSessionJson(storageKey, parseInventoryListFilters(searchParams))
+      return
+    }
+
+    const stored = hydrateSessionValue(storageKey, defaultInventoryListFilters())
+    const defaults = defaultInventoryListFilters()
+    const unchanged =
+      stored.search === defaults.search &&
+      stored.category === defaults.category &&
+      stored.sortBy === defaults.sortBy &&
+      stored.sortDir === defaults.sortDir &&
+      stored.activeOnly === defaults.activeOnly &&
+      stored.lowStockOnly === defaults.lowStockOnly &&
+      stored.hideZero === defaults.hideZero &&
+      stored.page === defaults.page
+    if (unchanged) return
+
+    setSearchParams(
+      applyInventoryListFiltersToSearchParams(searchParams, stored, { resetPage: false }),
+      { replace: true }
+    )
+  }, [searchParams, setSearchParams, storageKey])
+
+  useEffect(() => {
+    if (!hasInventoryFilterParams(searchParams) && !sessionHydratedRef.current) return
+    writeSessionJson(storageKey, filters)
+  }, [filters, searchParams, storageKey])
 
   useEffect(() => {
     setSearchInput(filters.search)

@@ -3,6 +3,7 @@ import { ArrowLeft, Loader2, Plus } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { MaterialDeleteDialog } from '@/features/materials/components/material-delete-dialog'
 import { MaterialFiltersBar } from '@/features/materials/components/material-filters-bar'
@@ -17,24 +18,41 @@ import {
 import type { Material, MaterialCategoria, MaterialStatusFilter } from '@/features/materials/types'
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 30
 
 type MaterialsTab = 'materiales' | 'formulas'
 
+type MaterialsFilters = {
+  search: string
+  status: MaterialStatusFilter | ''
+  category: MaterialCategoria | ''
+  sortBy: MaterialSortBy
+  page: number
+}
+
+const DEFAULT_MATERIALS_FILTERS: MaterialsFilters = {
+  search: '',
+  status: '',
+  category: '',
+  sortBy: 'name',
+  page: 1,
+}
+
 export function MaterialsPage() {
   const navigate = useNavigate()
+  const { company } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
   const [tab, setTab] = useState<MaterialsTab>(tabParam === 'formulas' ? 'formulas' : 'materiales')
 
-  const [page, setPage] = useState(1)
-  const [searchInput, setSearchInput] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [status, setStatus] = useState<MaterialStatusFilter | ''>('')
-  const [category, setCategory] = useState<MaterialCategoria | ''>('')
-  const [sortBy, setSortBy] = useState<MaterialSortBy>('name')
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey('materials', company?.id),
+    DEFAULT_MATERIALS_FILTERS
+  )
+  const [searchInput, setSearchInput] = useState(filters.search)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [materialToDelete, setMaterialToDelete] = useState<Material | null>(null)
@@ -42,22 +60,30 @@ export function MaterialsPage() {
   const { data: categories = [] } = useActiveCategoriesQuery()
 
   useEffect(() => {
+    setSearchInput(filters.search)
+  }, [filters.search])
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim())
-      setPage(1)
+      const nextSearch = searchInput.trim()
+      setFilters((prev) => ({
+        ...prev,
+        search: nextSearch,
+        page: nextSearch === prev.search ? prev.page : 1,
+      }))
     }, 300)
 
     return () => window.clearTimeout(timer)
-  }, [searchInput])
+  }, [searchInput, setFilters])
 
   const { data, isLoading, isError, error } = useMaterialsQuery({
-    page,
+    page: filters.page,
     perPage: PER_PAGE,
-    search: debouncedSearch || undefined,
-    status: status || undefined,
-    category: category || undefined,
-    sortBy,
-    sortDir: sortBy === 'name' ? 'asc' : 'desc',
+    search: filters.search || undefined,
+    status: filters.status || undefined,
+    category: filters.category || undefined,
+    sortBy: filters.sortBy,
+    sortDir: filters.sortBy === 'name' ? 'asc' : 'desc',
   })
 
   const materials = data?.materials ?? []
@@ -162,20 +188,17 @@ export function MaterialsPage() {
             <MaterialFiltersBar
               searchInput={searchInput}
               onSearchChange={setSearchInput}
-              status={status}
+              status={filters.status}
               onStatusChange={(value) => {
-                setStatus(value)
-                setPage(1)
+                setFilters((prev) => ({ ...prev, status: value, page: 1 }))
               }}
-              category={category}
+              category={filters.category}
               onCategoryChange={(value) => {
-                setCategory(value)
-                setPage(1)
+                setFilters((prev) => ({ ...prev, category: value, page: 1 }))
               }}
-              sortBy={sortBy}
+              sortBy={filters.sortBy}
               onSortByChange={(value) => {
-                setSortBy(value)
-                setPage(1)
+                setFilters((prev) => ({ ...prev, sortBy: value, page: 1 }))
               }}
               categories={categories}
             />
@@ -215,7 +238,9 @@ export function MaterialsPage() {
                     variant="outline"
                     size="sm"
                     disabled={meta.currentPage <= 1}
-                    onClick={() => setPage((c) => Math.max(1, c - 1))}
+                    onClick={() =>
+                      setFilters((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))
+                    }
                   >
                     Anterior
                   </Button>
@@ -223,7 +248,7 @@ export function MaterialsPage() {
                     variant="outline"
                     size="sm"
                     disabled={meta.currentPage >= meta.lastPage}
-                    onClick={() => setPage((c) => c + 1)}
+                    onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                   >
                     Siguiente
                   </Button>

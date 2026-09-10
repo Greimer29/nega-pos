@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { MachineDeleteDialog } from '@/features/machines/components/machine-delete-dialog'
 import { MachineFormDialog } from '@/features/machines/components/machine-form-dialog'
 import {
@@ -19,16 +20,32 @@ import {
 import type { Machine } from '@/features/machines/types'
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 20
 
+type MachinesFilters = {
+  search: string
+  type: string
+  status: MachineStatus | ''
+  page: number
+}
+
+const DEFAULT_MACHINES_FILTERS: MachinesFilters = {
+  search: '',
+  type: '',
+  status: '',
+  page: 1,
+}
+
 export function MachinesPage() {
-  const [page, setPage] = useState(1)
-  const [searchInput, setSearchInput] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [type, setType] = useState('')
-  const [status, setStatus] = useState<MachineStatus | ''>('')
+  const { company } = useAuth()
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey('machines', company?.id),
+    DEFAULT_MACHINES_FILTERS
+  )
+  const [searchInput, setSearchInput] = useState(filters.search)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null)
@@ -36,20 +53,28 @@ export function MachinesPage() {
   const deleteMutation = useDeleteMachineMutation()
 
   useEffect(() => {
+    setSearchInput(filters.search)
+  }, [filters.search])
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim())
-      setPage(1)
+      const nextSearch = searchInput.trim()
+      setFilters((prev) => ({
+        ...prev,
+        search: nextSearch,
+        page: nextSearch === prev.search ? prev.page : 1,
+      }))
     }, 300)
 
     return () => window.clearTimeout(timer)
-  }, [searchInput])
+  }, [searchInput, setFilters])
 
   const { data, isLoading, isError, error } = useMachinesQuery({
-    page,
+    page: filters.page,
     perPage: PER_PAGE,
-    search: debouncedSearch || undefined,
-    type: type || undefined,
-    status: status || undefined,
+    search: filters.search || undefined,
+    type: filters.type || undefined,
+    status: filters.status || undefined,
   })
 
   const machines = data?.machines ?? []
@@ -118,19 +143,21 @@ export function MachinesPage() {
             <Input
               className="min-w-[160px]"
               placeholder="Filtrar por tipo…"
-              value={type}
+              value={filters.type}
               onChange={(e) => {
-                setType(e.target.value)
-                setPage(1)
+                setFilters((prev) => ({ ...prev, type: e.target.value, page: 1 }))
               }}
             />
 
             <select
               className="border-input bg-background flex h-9 min-w-[180px] rounded-md border px-3 text-sm"
-              value={status}
+              value={filters.status}
               onChange={(e) => {
-                setStatus(e.target.value as MachineStatus | '')
-                setPage(1)
+                setFilters((prev) => ({
+                  ...prev,
+                  status: e.target.value as MachineStatus | '',
+                  page: 1,
+                }))
               }}
             >
               <option value="">Todos los estados</option>
@@ -164,11 +191,11 @@ export function MachinesPage() {
           ) : machines.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-muted-foreground text-sm">
-                {debouncedSearch || type || status
+                {filters.search || filters.type || filters.status
                   ? 'No hay máquinas que coincidan con los filtros.'
                   : 'Todavía no hay máquinas cargadas.'}
               </p>
-              {!debouncedSearch && !type && !status ? (
+              {!filters.search && !filters.type && !filters.status ? (
                 <Button className="mt-4" variant="outline" onClick={openCreateDialog}>
                   <Plus />
                   Crear la primera
@@ -267,7 +294,9 @@ export function MachinesPage() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage <= 1}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  onClick={() =>
+                    setFilters((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))
+                  }
                 >
                   Anterior
                 </Button>
@@ -275,7 +304,7 @@ export function MachinesPage() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage >= meta.lastPage}
-                  onClick={() => setPage((current) => current + 1)}
+                  onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                 >
                   Siguiente
                 </Button>

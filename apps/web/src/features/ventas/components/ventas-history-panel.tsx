@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { VentasHistoryOrderLines } from '@/features/ventas/components/ventas-history-order-lines'
 import { VentasOrderReturnDialog } from '@/features/ventas/components/ventas-order-return-dialog'
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
@@ -11,11 +12,28 @@ import { useSalesQuery } from '@/features/ventas/hooks/use-sales'
 import { SALE_ORDER_STATUS_LABELS, paymentMethodLabel } from '@/features/ventas/constants'
 import type { SaleOrderStatus } from '@/features/ventas/types'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 20
 
 type DateFilter = 'today' | 'month' | 'custom' | 'all'
+
+type VentasHistoryFilters = {
+  search: string
+  dateFilter: DateFilter
+  customFrom: string
+  customTo: string
+  page: number
+}
+
+const DEFAULT_VENTAS_HISTORY_FILTERS: VentasHistoryFilters = {
+  search: '',
+  dateFilter: 'month',
+  customFrom: '',
+  customTo: '',
+  page: 1,
+}
 
 function startOfMonthIso() {
   const now = new Date()
@@ -85,31 +103,39 @@ function SaleStatusBadge({
 }
 
 export function VentasHistoryPanel() {
-  const [page, setPage] = useState(1)
-  const [searchInput, setSearchInput] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [dateFilter, setDateFilter] = useState<DateFilter>('month')
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo] = useState('')
+  const { company } = useAuth()
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey('ventas-history', company?.id),
+    DEFAULT_VENTAS_HISTORY_FILTERS
+  )
+  const [searchInput, setSearchInput] = useState(filters.search)
   const [returnSaleId, setReturnSaleId] = useState<number | null>(null)
   const [expandedSaleId, setExpandedSaleId] = useState<number | null>(null)
 
   useEffect(() => {
+    setSearchInput(filters.search)
+  }, [filters.search])
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim())
-      setPage(1)
+      const nextSearch = searchInput.trim()
+      setFilters((prev) => ({
+        ...prev,
+        search: nextSearch,
+        page: nextSearch === prev.search ? prev.page : 1,
+      }))
     }, 300)
     return () => window.clearTimeout(timer)
-  }, [searchInput])
+  }, [searchInput, setFilters])
 
-  const dateRange = resolveDateRange(dateFilter, customFrom, customTo)
-  const customRangePending = dateFilter === 'custom' && dateRange === null
+  const dateRange = resolveDateRange(filters.dateFilter, filters.customFrom, filters.customTo)
+  const customRangePending = filters.dateFilter === 'custom' && dateRange === null
 
   const { data, isLoading, isError, error, refetch } = useSalesQuery(
     {
-      page,
+      page: filters.page,
       perPage: PER_PAGE,
-      search: debouncedSearch || undefined,
+      search: filters.search || undefined,
       exclude_status: 'DRAFT',
       ...(dateRange ?? {}),
     },
@@ -153,10 +179,13 @@ export function VentasHistoryPanel() {
 
             <select
               className="border-input flex h-9 rounded-md border bg-white px-3 text-sm"
-              value={dateFilter}
+              value={filters.dateFilter}
               onChange={(e) => {
-                setDateFilter(e.target.value as DateFilter)
-                setPage(1)
+                setFilters((prev) => ({
+                  ...prev,
+                  dateFilter: e.target.value as DateFilter,
+                  page: 1,
+                }))
               }}
             >
               <option value="today">Hoy</option>
@@ -165,24 +194,30 @@ export function VentasHistoryPanel() {
               <option value="custom">Rango personalizado</option>
             </select>
 
-            {dateFilter === 'custom' ? (
+            {filters.dateFilter === 'custom' ? (
               <>
                 <Input
                   type="date"
                   className="w-auto"
-                  value={customFrom}
+                  value={filters.customFrom}
                   onChange={(e) => {
-                    setCustomFrom(e.target.value)
-                    setPage(1)
+                    setFilters((prev) => ({
+                      ...prev,
+                      customFrom: e.target.value,
+                      page: 1,
+                    }))
                   }}
                 />
                 <Input
                   type="date"
                   className="w-auto"
-                  value={customTo}
+                  value={filters.customTo}
                   onChange={(e) => {
-                    setCustomTo(e.target.value)
-                    setPage(1)
+                    setFilters((prev) => ({
+                      ...prev,
+                      customTo: e.target.value,
+                      page: 1,
+                    }))
                   }}
                 />
               </>
@@ -323,7 +358,9 @@ export function VentasHistoryPanel() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() =>
+                    setFilters((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))
+                  }
                 >
                   Anterior
                 </Button>
@@ -331,7 +368,7 @@ export function VentasHistoryPanel() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage >= meta.lastPage}
-                  onClick={() => setPage((p) => p + 1)}
+                  onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                 >
                   Siguiente
                 </Button>

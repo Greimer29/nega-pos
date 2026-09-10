@@ -1,17 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { ProfitMarginFiltersPanel } from '@/features/purchases/components/profit-margin-filters-panel'
 import { ProfitMarginProductList } from '@/features/purchases/components/profit-margin-product-list'
 import { useApplyProfitMarginMutation, useUpdateProfitMarginMutation } from '@/features/purchases/hooks/use-settings'
 import { PROFIT_MARGIN_PANEL_ID } from '@/features/settings/constants'
 import { useCatalogProductQuery, useCatalogProductsQuery } from '@/features/ventas/hooks/use-catalog'
 import type { CatalogProduct } from '@/features/ventas/types'
-import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 
 type ProfitMarginConfigCardProps = {
   defaultMarginPercent?: string | null
   highlightProductId?: number
+}
+
+type ProfitMarginFilters = {
+  search: string
+  category: string
+  activeOnly: boolean
+  page: number
+}
+
+const DEFAULT_PROFIT_MARGIN_FILTERS: ProfitMarginFilters = {
+  search: '',
+  category: '',
+  activeOnly: true,
+  page: 1,
 }
 
 function hasCostPrice(product: CatalogProduct) {
@@ -22,12 +38,13 @@ export function ProfitMarginConfigCard({
   defaultMarginPercent,
   highlightProductId,
 }: ProfitMarginConfigCardProps) {
+  const { company } = useAuth()
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey('profit-margin', company?.id),
+    DEFAULT_PROFIT_MARGIN_FILTERS
+  )
   const [marginInput, setMarginInput] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [category, setCategory] = useState('')
-  const [activeOnly, setActiveOnly] = useState(true)
-  const [page, setPage] = useState(1)
+  const [searchInput, setSearchInput] = useState(filters.search)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
 
@@ -55,12 +72,20 @@ export function ProfitMarginConfigCard({
   }, [])
 
   useEffect(() => {
+    setSearchInput(filters.search)
+  }, [filters.search])
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim())
-      setPage(1)
+      const nextSearch = searchInput.trim()
+      setFilters((prev) => ({
+        ...prev,
+        search: nextSearch,
+        page: nextSearch === prev.search ? prev.page : 1,
+      }))
     }, 300)
     return () => window.clearTimeout(timer)
-  }, [searchInput])
+  }, [searchInput, setFilters])
 
   const { data: highlightProduct } = useCatalogProductQuery(highlightProductId)
 
@@ -89,11 +114,11 @@ export function ProfitMarginConfigCard({
   }, [defaultMarginPercent, marginInput])
 
   const { data, isLoading, isError, error } = useCatalogProductsQuery({
-    page,
+    page: filters.page,
     perPage: 50,
-    search: debouncedSearch || undefined,
-    category: category || undefined,
-    active: activeOnly ? true : undefined,
+    search: filters.search || undefined,
+    category: filters.category || undefined,
+    active: filters.activeOnly ? true : undefined,
     sortBy: 'name',
     sortDir: 'asc',
   })
@@ -197,15 +222,13 @@ export function ProfitMarginConfigCard({
             marginValid={marginValid}
             searchInput={searchInput}
             onSearchChange={setSearchInput}
-            category={category}
+            category={filters.category}
             onCategoryChange={(value) => {
-              setCategory(value)
-              setPage(1)
+              setFilters((prev) => ({ ...prev, category: value, page: 1 }))
             }}
-            activeOnly={activeOnly}
+            activeOnly={filters.activeOnly}
             onActiveOnlyChange={(value) => {
-              setActiveOnly(value)
-              setPage(1)
+              setFilters((prev) => ({ ...prev, activeOnly: value, page: 1 }))
             }}
             applicableSelectedCount={applicableSelected.length}
             selectedCount={selectedIds.size}
@@ -224,7 +247,7 @@ export function ProfitMarginConfigCard({
             someVisibleSelected={someVisibleSelected}
             onToggleAllVisible={toggleAllVisible}
             meta={meta}
-            onPageChange={setPage}
+            onPageChange={(page) => setFilters((prev) => ({ ...prev, page }))}
             scrollHeight={filtersPanelHeight}
             marginPercent={marginPercent}
             marginValid={marginValid}

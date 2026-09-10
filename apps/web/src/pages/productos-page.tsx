@@ -19,37 +19,59 @@ import {
 import type { CatalogProduct } from '@/features/ventas/types'
 import { notifyApiError, QueryErrorState, EmptyListState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 30
 
+type ProductosFilters = {
+  search: string
+  category: string
+  page: number
+}
+
+const DEFAULT_PRODUCTOS_FILTERS: ProductosFilters = {
+  search: '',
+  category: '',
+  page: 1,
+}
+
 export function ProductosPage() {
   const navigate = useNavigate()
-  const { can } = useAuth()
+  const { can, company } = useAuth()
   const canEditCatalog = can('catalog.edit')
-  const [page, setPage] = useState(1)
-  const [searchInput, setSearchInput] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [category, setCategory] = useState('')
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey('productos', company?.id),
+    DEFAULT_PRODUCTOS_FILTERS
+  )
+  const [searchInput, setSearchInput] = useState(filters.search)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const deleteMutation = useDeleteCatalogProductMutation()
   const { data: categories = [] } = useActiveCategoriesQuery()
-  const activeFilterCount = category ? 1 : 0
+  const activeFilterCount = filters.category ? 1 : 0
+
+  useEffect(() => {
+    setSearchInput(filters.search)
+  }, [filters.search])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim())
-      setPage(1)
+      const nextSearch = searchInput.trim()
+      setFilters((prev) => ({
+        ...prev,
+        search: nextSearch,
+        page: nextSearch === prev.search ? prev.page : 1,
+      }))
     }, 300)
     return () => window.clearTimeout(timer)
-  }, [searchInput])
+  }, [searchInput, setFilters])
 
   const { data, isLoading, isError, error } = useCatalogProductsQuery({
-    page,
+    page: filters.page,
     perPage: PER_PAGE,
-    search: debouncedSearch || undefined,
-    category: category || undefined,
+    search: filters.search || undefined,
+    category: filters.category || undefined,
     active: true,
     itemKind: 'PRODUCT',
     sortBy: 'name',
@@ -170,10 +192,10 @@ export function ProductosPage() {
             >
               <select
                 className="border-input flex h-9 rounded-md border bg-white px-3 text-sm"
-                value={category}
+                value={filters.category}
                 onChange={(e) => {
-                  setCategory(e.target.value)
-                  setPage(1)
+                  const category = e.target.value
+                  setFilters((prev) => ({ ...prev, category, page: 1 }))
                 }}
               >
                 <option value="">Todas las categorías</option>
@@ -223,7 +245,9 @@ export function ProductosPage() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage <= 1}
-                  onClick={() => setPage((c) => Math.max(1, c - 1))}
+                  onClick={() =>
+                    setFilters((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))
+                  }
                 >
                   Anterior
                 </Button>
@@ -231,7 +255,7 @@ export function ProductosPage() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage >= meta.lastPage}
-                  onClick={() => setPage((c) => c + 1)}
+                  onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                 >
                   Siguiente
                 </Button>

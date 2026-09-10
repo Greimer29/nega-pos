@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { CustomerFormDialog } from '@/features/customers/components/customer-form-dialog'
 import type { Customer } from '@/features/customers/types'
 import { useAuth } from '@/features/auth/hooks/use-auth'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import {
   useConfirmSaleMutation,
   useCreateSaleMutation,
@@ -100,6 +101,22 @@ type CartLine =
 
 type CatalogSource = 'products' | 'materials' | 'services'
 
+type VentasCatalogFilters = {
+  source: CatalogSource
+  search: string
+  category: string
+  size: string
+  page: number
+}
+
+const DEFAULT_VENTAS_CATALOG_FILTERS: VentasCatalogFilters = {
+  source: 'products',
+  search: '',
+  category: '',
+  size: '',
+  page: 1,
+}
+
 function cartLineUnitPrice(line: CartLine): number {
   if (line.kind === 'material') {
     return line.unitPriceUsd ?? materialSaleUnitPriceUsd(line.material)
@@ -148,19 +165,21 @@ export function VentasPanel() {
 
 function VentasCreateView() {
   const navigate = useNavigate()
-  const { can } = useAuth()
+  const { can, company } = useAuth()
   const canConfirmSale = can('ventas.confirm')
   const canCreditSale = can('ventas.credit')
   const { data: currentShift, isLoading: shiftLoading } = useCurrentSalesShiftQuery()
   const shiftOpen = Boolean(currentShift)
   const [initialDraft] = useState(() => loadVentasCartDraft())
-  const [searchInput, setSearchInput] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [category, setCategory] = useState('')
-  const [sizeFilter, setSizeFilter] = useState('')
-  const [debouncedSizeFilter, setDebouncedSizeFilter] = useState('')
-  const [page, setPage] = useState(1)
-  const [catalogSource, setCatalogSource] = useState<CatalogSource>('products')
+  const [catalogFilters, setCatalogFilters] = useSessionPersistedState(
+    sessionFilterKey('ventas-catalog', company?.id),
+    DEFAULT_VENTAS_CATALOG_FILTERS
+  )
+  const [searchInput, setSearchInput] = useState(catalogFilters.search)
+  const [sizeFilter, setSizeFilter] = useState(catalogFilters.size)
+  const catalogSource = catalogFilters.source
+  const category = catalogFilters.category
+  const page = catalogFilters.page
   const [sizePickProduct, setSizePickProduct] = useState<CatalogProduct | null>(null)
   const [sizePickOpen, setSizePickOpen] = useState(false)
   const [customerId, setCustomerId] = useState<number | ''>(() => initialDraft?.customerId ?? '')
@@ -222,9 +241,9 @@ function VentasCreateView() {
     {
       page,
       perPage: CATALOG_PER_PAGE,
-      search: debouncedSearch || undefined,
+      search: catalogFilters.search || undefined,
       category: category || undefined,
-      size: debouncedSizeFilter || undefined,
+      size: catalogFilters.size || undefined,
       active: true,
       itemKind: 'PRODUCT',
       sortBy: 'most_sold',
@@ -242,7 +261,7 @@ function VentasCreateView() {
     {
       page,
       perPage: CATALOG_PER_PAGE,
-      search: debouncedSearch || undefined,
+      search: catalogFilters.search || undefined,
       category: category || undefined,
       active: true,
       itemKind: 'SERVICE',
@@ -261,7 +280,7 @@ function VentasCreateView() {
     {
       page,
       perPage: CATALOG_PER_PAGE,
-      search: debouncedSearch || undefined,
+      search: catalogFilters.search || undefined,
       category: category || undefined,
       status: 'active',
       sortBy: 'name',
@@ -271,20 +290,36 @@ function VentasCreateView() {
   )
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim())
-      setPage(1)
-    }, 300)
-    return () => window.clearTimeout(timer)
-  }, [searchInput])
+    setSearchInput(catalogFilters.search)
+  }, [catalogFilters.search])
+
+  useEffect(() => {
+    setSizeFilter(catalogFilters.size)
+  }, [catalogFilters.size])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDebouncedSizeFilter(sizeFilter.trim())
-      setPage(1)
+      const nextSearch = searchInput.trim()
+      setCatalogFilters((prev) => ({
+        ...prev,
+        search: nextSearch,
+        page: nextSearch === prev.search ? prev.page : 1,
+      }))
     }, 300)
     return () => window.clearTimeout(timer)
-  }, [sizeFilter])
+  }, [searchInput, setCatalogFilters])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const nextSize = sizeFilter.trim()
+      setCatalogFilters((prev) => ({
+        ...prev,
+        size: nextSize,
+        page: nextSize === prev.size ? prev.page : 1,
+      }))
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [sizeFilter, setCatalogFilters])
 
   useEffect(() => {
     if (!cartOpen) return
@@ -1148,8 +1183,7 @@ function VentasCreateView() {
                       : 'text-muted-foreground'
                   )}
                   onClick={() => {
-                    setCatalogSource('products')
-                    setPage(1)
+                    setCatalogFilters((prev) => ({ ...prev, source: 'products', page: 1 }))
                   }}
                 >
                   Productos
@@ -1163,8 +1197,7 @@ function VentasCreateView() {
                       : 'text-muted-foreground'
                   )}
                   onClick={() => {
-                    setCatalogSource('materials')
-                    setPage(1)
+                    setCatalogFilters((prev) => ({ ...prev, source: 'materials', page: 1 }))
                   }}
                 >
                   Materiales
@@ -1178,8 +1211,7 @@ function VentasCreateView() {
                       : 'text-muted-foreground'
                   )}
                   onClick={() => {
-                    setCatalogSource('services')
-                    setPage(1)
+                    setCatalogFilters((prev) => ({ ...prev, source: 'services', page: 1 }))
                   }}
                 >
                   Servicios
@@ -1207,8 +1239,11 @@ function VentasCreateView() {
                 className="border-input flex h-9 rounded-md border bg-white px-3 text-sm"
                 value={category}
                 onChange={(e) => {
-                  setCategory(e.target.value)
-                  setPage(1)
+                  setCatalogFilters((prev) => ({
+                    ...prev,
+                    category: e.target.value,
+                    page: 1,
+                  }))
                 }}
               >
                 <option value="">Todas las categorías</option>
@@ -1342,7 +1377,12 @@ function VentasCreateView() {
                     variant="outline"
                     size="sm"
                     disabled={catalogMeta.currentPage <= 1 || loadingCatalog}
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                    onClick={() =>
+                      setCatalogFilters((prev) => ({
+                        ...prev,
+                        page: Math.max(1, prev.page - 1),
+                      }))
+                    }
                   >
                     Anterior
                   </Button>
@@ -1351,7 +1391,9 @@ function VentasCreateView() {
                     variant="outline"
                     size="sm"
                     disabled={catalogMeta.currentPage >= catalogMeta.lastPage || loadingCatalog}
-                    onClick={() => setPage((current) => current + 1)}
+                    onClick={() =>
+                      setCatalogFilters((prev) => ({ ...prev, page: prev.page + 1 }))
+                    }
                   >
                     Siguiente
                   </Button>
@@ -1370,7 +1412,12 @@ function VentasCreateView() {
                     variant="outline"
                     size="sm"
                     disabled={servicesMeta.currentPage <= 1 || loadingServices}
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                    onClick={() =>
+                      setCatalogFilters((prev) => ({
+                        ...prev,
+                        page: Math.max(1, prev.page - 1),
+                      }))
+                    }
                   >
                     Anterior
                   </Button>
@@ -1381,7 +1428,9 @@ function VentasCreateView() {
                     disabled={
                       servicesMeta.currentPage >= servicesMeta.lastPage || loadingServices
                     }
-                    onClick={() => setPage((current) => current + 1)}
+                    onClick={() =>
+                      setCatalogFilters((prev) => ({ ...prev, page: prev.page + 1 }))
+                    }
                   >
                     Siguiente
                   </Button>
@@ -1400,7 +1449,12 @@ function VentasCreateView() {
                     variant="outline"
                     size="sm"
                     disabled={materialsMeta.currentPage <= 1 || loadingMaterials}
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                    onClick={() =>
+                      setCatalogFilters((prev) => ({
+                        ...prev,
+                        page: Math.max(1, prev.page - 1),
+                      }))
+                    }
                   >
                     Anterior
                   </Button>
@@ -1411,7 +1465,9 @@ function VentasCreateView() {
                     disabled={
                       materialsMeta.currentPage >= materialsMeta.lastPage || loadingMaterials
                     }
-                    onClick={() => setPage((current) => current + 1)}
+                    onClick={() =>
+                      setCatalogFilters((prev) => ({ ...prev, page: prev.page + 1 }))
+                    }
                   >
                     Siguiente
                   </Button>

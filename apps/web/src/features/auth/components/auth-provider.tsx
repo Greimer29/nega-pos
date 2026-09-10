@@ -12,6 +12,7 @@ import { clearVentasCartDraft } from '@/features/ventas/utils/ventas-cart-draft'
 import { canAccess, type PermissionKey } from '@/features/permissions/catalog'
 import { refreshCsrfToken, setUnauthorizedHandler } from '@/lib/api'
 import { queryClient } from '@/lib/query-client'
+import { clearSessionFilterKeys } from '@/lib/session-persisted-state'
 import type { AuthCompany, User } from '@/types/auth'
 
 const SESSION_KEEPALIVE_MS = 25 * 60 * 1000
@@ -61,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearSession = useCallback(() => {
     setUser(null)
     setCompany(null)
+    clearSessionFilterKeys()
   }, [])
 
   const applySessionFailure = useCallback(

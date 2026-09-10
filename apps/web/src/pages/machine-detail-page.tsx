@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { MachineExpenseFormDialog } from '@/features/machines/components/machine-expense-form-dialog'
 import { MachineFormDialog } from '@/features/machines/components/machine-form-dialog'
 import {
@@ -16,7 +17,18 @@ import { AccountSelect } from '@/features/accounts/components/account-select'
 import { DisplayMoney } from '@/features/currencies/components/display-money'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
+
+type MachineDetailExpenseFilters = {
+  accountId: number | null
+  unassignedOnly: boolean
+}
+
+const DEFAULT_MACHINE_DETAIL_EXPENSE_FILTERS: MachineDetailExpenseFilters = {
+  accountId: null,
+  unassignedOnly: false,
+}
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) {
@@ -31,11 +43,17 @@ function formatDateTime(value: string | null | undefined) {
 
 export function MachineDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const { company } = useAuth()
   const { id: machineId, isValid: isValidMachineId } = parsePositiveIntRouteParam(id)
   const [editOpen, setEditOpen] = useState(false)
   const [expenseOpen, setExpenseOpen] = useState(false)
-  const [accountFilter, setAccountFilter] = useState<number | null>(null)
-  const [unassignedOnly, setUnassignedOnly] = useState(false)
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey(
+      `machine-detail-expenses${machineId ? `:${machineId}` : ''}`,
+      company?.id
+    ),
+    DEFAULT_MACHINE_DETAIL_EXPENSE_FILTERS
+  )
 
   const { data: machine, isLoading, isError, error } = useMachineQuery(machineId)
 
@@ -85,8 +103,8 @@ export function MachineDetailPage() {
   }
 
   const expenses = (machine.expenses ?? []).filter((expense) => {
-    if (unassignedOnly) return expense.accountId == null
-    if (accountFilter != null) return expense.accountId === accountFilter
+    if (filters.unassignedOnly) return expense.accountId == null
+    if (filters.accountId != null) return expense.accountId === filters.accountId
     return true
   })
 
@@ -178,22 +196,29 @@ export function MachineDetailPage() {
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <AccountSelect
-              value={unassignedOnly ? null : accountFilter}
+              value={filters.unassignedOnly ? null : filters.accountId}
               onChange={(value) => {
-                setUnassignedOnly(false)
-                setAccountFilter(value)
+                setFilters((prev) => ({
+                  ...prev,
+                  unassignedOnly: false,
+                  accountId: value,
+                }))
               }}
-              disabled={unassignedOnly}
+              disabled={filters.unassignedOnly}
               label="Filtrar por cuenta"
             />
             <div className="flex items-end">
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  checked={unassignedOnly}
+                  checked={filters.unassignedOnly}
                   onChange={(e) => {
-                    setUnassignedOnly(e.target.checked)
-                    if (e.target.checked) setAccountFilter(null)
+                    const checked = e.target.checked
+                    setFilters((prev) => ({
+                      ...prev,
+                      unassignedOnly: checked,
+                      accountId: checked ? null : prev.accountId,
+                    }))
                   }}
                 />
                 Solo sin cuenta

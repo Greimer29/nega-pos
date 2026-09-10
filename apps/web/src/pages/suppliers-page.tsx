@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { SupplierDeleteDialog } from '@/features/suppliers/components/supplier-delete-dialog'
 import { SupplierFormDialog } from '@/features/suppliers/components/supplier-form-dialog'
@@ -14,9 +15,20 @@ import {
 import type { Supplier } from '@/features/suppliers/types'
 import { notifyApiError, QueryErrorState, EmptyListState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 20
+
+type SuppliersFilters = {
+  search: string
+  page: number
+}
+
+const DEFAULT_SUPPLIERS_FILTERS: SuppliersFilters = {
+  search: '',
+  page: 1,
+}
 
 function formatRif(rif: string | null) {
   return rif ?? '—'
@@ -27,9 +39,12 @@ function formatTelefono(phone: string | null) {
 }
 
 export function SuppliersPage() {
-  const [page, setPage] = useState(1)
-  const [searchInput, setSearchInput] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const { company } = useAuth()
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey('suppliers', company?.id),
+    DEFAULT_SUPPLIERS_FILTERS
+  )
+  const [searchInput, setSearchInput] = useState(filters.search)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
@@ -37,18 +52,26 @@ export function SuppliersPage() {
   const deleteMutation = useDeleteSupplierMutation()
 
   useEffect(() => {
+    setSearchInput(filters.search)
+  }, [filters.search])
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim())
-      setPage(1)
+      const nextSearch = searchInput.trim()
+      setFilters((prev) => ({
+        ...prev,
+        search: nextSearch,
+        page: nextSearch === prev.search ? prev.page : 1,
+      }))
     }, 300)
 
     return () => window.clearTimeout(timer)
-  }, [searchInput])
+  }, [searchInput, setFilters])
 
   const { data, isLoading, isError, error } = useSuppliersQuery({
-    page,
+    page: filters.page,
     perPage: PER_PAGE,
-    search: debouncedSearch || undefined,
+    search: filters.search || undefined,
   })
 
   const suppliers = data?.suppliers ?? []
@@ -132,17 +155,17 @@ export function SuppliersPage() {
           ) : suppliers.length === 0 ? (
             <EmptyListState
               title={
-                debouncedSearch
+                filters.search
                   ? 'No hay proveedores que coincidan con la búsqueda'
                   : 'Todavía no hay proveedores'
               }
               description={
-                debouncedSearch
+                filters.search
                   ? undefined
                   : 'Es normal en una empresa nueva. Creá el primero cuando quieras comprar.'
               }
               action={
-                !debouncedSearch ? (
+                !filters.search ? (
                   <Button variant="outline" onClick={openCreateDialog}>
                     <Plus />
                     Crear el primero
@@ -256,7 +279,9 @@ export function SuppliersPage() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage <= 1}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  onClick={() =>
+                    setFilters((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))
+                  }
                 >
                   Anterior
                 </Button>
@@ -264,7 +289,7 @@ export function SuppliersPage() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage >= meta.lastPage}
-                  onClick={() => setPage((current) => current + 1)}
+                  onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                 >
                   Siguiente
                 </Button>

@@ -1,7 +1,8 @@
 import { Loader2, Receipt } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { DashboardCreditTable } from '@/features/dashboard/components/dashboard-credit-table'
 import { DashboardDailySalesCard } from '@/features/dashboard/components/dashboard-daily-sales-card'
 import { DashboardLowStockList } from '@/features/dashboard/components/dashboard-low-stock-list'
@@ -18,6 +19,15 @@ import {
 } from '@/features/dashboard/utils/dashboard-chart-support'
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
+
+type DashboardChartState = {
+  chartMode: DashboardChartMode
+}
+
+const DEFAULT_DASHBOARD_CHART: DashboardChartState = {
+  chartMode: 'weekly',
+}
 
 function todayLabel() {
   return new Date().toLocaleDateString('es-VE', {
@@ -29,7 +39,12 @@ function todayLabel() {
 }
 
 export function DashboardPage() {
-  const [chartMode, setChartMode] = useState<DashboardChartMode>('weekly')
+  const { company } = useAuth()
+  const [chartState, setChartState] = useSessionPersistedState(
+    sessionFilterKey('dashboard-chart', company?.id),
+    DEFAULT_DASHBOARD_CHART
+  )
+  const chartMode = chartState.chartMode
   const lastSuccessfulChartModeRef = useRef<DashboardChartMode>('weekly')
   const { data, isLoading, isError, error, isFetching, isPlaceholderData } =
     useDashboardOverviewQuery(chartMode)
@@ -58,7 +73,7 @@ export function DashboardPage() {
       toast.warning(DASHBOARD_DAILY_CHART_MESSAGE)
 
       if (chartMode === 'daily') {
-        setChartMode(lastSuccessfulChartModeRef.current)
+        setChartState({ chartMode: lastSuccessfulChartModeRef.current })
       }
 
       return
@@ -71,9 +86,9 @@ export function DashboardPage() {
     notifyApiError(error, 'No se pudo cargar el gráfico')
 
     if (chartMode !== lastSuccessfulChartModeRef.current) {
-      setChartMode(lastSuccessfulChartModeRef.current)
+      setChartState({ chartMode: lastSuccessfulChartModeRef.current })
     }
-  }, [chartMode, data, error, isError])
+  }, [chartMode, data, error, isError, setChartState])
 
   function handleChartModeChange(mode: DashboardChartMode) {
     if (!canSelectDashboardChartMode(mode)) {
@@ -81,7 +96,7 @@ export function DashboardPage() {
       return
     }
 
-    setChartMode(mode)
+    setChartState({ chartMode: mode })
   }
 
   return (
