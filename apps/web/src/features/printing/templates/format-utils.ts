@@ -183,14 +183,6 @@ export function renderBusinessFiscal(business: PrintBusinessConfig): string {
   return lines.join('')
 }
 
-function formatLineQuantity(qty: number, measure?: string): string {
-  const decimals = measure ? inventoryQuantityDecimals(measure) : 0
-  return qty.toLocaleString('es-VE', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  })
-}
-
 function formatPaymentNativeAmount(value: string | number | null | undefined, currencyCode: string): string {
   const amount = Number(value)
   if (!Number.isFinite(amount)) {

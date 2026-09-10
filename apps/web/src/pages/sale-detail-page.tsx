@@ -13,7 +13,6 @@ import { VentasOrderReturnDialog } from '@/features/ventas/components/ventas-ord
 import { SALE_ORDER_STATUS_LABELS, paymentMethodLabel } from '@/features/ventas/constants'
 import type { SaleOrderStatus } from '@/features/ventas/types'
 import { notifyApiError } from '@/features/notifications/query-error-state'
-import { toast } from '@/features/notifications/toast'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'

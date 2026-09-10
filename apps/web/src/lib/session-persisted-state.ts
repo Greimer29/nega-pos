@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export const SESSION_FILTER_PREFIX = 'nega-pos:filters:'
 
@@ -78,6 +78,8 @@ export function useSessionPersistedState<T>(
   key: string,
   defaults: T
 ): [T, (value: T | ((prev: T) => T)) => void] {
+  const defaultsRef = useRef(defaults)
+  defaultsRef.current = defaults
   const [state, setState] = useState<T>(() => hydrateSessionValue(key, defaults))
 
   useEffect(() => {
@@ -86,9 +88,7 @@ export function useSessionPersistedState<T>(
 
   // When the storage key changes (e.g. company switch), reload from that key.
   useEffect(() => {
-    setState(hydrateSessionValue(key, defaults))
-    // Only re-hydrate when the key identity changes, not when defaults object identity does.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: key-driven reset
+    setState(hydrateSessionValue(key, defaultsRef.current))
   }, [key])
 
   const setPersisted = useCallback((value: T | ((prev: T) => T)) => {
