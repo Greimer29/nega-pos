@@ -1,4 +1,4 @@
-import { MONETARY_REGISTRATION_USD_MESSAGE } from '#exceptions/moneda_registro_usd_requerida_exception'
+import { MONETARY_REGISTRATION_BASE_MESSAGE } from '#utils/monetary_registration'
 import Currency from '#models/currency'
 import MachineExpense from '#models/machine_expense'
 import Machine from '#models/machine'
@@ -95,6 +95,7 @@ test.group('Machines API', (group) => {
       category: 'REPAIR',
       description: 'Cambio de aguja',
       amount: '150.50',
+      currencyCode: 'XAU',
     })
 
     await MachineExpense.create({
@@ -103,6 +104,7 @@ test.group('Machines API', (group) => {
       category: 'SUPPLY',
       description: 'Aceite',
       amount: '49.50',
+      currencyCode: 'XAU',
     })
 
     const total = await MachineService.calcularTotalGastado(Number(machine.id))
@@ -140,7 +142,7 @@ test.group('Machines API', (group) => {
     })
 
     const total = await MachineService.calcularTotalGastado(Number(machine.id))
-    assert.equal(total, '60.00')
+    assert.equal(total, '10.50')
   })
 
   test('GET /api/v1/machines/:id returns total_spent and expenses', async ({ client }) => {
@@ -158,6 +160,7 @@ test.group('Machines API', (group) => {
       category: 'MAINTENANCE',
       description: 'Servicio',
       amount: '300.00',
+      currencyCode: 'XAU',
     })
 
     const response = await client.get(`/api/v1/machines/${machine.id}`).loginAs(user)
@@ -203,7 +206,7 @@ test.group('Machines API', (group) => {
     response.assertBodyContains({
       data: {
         expense: {
-          amount: '500.00',
+          amount: '500.0000',
           category: 'REPAIR',
         },
       },
@@ -236,7 +239,7 @@ test.group('Machines API', (group) => {
     response.assertBodyContains({
       error: {
         code: 'MONEDA_REGISTRO_USD_REQUERIDA',
-        message: MONETARY_REGISTRATION_USD_MESSAGE,
+        message: `${MONETARY_REGISTRATION_BASE_MESSAGE} (XAU).`,
       },
     })
   })
@@ -256,6 +259,7 @@ test.group('Machines API', (group) => {
       category: 'OTHER',
       description: 'Gasto 1',
       amount: '100.00',
+      currencyCode: 'XAU',
     })
 
     await MachineExpense.create({
@@ -264,6 +268,7 @@ test.group('Machines API', (group) => {
       category: 'OTHER',
       description: 'Gasto 2',
       amount: '250.00',
+      currencyCode: 'XAU',
     })
 
     const response = await client.get('/api/v1/machine-expenses').loginAs(user)

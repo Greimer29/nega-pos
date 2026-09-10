@@ -15,6 +15,7 @@ import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
 import { seedOpenSalesShift } from '#tests/helpers/seed_test_sale'
+import { seedReferenceData } from '#tests/helpers/seed_reference_data'
 
 const TEST_EMAIL = 'test-ventas@negapos.local'
 const TEST_PASSWORD = 'password123'
@@ -103,6 +104,7 @@ test.group('Ventas API — catálogo y ventas', (group) => {
 
   group.each.setup(async () => {
     await resetDatabase()
+    await seedReferenceData()
     await seedAdminUser()
     const user = await User.findByOrFail('email', TEST_EMAIL)
     await seedOpenSalesShift(Number(user.id))
@@ -309,7 +311,11 @@ test.group('Ventas API — catálogo y ventas', (group) => {
   test('order lines and production expand catalog formulas', async ({ client, assert }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
     const customer = await seedCustomer()
-    const material = await seedMaterial({ code: 'MAT-003', lastPurchasePriceUsd: '4.0000' })
+    const material = await seedMaterial({
+      code: 'MAT-003',
+      lastPurchasePriceUsd: '4.0000',
+      unit: 'MTS',
+    })
 
     await InventoryMovement.create({
       materialId: Number(material.id),
@@ -340,13 +346,17 @@ test.group('Ventas API — catálogo y ventas', (group) => {
         items: [{ material_id: Number(material.id), quantity: 1.5 }],
       })
 
-    await client.put(`/api/v1/catalog-products/${catalog.id}`).loginAs(user).json({
-      name: 'Camisa corporativa',
-      category: 'Camisa',
-      sale_price_usd: 25,
-      formula_id: formulaId,
-      stock_quantity: 15,
-    })
+    const attachFormula = await client
+      .put(`/api/v1/catalog-products/${catalog.id}`)
+      .loginAs(user)
+      .json({
+        name: 'Camisa corporativa',
+        category: 'Camisa',
+        sale_price_usd: 25,
+        formula_id: formulaId,
+      })
+
+    attachFormula.assertStatus(200)
 
     const orderResponse = await client
       .post('/api/v1/orders')
@@ -485,7 +495,11 @@ test.group('Ventas API — catálogo y ventas', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const material = await seedMaterial({ code: 'MAT-FORM-COST', lastPurchasePriceUsd: '0.4000' })
+    const material = await seedMaterial({
+      code: 'MAT-FORM-COST',
+      lastPurchasePriceUsd: '0.4000',
+      unit: 'MTS',
+    })
 
     const formula = await Formula.create({ name: 'Fórmula costo', active: true })
     await FormulaMaterial.create({

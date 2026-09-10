@@ -172,7 +172,7 @@ test.group('Catalog services (item_kind SERVICE)', (group) => {
     assert.equal(physical.stockQuantity, '6.000')
 
     await service.refresh()
-    assert.equal(service.stockQuantity, '0')
+    assert.equal(service.stockQuantity, '0.000')
 
     const serviceMovements = await ProductInventoryMovement.query().where(
       'catalogProductId',
@@ -226,7 +226,7 @@ test.group('Catalog services (item_kind SERVICE)', (group) => {
     assert.equal(returnResponse.body().data.sale.status, 'RETURNED')
 
     await service.refresh()
-    assert.equal(service.stockQuantity, '0')
+    assert.equal(service.stockQuantity, '0.000')
 
     const movements = await ProductInventoryMovement.query().where(
       'catalogProductId',

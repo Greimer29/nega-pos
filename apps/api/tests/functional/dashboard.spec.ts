@@ -30,7 +30,7 @@ let openShiftId = 0
 async function seedDashboardSale(input: SeedTestSaleInput) {
   return seedTestSale({
     ...input,
-    salesShiftId: input.salesShiftId ?? openShiftId,
+    salesShiftId: input.salesShiftId === undefined ? openShiftId : input.salesShiftId,
   })
 }
 
@@ -824,7 +824,7 @@ test.group('Dashboard API', (group) => {
     assert.equal(body.data.gananciaDelDia.porcentajeSobreVentas, 36)
   })
 
-  test('GET dashboard purchasesMonth uses credit balance instead of invoice total', async ({
+  test('GET dashboard purchasesMonth excludes unpaid credit from cash total', async ({
     client,
     assert,
   }) => {
@@ -848,8 +848,8 @@ test.group('Dashboard API', (group) => {
     const response = await client.get('/api/v1/dashboard/summary').loginAs(user)
 
     response.assertStatus(200)
-    assert.equal(response.body().data.purchasesMonth.quantity, 1)
-    assert.equal(response.body().data.purchasesMonth.totalUsd, '35.00')
+    assert.equal(response.body().data.purchasesMonth.quantity, 0)
+    assert.equal(response.body().data.purchasesMonth.totalUsd, '0.00')
   })
 
   test('GET dashboard purchasesMonth matches report purchasesUsd for current month', async ({
@@ -931,8 +931,7 @@ test.group('Dashboard API', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const opened = await client.post('/api/v1/sales-shifts/open').loginAs(user)
-    const shiftId = opened.body().data.sales_shift.id
+    const shiftId = openShiftId
 
     await seedDashboardSale({
       totalUsd: '25.0000',
@@ -982,8 +981,7 @@ test.group('Dashboard API', (group) => {
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
     const today = DateTime.now().toISODate()!
-    const opened = await client.post('/api/v1/sales-shifts/open').loginAs(user)
-    const shiftId = opened.body().data.sales_shift.id
+    const shiftId = openShiftId
 
     await seedDashboardSale({
       totalUsd: '50.0000',
