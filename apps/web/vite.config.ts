@@ -69,6 +69,13 @@ export default defineConfig(({ mode }) => {
     console.warn(
       '[nega-pos] VITE_API_URL no está en apps/web/.env — proxy usa http://localhost:3333 por defecto.'
     )
+  } else if (
+    mode === 'development' &&
+    (/railway\.app/i.test(apiUrl) || /nega-pos-api-production/i.test(apiUrl))
+  ) {
+    console.error(
+      `[nega-pos] VITE_API_URL apunta a producción (${apiUrl}). Usá http://localhost:3333 para dev.`
+    )
   } else {
     console.log(`[nega-pos] Proxy /api → ${apiUrl}`)
   }

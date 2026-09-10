@@ -172,53 +172,75 @@ nega-pos/
 
 ## 5. Entornos de ejecución
 
-### Local con Docker (MySQL)
+Hay **dos mundos separados**. No mezclarlos en el día a día.
+
+| | Desarrollo / pruebas / PRs | Producción |
+|--|----------------------------|------------|
+| API + MySQL | Docker en esta máquina (`localhost:3333` / `:3306`) | Railway (`nega-pos-api-production…`) |
+| Web | `pnpm dev:web` → **siempre** `VITE_API_URL=http://localhost:3333` | No se despliega; clientes usan builds |
+| Desktop / APK | Solo si querés probar el instalador contra local (cambiar URL) | Build con URL de Railway |
+| Datos | BD local (`nega_pos` / `nega_pos_central` / tenants locales) | BD de Railway (clientes reales) |
+| Flujo Git | rama → prueba local → **PR** → merge a `main` | Deploy API en Railway tras merge |
+
+`pnpm dev:web` **bloquea** si `apps/web/.env` apunta a Railway u otra HTTPS remota (`scripts/assert-dev-api-local.mjs`).
+
+### Local con Docker (MySQL + API)
 
 ```powershell
-docker compose up -d mysql    # Solo BD → localhost:3306
+docker compose up -d          # MySQL + API → localhost:3333   (alias: pnpm dev:stack)
 # o
-docker compose up -d          # MySQL + API en :3333
+docker compose up -d mysql    # Solo BD → localhost:3306       (alias: pnpm dev:db)
+# y API en el host:
+pnpm dev:api
 ```
 
 Credenciales alineadas con `apps/api/.env.example`: usuario `nega_pos`, BD `nega_pos`.
+
+Arranque típico de trabajo diario:
+
+```powershell
+pnpm dev:stack                # o abrir Docker Desktop y luego compose
+pnpm dev:web                  # http://localhost:5173 → proxy /api → :3333
+```
+
+Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca producción ni `nega_pos` de desarrollo).
 
 ### Desarrollo en host
 
 | Servicio | Puerto | Comando |
 |----------|--------|---------|
-| API | 3333 | `pnpm dev:api` |
+| API | 3333 | `pnpm dev:api` o contenedor `nega-pos-api` |
 | Web (Vite) | 5173 | `pnpm dev:web` |
-| MySQL | 3306 | `pnpm dev:db` |
+| MySQL | 3306 | `pnpm dev:db` / `pnpm dev:stack` |
 
 ### Desktop
 
 - Servidor estático embebido en `127.0.0.1:51740`
 - Build: `pnpm build:desktop` o desarrollo: `pnpm dev:desktop`
 - Configuración de impresión: **fuente de verdad en MySQL** (`app_settings` key `print_config` vía `GET/PUT /api/v1/settings/printing`). El JSON local en userData solo sirve para **importación one-shot** al primer arranque si la BD está vacía.
-- API remota: `apps/desktop/api-url.json` (URL de Railway u otro host)
+- API de **release**: `apps/desktop/api-url.json` (URL de Railway). No usar ese JSON como fuente para `dev:web`.
 
 ### Mobile APK (Capacitor)
 
 - Workspace: `apps/mobile` (WebView de `apps/web/dist`; **no** altera el pipeline desktop)
 - Habla con la **API pública HTTPS** (`VITE_API_URL` al buildear); cookies cross-origin (`SameSite=None; Secure` en producción)
 - CORS: setear `MOBILE_APP_ORIGIN=https://localhost` en la API (Railway / `.env`)
-- Build: `$env:VITE_API_URL="https://tu-api"; pnpm build:mobile` luego `pnpm --filter mobile build:apk:debug`
+- Build de release: `$env:VITE_API_URL="https://tu-api"; pnpm build:mobile` luego `pnpm --filter mobile build:apk:release`
 - Detalle: [`apps/mobile/README.md`](apps/mobile/README.md)
 - Impresión térmica es **exclusiva del desktop**; la config de impresión se ve/edita también desde el navegador vía API
 
 ### Despliegue Railway (solo API + MySQL)
 
-**Railway despliega únicamente la API y MySQL.** Web, desktop y mobile corren **100 % en local** y se conectan a la URL HTTPS de la API.
+**Railway despliega únicamente la API y MySQL de producción.** No es el target de `pnpm dev:web`.
 
-Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
+Guía operativa histórica: `docs/RAILWAY_DEPLOY.md` (carpeta `docs/` descontinuada como fuente de verdad; preferir esta sección).
 
-| En Railway | Local (PC) |
-|------------|------------|
-| `nega-pos-mysql` | — |
-| `nega-pos-api` (Docker) | — |
-| — | Web: `pnpm dev:web` → `VITE_API_URL` |
-| — | Desktop: `apps/desktop/api-url.json` |
-| — | Android: `pnpm build:mobile` + `VITE_API_URL` |
+| En Railway (prod) | En esta PC (dev) |
+|-------------------|------------------|
+| `nega-pos-mysql` | Docker `nega-pos-mysql` |
+| `nega-pos-api` | Docker `nega-pos-api` o `pnpm dev:api` |
+| — | Web: `pnpm dev:web` → `http://localhost:3333` |
+| — | Desktop/APK release: URL Railway al buildear |
 
 | Pieza | Ubicación |
 |-------|-----------|
@@ -228,7 +250,9 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 | Seed seguro | `node ace db:bootstrap` — platform admin en central (multi-tenant) o admin tenant si legacy |
 | Uploads persistentes | Volume `/data/uploads` + `STORAGE_LOCAL_PATH=/data/uploads` (paths `t_<companyId>/…`) |
 
-**Reglas:** no crear servicio web en Railway; `FRONTEND_URL=http://localhost:5173`; pre-deploy migra **central y todos los tenants** (`migration:run_central` + `migration:run_tenants`); empresas nuevas se crean desde `/platform` (`CREATE DATABASE` + migrate + seed, sin OTP). Si un tenant falla en pre-deploy, Railway aborta el deploy (revisar logs: slug / `db_name` / error). Desde `/platform` también se puede **suspender** o **eliminar por completo** una empresa (DROP de su MySQL + filas en central + uploads); la eliminación pide confirmar el slug.
+**Reglas prod:** no crear servicio web en Railway; pre-deploy migra **central y todos los tenants** (`migration:run_central` + `migration:run_tenants`); empresas nuevas se crean desde `/platform` (`CREATE DATABASE` + migrate + seed, sin OTP). Si un tenant falla en pre-deploy, Railway aborta el deploy (revisar logs: slug / `db_name` / error). Desde `/platform` también se puede **suspender** o **eliminar por completo** una empresa (DROP de su MySQL + filas en central + uploads); la eliminación pide confirmar el slug.
+
+**Flujo con PRs:** trabajar en rama contra Docker local → abrir PR a `main` → merge → Railway redeploya la API. Los instaladores desktop/mobile se regeneran cuando haga falta con la URL de prod.
 
 ### Cutover multi-empresa (producción limpia)
 
@@ -266,7 +290,7 @@ Guía completa: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md).
 
 | Variable | Propósito |
 |----------|-----------|
-| `VITE_API_URL` | URL base API sin `/api/v1` (ej. `http://localhost:3333`; en APK usar la URL pública HTTPS) |
+| `VITE_API_URL` | **Dev:** `http://localhost:3333` (obligatorio para `pnpm dev:web`). **Release APK/desktop build:** URL HTTPS de Railway. Nunca mezclar prod en `.env` de desarrollo. |
 | `VITE_GOOGLE_CLIENT_ID` | Mismo client id que la API (botón Continuar con Google) |
 
 ---
@@ -953,8 +977,9 @@ pnpm test
 | Comando | Acción |
 |---------|--------|
 | `pnpm dev:db` | Levanta MySQL (Docker) |
-| `pnpm dev:api` | API en modo desarrollo (HMR) |
-| `pnpm dev:web` | Vite dev server |
+| `pnpm dev:stack` | Levanta MySQL + API (Docker, `:3333`) |
+| `pnpm dev:api` | API en modo desarrollo (HMR) en el host |
+| `pnpm dev:web` | Vite dev server (exige API local; bloquea Railway) |
 | `pnpm dev:setup` | Script inicial (`scripts/dev-setup.ps1`) |
 | `pnpm dev:reset-db` | Reset BD (`scripts/reset-database.ps1`) |
 | `pnpm dev:desktop` | Build web + Electron dev |

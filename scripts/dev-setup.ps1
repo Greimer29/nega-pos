@@ -30,6 +30,12 @@ if (-not (Test-Path 'apps\api\.env')) {
 if (-not (Test-Path 'apps\web\.env')) {
   Write-Host '==> Creando apps\web\.env desde .env.example...' -ForegroundColor Cyan
   Copy-Item 'apps\web\.env.example' 'apps\web\.env'
+} else {
+  $webEnvRaw = Get-Content 'apps\web\.env' -Raw
+  if ($webEnvRaw -match 'railway\.app|nega-pos-api-production') {
+    Write-Warning 'apps/web/.env apuntaba a Railway/producción — forzando http://localhost:3333'
+    Set-Content -Path 'apps\web\.env' -Value "VITE_API_URL=http://localhost:3333`n" -NoNewline
+  }
 }
 
 Set-Location 'apps\api'

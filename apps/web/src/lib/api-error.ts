@@ -137,7 +137,7 @@ export function getApiError(error: unknown): ApiErrorBody {
         message: isDesktopApp()
           ? 'No se pudo conectar con el servidor. Verificá tu internet e intentá reconectar.'
           : usesLocalApiProxy()
-            ? 'No se pudo conectar con la API. Verificá VITE_API_URL en apps/web/.env y que Railway (o la API local) esté online.'
+            ? 'No se pudo conectar con la API. Verificá VITE_API_URL en apps/web/.env (dev: http://localhost:3333) y que Docker o `pnpm dev:api` esté online.'
             : 'No se pudo conectar con la API. Verificá tu conexión e intentá de nuevo.',
       }
     }
@@ -176,7 +176,7 @@ export function getApiError(error: unknown): ApiErrorBody {
       return {
         code: 'NETWORK_ERROR',
         message:
-          'No se pudo conectar con la API. Verificá que `VITE_API_URL` en apps/web/.env apunte a Railway (o a la API local en :3333), reiniciá `pnpm dev:web` y recargá la página.',
+          'No se pudo conectar con la API. En desarrollo `VITE_API_URL` debe ser `http://localhost:3333` (Docker o `pnpm dev:api`). Reiniciá `pnpm dev:web` y recargá la página.',
       }
     }
 
