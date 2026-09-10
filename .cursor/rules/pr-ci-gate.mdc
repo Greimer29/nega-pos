@@ -9,14 +9,16 @@ alwaysApply: true
 
 ## Obligatorio (en este orden)
 
-1. `pnpm lint` en la raíz del monorepo (debe salir exit 0).
-2. Si tocaste `apps/api`: también `pnpm --filter api exec eslint . --fix` si lint falló por prettier, y re-correr `pnpm lint`.
-3. Si tocaste tests API relevantes y hay BD de test disponible: los specs afectados.
+1. `pnpm lint` en la raíz del monorepo (exit 0).
+2. `pnpm typecheck` en la raíz del monorepo (exit 0).
+3. Si lint falló por prettier: `pnpm --filter api exec eslint . --fix` y/o web, luego re-correr lint + typecheck.
+4. Si tocaste tests API relevantes y hay BD de test disponible: los specs afectados.
 
-## Si lint falla
+## Si lint o typecheck fallan
 
-- Corregí con `pnpm --filter api exec eslint . --fix` y/o `pnpm --filter web exec eslint . --fix`.
-- Volvé a correr `pnpm lint` hasta verde.
+- Lint: corregí con `eslint . --fix` en el package afectado.
+- Typecheck: arreglá los errores de `tsc` (tipos DOM como `HeadersInit` no existen en API Node — usá tipos explícitos).
+- Volvé a correr `pnpm lint` y `pnpm typecheck` hasta verde.
 - **No** subas “y lo arreglamos después”: eso ya rompió CI varias veces.
 
 ## Excepciones

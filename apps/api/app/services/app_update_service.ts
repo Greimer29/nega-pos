@@ -72,7 +72,7 @@ export default class AppUpdateService {
     return { repo, token }
   }
 
-  private authHeaders(token: string): HeadersInit {
+  private authHeaders(token: string): Record<string, string> {
     return {
       'Accept': 'application/vnd.github+json',
       'Authorization': `Bearer ${token}`,
