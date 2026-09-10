@@ -3,6 +3,15 @@ import { BaseTransformer } from '@adonisjs/core/transformers'
 
 export default class SupplierTransformer extends BaseTransformer<Supplier> {
   toObject() {
+    const saldoPendienteUsd =
+      this.resource.$extras.saldoPendienteUsd !== undefined
+        ? String(this.resource.$extras.saldoPendienteUsd)
+        : undefined
+    const tieneSaldoVencido =
+      this.resource.$extras.tieneSaldoVencido !== undefined
+        ? Boolean(this.resource.$extras.tieneSaldoVencido)
+        : undefined
+
     return {
       ...this.pick(this.resource, [
         'id',
@@ -17,6 +26,8 @@ export default class SupplierTransformer extends BaseTransformer<Supplier> {
         'updatedAt',
       ]),
       active: Boolean(this.resource.active),
+      ...(saldoPendienteUsd !== undefined ? { saldoPendienteUsd } : {}),
+      ...(tieneSaldoVencido !== undefined ? { tieneSaldoVencido } : {}),
     }
   }
 }

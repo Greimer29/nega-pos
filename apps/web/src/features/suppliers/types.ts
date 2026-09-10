@@ -8,6 +8,10 @@ export type Supplier = {
   creditDays: number | null
   imagePath: string | null
   active: boolean
+  /** Presente en listado: deuda a crédito confirmada. */
+  saldoPendienteUsd?: string
+  /** Presente en listado: hay al menos una compra vencida con saldo. */
+  tieneSaldoVencido?: boolean
   createdAt: string
   updatedAt: string
 }

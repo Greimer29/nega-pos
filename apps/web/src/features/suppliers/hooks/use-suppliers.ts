@@ -84,6 +84,7 @@ export function useCreateSupplierPaymentMutation() {
       void queryClient.invalidateQueries({
         queryKey: [...suppliersQueryKey, 'account-statement', supplierId],
       })
+      void queryClient.invalidateQueries({ queryKey: suppliersQueryKey })
       invalidateSupplierPayments(queryClient)
     },
   })
@@ -104,6 +105,7 @@ export function useCreateSupplierInvoiceMutation() {
       void queryClient.invalidateQueries({
         queryKey: [...suppliersQueryKey, 'account-statement', supplierId],
       })
+      void queryClient.invalidateQueries({ queryKey: suppliersQueryKey })
       invalidateSupplierPayments(queryClient)
       invalidateExpensesFinancials(queryClient)
     },

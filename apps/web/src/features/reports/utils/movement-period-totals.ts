@@ -20,7 +20,11 @@ function isPendingCredit(status: AccountStatementMovement['creditReportStatus'])
 
 function pendingCreditAmount(movement: AccountStatementMovement) {
   if (movement.isCreditSale || movement.isCreditPurchase) {
-    return Number(movement.amountUsd)
+    const pendingBalance = Number(movement.creditBalanceUsd ?? movement.amountUsd)
+    if (pendingBalance <= 0 || !isPendingCredit(movement.creditReportStatus)) {
+      return 0
+    }
+    return pendingBalance
   }
 
   const pendingBalance = Number(movement.creditBalanceUsd ?? movement.amountUsd)
@@ -70,10 +74,6 @@ function computePurchaseTotals(movements: AccountStatementMovement[]): CreditSpl
     }
 
     if (movement.isCreditPurchase) {
-      if (movement.isCreditPurchaseCarryover) {
-        continue
-      }
-
       pendingCreditUsd += pendingCreditAmount(movement)
       continue
     }

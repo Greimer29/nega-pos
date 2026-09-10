@@ -99,7 +99,7 @@ export const reportUi = {
     'report-hero-kpi relative overflow-hidden rounded-2xl border border-white/10 bg-neutral-950 p-6 text-white shadow-[0_2px_8px_-2px_rgb(0_0_0_/_0.12)]',
 } as const
 
-export type MetricTone = 'income' | 'purchase' | 'expense' | 'machine'
+export type MetricTone = 'income' | 'purchase' | 'expense' | 'machine' | 'payable'
 
 export function metricToneStyles(tone: MetricTone) {
   switch (tone) {
@@ -120,6 +120,12 @@ export function metricToneStyles(tone: MetricTone) {
         icon: reportUi.iconBoxMachine,
         tag: 'bg-teal-50 text-teal-800',
         tagLabel: 'Egreso',
+      }
+    case 'payable':
+      return {
+        icon: 'flex size-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-800',
+        tag: 'bg-amber-50 text-amber-800',
+        tagLabel: 'Pendiente',
       }
     default:
       return {

@@ -40,12 +40,16 @@ export type AccountStatementSummary = {
   expensesUsd: string
   machineExpensesUsd: string
   incomesUsd: string
+  pendingPayablesUsd: string
+  overduePayablesUsd: string
   netUsd: string
   sales: string
   purchases: string
   expenses: string
   machineExpenses: string
   incomes: string
+  pendingPayables: string
+  overduePayables: string
   net: string
   rates: Record<string, string>
 }

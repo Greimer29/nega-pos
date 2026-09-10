@@ -118,10 +118,7 @@ export function CustomerPaymentFormDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Cuenta</Label>
-            <AccountSelect value={accountId} onChange={setAccountId} />
-          </div>
+          <AccountSelect value={accountId} onChange={setAccountId} />
 
           <div className="space-y-2">
             <Label htmlFor="customer-payment-note">Nota</Label>

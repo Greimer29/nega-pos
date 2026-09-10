@@ -57,9 +57,10 @@ describe('computeMovementPeriodTotals', () => {
         movement({
           id: 2,
           type: 'purchase',
-          amountUsd: '45.0000',
+          amountUsd: '0.0000',
           isCreditPurchase: true,
           creditReportStatus: 'overdue',
+          creditBalanceUsd: '45.0000',
         }),
         movement({
           id: 3,
@@ -77,7 +78,7 @@ describe('computeMovementPeriodTotals', () => {
     })
   })
 
-  it('ignores carryover credit purchases when summing pending credit', () => {
+  it('includes carryover credit purchases in pending credit via creditBalanceUsd', () => {
     const totals = computeMovementPeriodTotals(
       [
         movement({
@@ -92,9 +93,11 @@ describe('computeMovementPeriodTotals', () => {
         movement({
           id: 2,
           type: 'purchase',
-          amountUsd: '45.0000',
+          amountUsd: '0.0000',
           isCreditPurchase: true,
+          isCreditPurchaseCarryover: true,
           creditReportStatus: 'pending',
+          creditBalanceUsd: '45.0000',
         }),
       ],
       'compras'
@@ -103,7 +106,7 @@ describe('computeMovementPeriodTotals', () => {
     expect(totals).toEqual({
       kind: 'credit_split',
       cashUsd: 0,
-      pendingCreditUsd: 45,
+      pendingCreditUsd: 165,
     })
   })
 

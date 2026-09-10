@@ -448,7 +448,7 @@ catalog_products ──< product_inventory_movements
 `POST /api/v1/suppliers/:id/invoices` (permiso `suppliers.payments`):
 
 - **Contado** (`is_credit: false`): crea un `expense` con `supplier_id`, `account_id` obligatorio, `invoice_number` opcional. No toca inventario. Aparece en Gastos y en el estado de cuenta del proveedor.
-- **Crédito** (`is_credit: true`): crea un `purchase` ya `CONFIRMED` con `affects_inventory: false`, sin ítems, `balance_usd = total`. El **Abono** existente baja ese saldo. No toca inventario.
+- **Crédito** (`is_credit: true`): crea un `purchase` ya `CONFIRMED` con `affects_inventory: false`, sin ítems, `balance_usd = total`. El **Abono** existente baja ese saldo. No toca inventario. En Reportes/Dashboard aparece como **cuenta por pagar** (informativo; no afecta flujo de caja hasta el abono).
 
 ### Catálogo, fórmulas y tallas
 
@@ -490,7 +490,7 @@ catalog_products ──< product_inventory_movements
 
 ### Reportes (`report_service.ts` / `inventory_report_service.ts`)
 
-- **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **ingresos** (aportes), compras, gastos, gastos de máquina, abonos de clientes/proveedores en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). Balance neto: `ventas + ingresos − compras − gastos − gastos_máquina`.
+- **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **ingresos** (aportes), compras de contado, abonos a proveedores, gastos, gastos de máquina y abonos de clientes en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). Balance neto (flujo de caja): `ventas + ingresos − compras_contado/abonos − gastos − gastos_máquina`. Las **cuentas por pagar** (compras/facturas a crédito con saldo) se listan como informativas (`pendingPayablesUsd` / `overduePayablesUsd`) y **no restan** del neto hasta el abono.
 - **Inventario** (`GET /reports/inventory`): snapshot de stock de productos de catálogo y materiales en una sola lista (paginada). Filtros: `search`, `category`, `sort_by`/`sort_dir` (`id`|`name`|`sale_price`|`quantity`), `active`, `low_stock`, `hide_zero`, `page`, `per_page`, `export=true` (set completo para Excel). Cada ítem incluye `kind` (`product`|`material`), precios/costos, unidad, `stock_source`, `low_stock`, `has_sizes` y `lines[]` (por talla si aplica; si no, una línea con `size: null`). Con `hide_zero`, se omiten tallas con cantidad ≤ 0 y productos/materiales con total 0. UI: `/reportes?vista=inventario` (query `inv_*`).
 - **Movimientos de producto** (`GET /reports/inventory/:productId/movements`): historial de `product_inventory_movements` de un producto de catálogo (no materiales). Filtros de período (`month`|`from`/`to`) y `types` (PURCHASE_IN, SALE_OUT, ajustes manuales, REVERSAL_ADJUSTMENT). UI: `/reportes/inventario/:productId`.
 
@@ -673,7 +673,7 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
-| GET | `/api/v1/suppliers` | `suppliers.view` | `Suppliers.index` |
+| GET | `/api/v1/suppliers` | `suppliers.view` | `Suppliers.index` — listado incluye `saldoPendienteUsd` y `tieneSaldoVencido` (deuda a crédito confirmada) |
 | GET | `/api/v1/suppliers/:id` | `suppliers.view` | `Suppliers.show` |
 | GET | `/api/v1/suppliers/:id/account-statement` | `suppliers.view` | `Suppliers.accountStatement` |
 | POST | `/api/v1/suppliers` | `suppliers.edit` | `Suppliers.store` |

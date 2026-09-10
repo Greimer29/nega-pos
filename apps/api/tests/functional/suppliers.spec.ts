@@ -216,6 +216,45 @@ test.group('Suppliers API', (group) => {
     const body = response.body()
     assert.equal(body.data.meta.total, 2)
     assert.lengthOf(body.data.suppliers, 2)
+    assert.equal(body.data.suppliers[0].saldoPendienteUsd, '0.0000')
+  })
+
+  test('GET /api/v1/suppliers includes pending credit balance per supplier', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const supplier = await Supplier.create({ name: 'Listado Saldo Cred', active: true })
+
+    await Purchase.create({
+      supplierId: supplier.id,
+      date: DateTime.now().minus({ days: 5 }),
+      invoiceNumber: 'F-LIST-CRED',
+      totalUsd: '90.0000',
+      totalBs: '3240.00',
+      status: 'CONFIRMED',
+      isCredit: true,
+      creditDueDate: DateTime.now().minus({ days: 1 }),
+      balanceUsd: '90.0000',
+      amountPaidUsd: '0.0000',
+    })
+
+    const response = await client.get('/api/v1/suppliers?search=Listado%20Saldo').loginAs(user)
+    response.assertStatus(200)
+
+    const body = response.body() as {
+      data: {
+        suppliers: Array<{
+          id: number
+          saldoPendienteUsd: string
+          tieneSaldoVencido: boolean
+        }>
+      }
+    }
+    const row = body.data.suppliers.find((item) => item.id === Number(supplier.id))
+    assert.exists(row)
+    assert.equal(row!.saldoPendienteUsd, '90.0000')
+    assert.isTrue(row!.tieneSaldoVencido)
   })
 
   test('GET /api/v1/suppliers/:id/account-statement lists all purchases for supplier', async ({

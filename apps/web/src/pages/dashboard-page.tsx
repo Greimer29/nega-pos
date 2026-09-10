@@ -138,9 +138,10 @@ export function DashboardPage() {
             />
             <DashboardCreditTable
               title="Créditos proveedores"
-              description="Compras a crédito por cancelar"
+              description="Cuentas por pagar: no afectan caja hasta el abono"
               rows={data.proveedoresCredito}
               linkBase="/suppliers"
+              overdueLabel="Hay deudas vencidas por pagar"
             />
           </div>
         </>

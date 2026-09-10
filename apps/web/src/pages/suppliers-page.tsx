@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { SupplierDeleteDialog } from '@/features/suppliers/components/supplier-delete-dialog'
 import { SupplierFormDialog } from '@/features/suppliers/components/supplier-form-dialog'
 import {
@@ -151,64 +152,95 @@ export function SuppliersPage() {
             />
           ) : (
             <div className="overflow-x-auto rounded-md border">
-              <table className="w-full min-w-[640px] text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="bg-muted/50 border-b text-left">
                     <th className="px-4 py-3 font-medium">Nombre</th>
                     <th className="px-4 py-3 font-medium">RIF</th>
                     <th className="px-4 py-3 font-medium">Teléfono</th>
+                    <th className="px-4 py-3 text-right font-medium">Saldo pendiente</th>
                     <th className="px-4 py-3 font-medium">Estado</th>
                     <th className="px-4 py-3 text-right font-medium">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {suppliers.map((supplier) => (
-                    <tr key={supplier.id} className="border-b last:border-b-0">
-                      <td className="px-4 py-3 font-medium">{supplier.name}</td>
-                      <td className="text-muted-foreground px-4 py-3 font-mono text-xs">
-                        {formatRif(supplier.rif)}
-                      </td>
-                      <td className="text-muted-foreground px-4 py-3">{formatTelefono(supplier.phone)}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={cn(
-                            'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-                            supplier.active
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-muted text-muted-foreground'
-                          )}
-                        >
-                          {supplier.active ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" aria-label={`Estado de cuenta ${supplier.name}`} asChild>
-                            <Link to={`/suppliers/${supplier.id}/cuenta`}>
-                              <Wallet />
-                            </Link>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Editar ${supplier.name}`}
-                            onClick={() => openEditDialog(supplier)}
+                  {suppliers.map((supplier) => {
+                    const saldoUsd = Number(supplier.saldoPendienteUsd ?? 0)
+                    const hasDebt = saldoUsd > 0
+                    return (
+                      <tr key={supplier.id} className="border-b last:border-b-0">
+                        <td className="px-4 py-3 font-medium">{supplier.name}</td>
+                        <td className="text-muted-foreground px-4 py-3 font-mono text-xs">
+                          {formatRif(supplier.rif)}
+                        </td>
+                        <td className="text-muted-foreground px-4 py-3">
+                          {formatTelefono(supplier.phone)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex flex-col items-end gap-1">
+                            <span
+                              className={cn(
+                                'font-medium tabular-nums',
+                                hasDebt ? 'text-amber-800' : 'text-muted-foreground'
+                              )}
+                            >
+                              <DisplayMoneyFromUsd
+                                amountUsd={(supplier.saldoPendienteUsd ?? '0').toString()}
+                              />
+                            </span>
+                            {supplier.tieneSaldoVencido ? (
+                              <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800">
+                                Vencido
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={cn(
+                              'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
+                              supplier.active
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-muted text-muted-foreground'
+                            )}
                           >
-                            <Pencil />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Eliminar ${supplier.name}`}
-                            onClick={() => openDeleteDialog(supplier)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {supplier.active ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Estado de cuenta ${supplier.name}`}
+                              asChild
+                            >
+                              <Link to={`/suppliers/${supplier.id}/cuenta`}>
+                                <Wallet />
+                              </Link>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Editar ${supplier.name}`}
+                              onClick={() => openEditDialog(supplier)}
+                            >
+                              <Pencil />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Eliminar ${supplier.name}`}
+                              onClick={() => openDeleteDialog(supplier)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

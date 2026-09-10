@@ -11,6 +11,7 @@ import db from '@adonisjs/lucid/services/db'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
+import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
 
 const IMAGE_MIME: Record<string, string> = {
@@ -65,7 +66,53 @@ export default class SupplierService {
       query.where('active', filters.active)
     }
 
-    return query.paginate(page, perPage)
+    const paginator = await query.paginate(page, perPage)
+    await this.attachPendingBalances(paginator.all())
+    return paginator
+  }
+
+  /**
+   * Saldo pendiente = suma de balance_usd de compras a crédito confirmadas.
+   */
+  private async attachPendingBalances(suppliers: Supplier[]): Promise<void> {
+    if (suppliers.length === 0) {
+      return
+    }
+
+    const ids = suppliers.map((supplier) => Number(supplier.id))
+    const hoy = DateTime.now().toISODate()!
+
+    const rows = await db
+      .from('purchases')
+      .whereIn('supplier_id', ids)
+      .where('is_credit', true)
+      .where('status', 'CONFIRMED')
+      .where('balance_usd', '>', 0)
+      .groupBy('supplier_id')
+      .select(
+        'supplier_id',
+        db.raw('SUM(balance_usd) as saldo'),
+        db.raw(
+          `MAX(CASE WHEN credit_due_date IS NOT NULL AND credit_due_date < ? THEN 1 ELSE 0 END) as vencida`,
+          [hoy]
+        )
+      )
+
+    const bySupplier = new Map(
+      rows.map((row) => [
+        Number(row.supplier_id),
+        {
+          saldoPendienteUsd: Number(row.saldo).toFixed(4),
+          tieneSaldoVencido: Number(row.vencida) > 0,
+        },
+      ])
+    )
+
+    for (const supplier of suppliers) {
+      const balance = bySupplier.get(Number(supplier.id))
+      supplier.$extras.saldoPendienteUsd = balance?.saldoPendienteUsd ?? '0.0000'
+      supplier.$extras.tieneSaldoVencido = balance?.tieneSaldoVencido ?? false
+    }
   }
 
   async obtener(id: number): Promise<Supplier> {

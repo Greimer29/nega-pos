@@ -105,6 +105,12 @@ export type AccountStatementSummary = {
 
   incomesUsd: string
 
+  /** Deuda a proveedores con saldo (informativo; no resta del neto). */
+  pendingPayablesUsd: string
+
+  /** Subconjunto vencido de pendingPayablesUsd. */
+  overduePayablesUsd: string
+
   netUsd: string
 
   sales: string
@@ -116,6 +122,10 @@ export type AccountStatementSummary = {
   machineExpenses: string
 
   incomes: string
+
+  pendingPayables: string
+
+  overduePayables: string
 
   net: string
 
@@ -164,6 +174,10 @@ export default class ReportService {
     let machineExpensesUsd = 0
 
     let incomesUsd = 0
+
+    let pendingPayablesUsd = 0
+
+    let overduePayablesUsd = 0
 
     if (types.has('sales')) {
       const sales = await Sale.query()
@@ -362,13 +376,15 @@ export default class ReportService {
             })
 
             .orWhere((creditBuilder) => {
-              creditBuilder
-
-                .where('isCredit', true)
-
-                .whereNotNull('creditDueDate')
-
-                .where('creditDueDate', '<=', period.to)
+              creditBuilder.where('isCredit', true).where((creditScope) => {
+                creditScope
+                  .where((withDue) => {
+                    withDue.whereNotNull('creditDueDate').where('creditDueDate', '<=', period.to)
+                  })
+                  .orWhere((withoutDue) => {
+                    withoutDue.whereNull('creditDueDate').where('date', '<=', period.to)
+                  })
+              })
             })
         })
 
@@ -423,6 +439,13 @@ export default class ReportService {
         const nativeUsd = balanceUsdAmount
 
         purchasesUsd += usd
+
+        if (purchase.isCredit && balanceUsdAmount > 0) {
+          pendingPayablesUsd += balanceUsdAmount
+          if (creditStatus === 'overdue') {
+            overduePayablesUsd += balanceUsdAmount
+          }
+        }
 
         movements.push(
           this.buildMovement({
@@ -710,6 +733,10 @@ export default class ReportService {
 
         incomesUsd: incomesUsd.toFixed(4),
 
+        pendingPayablesUsd: pendingPayablesUsd.toFixed(4),
+
+        overduePayablesUsd: overduePayablesUsd.toFixed(4),
+
         netUsd: netUsd.toFixed(4),
 
         sales: this.formatDisplay(
@@ -738,6 +765,16 @@ export default class ReportService {
         incomes: this.formatDisplay(
           this.currencyService.fromUsd(incomesUsd, displayCurrency, rates),
 
+          displayCurrency
+        ),
+
+        pendingPayables: this.formatDisplay(
+          this.currencyService.fromUsd(pendingPayablesUsd, displayCurrency, rates),
+          displayCurrency
+        ),
+
+        overduePayables: this.formatDisplay(
+          this.currencyService.fromUsd(overduePayablesUsd, displayCurrency, rates),
           displayCurrency
         ),
 

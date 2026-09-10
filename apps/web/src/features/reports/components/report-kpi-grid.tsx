@@ -1,27 +1,16 @@
 import {
-
   ArrowDownLeft,
-
   ArrowDownToLine,
-
   ArrowUpRight,
-
   ChevronRight,
-
+  HandCoins,
   Receipt,
-
   ShoppingCart,
-
   TrendingUp,
-
   Wrench,
-
 } from 'lucide-react'
-
 import type { LucideIcon } from 'lucide-react'
-
 import { Link } from 'react-router-dom'
-
 import { useDisplayCurrency } from '@/features/currencies/context/display-currency-context'
 import { currencySymbol } from '@/features/reports/constants'
 import { reportCategoryHref } from '@/features/reports/report-categories'
@@ -30,23 +19,21 @@ import type { AccountStatementSummary } from '@/features/reports/types'
 import { formatReportDisplayAmount } from '@/features/reports/utils/format-report-amount'
 import { cn } from '@/lib/utils'
 
-
-
 type ReportKpiGridProps = {
-
   summary: AccountStatementSummary
-
   filterSearch: string
-
 }
-
-
 
 export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
   const { displayCurrency, formatFromUsd, baseCurrencyCode } = useDisplayCurrency()
   const netUsd = Number(summary.netUsd)
   const isPositive = netUsd >= 0
   const formatUsd = (amountUsd: string) => formatReportDisplayAmount(amountUsd, formatFromUsd)
+  const overduePayablesUsd = Number(summary.overduePayablesUsd ?? 0)
+  const pendingPayablesDetail =
+    overduePayablesUsd > 0
+      ? `${formatUsd(summary.overduePayablesUsd)} vencidas`
+      : 'No resta del balance neto'
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -76,6 +63,14 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
         label="Egresos compras"
         value={formatUsd(summary.purchasesUsd)}
         tone="purchase"
+        href={reportCategoryHref('compras', filterSearch)}
+      />
+      <MetricCard
+        icon={HandCoins}
+        label="Cuentas por pagar"
+        value={formatUsd(summary.pendingPayablesUsd ?? '0')}
+        detail={pendingPayablesDetail}
+        tone="payable"
         href={reportCategoryHref('compras', filterSearch)}
       />
       <MetricCard
@@ -193,10 +188,8 @@ function HeroKpiCard({
           </p>
 
           <p className="mt-3 max-w-md text-xs leading-relaxed text-neutral-400">
-
-            Consolidación en {baseCurrencyCode} con visualización en {currency}. Cada movimiento
-            usa el monto guardado del documento; la tasa del catálogo solo convierte la vista.
-
+            Flujo de caja en {baseCurrencyCode} (visualización {currency}). La deuda a crédito de
+            proveedores se muestra aparte y no resta este balance hasta el abono.
           </p>
 
         </div>
@@ -295,7 +288,11 @@ function MetricCard({
 
             'mt-1 text-2xl font-bold tracking-tight tabular-nums',
 
-            tone === 'income' ? 'text-emerald-700' : 'text-neutral-900'
+            tone === 'income'
+              ? 'text-emerald-700'
+              : tone === 'payable'
+                ? 'text-amber-800'
+                : 'text-neutral-900'
 
           )}
 

@@ -892,7 +892,7 @@ test.group('Dashboard API', (group) => {
     const reportTotal = Number(reportResponse.body().data.summary.purchasesUsd).toFixed(2)
 
     assert.equal(dashboardTotal, reportTotal)
-    assert.equal(dashboardTotal, '65.00')
+    assert.equal(dashboardTotal, '25.00')
   })
 
   test('GET dashboard overview daily chart spans the same ISO week as weekly chart', async ({

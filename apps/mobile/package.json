@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "1.0.10",
+  "version": "1.1.0",
   "private": true,
   "description": "Nega POS — wrapper Capacitor Android (reutiliza apps/web/dist)",
   "scripts": {

@@ -20,21 +20,27 @@ export function creditPurchaseReportStatus(
   ctx: CreditPurchaseReportContext,
   asOfDate: string = DateTime.now().toISODate()!
 ): CreditPurchaseReportStatus | null {
-  if (!ctx.isCredit || !ctx.creditDueDate) {
+  if (!ctx.isCredit) {
     return null
   }
 
-  if (ctx.balanceUsd > 0) {
-    return ctx.creditDueDate < asOfDate ? 'overdue' : 'pending'
+  if (ctx.balanceUsd <= 0) {
+    return 'settled'
   }
 
-  return 'settled'
+  if (!ctx.creditDueDate) {
+    return 'pending'
+  }
+
+  return ctx.creditDueDate < asOfDate ? 'overdue' : 'pending'
 }
 
 /**
  * Compras a crédito en reportes:
- * - Pendientes/vencidas con saldo: aparecen si el vencimiento es <= fin del período (incluye arrastre a meses posteriores).
- * - Saldadas: solo si el vencimiento cae dentro del período filtrado.
+ * - Con saldo y vencimiento: visibles si el vencimiento es <= fin del período (incluye arrastre).
+ * - Con saldo y sin vencimiento: visibles si la fecha de compra es <= fin del período.
+ * - Saldadas con vencimiento: solo si el vencimiento cae dentro del período.
+ * - Saldadas sin vencimiento: solo si la fecha de compra cae dentro del período.
  */
 export function creditPurchaseVisibleInReport(
   ctx: CreditPurchaseReportContext,
@@ -44,15 +50,13 @@ export function creditPurchaseVisibleInReport(
     return ctx.purchaseDate >= period.from && ctx.purchaseDate <= period.to
   }
 
-  if (!ctx.creditDueDate) {
-    return false
-  }
+  const anchorDate = ctx.creditDueDate ?? ctx.purchaseDate
 
   if (ctx.balanceUsd > 0) {
-    return ctx.creditDueDate <= period.to
+    return anchorDate <= period.to
   }
 
-  return ctx.creditDueDate >= period.from && ctx.creditDueDate <= period.to
+  return anchorDate >= period.from && anchorDate <= period.to
 }
 
 export function creditPurchaseIsOverdue(
@@ -78,16 +82,12 @@ export function creditPurchaseReportAmountUsd(ctx: CreditPurchaseReportContext):
 }
 
 /**
- * Créditos impagos visibles por arrastre en meses posteriores al vencimiento
- * no deben volver a sumar en purchasesUsd: solo cuentan en el mes del vencimiento.
+ * La deuda a crédito no afecta flujo de caja: solo los abonos y compras de contado
+ * suman a purchasesUsd / Balance neto.
  */
 export function creditPurchaseCountsTowardPeriodTotal(
-  ctx: CreditPurchaseReportContext,
-  period: { from: string; to: string }
+  _ctx: CreditPurchaseReportContext,
+  _period: { from: string; to: string }
 ): boolean {
-  if (!ctx.isCredit || ctx.balanceUsd <= 0 || !ctx.creditDueDate) {
-    return false
-  }
-
-  return ctx.creditDueDate >= period.from && ctx.creditDueDate <= period.to
+  return false
 }

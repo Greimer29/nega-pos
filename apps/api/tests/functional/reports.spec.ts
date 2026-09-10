@@ -313,18 +313,30 @@ test.group('Reports API', (group) => {
         movements: Array<{
           amountUsd: string
           isCreditPurchase?: boolean
+          creditBalanceUsd?: string
           creditReportStatus?: string
         }>
-        summary: { purchasesUsd: string }
+        summary: { purchasesUsd: string; pendingPayablesUsd: string }
       }
     }
 
     const currentCredit = currentBody.data.movements.filter((m) => m.isCreditPurchase)
     assert.isAtLeast(currentCredit.length, 1)
-    assert.exists(currentBody.data.movements.find((m) => m.amountUsd === '100.0000'))
+    assert.exists(
+      currentBody.data.movements.find(
+        (m) => m.isCreditPurchase && m.creditBalanceUsd === '100.0000'
+      )
+    )
+    assert.equal(currentBody.data.summary.purchasesUsd, '25.0000')
+    const expectedPending =
+      dueFuture <= monthEnd ? 150 : 100
+    assert.equal(currentBody.data.summary.pendingPayablesUsd, `${expectedPending.toFixed(4)}`)
     if (dueFuture <= monthEnd) {
-      const pending = currentBody.data.movements.find((m) => m.amountUsd === '50.0000')
+      const pending = currentBody.data.movements.find(
+        (m) => m.isCreditPurchase && m.creditBalanceUsd === '50.0000'
+      )
       assert.exists(pending)
+      assert.equal(pending!.amountUsd, '0.0000')
       assert.equal(pending!.creditReportStatus, 'pending')
     }
 
@@ -343,10 +355,16 @@ test.group('Reports API', (group) => {
           creditBalanceUsd?: string
           creditReportStatus?: string
         }>
+        summary: { purchasesUsd: string; pendingPayablesUsd: string }
       }
     }
 
-    assert.exists(nextBody.data.movements.find((m) => m.amountUsd === '80.0000'))
+    assert.exists(
+      nextBody.data.movements.find(
+        (m) => m.isCreditPurchase && m.creditBalanceUsd === '80.0000'
+      )
+    )
+    assert.equal(nextBody.data.summary.purchasesUsd, '0.0000')
     if (duePast < nextMonth.startOf('month')) {
       const carryover = nextBody.data.movements.find(
         (m) => m.isCreditPurchase && m.creditBalanceUsd === '100.0000'
@@ -357,7 +375,7 @@ test.group('Reports API', (group) => {
     }
   })
 
-  test('GET account-statement does not double-count overdue credit purchases across months', async ({
+  test('GET account-statement does not count unpaid credit purchases toward cash totals', async ({
     client,
     assert,
   }) => {
@@ -384,9 +402,21 @@ test.group('Reports API', (group) => {
 
     dueMonth.assertStatus(200)
     const dueBody = dueMonth.body() as {
-      data: { summary: { purchasesUsd: string } }
+      data: {
+        summary: { purchasesUsd: string; pendingPayablesUsd: string; overduePayablesUsd: string }
+        movements: Array<{
+          amountUsd: string
+          isCreditPurchaseCarryover?: boolean
+          creditBalanceUsd?: string
+        }>
+      }
     }
-    assert.equal(dueBody.data.summary.purchasesUsd, '120.0000')
+    assert.equal(dueBody.data.summary.purchasesUsd, '0.0000')
+    assert.equal(dueBody.data.summary.pendingPayablesUsd, '120.0000')
+    const dueMovement = dueBody.data.movements.find((m) => m.creditBalanceUsd === '120.0000')
+    assert.exists(dueMovement)
+    assert.equal(dueMovement!.amountUsd, '0.0000')
+    assert.equal(dueMovement!.isCreditPurchaseCarryover, true)
 
     const carryoverMonth = await client
       .get('/api/v1/reports/account-statement')
@@ -401,11 +431,12 @@ test.group('Reports API', (group) => {
           isCreditPurchaseCarryover?: boolean
           creditBalanceUsd?: string
         }>
-        summary: { purchasesUsd: string }
+        summary: { purchasesUsd: string; pendingPayablesUsd: string }
       }
     }
 
     assert.equal(carryoverBody.data.summary.purchasesUsd, '0.0000')
+    assert.equal(carryoverBody.data.summary.pendingPayablesUsd, '120.0000')
     const carryover = carryoverBody.data.movements.find((m) => m.isCreditPurchaseCarryover)
     assert.exists(carryover)
     assert.equal(carryover!.amountUsd, '0.0000')

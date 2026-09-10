@@ -18,6 +18,7 @@ type DashboardCreditTableProps = {
   linkBase: string
   linkSuffix?: string
   showOrders?: boolean
+  overdueLabel?: string
 }
 
 export function DashboardCreditTable({
@@ -27,13 +28,34 @@ export function DashboardCreditTable({
   linkBase,
   linkSuffix = '',
   showOrders = false,
+  overdueLabel = 'Hay saldos vencidos',
 }: DashboardCreditTableProps) {
+  const totalPendingUsd = rows.reduce((sum, row) => sum + Number(row.saldoPendienteUsd || 0), 0)
+  const hasOverdue = rows.some((row) => row.estado === 'vencida')
+
   return (
     <div className={dashboardUi.metricCard}>
-      <div className="mb-4">
-        <h3 className={dashboardUi.sectionTitle}>{title}</h3>
-        <p className={dashboardUi.muted}>{description}</p>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className={dashboardUi.sectionTitle}>{title}</h3>
+          <p className={dashboardUi.muted}>{description}</p>
+        </div>
+        {rows.length > 0 ? (
+          <div className="text-right">
+            <p className={dashboardUi.muted}>Total pendiente</p>
+            <p className="text-lg font-semibold tabular-nums text-neutral-900">
+              <DisplayMoneyFromUsd amountUsd={totalPendingUsd.toFixed(4)} />
+            </p>
+          </div>
+        ) : null}
       </div>
+
+      {hasOverdue ? (
+        <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+          {overdueLabel}
+        </p>
+      ) : null}
+
       {rows.length === 0 ? (
         <p className={dashboardUi.muted}>Sin saldos pendientes.</p>
       ) : (
