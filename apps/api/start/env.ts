@@ -43,4 +43,9 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   DRIVE_DISK: Env.schema.string.optional(),
   STORAGE_LOCAL_PATH: Env.schema.string.optional(),
+
+  /** App updates via GitHub Releases (desktop/mobile installers). */
+  APP_UPDATES_ENABLED: Env.schema.boolean.optional(),
+  APP_UPDATES_GITHUB_REPO: Env.schema.string.optional(),
+  APP_UPDATES_GITHUB_TOKEN: Env.schema.string.optional(),
 })

@@ -219,6 +219,7 @@ Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca produc
 - Build: `pnpm build:desktop` o desarrollo: `pnpm dev:desktop`
 - Configuración de impresión: **fuente de verdad en MySQL** (`app_settings` key `print_config` vía `GET/PUT /api/v1/settings/printing`). El JSON local en userData solo sirve para **importación one-shot** al primer arranque si la BD está vacía.
 - API de **release**: `apps/desktop/api-url.json` (URL de Railway). No usar ese JSON como fuente para `dev:web`.
+- Actualizaciones: Configuración → General → **Aplicación**. En Electron: descarga el Setup vía API, lo abre y cierra la app para que NSIS reemplace archivos (**auto-update**).
 
 ### Mobile APK (Capacitor)
 
@@ -226,6 +227,7 @@ Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca produc
 - Habla con la **API pública HTTPS** (`VITE_API_URL` al buildear); cookies cross-origin (`SameSite=None; Secure` en producción)
 - CORS: setear `MOBILE_APP_ORIGIN=https://localhost` en la API (Railway / `.env`)
 - Build de release: `$env:VITE_API_URL="https://tu-api"; pnpm build:mobile` luego `pnpm --filter mobile build:apk:release`
+- Actualizaciones: misma card **Aplicación** descarga el APK; Android **no** permite silent replace — el usuario confirma la instalación desde Descargas.
 - Detalle: [`apps/mobile/README.md`](apps/mobile/README.md)
 - Impresión térmica es **exclusiva del desktop**; la config de impresión se ve/edita también desde el navegador vía API
 
@@ -283,6 +285,9 @@ Guía operativa histórica: `docs/RAILWAY_DEPLOY.md` (carpeta `docs/` descontinu
 | `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD` | Super admin central (`db:bootstrap`) |
 | `GOOGLE_CLIENT_ID` | Login Google (id_token) |
 | `DRIVE_DISK` / `STORAGE_LOCAL_PATH` | Archivos subidos (imágenes, facturas). En Railway: Volume + `/data/uploads` |
+| `APP_UPDATES_ENABLED` | `true`/`false` — habilita consulta/descarga de instaladores (default: habilitado si hay token) |
+| `APP_UPDATES_GITHUB_REPO` | Repo de releases (`owner/repo`, default `Greimer29/nega-pos`) |
+| `APP_UPDATES_GITHUB_TOKEN` | PAT GitHub (solo lectura de releases/assets) para que la API proxifique descargas a clientes autenticados |
 | `RUN_MIGRATIONS_ON_START` | Solo Docker local/`docker-compose` (`true`). En Railway: `false` (usa pre-deploy) |
 | `SKIP_BOOTSTRAP_SEED` | `true` para omitir `db:bootstrap` en el entrypoint |
 
@@ -841,6 +846,38 @@ Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuent
 | GET | `/api/v1/settings/printing` | `settings.view` | `SettingsController.getPrinting` |
 | PUT | `/api/v1/settings/printing` | `settings.edit` | `SettingsController.updatePrinting` |
 
+### Actualizaciones de app (`settings.view`)
+
+Instaladores publicados en **GitHub Releases**. La API consulta la última release y proxifica la descarga (los clientes del POS no necesitan acceso a GitHub).
+
+| Método | Ruta | Permiso | Controlador |
+|--------|------|---------|-------------|
+| GET | `/api/v1/app-updates/latest?current=1.2.1` | `settings.view` | `AppUpdatesController.latest` |
+| GET | `/api/v1/app-updates/download/:platform` | `settings.view` | `AppUpdatesController.download` (`desktop` \| `android`) |
+
+**Assets obligatorios en el release** (tag `vX.Y.Z`):
+
+| Plataforma | Nombre de archivo |
+|------------|-------------------|
+| Desktop | `Nega-POS-Setup-{version}.exe` |
+| Android | `Nega-POS-{version}.apk` |
+
+UI: Configuración → General → card **Aplicación** (versión instalada, aviso de update).
+
+| Cliente | Comportamiento |
+|---------|----------------|
+| Desktop (Electron) | Botón **Actualizar ahora** → IPC descarga `download/desktop`, lanza el Setup.exe y cierra la app |
+| Android (Capacitor) | Descarga el APK; el usuario abre el archivo e confirma instalar |
+| Navegador | Ofrece descargas Desktop (.exe) y Android (.apk) |
+
+Publicar release tras buildear:
+
+```powershell
+pnpm build:desktop
+# + build mobile APK release
+pwsh scripts/publish-github-release.ps1
+```
+
 ---
 
 ## 10. Frontend web
@@ -986,6 +1023,7 @@ pnpm test
 | `pnpm dev:desktop` | Build web + Electron dev |
 | `pnpm build:desktop` | Build web + empaquetado Windows |
 | `pnpm build:mobile` | Build web + sync Capacitor Android (`VITE_API_URL` requerida) |
+| `pwsh scripts/publish-github-release.ps1` | Crea GitHub Release `vX.Y.Z` con Setup.exe + APK (nombres fijos) |
 | `pnpm lint` / `pnpm typecheck` | Calidad en todos los workspaces |
 
 ### API (Ace frecuentes)

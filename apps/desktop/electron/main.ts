@@ -11,6 +11,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import serveHandler from 'serve-handler'
 import type { PrintConfig } from './print-config'
+import { downloadAndLaunchDesktopUpdater } from './app-updates'
 import {
   getPrintConfigPath,
   isPrintConfigMigrated,
@@ -247,6 +248,15 @@ function registerPrintingHandlers(): void {
   })
 }
 
+function registerUpdateHandlers(): void {
+  ipcMain.handle('updates:downloadAndInstall', async (event, downloadUrl: string) => {
+    if (typeof downloadUrl !== 'string' || !downloadUrl.trim()) {
+      throw new Error('Falta la URL de descarga.')
+    }
+    return downloadAndLaunchDesktopUpdater(event.sender, downloadUrl.trim())
+  })
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1670,
@@ -283,6 +293,7 @@ if (!gotSingleInstanceLock) {
   void app.whenReady().then(async () => {
     try {
       registerPrintingHandlers()
+      registerUpdateHandlers()
       await startStaticServer()
       warmupApiConnection(runtimeApiUrl)
       createWindow()

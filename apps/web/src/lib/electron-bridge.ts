@@ -27,8 +27,21 @@ export type ElectronPrintingApi = {
   printHtml: (options: ElectronPrintHtmlOptions) => Promise<void>
 }
 
+export type ElectronUpdateProgress = {
+  receivedBytes: number
+  totalBytes: number | null
+  percent: number | null
+}
+
+export type ElectronUpdatesApi = {
+  isAvailable: true
+  downloadAndInstall: (downloadUrl: string) => Promise<{ path: string; fileName: string }>
+  onProgress: (listener: (progress: ElectronUpdateProgress) => void) => () => void
+}
+
 export type ElectronBridge = {
   printing: ElectronPrintingApi
+  updates?: ElectronUpdatesApi
 }
 
 export function isElectronPrintingAvailable(): boolean {
@@ -40,4 +53,15 @@ export function getElectronPrintingApi(): ElectronPrintingApi | null {
     return null
   }
   return window.negaPos!.printing
+}
+
+export function isElectronUpdatesAvailable(): boolean {
+  return typeof window !== 'undefined' && window.negaPos?.updates?.isAvailable === true
+}
+
+export function getElectronUpdatesApi(): ElectronUpdatesApi | null {
+  if (!isElectronUpdatesAvailable()) {
+    return null
+  }
+  return window.negaPos!.updates!
 }

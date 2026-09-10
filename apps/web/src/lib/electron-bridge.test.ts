@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   getElectronPrintingApi,
+  getElectronUpdatesApi,
   isElectronPrintingAvailable,
+  isElectronUpdatesAvailable,
 } from '@/lib/electron-bridge'
 
 describe('electron-bridge', () => {
@@ -72,5 +74,65 @@ describe('electron-bridge', () => {
     globalThis.window.negaPos = { printing: mockApi }
     expect(isElectronPrintingAvailable()).toBe(true)
     expect(getElectronPrintingApi()).toBe(mockApi)
+    expect(isElectronUpdatesAvailable()).toBe(false)
+    expect(getElectronUpdatesApi()).toBeNull()
+  })
+
+  it('returns the updates API when exposed by Electron preload', () => {
+    if (!globalThis.window) {
+      expect(getElectronUpdatesApi()).toBeNull()
+      return
+    }
+
+    const updatesApi = {
+      isAvailable: true as const,
+      downloadAndInstall: async () => ({ path: 'C:\\temp\\setup.exe', fileName: 'setup.exe' }),
+      onProgress: () => () => undefined,
+    }
+
+    globalThis.window.negaPos = {
+      printing: {
+        isAvailable: true as const,
+        listPrinters: async () => [],
+        getConfig: async () => ({
+          business: { name: 'Test', subtitle: '', footer: '' },
+          ticket: { station_label: '' },
+          formats: [],
+          documents: {
+            invoice: {
+              enabled: true,
+              deviceName: '',
+              paperWidthMm: 78,
+              formatId: 'builtin-invoice',
+            },
+            deliveryNote: {
+              enabled: false,
+              deviceName: '',
+              paperWidthMm: 78,
+              formatId: 'builtin-delivery-note',
+            },
+            comanda: {
+              enabled: false,
+              deviceName: '',
+              paperWidthMm: 78,
+              formatId: 'builtin-comanda',
+            },
+          },
+          behavior: {
+            printInvoiceOnConfirm: true,
+            printDeliveryNoteOnConfirm: false,
+            printComandaOnConfirm: false,
+          },
+          categoryRouting: { comanda: { enabled: false, rules: [] } },
+        }),
+        getConfigPath: async () => '',
+        saveConfig: async (config) => config,
+        printHtml: async () => undefined,
+      },
+      updates: updatesApi,
+    }
+
+    expect(isElectronUpdatesAvailable()).toBe(true)
+    expect(getElectronUpdatesApi()).toBe(updatesApi)
   })
 })
