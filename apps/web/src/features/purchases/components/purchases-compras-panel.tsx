@@ -158,7 +158,11 @@ export function PurchasesComprasPanel() {
                         <div className="flex flex-wrap items-center gap-2">
                           <EstadoBadge status={purchase.status} />
                           {purchase.isCredit && purchase.status === 'CONFIRMED' ? (
-                            <CreditPurchaseBadge creditDueDate={purchase.creditDueDate} compact />
+                            <CreditPurchaseBadge
+                              creditDueDate={purchase.creditDueDate}
+                              balanceUsd={purchase.balanceUsd}
+                              compact
+                            />
                           ) : null}
                         </div>
                       </td>
