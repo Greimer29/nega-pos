@@ -1,4 +1,4 @@
-import { ImageIcon, Loader2, Palette, Save, Trash2 } from 'lucide-react'
+import { Download, ImageIcon, Loader2, Palette, RefreshCw, Save, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { businessLogoUrl } from '@/features/settings/services/general-settings-service'
 import { useGeneralSettingsPanel } from '@/features/settings/hooks/use-general-settings-panel'
+import { useAppUpdates } from '@/features/settings/hooks/use-app-updates'
 import { DEFAULT_BUSINESS_PALETTE } from '@/features/settings/types/general-settings'
 
 export function SettingsGeneralPanel() {
@@ -24,6 +25,8 @@ export function SettingsGeneralPanel() {
     resetPalette,
   } = useGeneralSettingsPanel()
 
+  const updates = useAppUpdates()
+
   if (loading) {
     return (
       <div className="text-muted-foreground flex items-center justify-center gap-2 py-16">
@@ -36,6 +39,125 @@ export function SettingsGeneralPanel() {
   return (
     <div className="flex flex-col gap-6">
       {message ? <p className="text-emerald-700 text-sm">{message}</p> : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Aplicación</CardTitle>
+          <CardDescription>
+            {updates.supportsAutoInstall
+              ? 'En desktop se descarga e inicia el instalador automáticamente; la app se cierra para completar el update.'
+              : updates.platform === 'android'
+                ? 'Descargá el APK y confirmá la instalación en Android (no hay actualización silenciosa).'
+                : 'Descargas desde GitHub Releases vía API. En desktop instalado, el update se aplica automáticamente.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm">
+            Versión instalada:{' '}
+            <span className="font-medium tabular-nums">
+              {updates.currentVersion ? `v${updates.currentVersion}` : 'desconocida'}
+            </span>
+          </p>
+
+          {updates.loading ? (
+            <p className="text-muted-foreground flex items-center gap-2 text-sm">
+              <Loader2 className="size-4 animate-spin" />
+              Buscando actualizaciones…
+            </p>
+          ) : null}
+
+          {!updates.loading && updates.error ? (
+            <p className="text-amber-800 text-sm">{updates.error}</p>
+          ) : null}
+
+          {!updates.loading && !updates.error && updates.latest ? (
+            updates.latest.updateAvailable ? (
+              <p className="text-sm">
+                Hay una actualización disponible:{' '}
+                <span className="font-medium tabular-nums">v{updates.latest.latestVersion}</span>
+              </p>
+            ) : (
+              <p className="text-muted-foreground text-sm">Estás al día con la última versión.</p>
+            )
+          ) : null}
+
+          {updates.installing ? (
+            <p className="text-muted-foreground flex items-center gap-2 text-sm">
+              <Loader2 className="size-4 animate-spin" />
+              {updates.statusMessage ?? 'Actualizando…'}
+              {updates.progressPercent != null
+                ? ` (${Math.round(updates.progressPercent)}%)`
+                : null}
+            </p>
+          ) : null}
+
+          {!updates.installing && updates.statusMessage ? (
+            <p className="text-emerald-700 text-sm">{updates.statusMessage}</p>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={updates.loading || updates.installing}
+              onClick={() => void updates.refresh()}
+            >
+              <RefreshCw className="size-4" />
+              Volver a comprobar
+            </Button>
+
+            {updates.canUpdatePreferred && updates.preferredPlatform ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={updates.installing}
+                onClick={() => void updates.startUpdate(updates.preferredPlatform!)}
+              >
+                {updates.installing ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Download className="size-4" />
+                )}
+                {updates.supportsAutoInstall
+                  ? 'Actualizar ahora'
+                  : updates.platform === 'android'
+                    ? 'Descargar e instalar APK'
+                    : 'Descargar actualización'}
+              </Button>
+            ) : null}
+
+            {!updates.loading &&
+            updates.latest?.updateAvailable &&
+            updates.platform === 'browser' ? (
+              <>
+                {updates.latest.desktop.available ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void updates.startUpdate('desktop')}
+                  >
+                    <Download className="size-4" />
+                    Desktop (.exe)
+                  </Button>
+                ) : null}
+                {updates.latest.android.available ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void updates.startUpdate('android')}
+                  >
+                    <Download className="size-4" />
+                    Android (.apk)
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>

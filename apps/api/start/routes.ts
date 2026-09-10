@@ -14,6 +14,7 @@ const SalesShiftsController = () => import('#controllers/sales_shifts_controller
 const ExpensesController = () => import('#controllers/expenses_controller')
 const IncomesController = () => import('#controllers/incomes_controller')
 const SettingsController = () => import('#controllers/settings_controller')
+const AppUpdatesController = () => import('#controllers/app_updates_controller')
 const AccountsController = () => import('#controllers/accounts_controller')
 const CurrenciesController = () => import('#controllers/currencies_controller')
 const ReportsController = () => import('#controllers/reports_controller')
@@ -175,6 +176,9 @@ router
         router.delete('settings/general/logo', [SettingsController, 'deleteLogo'])
         router.get('settings/printing', [SettingsController, 'getPrinting'])
         router.put('settings/printing', [SettingsController, 'updatePrinting'])
+
+        router.get('app-updates/latest', [AppUpdatesController, 'latest'])
+        router.get('app-updates/download/:platform', [AppUpdatesController, 'download'])
 
         router.get('dashboard/summary', [controllers.Dashboard, 'resumen'])
         router.get('dashboard/overview', [controllers.Dashboard, 'overview'])

@@ -73,6 +73,8 @@ import CodigoMetodoPagoDuplicadoException from '#exceptions/codigo_metodo_pago_d
 import UltimoMetodoPagoActivoException from '#exceptions/ultimo_metodo_pago_activo_exception'
 import TurnoNoAbiertoException from '#exceptions/turno_no_abierto_exception'
 import TurnoYaAbiertoException from '#exceptions/turno_ya_abierto_exception'
+import AppUpdatesNoConfiguradoException from '#exceptions/app_updates_no_configurado_exception'
+import AppUpdatesAssetNoEncontradoException from '#exceptions/app_updates_asset_no_encontrado_exception'
 
 export default class HttpExceptionHandler extends ExceptionHandler {
   protected debug = !app.inProduction
@@ -744,6 +746,24 @@ export default class HttpExceptionHandler extends ExceptionHandler {
         error: {
           code: TurnoYaAbiertoException.code,
           message: error.message || TurnoYaAbiertoException.message,
+        },
+      })
+    }
+
+    if (error instanceof AppUpdatesNoConfiguradoException) {
+      return ctx.response.status(AppUpdatesNoConfiguradoException.status).json({
+        error: {
+          code: AppUpdatesNoConfiguradoException.code,
+          message: error.message || AppUpdatesNoConfiguradoException.message,
+        },
+      })
+    }
+
+    if (error instanceof AppUpdatesAssetNoEncontradoException) {
+      return ctx.response.status(AppUpdatesAssetNoEncontradoException.status).json({
+        error: {
+          code: AppUpdatesAssetNoEncontradoException.code,
+          message: error.message || AppUpdatesAssetNoEncontradoException.message,
         },
       })
     }

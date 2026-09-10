@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { PrintConfig } from './print-config'
 import type { PrinterInfo, PrintHtmlOptions } from './print-service'
+import type { UpdateDownloadProgress } from './app-updates'
 
 const printingApi = {
   isAvailable: true as const,
@@ -18,6 +19,22 @@ const printingApi = {
     ipcRenderer.invoke('printing:printHtml', options),
 }
 
+const updatesApi = {
+  isAvailable: true as const,
+  downloadAndInstall: (downloadUrl: string): Promise<{ path: string; fileName: string }> =>
+    ipcRenderer.invoke('updates:downloadAndInstall', downloadUrl),
+  onProgress: (listener: (progress: UpdateDownloadProgress) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: UpdateDownloadProgress) => {
+      listener(progress)
+    }
+    ipcRenderer.on('updates:progress', handler)
+    return () => {
+      ipcRenderer.removeListener('updates:progress', handler)
+    }
+  },
+}
+
 contextBridge.exposeInMainWorld('negaPos', {
   printing: printingApi,
+  updates: updatesApi,
 })
