@@ -315,11 +315,13 @@ export default class CatalogProductService {
           product.formulaId = null
         } else {
           await this.assertFormulaExiste(input.formula_id)
-          product.formulaId = input.formula_id
           if (input.formula_id !== previousFormulaId) {
             product.stockQuantity = '0.000'
+            // replaceSizes rejects products that already have a formula — clear first
+            product.formulaId = null
             await this.sizeService.replaceSizes(product, [], trx)
           }
+          product.formulaId = input.formula_id
         }
       }
 

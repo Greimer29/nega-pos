@@ -338,7 +338,7 @@ test.group('Inventory flow integration — compras, ventas, fórmulas, materiale
       type: 'CORPORATE',
       active: true,
     })
-    const material = await seedMaterial({ code: 'STK-FORM' })
+    const material = await seedMaterial({ code: 'STK-FORM', unit: 'MTS' })
 
     await crearCompraConfirmada(client, user, supplier, material, 100)
 
