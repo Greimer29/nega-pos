@@ -34,6 +34,7 @@ export type LoadedDraftCartLine =
       formulaMaterials?: SaleLineFormulaMaterial[] | null
       unitPriceUsd?: number
       kitchenNote?: string | null
+      detail?: string | null
       catalogProductSizeId?: number | null
       size?: string | null
     }
@@ -122,6 +123,12 @@ export function VentasLoadDraftDialog({ open, onOpenChange, onLoaded }: VentasLo
           quantity: Number(line.quantity),
           formulaMaterials,
           kitchenNote: line.kitchen_note?.trim() ? line.kitchen_note.trim() : null,
+          detail:
+            product.item_kind === 'SERVICE' || product.is_service
+              ? line.description?.trim() && line.description.trim() !== product.name
+                ? line.description.trim()
+                : null
+              : null,
           unitPriceUsd: Number(line.unit_price_usd),
           catalogProductSizeId: line.catalog_product_size_id ?? null,
           size: line.size ?? null,

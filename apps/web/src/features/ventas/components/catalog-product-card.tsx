@@ -150,7 +150,9 @@ export function CatalogProductCard({
           </div>
         ) : null}
 
-        <CatalogStockBadge product={product} stock={stock} stockIsLow={stockIsLow} />
+        {product.item_kind === 'SERVICE' || product.is_service ? null : (
+          <CatalogStockBadge product={product} stock={stock} stockIsLow={stockIsLow} />
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 px-0.5 pb-1.5">

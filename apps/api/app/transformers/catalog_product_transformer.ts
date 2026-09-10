@@ -46,6 +46,8 @@ export function serializeCatalogProduct(
     name: product.name,
     description: product.description,
     category: product.category,
+    item_kind: product.itemKind ?? 'PRODUCT',
+    is_service: (product.itemKind ?? 'PRODUCT') === 'SERVICE',
     sale_unit: product.saleUnit,
     formula_id: product.formulaId ? Number(product.formulaId) : null,
     image_path: product.imagePath,

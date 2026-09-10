@@ -15,6 +15,7 @@ import { MaterialDetallePage } from '@/pages/material-detail-page'
 import { ProductDetailPage } from '@/pages/product-detail-page'
 import { ProductInventoryBulkAdjustmentPage } from '@/pages/product-inventory-bulk-adjustment-page'
 import { ProductosPage } from '@/pages/productos-page'
+import { ServiciosPage } from '@/pages/servicios-page'
 import { PurchasesPage } from '@/pages/purchases-page'
 import { PurchaseDetallePage } from '@/pages/purchase-detail-page'
 import { SuppliersPage } from '@/pages/suppliers-page'
@@ -149,6 +150,10 @@ export const router = createBrowserRouter([
       {
         path: 'productos/materiales/:id',
         element: <MaterialDetallePage />,
+      },
+      {
+        path: 'productos/servicios',
+        element: <ServiciosPage />,
       },
       {
         path: 'productos/:id',

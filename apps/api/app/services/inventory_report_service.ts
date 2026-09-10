@@ -224,7 +224,7 @@ export default class InventoryReportService {
     filters: InventoryReportFilters,
     activeOnly: boolean
   ): Promise<InventoryReportProduct[]> {
-    const query = CatalogProduct.query()
+    const query = CatalogProduct.query().where('itemKind', 'PRODUCT')
 
     if (activeOnly) {
       query.where('active', true)

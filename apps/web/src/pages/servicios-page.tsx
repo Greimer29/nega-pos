@@ -1,30 +1,31 @@
 import { useEffect, useState } from 'react'
-import { Layers, Loader2, PackageMinus, Plus, SlidersHorizontal } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Loader2, Plus, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
-import { CatalogFormDialog } from '@/features/ventas/components/catalog-form-dialog'
+import { PermissionGate } from '@/features/permissions/components/permission-gate'
+import { useAuth } from '@/features/auth/hooks/use-auth'
+import { ServiceFormDialog } from '@/features/ventas/components/service-form-dialog'
 import {
   CatalogProductCard,
   catalogProductGridClassName,
 } from '@/features/ventas/components/catalog-product-card'
-import { PermissionGate } from '@/features/permissions/components/permission-gate'
-import { useAuth } from '@/features/auth/hooks/use-auth'
 import {
   useCatalogProductsQuery,
   useDeleteCatalogProductMutation,
 } from '@/features/ventas/hooks/use-catalog'
 import type { CatalogProduct } from '@/features/ventas/types'
-import { notifyApiError, QueryErrorState, EmptyListState } from '@/features/notifications/query-error-state'
+import {
+  EmptyListState,
+  notifyApiError,
+  QueryErrorState,
+} from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 30
 
-export function ProductosPage() {
-  const navigate = useNavigate()
+export function ServiciosPage() {
   const { can } = useAuth()
   const canEditCatalog = can('catalog.edit')
   const [page, setPage] = useState(1)
@@ -33,8 +34,8 @@ export function ProductosPage() {
   const [category, setCategory] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editing, setEditing] = useState<CatalogProduct | null>(null)
   const deleteMutation = useDeleteCatalogProductMutation()
-  const { data: categories = [] } = useActiveCategoriesQuery()
   const activeFilterCount = category ? 1 : 0
 
   useEffect(() => {
@@ -45,34 +46,36 @@ export function ProductosPage() {
     return () => window.clearTimeout(timer)
   }, [searchInput])
 
-  const { data, isLoading, isError, error } = useCatalogProductsQuery({
+  const { data, isLoading, isError, error, refetch } = useCatalogProductsQuery({
     page,
     perPage: PER_PAGE,
     search: debouncedSearch || undefined,
     category: category || undefined,
     active: true,
-    itemKind: 'PRODUCT',
+    itemKind: 'SERVICE',
     sortBy: 'name',
     sortDir: 'asc',
   })
 
-  const products = data?.catalog_products ?? []
+  const services = data?.catalog_products ?? []
   const meta = data?.meta
 
   function openCreateDialog() {
+    setEditing(null)
     setDialogOpen(true)
   }
 
-  function openEditProduct(product: CatalogProduct) {
-    void navigate(`/productos/${product.id}?edit=1`)
+  function openEditService(service: CatalogProduct) {
+    setEditing(service)
+    setDialogOpen(true)
   }
 
-  async function handleDeleteProduct(product: CatalogProduct) {
+  async function handleDeleteService(service: CatalogProduct) {
     try {
-      const result = await deleteMutation.mutateAsync(product.id)
+      const result = await deleteMutation.mutateAsync(service.id)
       if (result.modo === 'soft') {
         toast.warning(
-          `"${product.name}" fue desactivado porque tiene ventas asociadas.`,
+          `"${service.name}" fue desactivado porque tiene ventas asociadas.`,
           'Desactivado'
         )
       }
@@ -84,18 +87,18 @@ export function ProductosPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Productos</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Servicios</h1>
         <p className="text-muted-foreground text-sm">
-          Catálogo de productos terminados para venta y producción.
+          Servicios vendibles sin inventario (precio fijo de lista; cantidad y detalle en la factura).
         </p>
       </div>
 
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
           <div className="min-w-0 space-y-1.5">
-            <CardTitle className="text-base">Catálogo</CardTitle>
+            <CardTitle className="text-base">Catálogo de servicios</CardTitle>
             <CardDescription>
-              {meta ? `${meta.total} producto${meta.total === 1 ? '' : 's'}` : 'Cargando…'}
+              {meta ? `${meta.total} servicio${meta.total === 1 ? '' : 's'}` : 'Cargando…'}
             </CardDescription>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -107,7 +110,7 @@ export function ProductosPage() {
               title="Filtros"
               aria-label="Filtros"
               aria-expanded={filtersOpen}
-              aria-controls="productos-catalog-filters"
+              aria-controls="servicios-catalog-filters"
               onClick={() => setFiltersOpen((open) => !open)}
             >
               <SlidersHorizontal className="size-4" />
@@ -117,41 +120,15 @@ export function ProductosPage() {
                 </span>
               ) : null}
             </Button>
-            <Button
-              variant="outline"
-              asChild
-              className="size-9 sm:h-9 sm:w-auto sm:px-4"
-            >
-              <Link to="/productos/materiales" title="Ver materiales" aria-label="Ver materiales">
-                <Layers className="size-4" />
-                <span className="hidden sm:inline">Ver materiales</span>
-              </Link>
-            </Button>
-            <PermissionGate permission="catalog.edit">
-              <Button
-                variant="outline"
-                asChild
-                className="size-9 sm:h-9 sm:w-auto sm:px-4"
-              >
-                <Link
-                  to="/productos/movimientos"
-                  title="Cargo, descargo o ajuste masivo"
-                  aria-label="Movimiento de inventario"
-                >
-                  <PackageMinus className="size-4" />
-                  <span className="hidden sm:inline">Movimientos</span>
-                </Link>
-              </Button>
-            </PermissionGate>
             <PermissionGate permission="catalog.edit">
               <Button
                 onClick={openCreateDialog}
                 className="size-9 sm:h-9 sm:w-auto sm:px-4"
-                title="Nuevo producto"
-                aria-label="Nuevo producto"
+                title="Nuevo servicio"
+                aria-label="Nuevo servicio"
               >
                 <Plus />
-                <span className="hidden sm:inline">Nuevo producto</span>
+                <span className="hidden sm:inline">Nuevo servicio</span>
               </Button>
             </PermissionGate>
           </div>
@@ -159,79 +136,74 @@ export function ProductosPage() {
         <CardContent className="space-y-4 px-3 sm:px-6">
           <div className="flex flex-col gap-3">
             <Input
-              placeholder="Buscar producto…"
+              placeholder="Buscar servicio…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="max-w-xs"
             />
             <div
-              id="productos-catalog-filters"
+              id="servicios-catalog-filters"
               className={cn('flex-wrap gap-3', filtersOpen ? 'flex' : 'hidden')}
             >
-              <select
-                className="border-input flex h-9 rounded-md border bg-white px-3 text-sm"
+              <Input
+                placeholder="Categoría…"
                 value={category}
                 onChange={(e) => {
                   setCategory(e.target.value)
                   setPage(1)
                 }}
-              >
-                <option value="">Todas las categorías</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                className="max-w-xs"
+              />
             </div>
           </div>
 
           {isLoading ? (
             <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">
               <Loader2 className="size-4 animate-spin" />
-              Cargando productos…
+              Cargando servicios…
             </div>
           ) : isError ? (
-            <QueryErrorState isError error={error} title="No se pudieron cargar los productos" />
-          ) : products.length === 0 ? (
+            <QueryErrorState isError error={error} title="No se pudieron cargar los servicios" />
+          ) : services.length === 0 ? (
             <EmptyListState
-              title="Todavía no hay productos"
-              description="Es normal en una empresa nueva. Creá el catálogo cuando quieras vender."
+              title="Todavía no hay servicios"
+              description="Creá servicios con precio de lista para venderlos en el POS sin descontar stock."
             />
           ) : (
             <div className={catalogProductGridClassName}>
-              {products.map((product) => (
+              {services.map((service) => (
                 <CatalogProductCard
-                  key={product.id}
-                  product={product}
+                  key={service.id}
+                  product={service}
                   showActions={canEditCatalog}
-                  onEdit={openEditProduct}
-                  onDelete={handleDeleteProduct}
-                  onOpen={() => void navigate(`/productos/${product.id}`)}
+                  onEdit={openEditService}
+                  onDelete={canEditCatalog ? handleDeleteService : undefined}
                 />
               ))}
             </div>
           )}
 
           {meta && meta.lastPage > 1 ? (
-            <div className="flex items-center justify-between gap-4 pt-2">
+            <div className="flex items-center justify-between gap-4 border-t pt-3">
               <p className="text-muted-foreground text-sm">
                 Página {meta.currentPage} de {meta.lastPage}
               </p>
               <div className="flex gap-2">
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
-                  disabled={meta.currentPage <= 1}
-                  onClick={() => setPage((c) => Math.max(1, c - 1))}
+                  disabled={meta.currentPage <= 1 || isLoading}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
                 >
                   Anterior
                 </Button>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
-                  disabled={meta.currentPage >= meta.lastPage}
-                  onClick={() => setPage((c) => c + 1)}
+                  disabled={meta.currentPage >= meta.lastPage || isLoading}
+                  onClick={() => setPage((current) => current + 1)}
                 >
                   Siguiente
                 </Button>
@@ -241,7 +213,17 @@ export function ProductosPage() {
         </CardContent>
       </Card>
 
-      <CatalogFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <ServiceFormDialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open)
+          if (!open) setEditing(null)
+        }}
+        service={editing}
+        onSaved={() => {
+          void refetch()
+        }}
+      />
     </div>
   )
 }

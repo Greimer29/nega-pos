@@ -2,11 +2,13 @@ import { Exception } from '@adonisjs/core/exceptions'
 import ProductoCatalogoStockFormulaException from '#exceptions/producto_catalogo_stock_formula_exception'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
 import ProductoTallaRequeridaException from '#exceptions/producto_talla_requerida_exception'
+import ServicioCatalogoOperacionInvalidaException from '#exceptions/servicio_catalogo_operacion_invalida_exception'
 import StockInsuficienteException from '#exceptions/stock_insuficiente_exception'
 import {
   resolveInventoryAdjustment,
   type InventoryAdjustmentMode,
 } from '#constants/inventory_adjustment'
+import { isCatalogService } from '#constants/catalog_item_kind'
 import {
   formatInventoryQuantityForStorage,
   normalizeInventoryQuantity,
@@ -76,6 +78,12 @@ export default class ProductInventoryService {
 
       if (!product) {
         throw new ProductoCatalogoNoEncontradoException()
+      }
+
+      if (isCatalogService(product)) {
+        throw new ServicioCatalogoOperacionInvalidaException(
+          'Un servicio no admite ajustes de inventario'
+        )
       }
 
       if (product.formulaId) {

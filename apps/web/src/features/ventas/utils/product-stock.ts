@@ -3,6 +3,9 @@ import type { Material } from '@/features/materials/types'
 import type { CatalogProduct } from '@/features/ventas/types'
 
 export function isProductStockLow(product: CatalogProduct): boolean {
+  if (product.item_kind === 'SERVICE' || product.is_service) {
+    return false
+  }
   const stock = Number(product.stock_quantity)
   const minimum = Number(product.minimum_stock ?? 0)
   return stock <= 0 || (minimum > 0 && stock < minimum)
@@ -31,6 +34,10 @@ export function cartLineHasStockIssue(line: CartStockLine): boolean {
     }
     const { disponible } = materialStockDisponible(line.material)
     return line.quantity > disponible
+  }
+
+  if (line.product.item_kind === 'SERVICE' || line.product.is_service) {
+    return false
   }
 
   if (line.catalogProductSizeId) {

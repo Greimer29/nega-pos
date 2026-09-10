@@ -18,6 +18,7 @@ export type VentasCartDraftLine = {
   formulaMaterials?: SaleLineFormulaMaterial[] | null
   unitPriceUsd?: number
   kitchenNote?: string | null
+  detail?: string | null
   catalogProductSizeId?: number | null
   size?: string | null
 }
@@ -91,6 +92,8 @@ function normalizeCartLine(line: unknown): VentasCartDraftLine | null {
       typeof line.kitchenNote === 'string' && line.kitchenNote.trim()
         ? line.kitchenNote.trim()
         : null,
+    detail:
+      typeof line.detail === 'string' && line.detail.trim() ? line.detail.trim() : null,
   }
 
   if (kind === 'material') {

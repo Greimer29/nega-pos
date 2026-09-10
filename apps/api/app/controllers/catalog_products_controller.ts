@@ -51,6 +51,7 @@ export default class CatalogProductsController {
       category: filters.category,
       size: filters.size,
       active: filters.active,
+      itemKind: filters.item_kind,
       sortBy: filters.sort_by,
       sortDir: filters.sort_dir,
     })

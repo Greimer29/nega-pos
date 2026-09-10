@@ -35,11 +35,14 @@ export type VentasCartLine = {
   imageUrl?: string | null
   imageTone?: 'orange' | 'violet' | 'amber' | 'sky'
   metaLabel?: string
+  detail?: string | null
+  isService?: boolean
   hasFormula?: boolean
   hasCustomFormula?: boolean
   kitchenNote?: string | null
   onAdjustFormula?: () => void
   onEditKitchenNote?: () => void
+  onEditDetail?: () => void
 }
 
 type VentasOrderCartProps = {
@@ -327,6 +330,22 @@ export function VentasOrderCart({
                             <MessageSquareText className="size-3.5" />
                           </Button>
                         ) : null}
+                        {line.onEditDetail ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              'size-7',
+                              line.detail?.trim() && 'text-sky-700 hover:text-sky-800'
+                            )}
+                            title="Editar servicio (cantidad, precio, detalle)"
+                            onClick={line.onEditDetail}
+                            aria-label="Editar servicio"
+                          >
+                            <MessageSquareText className="size-3.5" />
+                          </Button>
+                        ) : null}
                       </div>
                     ) : (
                       <span>Cantidad: {line.quantity}</span>
@@ -335,6 +354,11 @@ export function VentasOrderCart({
                   {line.kitchenNote?.trim() ? (
                     <p className="line-clamp-2 text-xs text-amber-800/90 whitespace-pre-line">
                       {line.kitchenNote.trim()}
+                    </p>
+                  ) : null}
+                  {line.detail?.trim() ? (
+                    <p className="line-clamp-2 text-xs text-sky-800/90 whitespace-pre-line">
+                      {line.detail.trim()}
                     </p>
                   ) : null}
                   <div className="flex items-end justify-between gap-2 pt-1">

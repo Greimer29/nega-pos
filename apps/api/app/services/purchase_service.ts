@@ -10,6 +10,7 @@ import PurchaseYaConfirmadaException from '#exceptions/compra_ya_confirmada_exce
 import ProductInventoryService from '#services/product_inventory_service'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
 import ProductoCatalogoStockFormulaException from '#exceptions/producto_catalogo_stock_formula_exception'
+import ServicioCatalogoOperacionInvalidaException from '#exceptions/servicio_catalogo_operacion_invalida_exception'
 import MaterialNoEncontradoException from '#exceptions/material_no_encontrado_exception'
 import NumeroFacturaRequeridoException from '#exceptions/numero_factura_requerido_exception'
 import StockInsuficienteDevolucionException from '#exceptions/stock_insuficiente_devolucion_exception'
@@ -19,6 +20,7 @@ import Material from '#models/material'
 import CatalogProduct from '#models/catalog_product'
 import CompraCreditoSinVencimientoException from '#exceptions/compra_credito_sin_vencimiento_exception'
 import InventoryMovement from '#models/inventory_movement'
+import { isCatalogService } from '#constants/catalog_item_kind'
 import SupplierService from '#services/supplier_service'
 import AccountService from '#services/account_service'
 import CurrencyService from '#services/currency_service'
@@ -852,6 +854,11 @@ export default class PurchaseService {
     const product = await CatalogProduct.find(catalogProductId)
     if (!product) {
       throw new ProductoCatalogoNoEncontradoException()
+    }
+    if (isCatalogService(product)) {
+      throw new ServicioCatalogoOperacionInvalidaException(
+        'Los servicios no se pueden comprar como stock'
+      )
     }
   }
 

@@ -11,6 +11,7 @@ import TasaCambioInvalidaException from '#exceptions/tasa_cambio_invalida_except
 import TransicionInvalidaException from '#exceptions/transicion_invalida_exception'
 import VentaNoEditableException from '#exceptions/venta_no_editable_exception'
 import VentaNoEncontradaException from '#exceptions/venta_no_encontrada_exception'
+import { isCatalogService } from '#constants/catalog_item_kind'
 import CatalogProduct from '#models/catalog_product'
 import CatalogProductSize from '#models/catalog_product_size'
 import Customer from '#models/customer'
@@ -55,6 +56,8 @@ export type SaleLineInput = {
   material_id?: number
   quantity: number
   unit_price_usd: number
+  /** Detalle libre en factura (sobre todo para servicios). */
+  description?: string | null
   kitchen_note?: string | null
   catalog_product_size_id?: number | null
   size?: string | null
@@ -544,6 +547,16 @@ export default class SaleService {
         await line.save()
 
         if (line.catalogProductId) {
+          const product =
+            line.catalogProduct ??
+            (await CatalogProduct.query({ client: trx })
+              .where('id', Number(line.catalogProductId))
+              .first())
+
+          if (product && isCatalogService(product)) {
+            continue
+          }
+
           await this.revertirStockProductoParcial(
             Number(sale.id),
             Number(line.catalogProductId),
@@ -635,29 +648,43 @@ export default class SaleService {
           throw new ProductoCatalogoNoEncontradoException()
         }
 
+        const isService = isCatalogService(product)
         const unit = product.saleUnit ?? 'UND'
         const quantity = normalizeInventoryQuantity(line.quantity, unit)
 
-        await assertFormulaMaterialsAllowed(product, line.formula_materials)
-        const formulaMaterials = normalizeFormulaMaterialsInput(line.formula_materials)
-        const resolvedSize = await this.sizeService.resolveForLine(
-          product,
-          {
-            catalog_product_size_id: line.catalog_product_size_id,
-            size: line.size,
-          },
-          trx
-        )
+        if (isService && line.formula_materials !== undefined) {
+          throw new LineaVentaInvalidaException(
+            'Los materiales personalizados no aplican a servicios'
+          )
+        }
+
+        if (!isService) {
+          await assertFormulaMaterialsAllowed(product, line.formula_materials)
+        }
+        const formulaMaterials = isService
+          ? null
+          : normalizeFormulaMaterialsInput(line.formula_materials)
+        const resolvedSize = isService
+          ? { sizeId: null, sizeLabel: null }
+          : await this.sizeService.resolveForLine(
+              product,
+              {
+                catalog_product_size_id: line.catalog_product_size_id,
+                size: line.size,
+              },
+              trx
+            )
 
         const subtotal = quantity * unitPrice
         totalUsd += subtotal
 
+        const detail = line.description?.trim()
         resolvedLines.push({
           catalogProductId: line.catalog_product_id!,
           materialId: null,
           catalogProductSizeId: resolvedSize.sizeId,
           size: resolvedSize.sizeLabel,
-          description: product.name,
+          description: detail && detail.length > 0 ? detail : product.name,
           quantity: formatInventoryQuantityForStorage(quantity, unit),
           unitPriceUsd: unitPrice.toFixed(4),
           subtotalUsd: subtotal.toFixed(4),
@@ -798,6 +825,10 @@ export default class SaleService {
 
         if (!product) {
           throw new ProductoCatalogoNoEncontradoException()
+        }
+
+        if (isCatalogService(product)) {
+          continue
         }
 
         const { quantity: disponible } =

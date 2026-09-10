@@ -2,6 +2,7 @@ import FormulaNoEncontradaException from '#exceptions/formula_no_encontrada_exce
 import ProductoCatalogoEnPedidosActivosException from '#exceptions/producto_catalogo_en_pedidos_activos_exception'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
 import ArchivoImagenNoDisponibleException from '#exceptions/archivo_imagen_no_disponible_exception'
+import ServicioCatalogoOperacionInvalidaException from '#exceptions/servicio_catalogo_operacion_invalida_exception'
 import CatalogProduct from '#models/catalog_product'
 import Formula from '#models/formula'
 import OrderLine from '#models/order_line'
@@ -10,6 +11,8 @@ import FormulaService from '#services/formula_service'
 import CatalogProductSizeService from '#services/catalog_product_size_service'
 import ProductCodeService from '#services/product_code_service'
 import ProductInventoryService from '#services/product_inventory_service'
+import type { CatalogItemKind } from '#constants/catalog_item_kind'
+import { isCatalogService } from '#constants/catalog_item_kind'
 import type { InventoryUnit } from '#constants/inventory_units'
 import { formatInventoryQuantityForStorage, normalizeInventoryQuantity } from '#constants/inventory_units'
 import type { CostWarning } from '#types/cost_warning'
@@ -24,6 +27,7 @@ export type CatalogProductInput = {
   name: string
   description?: string | null
   category: string
+  item_kind?: CatalogItemKind
   sale_unit?: InventoryUnit
   sale_price_usd: number
   cost_usd?: number
@@ -43,6 +47,8 @@ export type ListCatalogProductsFilters = {
   category?: string
   size?: string
   active?: boolean
+  /** Default PRODUCT so existing product UIs never list services accidentally. */
+  itemKind?: CatalogItemKind
   sortBy?: 'name' | 'most_sold'
   sortDir?: 'asc' | 'desc'
 }
@@ -141,6 +147,9 @@ export default class CatalogProductService {
       query.where('active', filters.active)
     }
 
+    const itemKind = filters.itemKind ?? 'PRODUCT'
+    query.where('itemKind', itemKind)
+
     if (sortBy === 'most_sold') {
       query.orderByRaw(`${MOST_SOLD_SQL} ${sortDir === 'desc' ? 'DESC' : 'ASC'}`)
     } else {
@@ -180,6 +189,20 @@ export default class CatalogProductService {
   }
 
   async crear(input: CatalogProductInput): Promise<CatalogProduct> {
+    const itemKind: CatalogItemKind = input.item_kind ?? 'PRODUCT'
+    const isService = itemKind === 'SERVICE'
+
+    if (isService) {
+      if (input.formula_id) {
+        throw new ServicioCatalogoOperacionInvalidaException(
+          'Un servicio no puede tener fórmula de materiales'
+        )
+      }
+      if (input.sizes && input.sizes.length > 0) {
+        throw new ServicioCatalogoOperacionInvalidaException('Un servicio no admite tallas')
+      }
+    }
+
     let costUsd = input.cost_usd ?? 0
 
     if (input.formula_id) {
@@ -189,7 +212,9 @@ export default class CatalogProductService {
       }
     }
 
-    await this.categoryService.assertCategoriaActiva(input.category)
+    if (!isService) {
+      await this.categoryService.assertCategoriaActiva(input.category)
+    }
 
     if (input.sizes && input.sizes.length > 0 && input.formula_id) {
       const { default: ProductoConFormulaNoPermiteTallasException } = await import(
@@ -200,21 +225,26 @@ export default class CatalogProductService {
 
     return db.transaction(async (trx) => {
       const saleUnit = input.sale_unit ?? 'UND'
-      const stockQty = input.formula_id
-        ? 0
-        : normalizeInventoryQuantity(input.stock_quantity ?? 0, saleUnit)
+      const stockQty =
+        isService || input.formula_id
+          ? 0
+          : normalizeInventoryQuantity(input.stock_quantity ?? 0, saleUnit)
       const product = await CatalogProduct.create(
         {
           name: input.name.trim(),
           description: input.description?.trim() || null,
-          category: input.category.trim(),
+          category: input.category.trim() || (isService ? 'Servicios' : input.category.trim()),
+          itemKind,
           saleUnit,
-          formulaId: input.formula_id ?? null,
+          formulaId: isService ? null : (input.formula_id ?? null),
           salePriceUsd: input.sale_price_usd.toFixed(4),
           previousSalePriceUsd: null,
           costUsd: costUsd.toFixed(4),
           stockQuantity: formatInventoryQuantityForStorage(stockQty, saleUnit),
-          minimumStock: formatInventoryQuantityForStorage(input.minimum_stock ?? 0, saleUnit),
+          minimumStock: formatInventoryQuantityForStorage(
+            isService ? 0 : (input.minimum_stock ?? 0),
+            saleUnit
+          ),
           active: input.active ?? true,
         },
         { client: trx }
@@ -222,7 +252,7 @@ export default class CatalogProductService {
 
       await this.productCodeService.assertCatalogProductCodeAvailable(Number(product.id))
 
-      if (input.sizes !== undefined && !input.formula_id) {
+      if (!isService && input.sizes !== undefined && !input.formula_id) {
         await this.sizeService.replaceSizes(product, input.sizes, trx)
       }
 
@@ -246,6 +276,30 @@ export default class CatalogProductService {
         throw new ProductoCatalogoNoEncontradoException()
       }
 
+      if (input.item_kind !== undefined && input.item_kind !== product.itemKind) {
+        throw new ServicioCatalogoOperacionInvalidaException(
+          'No se puede cambiar el tipo de ítem (producto/servicio)'
+        )
+      }
+
+      const isService = isCatalogService(product)
+
+      if (isService) {
+        if (input.formula_id) {
+          throw new ServicioCatalogoOperacionInvalidaException(
+            'Un servicio no puede tener fórmula de materiales'
+          )
+        }
+        if (input.sizes && input.sizes.length > 0) {
+          throw new ServicioCatalogoOperacionInvalidaException('Un servicio no admite tallas')
+        }
+        if (input.stock_quantity !== undefined) {
+          throw new ServicioCatalogoOperacionInvalidaException(
+            'Un servicio no maneja inventario'
+          )
+        }
+      }
+
       const costWarnings: CostWarning[] = []
       const previousFormulaId = product.formulaId
       const previousSalePrice = product.salePriceUsd
@@ -254,9 +308,9 @@ export default class CatalogProductService {
       const trackedSalePrice = input.sale_price_usd !== undefined
       const trackedCost = input.cost_usd !== undefined
       const trackedStock =
-        input.stock_quantity !== undefined || input.sizes !== undefined
+        !isService && (input.stock_quantity !== undefined || input.sizes !== undefined)
 
-      if (input.formula_id !== undefined) {
+      if (!isService && input.formula_id !== undefined) {
         if (input.formula_id === null) {
           product.formulaId = null
         } else {
@@ -289,7 +343,9 @@ export default class CatalogProductService {
       }
 
       if (input.category !== undefined) {
-        await this.categoryService.assertCategoriaActiva(input.category)
+        if (!isService) {
+          await this.categoryService.assertCategoriaActiva(input.category)
+        }
         product.category = input.category.trim()
       }
 
@@ -299,7 +355,7 @@ export default class CatalogProductService {
 
       const saleUnit = product.saleUnit ?? 'UND'
 
-      if (input.minimum_stock !== undefined) {
+      if (!isService && input.minimum_stock !== undefined) {
         product.minimumStock = formatInventoryQuantityForStorage(input.minimum_stock, saleUnit)
       }
 
@@ -309,11 +365,11 @@ export default class CatalogProductService {
 
       if (input.cost_usd !== undefined) {
         product.costUsd = input.cost_usd.toFixed(4)
-      } else if (product.formulaId) {
+      } else if (!isService && product.formulaId) {
         product.costUsd = await this.calcularCostoFormulaPersistible(product)
       }
 
-      const touchingSizes = input.sizes !== undefined
+      const touchingSizes = !isService && input.sizes !== undefined
 
       if (touchingSizes) {
         if (product.formulaId) {
@@ -323,7 +379,7 @@ export default class CatalogProductService {
           throw new ProductoConFormulaNoPermiteTallasException()
         }
         await this.sizeService.replaceSizes(product, input.sizes ?? [], trx)
-      } else if (input.stock_quantity !== undefined && !product.formulaId) {
+      } else if (!isService && input.stock_quantity !== undefined && !product.formulaId) {
         const existingSizes = await this.sizeService.loadSizes(Number(product.id), trx)
         if (existingSizes.length === 0) {
           product.stockQuantity = formatInventoryQuantityForStorage(input.stock_quantity, saleUnit)
@@ -368,6 +424,12 @@ export default class CatalogProductService {
 
       if (!product) {
         throw new ProductoCatalogoNoEncontradoException()
+      }
+
+      if (isCatalogService(product)) {
+        throw new ServicioCatalogoOperacionInvalidaException(
+          'Un servicio no admite tallas ni inventario'
+        )
       }
 
       const previousStock = Number(product.stockQuantity)

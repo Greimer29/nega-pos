@@ -1,4 +1,5 @@
 import { INVENTORY_UNITS } from '#constants/inventory_units'
+import { CATALOG_ITEM_KINDS } from '#constants/catalog_item_kind'
 import { INVENTORY_ADJUSTMENT_MODES } from '#constants/inventory_adjustment'
 import vine from '@vinejs/vine'
 
@@ -11,6 +12,7 @@ const catalogProductFields = {
   name: vine.string().trim().minLength(1).maxLength(150),
   description: vine.string().trim().optional(),
   category: vine.string().trim().minLength(1).maxLength(100),
+  item_kind: vine.enum(CATALOG_ITEM_KINDS).optional(),
   sale_unit: vine.enum(INVENTORY_UNITS).optional(),
   sale_price_usd: vine.number().min(0),
   cost_usd: vine.number().min(0).optional(),
@@ -28,6 +30,7 @@ export const updateCatalogProductValidator = vine.create({
   name: vine.string().trim().minLength(1).maxLength(150).optional(),
   description: vine.string().trim().optional(),
   category: vine.string().trim().minLength(1).maxLength(100).optional(),
+  item_kind: vine.enum(CATALOG_ITEM_KINDS).optional(),
   sale_unit: vine.enum(INVENTORY_UNITS).optional(),
   sale_price_usd: vine.number().min(0).optional(),
   cost_usd: vine.number().min(0).optional(),
@@ -49,6 +52,7 @@ export const listCatalogProductsValidator = vine.create({
   category: vine.string().trim().maxLength(100).optional(),
   size: vine.string().trim().maxLength(20).optional(),
   active: vine.boolean().optional(),
+  item_kind: vine.enum(CATALOG_ITEM_KINDS).optional(),
   sort_by: vine.enum(['name', 'most_sold'] as const).optional(),
   sort_dir: vine.enum(['asc', 'desc'] as const).optional(),
 })

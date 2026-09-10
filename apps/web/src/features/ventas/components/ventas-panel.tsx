@@ -64,6 +64,7 @@ import { VentasPaymentMethodDialog } from '@/features/ventas/components/ventas-p
 import { useCurrentSalesShiftQuery } from '@/features/ventas/hooks/use-sales-shifts'
 import { SaleLineFormulaDialog } from '@/features/ventas/components/sale-line-formula-dialog'
 import { SaleLineKitchenNoteDialog } from '@/features/ventas/components/sale-line-kitchen-note-dialog'
+import { ServiceLineDialog } from '@/features/ventas/components/service-line-dialog'
 import type { PaymentMethod } from '@/features/payment-methods/types'
 import {
   createCartLineId,
@@ -85,6 +86,7 @@ type CartLine =
       formulaMaterials?: SaleLineFormulaMaterial[] | null
       unitPriceUsd?: number
       kitchenNote?: string | null
+      detail?: string | null
       catalogProductSizeId?: number | null
       size?: string | null
     }
@@ -96,7 +98,7 @@ type CartLine =
       unitPriceUsd?: number
     }
 
-type CatalogSource = 'products' | 'materials'
+type CatalogSource = 'products' | 'materials' | 'services'
 
 function cartLineUnitPrice(line: CartLine): number {
   if (line.kind === 'material') {
@@ -126,6 +128,7 @@ function normalizeDraftCartLine(
       formulaMaterials: line.formulaMaterials ?? null,
       unitPriceUsd: line.unitPriceUsd,
       kitchenNote: line.kitchenNote ?? null,
+      detail: line.detail ?? null,
       catalogProductSizeId: line.catalogProductSizeId ?? null,
       size: line.size ?? null,
     }
@@ -193,6 +196,9 @@ function VentasCreateView() {
   const [pendingSaleId, setPendingSaleId] = useState<number | null>(null)
   const [formulaDialogLineId, setFormulaDialogLineId] = useState<string | null>(null)
   const [kitchenNoteDialogLineId, setKitchenNoteDialogLineId] = useState<string | null>(null)
+  const [servicePickProduct, setServicePickProduct] = useState<CatalogProduct | null>(null)
+  const [servicePickOpen, setServicePickOpen] = useState(false)
+  const [serviceEditLineId, setServiceEditLineId] = useState<string | null>(null)
   const [invoiceDiscountUsd, setInvoiceDiscountUsd] = useState(
     () => initialDraft?.invoiceDiscountUsd ?? 0
   )
@@ -220,10 +226,30 @@ function VentasCreateView() {
       category: category || undefined,
       size: debouncedSizeFilter || undefined,
       active: true,
+      itemKind: 'PRODUCT',
       sortBy: 'most_sold',
       sortDir: 'desc',
     },
     { enabled: catalogSource === 'products' }
+  )
+
+  const {
+    data: servicesData,
+    isLoading: loadingServices,
+    isError: servicesError,
+    error: servicesQueryError,
+  } = useCatalogProductsQuery(
+    {
+      page,
+      perPage: CATALOG_PER_PAGE,
+      search: debouncedSearch || undefined,
+      category: category || undefined,
+      active: true,
+      itemKind: 'SERVICE',
+      sortBy: 'name',
+      sortDir: 'asc',
+    },
+    { enabled: catalogSource === 'services' }
   )
 
   const {
@@ -318,6 +344,8 @@ function VentasCreateView() {
 
   const products = catalogData?.catalog_products ?? []
   const catalogMeta = catalogData?.meta
+  const services = servicesData?.catalog_products ?? []
+  const servicesMeta = servicesData?.meta
   const materials = materialsData?.materials ?? []
   const materialsMeta = materialsData?.meta
   const activeFilterCount = (category ? 1 : 0) + (sizeFilter.trim() ? 1 : 0)
@@ -361,14 +389,27 @@ function VentasCreateView() {
           saleUnit: line.product.sale_unit ?? 'UND',
           imageUrl: line.product.image_path ? catalogImageUrl(line.product.id) : null,
           imageTone: catalogImageTone(line.product.id),
-          metaLabel: line.size ? `Talla ${line.size}` : undefined,
+          metaLabel: line.size
+            ? `Talla ${line.size}`
+            : line.product.item_kind === 'SERVICE' || line.product.is_service
+              ? 'Servicio'
+              : undefined,
+          detail: line.detail ?? null,
+          isService: line.product.item_kind === 'SERVICE' || Boolean(line.product.is_service),
           hasFormula: Boolean(line.product.formula_id),
           hasCustomFormula: line.formulaMaterials != null && line.formulaMaterials.length > 0,
           kitchenNote: line.kitchenNote ?? null,
           onAdjustFormula: line.product.formula_id
             ? () => setFormulaDialogLineId(line.id)
             : undefined,
-          onEditKitchenNote: () => setKitchenNoteDialogLineId(line.id),
+          onEditKitchenNote:
+            line.product.item_kind === 'SERVICE' || line.product.is_service
+              ? undefined
+              : () => setKitchenNoteDialogLineId(line.id),
+          onEditDetail:
+            line.product.item_kind === 'SERVICE' || line.product.is_service
+              ? () => setServiceEditLineId(line.id)
+              : undefined,
         }
       }),
     [cart]
@@ -383,6 +424,11 @@ function VentasCreateView() {
     const line = cart.find((item) => item.id === kitchenNoteDialogLineId) ?? null
     return line?.kind === 'catalog' ? line : null
   }, [cart, kitchenNoteDialogLineId])
+
+  const serviceEditLine = useMemo(() => {
+    const line = cart.find((item) => item.id === serviceEditLineId) ?? null
+    return line?.kind === 'catalog' ? line : null
+  }, [cart, serviceEditLineId])
 
   const orderLabel = sourceSaleLabel
     ? sourceSaleLabel
@@ -421,6 +467,12 @@ function VentasCreateView() {
   }
 
   function addToCart(product: CatalogProduct) {
+    if (product.item_kind === 'SERVICE' || product.is_service) {
+      setServicePickProduct(product)
+      setServicePickOpen(true)
+      return
+    }
+
     if (productHasSizes(product)) {
       const available = sizesWithStock(product)
       if (available.length === 0) {
@@ -459,6 +511,50 @@ function VentasCreateView() {
         },
       ]
     })
+  }
+
+  function addServiceToCart(values: {
+    quantity: number
+    unitPriceUsd: number
+    detail: string | null
+  }) {
+    if (!servicePickProduct) return
+    setSuccessMessage(null)
+    setCart((prev) => [
+      ...prev,
+      {
+        id: createCartLineId(),
+        kind: 'catalog' as const,
+        product: servicePickProduct,
+        quantity: values.quantity,
+        unitPriceUsd: values.unitPriceUsd,
+        detail: values.detail,
+        formulaMaterials: null,
+        catalogProductSizeId: null,
+        size: null,
+      },
+    ])
+  }
+
+  function saveServiceLineEdit(values: {
+    quantity: number
+    unitPriceUsd: number
+    detail: string | null
+  }) {
+    if (!serviceEditLineId) return
+    setSuccessMessage(null)
+    setCart((prev) =>
+      prev.map((line) =>
+        line.id === serviceEditLineId && line.kind === 'catalog'
+          ? {
+              ...line,
+              quantity: values.quantity,
+              unitPriceUsd: values.unitPriceUsd,
+              detail: values.detail,
+            }
+          : line
+      )
+    )
   }
 
   function addMaterialToCart(material: Material) {
@@ -635,6 +731,7 @@ function VentasCreateView() {
         catalog_product_id: item.product.id,
         quantity: item.quantity,
         unit_price_usd: cartLineUnitPrice(item),
+        ...(item.detail?.trim() ? { description: item.detail.trim() } : {}),
         ...(item.catalogProductSizeId
           ? {
               catalog_product_size_id: item.catalogProductSizeId,
@@ -981,16 +1078,24 @@ function VentasCreateView() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 space-y-1.5">
                 <CardTitle className="text-base">
-                  {catalogSource === 'products' ? 'Catálogo de productos' : 'Materiales'}
+                  {catalogSource === 'products'
+                    ? 'Catálogo de productos'
+                    : catalogSource === 'services'
+                      ? 'Servicios'
+                      : 'Materiales'}
                 </CardTitle>
                 <CardDescription>
                   {catalogSource === 'products'
                     ? catalogMeta
                       ? `${catalogMeta.total} producto${catalogMeta.total === 1 ? '' : 's'}`
                       : 'Filtrá y agregá productos a la venta'
-                    : materialsMeta
-                      ? `${materialsMeta.total} material${materialsMeta.total === 1 ? '' : 'es'}`
-                      : 'Filtrá y agregá materiales a la venta'}
+                    : catalogSource === 'services'
+                      ? servicesMeta
+                        ? `${servicesMeta.total} servicio${servicesMeta.total === 1 ? '' : 's'}`
+                        : 'Filtrá y agregá servicios a la venta'
+                      : materialsMeta
+                        ? `${materialsMeta.total} material${materialsMeta.total === 1 ? '' : 'es'}`
+                        : 'Filtrá y agregá materiales a la venta'}
                 </CardDescription>
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -1064,11 +1169,30 @@ function VentasCreateView() {
                 >
                   Materiales
                 </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-xs font-medium',
+                    catalogSource === 'services'
+                      ? 'bg-background shadow-sm'
+                      : 'text-muted-foreground'
+                  )}
+                  onClick={() => {
+                    setCatalogSource('services')
+                    setPage(1)
+                  }}
+                >
+                  Servicios
+                </button>
               </div>
               <div className="flex gap-2">
                 <Input
                   placeholder={
-                    catalogSource === 'products' ? 'Buscar producto…' : 'Buscar material…'
+                    catalogSource === 'products'
+                      ? 'Buscar producto…'
+                      : catalogSource === 'services'
+                        ? 'Buscar servicio…'
+                        : 'Buscar material…'
                   }
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
@@ -1152,6 +1276,34 @@ function VentasCreateView() {
                     ))}
                   </div>
                 )
+              ) : catalogSource === 'services' ? (
+                loadingServices ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="text-muted-foreground size-6 animate-spin" />
+                  </div>
+                ) : servicesError ? (
+                  <QueryErrorState
+                    isError
+                    error={servicesQueryError}
+                    title="No se pudieron cargar los servicios"
+                  />
+                ) : services.length === 0 ? (
+                  <EmptyListState
+                    className="py-8"
+                    title="Todavía no hay servicios"
+                    description="Creá servicios en Productos → Servicios para venderlos acá sin descontar stock."
+                  />
+                ) : (
+                  <div className={cn(catalogProductGridClassName, 'pb-1')}>
+                    {services.map((service) => (
+                      <CatalogProductCard
+                        key={service.id}
+                        product={service}
+                        onAddToCart={addToCart}
+                      />
+                    ))}
+                  </div>
+                )
               ) : loadingMaterials ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="text-muted-foreground size-6 animate-spin" />
@@ -1199,6 +1351,36 @@ function VentasCreateView() {
                     variant="outline"
                     size="sm"
                     disabled={catalogMeta.currentPage >= catalogMeta.lastPage || loadingCatalog}
+                    onClick={() => setPage((current) => current + 1)}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {catalogSource === 'services' && servicesMeta && servicesMeta.lastPage > 1 ? (
+              <div className="flex shrink-0 items-center justify-between gap-4 border-t pt-3">
+                <p className="text-muted-foreground text-sm">
+                  Página {servicesMeta.currentPage} de {servicesMeta.lastPage}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={servicesMeta.currentPage <= 1 || loadingServices}
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  >
+                    Anterior
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      servicesMeta.currentPage >= servicesMeta.lastPage || loadingServices
+                    }
                     onClick={() => setPage((current) => current + 1)}
                   >
                     Siguiente
@@ -1326,6 +1508,34 @@ function VentasCreateView() {
           }
           setKitchenNoteDialogLineId(null)
         }}
+      />
+      <ServiceLineDialog
+        open={servicePickOpen}
+        onOpenChange={(open) => {
+          setServicePickOpen(open)
+          if (!open) {
+            setServicePickProduct(null)
+          }
+        }}
+        service={servicePickProduct}
+        mode="add"
+        onConfirm={addServiceToCart}
+      />
+      <ServiceLineDialog
+        open={serviceEditLineId != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setServiceEditLineId(null)
+          }
+        }}
+        service={serviceEditLine?.product ?? null}
+        mode="edit"
+        initialQuantity={serviceEditLine?.quantity ?? 1}
+        initialUnitPriceUsd={
+          serviceEditLine ? cartLineUnitPrice(serviceEditLine) : undefined
+        }
+        initialDetail={serviceEditLine?.detail ?? ''}
+        onConfirm={saveServiceLineEdit}
       />
       {editProduct ? (
         <CatalogFormDialog

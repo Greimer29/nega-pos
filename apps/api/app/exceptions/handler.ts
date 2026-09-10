@@ -58,6 +58,7 @@ import ProductoCatalogoStockFormulaException from '#exceptions/producto_catalogo
 import ProductoTallaDuplicadaException from '#exceptions/producto_talla_duplicada_exception'
 import ProductoTallaRequeridaException from '#exceptions/producto_talla_requerida_exception'
 import ProductoConFormulaNoPermiteTallasException from '#exceptions/producto_con_formula_no_permite_tallas_exception'
+import ServicioCatalogoOperacionInvalidaException from '#exceptions/servicio_catalogo_operacion_invalida_exception'
 import ArchivoImagenNoDisponibleException from '#exceptions/archivo_imagen_no_disponible_exception'
 import VentaNoEditableException from '#exceptions/venta_no_editable_exception'
 import VentaNoEncontradaException from '#exceptions/venta_no_encontrada_exception'
@@ -615,6 +616,15 @@ export default class HttpExceptionHandler extends ExceptionHandler {
         error: {
           code: ProductoConFormulaNoPermiteTallasException.code,
           message: error.message || ProductoConFormulaNoPermiteTallasException.message,
+        },
+      })
+    }
+
+    if (error instanceof ServicioCatalogoOperacionInvalidaException) {
+      return ctx.response.status(ServicioCatalogoOperacionInvalidaException.status).json({
+        error: {
+          code: ServicioCatalogoOperacionInvalidaException.code,
+          message: error.message || ServicioCatalogoOperacionInvalidaException.message,
         },
       })
     }

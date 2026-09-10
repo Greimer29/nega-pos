@@ -32,7 +32,7 @@ Referencia técnica **única y vigente** para desarrolladores. Derivada exclusiv
 |--------|---------------------|
 | **Ventas** | Facturas en borrador → confirmación → descuento de stock (`SALE_OUT`), contado/crédito, devoluciones, modo rápido vs pedido |
 | **Pedidos** | Órdenes con estados, líneas de catálogo, materiales asociados y transiciones con descuento de stock |
-| **Catálogo** | Productos con/sin fórmula de materiales, categorías, precios y stock manual |
+| **Catálogo** | Productos físicos y **servicios** (`item_kind`), fórmulas de materiales, categorías, precios; stock solo en productos |
 | **Inventario** | Materiales con movimientos (`inventory_movements`) y productos con movimientos (`product_inventory_movements`) |
 | **Compras** | Borrador → ítems → confirmar → entrada `PURCHASE_IN` a materiales o productos |
 | **Partners** | Clientes y proveedores con abonos de crédito y estado de cuenta |
@@ -361,7 +361,7 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda b
 | `categories` | `name`, `active`, `sort_order` |
 | `formulas` | `name`, `active` |
 | `formula_materials` | `formula_id`, `material_id`, `quantity` |
-| `catalog_products` | `name`, `category`, `sale_unit`, `formula_id?`, `sale_price_usd`, `cost_usd`, `stock_quantity`, `minimum_stock`, `active` |
+| `catalog_products` | `name`, `category`, `item_kind` (`PRODUCT`\|`SERVICE`, default `PRODUCT`), `sale_unit`, `formula_id?`, `sale_price_usd`, `cost_usd`, `stock_quantity`, `minimum_stock`, `active`. Los `SERVICE` no usan inventario/fórmula/tallas (`stock`/`minimum` en 0, `formula_id` null). |
 | `catalog_product_sizes` | Tallas opcionales por producto: `catalog_product_id`, `size` (texto libre ≤20), `stock_quantity`; UNIQUE `(catalog_product_id, size)`. Si hay filas, el stock del producto es la suma de tallas. Incompatible con `formula_id`. |
 
 Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
@@ -435,7 +435,7 @@ catalog_products ──< product_inventory_movements
 ### Compras (`purchase_service.ts`)
 
 1. **Crear borrador** (`status: DRAFT`) con proveedor y cuenta opcional.
-2. **Agregar ítems** — material y/o producto de catálogo (productos con fórmula no admiten compra directa de stock).
+2. **Agregar ítems** — material y/o producto de catálogo (`PRODUCT`; productos con fórmula y servicios no admiten compra directa de stock).
 3. **Confirmar** (`POST .../confirm`):
    - Requiere `invoice_number` y al menos un ítem (salvo `affects_inventory = false`).
    - Si `affects_inventory` es true (default): por cada ítem material → movimiento `PURCHASE_IN` + actualización de `last_purchase_price_usd`; por cada ítem producto sin fórmula → `PURCHASE_IN` en `product_inventory_movements` + `cost_usd`.
@@ -452,11 +452,14 @@ catalog_products ──< product_inventory_movements
 
 ### Catálogo, fórmulas y tallas
 
-- Producto **con** `formula_id`: el stock de venta/pedido se descuenta de **materiales** según `formula_materials`, no de `stock_quantity`. No admite tallas.
+- `item_kind`:
+  - **`PRODUCT`** (default): producto físico vendible con inventario (manual, fórmula o tallas).
+  - **`SERVICE`**: servicio sin inventario. Admin en `/productos/servicios`. Listados de productos/inventario/ajustes/compras de stock filtran o rechazan `SERVICE`. Serialización incluye `item_kind` e `is_service`. Filtro de listado: `?item_kind=PRODUCT|SERVICE` (si se omite, el listado de catálogo default es `PRODUCT`).
+- Producto **con** `formula_id`: el stock de venta/pedido se descuenta de **materiales** según `formula_materials`, no de `stock_quantity`. No admite tallas. No aplica a `SERVICE`.
 - Producto **sin** fórmula: stock en `catalog_products.stock_quantity` vía `product_inventory_movements`.
-- Producto **con tallas** (`catalog_product_sizes`): stock por talla; `stock_quantity` del producto = suma. Ventas/pedidos exigen `catalog_product_size_id` o `size`; al confirmar se descuenta la talla y el total global (movimiento `SALE_OUT` con nota `… talla {size}`). Compras v1 no desglosan por talla.
-- API: create/update aceptan `sizes[]`; `PUT /catalog-products/:id/sizes` reemplaza el set (`[]` limpia). Listado `?size=` filtra productos con esa talla y stock > 0. Serialización siempre incluye `has_sizes` + `sizes[]`.
-- Ajustes manuales: `POST catalog-products/:id/adjustment`, `POST catalog-products/bulk-adjustment` (varios productos en una transacción) y `POST materials/:id/adjustment`. Los productos con tallas requieren `catalog_product_size_id`. Los productos con fórmula no admiten ajuste manual de stock. Las ediciones de producto que cambian **stock** o **precio/costo** generan movimientos en `product_inventory_movements` (`MANUAL_ADJUSTMENT` / `PRICE_CHANGE`) con `created_by_user_id`; cambios de nombre/descripción no se registran.
+- Producto **con tallas** (`catalog_product_sizes`): stock por talla; `stock_quantity` del producto = suma. Ventas/pedidos exigen `catalog_product_size_id` o `size`; al confirmar se descuenta la talla y el total global (movimiento `SALE_OUT` con nota `… talla {size}`). Compras v1 no desglosan por talla. No aplica a `SERVICE`.
+- API: create/update aceptan `sizes[]` y `item_kind`; `PUT /catalog-products/:id/sizes` reemplaza el set (`[]` limpia). Listado `?size=` filtra productos con esa talla y stock > 0. Serialización siempre incluye `has_sizes` + `sizes[]`.
+- Ajustes manuales: `POST catalog-products/:id/adjustment`, `POST catalog-products/bulk-adjustment` (varios productos en una transacción) y `POST materials/:id/adjustment`. Los productos con tallas requieren `catalog_product_size_id`. Los productos con fórmula y los **servicios** no admiten ajuste manual de stock. Las ediciones de producto que cambian **stock** o **precio/costo** generan movimientos en `product_inventory_movements` (`MANUAL_ADJUSTMENT` / `PRICE_CHANGE`) con `created_by_user_id`; cambios de nombre/descripción no se registran.
 
 ### Pedidos (`order_service.ts` + `order_state_machine.ts`)
 
@@ -479,19 +482,19 @@ catalog_products ──< product_inventory_movements
 
 ### Ventas (`sale_service.ts`)
 
-1. **Borrador** (`DRAFT`): líneas de catálogo o material, cliente opcional. En el POS de facturar se puede agregar **productos** o **materiales** (tabs en el catálogo); al confirmar, los materiales descuentan stock con movimiento `SALE_OUT`. El precio unitario de cada línea es el enviado por el cliente (se puede cambiar en el carrito; atajos −5/−10/−20 % vs precio de lista). Si el producto tiene fórmula, se pueden ajustar materiales de esa venta. El descuento de factura (`discount_usd`) es independiente del precio por línea: `total_usd = suma(líneas) − discount_usd` (nunca negativo).
+1. **Borrador** (`DRAFT`): líneas de catálogo (producto o **servicio**) o material, cliente opcional. En el POS de facturar hay tabs **Productos / Materiales / Servicios**; al confirmar, productos y materiales descuentan stock (`SALE_OUT`), los **servicios no mueven inventario**. Línea de servicio: `catalog_product_id` de un `SERVICE`, `quantity`, `unit_price_usd` editable y `description` opcional (detalle en factura; si falta, se usa el nombre del servicio). El precio unitario de cada línea es el enviado por el cliente (se puede cambiar en el carrito; atajos −5/−10/−20 % vs precio de lista). Si el producto tiene fórmula, se pueden ajustar materiales de esa venta. El descuento de factura (`discount_usd`) es independiente del precio por línea: `total_usd = suma(líneas) − discount_usd` (nunca negativo).
 2. **Confirmar** (`POST .../confirm`):
    - Genera `code`, `status → COMPLETED`, `sold_at` / `confirmed_at`.
    - `billing_mode FAST` → `order_status DELIVERED`; `ORDER` → `order_status PENDING`.
-   - Descuenta stock (producto directo, materiales de fórmula, o línea de material).
+   - Descuenta stock (producto directo, materiales de fórmula, o línea de material); **omite** líneas cuyo catálogo es `SERVICE`.
    - Aplica método de pago y saldo si es crédito.
 3. **Transición de pedido de venta** (`billing_mode ORDER`): `PENDING → IN_PROCESS → DELIVERED` (solo ventas completadas).
-4. **Devolución** (`POST .../return`): parcial o total; revierte stock y actualiza `RETURNED`.
+4. **Devolución** (`POST .../return`): parcial o total; revierte stock de productos/materiales (no de servicios) y actualiza `RETURNED`.
 
 ### Reportes (`report_service.ts` / `inventory_report_service.ts`)
 
 - **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **ingresos** (aportes), compras de contado, abonos a proveedores, gastos, gastos de máquina y abonos de clientes en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). Balance neto (flujo de caja): `ventas + ingresos − compras_contado/abonos − gastos − gastos_máquina`. Las **cuentas por pagar** (compras/facturas a crédito con saldo) se listan como informativas (`pendingPayablesUsd` / `overduePayablesUsd`) y **no restan** del neto hasta el abono.
-- **Inventario** (`GET /reports/inventory`): snapshot de stock de productos de catálogo y materiales en una sola lista (paginada). Filtros: `search`, `category`, `sort_by`/`sort_dir` (`id`|`name`|`sale_price`|`quantity`), `active`, `low_stock`, `hide_zero`, `page`, `per_page`, `export=true` (set completo para Excel). Cada ítem incluye `kind` (`product`|`material`), precios/costos, unidad, `stock_source`, `low_stock`, `has_sizes` y `lines[]` (por talla si aplica; si no, una línea con `size: null`). Con `hide_zero`, se omiten tallas con cantidad ≤ 0 y productos/materiales con total 0. UI: `/reportes?vista=inventario` (query `inv_*`).
+- **Inventario** (`GET /reports/inventory`): snapshot de stock de productos de catálogo (`item_kind=PRODUCT`) y materiales en una sola lista (paginada). Los servicios no aparecen. Filtros: `search`, `category`, `sort_by`/`sort_dir` (`id`|`name`|`sale_price`|`quantity`), `active`, `low_stock`, `hide_zero`, `page`, `per_page`, `export=true` (set completo para Excel). Cada ítem incluye `kind` (`product`|`material`), precios/costos, unidad, `stock_source`, `low_stock`, `has_sizes` y `lines[]` (por talla si aplica; si no, una línea con `size: null`). Con `hide_zero`, se omiten tallas con cantidad ≤ 0 y productos/materiales con total 0. UI: `/reportes?vista=inventario` (query `inv_*`).
 - **Movimientos de producto** (`GET /reports/inventory/:productId/movements`): historial de `product_inventory_movements` de un producto de catálogo (no materiales). Filtros de período (`month`|`from`/`to`) y `types` (PURCHASE_IN, SALE_OUT, ajustes manuales, REVERSAL_ADJUSTMENT). UI: `/reportes/inventario/:productId`.
 
 ### Dashboard (`dashboard_service.ts`)
@@ -831,12 +834,13 @@ Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuent
 | `/customers` | Listado clientes |
 | `/customers/:id` | Detalle cliente |
 | `/customers/:id/cuenta` | Estado de cuenta cliente |
-| `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), botón de registrar gasto de empresa (sin salir del POS; permiso `expenses.edit`), cliente walk-in por defecto «Generico», precio por línea (atajos −5/−10/−20 %), fórmula por línea si el producto tiene, descuento de factura aparte; en móvil carrito en drawer y filtros de catálogo en botón desplegable |
+| `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), botón de registrar gasto de empresa (sin salir del POS; permiso `expenses.edit`), cliente walk-in por defecto «Generico», tabs Productos/Materiales/**Servicios**, precio por línea (atajos −5/−10/−20 %), detalle opcional en líneas de servicio, fórmula por línea si el producto tiene, descuento de factura aparte; en móvil carrito en drawer y filtros de catálogo en botón desplegable |
 | `/ventas/:id` | Detalle factura |
 | `/orders/:id` | Detalle pedido |
-| `/productos` | Catálogo. Filtros de categoría en botón desplegable (mismo patrón que ventas). Botón «Movimientos» → cargo/descargo/ajuste masivo |
+| `/productos` | Catálogo de productos físicos (`item_kind=PRODUCT`). Filtros de categoría en botón desplegable (mismo patrón que ventas). Botón «Movimientos» → cargo/descargo/ajuste masivo |
 | `/productos/movimientos` | Cargo, descargo o ajuste de stock sobre varios productos (y tallas) en un solo registro |
 | `/productos/:id` | Detalle producto |
+| `/productos/servicios` | Catálogo de servicios (`item_kind=SERVICE`): nombre, precio, activo/categoría; sin stock/fórmula/tallas. Permisos `catalog.view` / `catalog.edit` |
 | `/productos/materiales` | Materiales |
 | `/productos/materiales/:id` | Detalle material |
 | `/purchases` | Hub Compras (`?tab=compras\|gastos\|ingresos`) |

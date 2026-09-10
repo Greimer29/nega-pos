@@ -21,11 +21,15 @@ export type CatalogProductSizeInput = {
   stock_quantity: number
 }
 
+export type CatalogItemKind = 'PRODUCT' | 'SERVICE'
+
 export type CatalogProduct = {
   id: number
   name: string
   description: string | null
   category: string
+  item_kind?: CatalogItemKind
+  is_service?: boolean
   sale_unit: ProductSaleUnit
   formula_id: number | null
   image_path: string | null
@@ -93,6 +97,7 @@ export type CatalogProductInput = {
   name: string
   description?: string
   category: string
+  item_kind?: CatalogItemKind
   sale_unit?: ProductSaleUnit
   sale_price_usd: number
   cost_usd?: number
@@ -108,6 +113,7 @@ export type CatalogListParams = {
   category?: string
   size?: string
   active?: boolean
+  itemKind?: CatalogItemKind
   sortBy?: 'name' | 'most_sold'
   sortDir?: 'asc' | 'desc'
 }

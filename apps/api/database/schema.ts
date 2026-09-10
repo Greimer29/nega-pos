@@ -36,7 +36,7 @@ export class AppSettingSchema extends BaseModel {
 }
 
 export class CatalogProductSchema extends BaseModel {
-  static $columns = ['active', 'category', 'costUsd', 'createdAt', 'description', 'formulaId', 'id', 'imagePath', 'minimumStock', 'name', 'previousSalePriceUsd', 'salePriceUsd', 'saleUnit', 'stockQuantity', 'updatedAt'] as const
+  static $columns = ['active', 'category', 'costUsd', 'createdAt', 'description', 'formulaId', 'id', 'imagePath', 'itemKind', 'minimumStock', 'name', 'previousSalePriceUsd', 'salePriceUsd', 'saleUnit', 'stockQuantity', 'updatedAt'] as const
   $columns = CatalogProductSchema.$columns
   @column()
   declare active: boolean
@@ -54,6 +54,8 @@ export class CatalogProductSchema extends BaseModel {
   declare id: bigint | number
   @column()
   declare imagePath: string | null
+  @column()
+  declare itemKind: string
   @column()
   declare minimumStock: string
   @column()

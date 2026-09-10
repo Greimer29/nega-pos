@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   BarChart3,
   Banknote,
+  ConciergeBell,
   FlaskConical,
   LayoutDashboard,
   Package,
@@ -61,7 +62,9 @@ export const navEntries: NavEntry[] = [
         navPath: '/productos',
         match: (pathname) =>
           pathname === '/productos' ||
-          (pathname.startsWith('/productos') && !pathname.startsWith('/productos/materiales')),
+          (pathname.startsWith('/productos') &&
+            !pathname.startsWith('/productos/materiales') &&
+            !pathname.startsWith('/productos/servicios')),
       },
       {
         to: '/productos/materiales',
@@ -69,6 +72,13 @@ export const navEntries: NavEntry[] = [
         icon: FlaskConical,
         navPath: '/productos/materiales',
         match: (pathname) => pathname.startsWith('/productos/materiales'),
+      },
+      {
+        to: '/productos/servicios',
+        label: 'Servicios',
+        icon: ConciergeBell,
+        navPath: '/productos/servicios',
+        match: (pathname) => pathname.startsWith('/productos/servicios'),
       },
       {
         to: '/machines',
