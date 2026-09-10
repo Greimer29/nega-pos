@@ -32,6 +32,7 @@ async function resetDatabase() {
   await db.from('customers').delete()
   await db.from('counters').delete()
   await db.from('suppliers').delete()
+  await db.from('sales_shifts').delete()
   await db.from('users').delete()
 }
 
@@ -330,7 +331,8 @@ test.group('Purchases API (borrador)', (group) => {
     const supplier = await seedSupplier()
 
     await db.from('currencies').where('code', 'VES').update({ rate_per_usd: '40.0000' })
-    const globalRateBefore = (await db.from('currencies').where('code', 'VES').first())!.rate_per_usd
+    const globalRateBefore = (await db.from('currencies').where('code', 'VES').first())!
+      .rate_per_usd
 
     const createResponse = await client
       .post('/api/v1/purchases')
@@ -352,8 +354,8 @@ test.group('Purchases API (borrador)', (group) => {
       },
     })
 
-    const purchaseId = (createResponse.body() as { data: { purchase: { id: number } } }).data.purchase
-      .id
+    const purchaseId = (createResponse.body() as { data: { purchase: { id: number } } }).data
+      .purchase.id
 
     const updateResponse = await client
       .put(`/api/v1/purchases/${purchaseId}`)

@@ -180,7 +180,6 @@ test.group('route_permissions', () => {
     assert.deepEqual(resolveRoutePermission('PUT', '/api/v1/categories/42'), [
       'catalog.edit',
       'settings.edit',
-      'settings.view',
     ])
   })
 

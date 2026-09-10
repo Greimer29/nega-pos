@@ -98,7 +98,7 @@ test.group('Materials API', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const material = await createMaterial({ code: '2919' })
+    const material = await createMaterial({ code: '2919', unit: 'MTS' })
 
     const response = await client
       .post(`/api/v1/materials/${material.id}/adjustment`)
@@ -114,7 +114,7 @@ test.group('Materials API', (group) => {
       data: {
         movimiento: {
           type: 'MANUAL_CARGO',
-          quantity: '2.5',
+          quantity: '2.500',
           note: 'Conteo físico mensual',
         },
         stockActual: 2.5,
@@ -134,7 +134,7 @@ test.group('Materials API', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const material = await createMaterial({ code: '2920' })
+    const material = await createMaterial({ code: '2920', unit: 'MTS' })
 
     await client
       .post(`/api/v1/materials/${material.id}/adjustment`)
@@ -157,7 +157,7 @@ test.group('Materials API', (group) => {
     ajuste.assertStatus(200)
     assert.equal(ajuste.body().data.stockActual, 5)
     assert.equal(ajuste.body().data.movimiento.type, 'MANUAL_ADJUSTMENT')
-    assert.equal(ajuste.body().data.movimiento.quantity, '-2')
+    assert.equal(ajuste.body().data.movimiento.quantity, '-2.000')
   })
 
   test('POST /api/v1/materials rejects duplicate code', async ({ client }) => {

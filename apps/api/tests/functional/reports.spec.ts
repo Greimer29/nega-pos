@@ -43,6 +43,7 @@ async function resetDatabase() {
   await db.from('counters').delete()
   await db.from('suppliers').delete()
   await db.from('accounts').delete()
+  await db.from('sales_shifts').delete()
   await db.from('users').delete()
   await AppSetting.updateOrCreate(
     { key: 'base_currency_code' },
@@ -183,8 +184,8 @@ test.group('Reports API', (group) => {
     assert.equal(body.data.movements[0].currencyCode, 'USD')
     assert.equal(body.data.movements[0].amountUsd, '7.0000')
     assert.equal(body.data.movements[0].amountNative, '7.0000')
-    assert.equal(body.data.movements[0].amountDisplay, '7.00')
-    assert.equal(body.data.summary.sales, '7.00')
+    assert.equal(body.data.movements[0].amountDisplay, '700.00')
+    assert.equal(body.data.summary.sales, '700.00')
   })
 
   test('GET /api/v1/reports/account-statement subtracts returned catalog quantity', async ({
@@ -232,7 +233,7 @@ test.group('Reports API', (group) => {
     }
 
     assert.equal(body.data.movements[0].amountUsd, '7.0000')
-    assert.equal(body.data.summary.sales, '7.00')
+    assert.equal(body.data.summary.sales, '700.00')
   })
 
   test('GET account-statement includes credit purchases by due date and unpaid carryover', async ({
@@ -328,8 +329,7 @@ test.group('Reports API', (group) => {
       )
     )
     assert.equal(currentBody.data.summary.purchasesUsd, '25.0000')
-    const expectedPending =
-      dueFuture <= monthEnd ? 150 : 100
+    const expectedPending = dueFuture <= monthEnd ? 150 : 100
     assert.equal(currentBody.data.summary.pendingPayablesUsd, `${expectedPending.toFixed(4)}`)
     if (dueFuture <= monthEnd) {
       const pending = currentBody.data.movements.find(
@@ -360,9 +360,7 @@ test.group('Reports API', (group) => {
     }
 
     assert.exists(
-      nextBody.data.movements.find(
-        (m) => m.isCreditPurchase && m.creditBalanceUsd === '80.0000'
-      )
+      nextBody.data.movements.find((m) => m.isCreditPurchase && m.creditBalanceUsd === '80.0000')
     )
     assert.equal(nextBody.data.summary.purchasesUsd, '0.0000')
     if (duePast < nextMonth.startOf('month')) {
@@ -630,7 +628,7 @@ test.group('Reports API', (group) => {
       }
     }
 
-    assert.equal(body.data.summary.sales, '40.00')
+    assert.equal(body.data.summary.sales, '4000.00')
     const creditSale = body.data.movements.find((m) => m.type === 'sale')
     assert.exists(creditSale)
     assert.equal(creditSale!.isCreditSale, true)
@@ -716,7 +714,7 @@ test.group('Reports API', (group) => {
       }
     }
 
-    assert.equal(filteredBody.data.summary.sales, '30.00')
+    assert.equal(filteredBody.data.summary.sales, '3000.00')
     assert.lengthOf(filteredBody.data.movements, 1)
     assert.equal(filteredBody.data.movements[0].amountUsd, '30.0000')
   })
@@ -762,8 +760,8 @@ test.group('Reports API', (group) => {
       }
     }
 
-    assert.equal(body.data.summary.purchasesUsd, '80.0000')
-    assert.equal(body.data.summary.purchases, '80.00')
+    assert.equal(body.data.summary.purchasesUsd, '50.0000')
+    assert.equal(body.data.summary.purchases, '5000.00')
     const paymentMovement = body.data.movements.find((m) => m.type === 'supplier_payment')
     assert.exists(paymentMovement)
     assert.equal(paymentMovement!.date, '2026-06-15')

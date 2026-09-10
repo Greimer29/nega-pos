@@ -71,6 +71,8 @@ import MetodoPagoRequeridoException from '#exceptions/metodo_pago_requerido_exce
 import MetodoPagoNoEncontradoException from '#exceptions/metodo_pago_no_encontrado_exception'
 import CodigoMetodoPagoDuplicadoException from '#exceptions/codigo_metodo_pago_duplicado_exception'
 import UltimoMetodoPagoActivoException from '#exceptions/ultimo_metodo_pago_activo_exception'
+import TurnoNoAbiertoException from '#exceptions/turno_no_abierto_exception'
+import TurnoYaAbiertoException from '#exceptions/turno_ya_abierto_exception'
 
 export default class HttpExceptionHandler extends ExceptionHandler {
   protected debug = !app.inProduction
@@ -724,6 +726,24 @@ export default class HttpExceptionHandler extends ExceptionHandler {
         error: {
           code: UltimoMetodoPagoActivoException.code,
           message: error.message || UltimoMetodoPagoActivoException.message,
+        },
+      })
+    }
+
+    if (error instanceof TurnoNoAbiertoException) {
+      return ctx.response.status(TurnoNoAbiertoException.status).json({
+        error: {
+          code: TurnoNoAbiertoException.code,
+          message: error.message || TurnoNoAbiertoException.message,
+        },
+      })
+    }
+
+    if (error instanceof TurnoYaAbiertoException) {
+      return ctx.response.status(TurnoYaAbiertoException.status).json({
+        error: {
+          code: TurnoYaAbiertoException.code,
+          message: error.message || TurnoYaAbiertoException.message,
         },
       })
     }

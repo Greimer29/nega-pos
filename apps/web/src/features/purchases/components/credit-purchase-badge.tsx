@@ -3,6 +3,8 @@ import { cn } from '@/lib/utils'
 
 type CreditPurchaseBadgeProps = {
   creditDueDate: string | null
+  /** Saldo pendiente USD. Si es ≤ 0, la compra a crédito se considera pagada. */
+  balanceUsd?: string | number | null
   reportStatus?: 'pending' | 'overdue' | 'settled'
   compact?: boolean
   className?: string
@@ -10,13 +12,21 @@ type CreditPurchaseBadgeProps = {
 
 function resolveStatus(
   creditDueDate: string | null,
+  balanceUsd?: string | number | null,
   reportStatus?: CreditPurchaseBadgeProps['reportStatus']
 ): 'pending' | 'overdue' | 'settled' {
   if (reportStatus) {
     return reportStatus
   }
 
-  if (!creditDueDate) {
+  if (balanceUsd !== undefined && balanceUsd !== null) {
+    if (Number(balanceUsd) <= 0) {
+      return 'settled'
+    }
+    if (!creditDueDate) {
+      return 'pending'
+    }
+  } else if (!creditDueDate) {
     return 'settled'
   }
 
@@ -26,11 +36,12 @@ function resolveStatus(
 
 export function CreditPurchaseBadge({
   creditDueDate,
+  balanceUsd,
   reportStatus,
   compact = false,
   className,
 }: CreditPurchaseBadgeProps) {
-  const status = resolveStatus(creditDueDate, reportStatus)
+  const status = resolveStatus(creditDueDate, balanceUsd, reportStatus)
 
   const label =
     status === 'overdue'
@@ -39,11 +50,11 @@ export function CreditPurchaseBadge({
         : 'Crédito vencido'
       : status === 'pending'
         ? compact
-          ? 'Pendiente'
+          ? 'Por pagar'
           : 'Crédito pendiente'
         : compact
-          ? 'Crédito'
-          : 'Crédito'
+          ? 'Pagada'
+          : 'Crédito pagado'
 
   return (
     <span

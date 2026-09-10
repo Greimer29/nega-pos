@@ -9,9 +9,7 @@ export type PlatformSessionClaims = {
   email: string
 }
 
-export function readPlatformClaims(
-  session: HttpContext['session']
-): PlatformSessionClaims | null {
+export function readPlatformClaims(session: HttpContext['session']): PlatformSessionClaims | null {
   const raw = session.get(PLATFORM_SESSION_KEY)
   if (!raw || typeof raw !== 'object') {
     return null

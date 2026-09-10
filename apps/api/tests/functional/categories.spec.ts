@@ -15,8 +15,11 @@ test.group('Categories API', (group) => {
   })
 
   group.each.setup(async () => {
+    await db.from('sale_lines').delete()
+    await db.from('sales').delete()
     await db.from('catalog_products').delete()
     await db.from('categories').delete()
+    await db.from('sales_shifts').delete()
     await db.from('users').delete()
     await seedReferenceData()
 
@@ -89,9 +92,7 @@ test.group('Categories API', (group) => {
       active: true,
     })
 
-    const response = await client
-      .delete(`/api/v1/categories/${category.id}`)
-      .loginAs(user)
+    const response = await client.delete(`/api/v1/categories/${category.id}`).loginAs(user)
 
     response.assertStatus(409)
   })

@@ -3,27 +3,43 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AccountSelect } from '@/features/accounts/components/account-select'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { IncomeFormDialog } from '@/features/purchases/components/income-form-dialog'
 import { DisplayDocumentMoney } from '@/features/currencies/components/display-money'
 import { formatFecha } from '@/features/purchases/constants'
 import { useIncomesQuery } from '@/features/purchases/hooks/use-incomes'
 import type { Income } from '@/features/purchases/types'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 
 const PER_PAGE = 20
 
+type PurchasesIngresosFilters = {
+  accountId: number | null
+  unassignedOnly: boolean
+  page: number
+}
+
+const DEFAULT_PURCHASES_INGRESOS_FILTERS: PurchasesIngresosFilters = {
+  accountId: null,
+  unassignedOnly: false,
+  page: 1,
+}
+
 export function PurchasesIngresosPanel() {
-  const [page, setPage] = useState(1)
+  const { company } = useAuth()
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey('purchases-ingresos', company?.id),
+    DEFAULT_PURCHASES_INGRESOS_FILTERS
+  )
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedIncome, setSelectedIncome] = useState<Income | null>(null)
-  const [accountFilter, setAccountFilter] = useState<number | null>(null)
-  const [unassignedOnly, setUnassignedOnly] = useState(false)
 
   const { data, isLoading, isError, error } = useIncomesQuery({
-    page,
+    page: filters.page,
     perPage: PER_PAGE,
-    account_id: unassignedOnly ? undefined : accountFilter ?? undefined,
-    unassigned: unassignedOnly || undefined,
+    account_id: filters.unassignedOnly ? undefined : filters.accountId ?? undefined,
+    unassigned: filters.unassignedOnly || undefined,
   })
 
   const incomes = data?.incomes ?? []
@@ -56,24 +72,31 @@ export function PurchasesIngresosPanel() {
       <CardContent className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2">
           <AccountSelect
-            value={unassignedOnly ? null : accountFilter}
+            value={filters.unassignedOnly ? null : filters.accountId}
             onChange={(value) => {
-              setUnassignedOnly(false)
-              setAccountFilter(value)
-              setPage(1)
+              setFilters((prev) => ({
+                ...prev,
+                unassignedOnly: false,
+                accountId: value,
+                page: 1,
+              }))
             }}
-            disabled={unassignedOnly}
+            disabled={filters.unassignedOnly}
             label="Filtrar por cuenta"
           />
           <div className="flex items-end">
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={unassignedOnly}
+                checked={filters.unassignedOnly}
                 onChange={(e) => {
-                  setUnassignedOnly(e.target.checked)
-                  if (e.target.checked) setAccountFilter(null)
-                  setPage(1)
+                  const checked = e.target.checked
+                  setFilters((prev) => ({
+                    ...prev,
+                    unassignedOnly: checked,
+                    accountId: checked ? null : prev.accountId,
+                    page: 1,
+                  }))
                 }}
               />
               Solo sin cuenta
@@ -146,16 +169,16 @@ export function PurchasesIngresosPanel() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => p - 1)}
+                    disabled={filters.page <= 1}
+                    onClick={() => setFilters((prev) => ({ ...prev, page: prev.page - 1 }))}
                   >
                     Anterior
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={page >= meta.lastPage}
-                    onClick={() => setPage((p) => p + 1)}
+                    disabled={filters.page >= meta.lastPage}
+                    onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                   >
                     Siguiente
                   </Button>

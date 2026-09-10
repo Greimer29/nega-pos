@@ -1,5 +1,5 @@
 import TasaCambioInvalidaException from '#exceptions/tasa_cambio_invalida_exception'
-import CurrencyService from '#services/currency_service'
+import type CurrencyService from '#services/currency_service'
 
 export type MonetaryEntryResolution = {
   currencyCode: string
@@ -35,10 +35,12 @@ export async function resolveMonetaryEntryAmount(params: {
   }
 
   let rate =
-    params.entryRate !== undefined && params.entryRate !== null ? Number(params.entryRate) : NaN
+    params.entryRate !== undefined && params.entryRate !== null
+      ? Number(params.entryRate)
+      : Number.NaN
   if (!(rate > 0)) {
     const rates = await currencyService.getActiveRates()
-    rate = rates[currencyCode] ?? NaN
+    rate = rates[currencyCode] ?? Number.NaN
   }
 
   if (!(rate > 0)) {

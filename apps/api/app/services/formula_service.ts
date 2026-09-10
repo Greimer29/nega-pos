@@ -1,4 +1,7 @@
-import { formatInventoryQuantityForStorage, normalizeInventoryQuantity } from '#constants/inventory_units'
+import {
+  formatInventoryQuantityForStorage,
+  normalizeInventoryQuantity,
+} from '#constants/inventory_units'
 import FormulaEnUsoException from '#exceptions/formula_en_uso_exception'
 import FormulaNoEncontradaException from '#exceptions/formula_no_encontrada_exception'
 import MaterialNoEncontradoException from '#exceptions/material_no_encontrado_exception'

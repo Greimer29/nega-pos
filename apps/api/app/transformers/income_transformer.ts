@@ -9,12 +9,7 @@ export async function serializeIncome(income: Income) {
   const baseCode = await currencyService.getBaseCurrencyCode()
   const currencyCode = income.currencyCode ?? baseCode
   const amountUsd = Number(income.amountUsd ?? 0).toFixed(4)
-  const amount = nativeAmountFromBase(
-    Number(amountUsd),
-    income.entryRate,
-    currencyCode,
-    baseCode
-  )
+  const amount = nativeAmountFromBase(Number(amountUsd), income.entryRate, currencyCode, baseCode)
 
   return {
     id: Number(income.id),

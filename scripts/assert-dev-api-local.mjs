@@ -1,6 +1,9 @@
 /**
  * Guarda de desarrollo: `pnpm dev:web` no debe apuntar a la API de producción.
  * Producción (Railway) solo se usa al buildear desktop/mobile con VITE_API_URL explícita.
+ *
+ * Vite prioriza process.env sobre apps/web/.env — una shell que quedó con
+ * VITE_API_URL=Railway (p.ej. tras build:mobile) sigue pegándole a prod.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -10,24 +13,46 @@ const webDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 
 
 const ENV_FILES = ['.env.development.local', '.env.local', '.env.development', '.env']
 
-function readViteApiUrl() {
+function normalizeUrl(value) {
+  return value.trim().replace(/^["']|["']$/g, '').replace(/\/$/, '')
+}
+
+function readViteApiUrlFromFiles() {
   for (const file of ENV_FILES) {
     const filePath = path.join(webDir, file)
     if (!fs.existsSync(filePath)) continue
     const match = fs.readFileSync(filePath, 'utf8').match(/^VITE_API_URL\s*=\s*(.+)$/m)
     if (!match) continue
-    return match[1].trim().replace(/^["']|["']$/g, '').replace(/\/$/, '')
+    return normalizeUrl(match[1])
   }
   return 'http://localhost:3333'
 }
 
-const apiUrl = readViteApiUrl()
-const isRemoteProd =
-  /railway\.app/i.test(apiUrl) ||
-  /nega-pos-api-production/i.test(apiUrl) ||
-  (/^https:\/\//i.test(apiUrl) && !/localhost|127\.0\.0\.1/i.test(apiUrl))
+function isRemoteProd(apiUrl) {
+  return (
+    /railway\.app/i.test(apiUrl) ||
+    /nega-pos-api-production/i.test(apiUrl) ||
+    (/^https:\/\//i.test(apiUrl) && !/localhost|127\.0\.0\.1/i.test(apiUrl))
+  )
+}
 
-if (isRemoteProd) {
+const fromProcess = process.env.VITE_API_URL ? normalizeUrl(process.env.VITE_API_URL) : null
+const fromFiles = readViteApiUrlFromFiles()
+const apiUrl = fromProcess || fromFiles
+
+if (fromProcess && isRemoteProd(fromProcess)) {
+  console.error('')
+  console.error('[nega-pos] BLOQUEADO: la variable de entorno del shell VITE_API_URL apunta a prod:')
+  console.error(`  ${fromProcess}`)
+  console.error('')
+  console.error('  Eso pisa apps/web/.env. En PowerShell:')
+  console.error('    Remove-Item Env:VITE_API_URL')
+  console.error('  Luego: pnpm dev:web')
+  console.error('')
+  process.exit(1)
+}
+
+if (isRemoteProd(apiUrl)) {
   console.error('')
   console.error('[nega-pos] BLOQUEADO: VITE_API_URL apunta a una API remota/producción:')
   console.error(`  ${apiUrl}`)
@@ -39,10 +64,11 @@ if (isRemoteProd) {
   console.error('  Luego: docker compose up -d   (MySQL + API)')
   console.error('         pnpm dev:web')
   console.error('')
-  console.error('  Railway solo para builds de release:')
-  console.error('    $env:VITE_API_URL="https://…railway.app"; pnpm build:mobile')
-  console.error('')
   process.exit(1)
 }
 
-console.log(`[nega-pos] Dev API local OK → ${apiUrl}`)
+if (fromProcess && fromProcess !== fromFiles) {
+  console.log(`[nega-pos] Usando VITE_API_URL del shell → ${fromProcess} (archivo: ${fromFiles})`)
+} else {
+  console.log(`[nega-pos] Dev API local OK → ${apiUrl}`)
+}

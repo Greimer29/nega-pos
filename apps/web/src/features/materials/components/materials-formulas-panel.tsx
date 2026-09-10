@@ -3,6 +3,7 @@ import { FlaskConical, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { FormulaFormDialog } from '@/features/formulas/components/formula-form-dialog'
 import {
   useDeleteFormulaMutation,
@@ -10,29 +11,51 @@ import {
 } from '@/features/formulas/hooks/use-formulas'
 import type { Formula } from '@/features/formulas/types'
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 
 const PER_PAGE = 30
 
+type MaterialsFormulasFilters = {
+  search: string
+  page: number
+}
+
+const DEFAULT_MATERIALS_FORMULAS_FILTERS: MaterialsFormulasFilters = {
+  search: '',
+  page: 1,
+}
+
 export function MaterialsFormulasPanel() {
-  const [page, setPage] = useState(1)
-  const [searchInput, setSearchInput] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const { company } = useAuth()
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey('materials-formulas', company?.id),
+    DEFAULT_MATERIALS_FORMULAS_FILTERS
+  )
+  const [searchInput, setSearchInput] = useState(filters.search)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingFormula, setEditingFormula] = useState<Formula | null>(null)
   const deleteMutation = useDeleteFormulaMutation()
 
   useEffect(() => {
+    setSearchInput(filters.search)
+  }, [filters.search])
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim())
-      setPage(1)
+      const nextSearch = searchInput.trim()
+      setFilters((prev) => ({
+        ...prev,
+        search: nextSearch,
+        page: nextSearch === prev.search ? prev.page : 1,
+      }))
     }, 300)
     return () => window.clearTimeout(timer)
-  }, [searchInput])
+  }, [searchInput, setFilters])
 
   const { data, isLoading, isError, error } = useFormulasQuery({
-    page,
+    page: filters.page,
     perPage: PER_PAGE,
-    search: debouncedSearch || undefined,
+    search: filters.search || undefined,
     active: true,
   })
 
@@ -154,7 +177,9 @@ export function MaterialsFormulasPanel() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage <= 1}
-                  onClick={() => setPage((c) => Math.max(1, c - 1))}
+                  onClick={() =>
+                    setFilters((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))
+                  }
                 >
                   Anterior
                 </Button>
@@ -162,7 +187,7 @@ export function MaterialsFormulasPanel() {
                   variant="outline"
                   size="sm"
                   disabled={meta.currentPage >= meta.lastPage}
-                  onClick={() => setPage((c) => c + 1)}
+                  onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                 >
                   Siguiente
                 </Button>

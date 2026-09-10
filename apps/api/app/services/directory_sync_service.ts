@@ -30,7 +30,10 @@ export default class DirectorySyncService {
             .where('company_id', store.companyId)
             .first()
         : null) ??
-      (await DirectoryUser.query().where('email', email).where('company_id', store.companyId).first())
+      (await DirectoryUser.query()
+        .where('email', email)
+        .where('company_id', store.companyId)
+        .first())
 
     if (!row) {
       const conflict = await DirectoryUser.findBy('email', email)

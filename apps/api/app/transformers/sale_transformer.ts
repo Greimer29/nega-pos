@@ -102,7 +102,9 @@ export function serializeSaleLine(line: SaleLine) {
           name: line.catalogProduct.name,
           category: line.catalogProduct.category,
           sale_unit: line.catalogProduct.saleUnit,
-          formula: line.catalogProduct.formula ? serializeFormulaDetail(line.catalogProduct.formula) : null,
+          formula: line.catalogProduct.formula
+            ? serializeFormulaDetail(line.catalogProduct.formula)
+            : null,
         }
       : null,
     material: line.material

@@ -118,13 +118,19 @@ test.group('Print config settings API', (group) => {
     putResponse.assertStatus(200)
     assert.equal(putResponse.body().data.persisted, true)
     assert.equal(putResponse.body().data.print_config.documents.comanda.enabled, true)
-    assert.equal(putResponse.body().data.print_config.documents.comanda.deviceName, 'Kitchen Printer')
+    assert.equal(
+      putResponse.body().data.print_config.documents.comanda.deviceName,
+      'Kitchen Printer'
+    )
 
     const getResponse = await client.get('/api/v1/settings/printing').loginAs(user)
     getResponse.assertStatus(200)
     assert.equal(getResponse.body().data.persisted, true)
     assert.equal(getResponse.body().data.print_config.documents.comanda.enabled, true)
-    assert.equal(getResponse.body().data.print_config.documents.comanda.deviceName, 'Kitchen Printer')
+    assert.equal(
+      getResponse.body().data.print_config.documents.comanda.deviceName,
+      'Kitchen Printer'
+    )
     assert.equal(getResponse.body().data.print_config.behavior.printComandaOnConfirm, true)
   })
 

@@ -2,18 +2,18 @@
 
 import type { ElectronBridge } from '@/lib/electron-bridge'
 
-interface ImportMetaEnv {
-  readonly VITE_API_URL: string
-  readonly VITE_APP_VERSION?: string
-  readonly VITE_BUILD_ID?: string
-  readonly VITE_GOOGLE_CLIENT_ID?: string
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
-
 declare global {
+  interface ImportMetaEnv {
+    readonly VITE_API_URL: string
+    readonly VITE_APP_VERSION?: string
+    readonly VITE_BUILD_ID?: string
+    readonly VITE_GOOGLE_CLIENT_ID?: string
+  }
+
+  interface ImportMeta {
+    readonly env: ImportMetaEnv
+  }
+
   interface Window {
     negaPos?: ElectronBridge
     google?: {

@@ -19,9 +19,7 @@ export default class extends BaseSchema {
     await this.defer(async () => {
       await this.db.transaction(async (trx) => {
         const salesCountRow = await trx.from('sales').count('* as total').first()
-        const salesTotal = Number(
-          (salesCountRow as { total?: number | string } | null)?.total ?? 0
-        )
+        const salesTotal = Number((salesCountRow as { total?: number | string } | null)?.total ?? 0)
 
         // Fresh company DB (no historical sales): default base = USD.
         // Legacy cutover to XAU only applies when there is existing transactional data.
@@ -36,11 +34,7 @@ export default class extends BaseSchema {
             .onConflict('key')
             .merge({ value: 'USD', updated_at: now })
 
-          const ensureCurrency = async (
-            code: string,
-            name: string,
-            ratePerUsd: string
-          ) => {
+          const ensureCurrency = async (code: string, name: string, ratePerUsd: string) => {
             const existing = await trx.from('currencies').where('code', code).first()
             if (existing) {
               await trx.from('currencies').where('code', code).update({
@@ -95,10 +89,13 @@ export default class extends BaseSchema {
           })
         }
 
-        await trx.from('currencies').where('code', 'USD').update({
-          rate_per_usd: this.factor.toFixed(4),
-          updated_at: now,
-        })
+        await trx
+          .from('currencies')
+          .where('code', 'USD')
+          .update({
+            rate_per_usd: this.factor.toFixed(4),
+            updated_at: now,
+          })
 
         await trx.rawQuery(
           `UPDATE currencies

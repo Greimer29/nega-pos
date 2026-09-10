@@ -117,9 +117,7 @@ export default class SettingsController {
     const scope = payload.scope ?? 'full'
     const result = await this.printConfigService.guardarPatch(scope, {
       scope,
-      ticket: payload.ticket
-        ? { station_label: payload.ticket.station_label ?? '' }
-        : undefined,
+      ticket: payload.ticket ? { station_label: payload.ticket.station_label ?? '' } : undefined,
       formats: payload.formats,
       documents: payload.documents
         ? {

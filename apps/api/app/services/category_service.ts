@@ -104,8 +104,7 @@ export default class CategoryService {
       .where('category', category.name)
       .count('* as total')
     const total =
-      Number(productsCount[0]?.$extras.total ?? 0) +
-      Number(materialsCount[0]?.$extras.total ?? 0)
+      Number(productsCount[0]?.$extras.total ?? 0) + Number(materialsCount[0]?.$extras.total ?? 0)
 
     if (total > 0) {
       throw new CategoriaEnUsoException(total)

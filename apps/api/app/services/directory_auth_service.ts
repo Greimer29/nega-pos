@@ -2,11 +2,7 @@ import Company from '#models/company'
 import DirectoryUser from '#models/directory_user'
 import User from '#models/user'
 import { ensureTenantConnection } from '#utils/tenant_connection'
-import {
-  runWithTenant,
-  TENANT_SESSION_KEY,
-  type TenantStore,
-} from '#utils/tenant_context'
+import { runWithTenant, TENANT_SESSION_KEY, type TenantStore } from '#utils/tenant_context'
 import type { HttpContext } from '@adonisjs/core/http'
 import UserInactiveException from '#exceptions/user_inactive_exception'
 

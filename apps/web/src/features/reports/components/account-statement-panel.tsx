@@ -1,30 +1,94 @@
 import { Loader2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { useDisplayCurrency } from '@/features/currencies/context/display-currency-context'
 import { ReportMovementsTable } from '@/features/reports/components/report-movements-table'
 import { ReportBreakdownChart } from '@/features/reports/components/report-breakdown-chart'
-import { ReportFiltersToolbar } from '@/features/reports/components/report-filters-toolbar'
+import {
+  ReportFiltersToolbar,
+  type ReportTypeFilters,
+} from '@/features/reports/components/report-filters-toolbar'
 import { ReportFlowChart } from '@/features/reports/components/report-flow-chart'
 import { ReportKpiGrid } from '@/features/reports/components/report-kpi-grid'
 import { formatFecha } from '@/features/reports/constants'
-import { defaultReportPeriodState, periodLabelFromState, periodStateToAccountParams } from '@/features/reports/report-period'
+import {
+  defaultReportPeriodState,
+  parsePeriodFromSearchParams,
+  periodLabelFromState,
+  periodStateToAccountParams,
+  type ReportPeriodState,
+} from '@/features/reports/report-period'
 import { buildReportSearchParams } from '@/features/reports/report-search-params'
 import { reportUi } from '@/features/reports/report-ui'
 import { useAccountStatementQuery } from '@/features/reports/hooks/use-reports'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
+
+type AccountStatementFilters = {
+  period: ReportPeriodState
+  accountId: number | null
+  unassignedOnly: boolean
+  types: ReportTypeFilters
+}
+
+const DEFAULT_TYPES: ReportTypeFilters = {
+  sales: true,
+  incomes: true,
+  purchases: true,
+  expenses: true,
+  machine_expenses: true,
+}
+
+function defaultAccountStatementFilters(): AccountStatementFilters {
+  return {
+    period: defaultReportPeriodState(),
+    accountId: null,
+    unassignedOnly: false,
+    types: { ...DEFAULT_TYPES },
+  }
+}
+
+function hasFinancialFilterParams(searchParams: URLSearchParams): boolean {
+  return [
+    'account_id',
+    'unassigned',
+    'day',
+    'date',
+    'year',
+    'range',
+    'from',
+    'to',
+    'month',
+  ].some((key) => searchParams.has(key))
+}
 
 export function AccountStatementPanel() {
+  const { company } = useAuth()
+  const [searchParams] = useSearchParams()
   const { displayCurrency } = useDisplayCurrency()
-  const [period, setPeriod] = useState(defaultReportPeriodState)
-  const [accountId, setAccountId] = useState<number | null>(null)
-  const [unassignedOnly, setUnassignedOnly] = useState(false)
-  const [types, setTypes] = useState({
-    sales: true,
-    incomes: true,
-    purchases: true,
-    expenses: true,
-    machine_expenses: true,
-  })
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey('reports-account-statement', company?.id),
+    defaultAccountStatementFilters()
+  )
+  const urlAppliedRef = useRef(false)
+
+  // Drill-down "Volver a reportes" brings period/account in the URL — URL wins once.
+  useEffect(() => {
+    if (urlAppliedRef.current) return
+    if (!hasFinancialFilterParams(searchParams)) return
+    urlAppliedRef.current = true
+    const accountIdRaw = searchParams.get('account_id')
+    const unassignedOnly = searchParams.get('unassigned') === '1'
+    setFilters((prev) => ({
+      ...prev,
+      period: parsePeriodFromSearchParams(searchParams),
+      accountId: unassignedOnly ? null : accountIdRaw ? Number(accountIdRaw) : null,
+      unassignedOnly,
+    }))
+  }, [searchParams, setFilters])
+
+  const { period, accountId, unassignedOnly, types } = filters
 
   const queryParams = useMemo(() => {
     const selectedTypes = (
@@ -68,10 +132,12 @@ export function AccountStatementPanel() {
         accountId={accountId}
         unassignedOnly={unassignedOnly}
         types={types}
-        onPeriodChange={setPeriod}
-        onAccountIdChange={setAccountId}
-        onUnassignedOnlyChange={setUnassignedOnly}
-        onTypesChange={setTypes}
+        onPeriodChange={(value) => setFilters((prev) => ({ ...prev, period: value }))}
+        onAccountIdChange={(value) => setFilters((prev) => ({ ...prev, accountId: value }))}
+        onUnassignedOnlyChange={(value) =>
+          setFilters((prev) => ({ ...prev, unassignedOnly: value }))
+        }
+        onTypesChange={(value) => setFilters((prev) => ({ ...prev, types: value }))}
       />
 
       {isLoading ? (

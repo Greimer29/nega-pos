@@ -166,17 +166,17 @@ const ROUTE_RULES: RouteRule[] = [
   {
     method: 'POST',
     pattern: /^\/categories(\/|$)/,
-    permission: ['catalog.edit', 'settings.edit', 'settings.view'],
+    permission: ['catalog.edit', 'settings.edit'],
   },
   {
     method: 'PUT',
     pattern: /^\/categories(\/|$)/,
-    permission: ['catalog.edit', 'settings.edit', 'settings.view'],
+    permission: ['catalog.edit', 'settings.edit'],
   },
   {
     method: 'DELETE',
     pattern: /^\/categories(\/|$)/,
-    permission: ['catalog.edit', 'settings.edit', 'settings.view'],
+    permission: ['catalog.edit', 'settings.edit'],
   },
 ]
 

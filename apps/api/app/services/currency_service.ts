@@ -157,7 +157,12 @@ export default class CurrencyService {
   }
 
   /** Convierte un monto en `currencyCode` a la moneda base del sistema. */
-  toBase(amount: number, currencyCode: string, rates: Record<string, number>, baseCode: string): number {
+  toBase(
+    amount: number,
+    currencyCode: string,
+    rates: Record<string, number>,
+    baseCode: string
+  ): number {
     const code = currencyCode.toUpperCase()
     if (code === baseCode) {
       return amount

@@ -90,7 +90,9 @@ test.group('Catalog services (item_kind SERVICE)', (group) => {
 
     const productsOnly = await client.get('/api/v1/catalog-products').loginAs(user)
     productsOnly.assertStatus(200)
-    const productNames = productsOnly.body().data.catalog_products.map((p: { name: string }) => p.name)
+    const productNames = productsOnly
+      .body()
+      .data.catalog_products.map((p: { name: string }) => p.name)
     assert.include(productNames, 'Camisa física')
     assert.notInclude(productNames, 'Envío')
 
@@ -99,7 +101,9 @@ test.group('Catalog services (item_kind SERVICE)', (group) => {
       .loginAs(user)
       .qs({ item_kind: 'SERVICE' })
     servicesOnly.assertStatus(200)
-    const serviceNames = servicesOnly.body().data.catalog_products.map((p: { name: string }) => p.name)
+    const serviceNames = servicesOnly
+      .body()
+      .data.catalog_products.map((p: { name: string }) => p.name)
     assert.include(serviceNames, 'Envío')
     assert.notInclude(serviceNames, 'Camisa física')
   })
@@ -158,9 +162,9 @@ test.group('Catalog services (item_kind SERVICE)', (group) => {
     assert.equal(Number(response.body().data.sale.total_usd), 2 * 10 + 3 * 18)
 
     const sale = response.body().data.sale
-    const serviceLine = (sale.lines as Array<{ catalog_product_id: number; description: string }>).find(
-      (line) => Number(line.catalog_product_id) === Number(service.id)
-    )
+    const serviceLine = (
+      sale.lines as Array<{ catalog_product_id: number; description: string }>
+    ).find((line) => Number(line.catalog_product_id) === Number(service.id))
     assert.exists(serviceLine)
     assert.equal(serviceLine?.description, 'Reparación express en taller')
 
@@ -168,7 +172,7 @@ test.group('Catalog services (item_kind SERVICE)', (group) => {
     assert.equal(physical.stockQuantity, '6.000')
 
     await service.refresh()
-    assert.equal(service.stockQuantity, '0')
+    assert.equal(service.stockQuantity, '0.000')
 
     const serviceMovements = await ProductInventoryMovement.query().where(
       'catalogProductId',
@@ -222,7 +226,7 @@ test.group('Catalog services (item_kind SERVICE)', (group) => {
     assert.equal(returnResponse.body().data.sale.status, 'RETURNED')
 
     await service.refresh()
-    assert.equal(service.stockQuantity, '0')
+    assert.equal(service.stockQuantity, '0.000')
 
     const movements = await ProductInventoryMovement.query().where(
       'catalogProductId',

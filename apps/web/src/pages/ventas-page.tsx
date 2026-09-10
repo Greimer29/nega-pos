@@ -1,15 +1,29 @@
-import { useState } from 'react'
 import { ProfitMarginLink } from '@/features/purchases/components/profit-margin-link'
 import { RegisterExpenseButton } from '@/features/purchases/components/register-expense-button'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { VentasHistoryPanel } from '@/features/ventas/components/ventas-history-panel'
 import { VentasPanel } from '@/features/ventas/components/ventas-panel'
 import { VentasShiftControls } from '@/features/ventas/components/ventas-shift-controls'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
 
 type VentasTab = 'facturar' | 'historial'
 
+type VentasTabState = {
+  activeTab: VentasTab
+}
+
+const DEFAULT_VENTAS_TAB: VentasTabState = {
+  activeTab: 'facturar',
+}
+
 export function VentasPage() {
-  const [activeTab, setActiveTab] = useState<VentasTab>('facturar')
+  const { company } = useAuth()
+  const [tabState, setTabState] = useSessionPersistedState(
+    sessionFilterKey('ventas-tab', company?.id),
+    DEFAULT_VENTAS_TAB
+  )
+  const activeTab = tabState.activeTab
 
   return (
     <div className="-m-4 flex h-[calc(100%+2rem)] min-h-0 flex-col gap-4 overflow-hidden p-4 md:-m-6 md:h-[calc(100%+3rem)] md:p-6">
@@ -24,7 +38,7 @@ export function VentasPage() {
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => setTabState({ activeTab: tab.id })}
               className={cn(
                 'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
                 activeTab === tab.id

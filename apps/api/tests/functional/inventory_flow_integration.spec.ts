@@ -6,6 +6,8 @@ import Supplier from '#models/supplier'
 import User from '#models/user'
 import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
+import { seedReferenceData } from '#tests/helpers/seed_reference_data'
+import { seedOpenSalesShift } from '#tests/helpers/seed_test_sale'
 import { test } from '@japa/runner'
 
 const TEST_EMAIL = 'test-inventory-flow@negapos.local'
@@ -30,6 +32,7 @@ async function resetDatabase() {
   await db.from('customers').delete()
   await db.from('counters').delete()
   await db.from('suppliers').delete()
+  await db.from('sales_shifts').delete()
   await db.from('users').delete()
 }
 
@@ -110,7 +113,10 @@ test.group('Inventory flow integration — compras, ventas, fórmulas, materiale
 
   group.each.setup(async () => {
     await resetDatabase()
+    await seedReferenceData()
     await seedAdminUser()
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    await seedOpenSalesShift(Number(user.id))
   })
 
   test('purchase confirm increases material stock reflected in detail and list APIs', async ({
@@ -332,7 +338,7 @@ test.group('Inventory flow integration — compras, ventas, fórmulas, materiale
       type: 'CORPORATE',
       active: true,
     })
-    const material = await seedMaterial({ code: 'STK-FORM' })
+    const material = await seedMaterial({ code: 'STK-FORM', unit: 'MTS' })
 
     await crearCompraConfirmada(client, user, supplier, material, 100)
 

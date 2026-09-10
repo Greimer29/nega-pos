@@ -599,12 +599,7 @@ export default class DashboardService {
     const expenseRows = await db
       .from('expenses')
       .whereIn('date', dates)
-      .select(
-        'id',
-        'description',
-        'amount_usd as amountUsd',
-        'currency_code as currencyCode'
-      )
+      .select('id', 'description', 'amount_usd as amountUsd', 'currency_code as currencyCode')
       .orderBy('amount_usd', 'desc')
 
     const machineRows = await db
@@ -668,12 +663,7 @@ export default class DashboardService {
     const expenseRows = await db
       .from('expenses')
       .where('date', date)
-      .select(
-        'id',
-        'description',
-        'amount_usd as amountUsd',
-        'currency_code as currencyCode'
-      )
+      .select('id', 'description', 'amount_usd as amountUsd', 'currency_code as currencyCode')
       .orderBy('amount_usd', 'desc')
 
     const machineRows = await db
@@ -877,7 +867,10 @@ export default class DashboardService {
     }))
   }
 
-  async cierreDiario(input?: { salesShiftId?: number; date?: string }): Promise<DailyClosingResult> {
+  async cierreDiario(input?: {
+    salesShiftId?: number
+    date?: string
+  }): Promise<DailyClosingResult> {
     let date: string
     let salesShiftId: number | null = null
     let shiftForExpenses: SalesShift | null = null
@@ -1046,9 +1039,7 @@ export default class DashboardService {
       }
     }
 
-    const returnsQuery = db
-      .from('sales')
-      .where('status', 'RETURNED')
+    const returnsQuery = db.from('sales').where('status', 'RETURNED')
 
     if (salesShiftId) {
       returnsQuery.where('sales_shift_id', salesShiftId)
@@ -1056,8 +1047,12 @@ export default class DashboardService {
       returnsQuery.whereRaw('DATE(sales.returned_at) = ?', [date])
     }
 
-    const returnsRows = await returnsQuery
-      .select('id', 'code', 'returned_at as returnedAt', 'total_usd as totalUsd')
+    const returnsRows = await returnsQuery.select(
+      'id',
+      'code',
+      'returned_at as returnedAt',
+      'total_usd as totalUsd'
+    )
 
     const returns: DailyClosingReturnItem[] = returnsRows.map((row) => ({
       saleId: Number(row.id),
@@ -1074,8 +1069,7 @@ export default class DashboardService {
         currencyCode: item.currencyCode,
         salesCount: item.salesCount,
         totalUsd: item.totalUsd.toFixed(4),
-        totalInCurrency:
-          item.currencyCode === 'USD' ? item.totalUsd.toFixed(2) : null,
+        totalInCurrency: item.currencyCode === 'USD' ? item.totalUsd.toFixed(2) : null,
       }))
 
     // Enrich totals in local currency using sale snapshots when available

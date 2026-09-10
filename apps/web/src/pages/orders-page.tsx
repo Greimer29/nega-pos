@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { NuevoOrderDialog } from '@/features/orders/components/new-order-dialog'
 import { OrderEstadoBadge } from '@/features/orders/components/order-status-badge'
 import { formatFecha, ESTADO_LABELS, MODALIDAD_LABELS } from '@/features/orders/constants'
@@ -10,21 +11,36 @@ import { useOrdersQuery } from '@/features/orders/hooks/use-orders'
 import type { OrderEstado } from '@/features/orders/types'
 import { useCustomersQuery } from '@/features/customers/hooks/use-customers'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
+import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 
 const PER_PAGE = 20
 
+type OrdersFilters = {
+  status: OrderEstado | ''
+  customerId: number | ''
+  page: number
+}
+
+const DEFAULT_ORDERS_FILTERS: OrdersFilters = {
+  status: '',
+  customerId: '',
+  page: 1,
+}
+
 export function OrdersPage() {
-  const [page, setPage] = useState(1)
-  const [status, setEstado] = useState<OrderEstado | ''>('')
-  const [customerId, setCustomerId] = useState<number | ''>('')
+  const { company } = useAuth()
+  const [filters, setFilters] = useSessionPersistedState(
+    sessionFilterKey('orders', company?.id),
+    DEFAULT_ORDERS_FILTERS
+  )
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const { data: customersData } = useCustomersQuery({ page: 1, perPage: 100, active: true })
   const { data, isLoading, isError, error } = useOrdersQuery({
-    page,
+    page: filters.page,
     perPage: PER_PAGE,
-    status: status || undefined,
-    customer_id: customerId || undefined,
+    status: filters.status || undefined,
+    customer_id: filters.customerId || undefined,
   })
 
   const orders = data?.orders ?? []
@@ -54,10 +70,13 @@ export function OrdersPage() {
             <label className="text-muted-foreground text-xs font-medium">Estado</label>
             <select
               className="border-input bg-background flex h-9 min-w-[160px] rounded-md border px-3 text-sm"
-              value={status}
+              value={filters.status}
               onChange={(e) => {
-                setEstado(e.target.value as OrderEstado | '')
-                setPage(1)
+                setFilters((prev) => ({
+                  ...prev,
+                  status: e.target.value as OrderEstado | '',
+                  page: 1,
+                }))
               }}
             >
               <option value="">Todos</option>
@@ -74,10 +93,13 @@ export function OrdersPage() {
             <label className="text-muted-foreground text-xs font-medium">Cliente</label>
             <select
               className="border-input bg-background flex h-9 min-w-[180px] rounded-md border px-3 text-sm"
-              value={customerId}
+              value={filters.customerId}
               onChange={(e) => {
-                setCustomerId(e.target.value ? Number(e.target.value) : '')
-                setPage(1)
+                setFilters((prev) => ({
+                  ...prev,
+                  customerId: e.target.value ? Number(e.target.value) : '',
+                  page: 1,
+                }))
               }}
             >
               <option value="">Todos</option>
@@ -169,16 +191,16 @@ export function OrdersPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={page <= 1}
-                      onClick={() => setPage((p) => p - 1)}
+                      disabled={filters.page <= 1}
+                      onClick={() => setFilters((prev) => ({ ...prev, page: prev.page - 1 }))}
                     >
                       Anterior
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={page >= meta.lastPage}
-                      onClick={() => setPage((p) => p + 1)}
+                      disabled={filters.page >= meta.lastPage}
+                      onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                     >
                       Siguiente
                     </Button>
