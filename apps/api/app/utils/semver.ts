@@ -6,7 +6,11 @@ export function normalizeSemver(version: string): string {
 export function parseSemverParts(version: string): [number, number, number] {
   const normalized = normalizeSemver(version)
   const [major = '0', minor = '0', patch = '0'] = normalized.split('.')
-  return [Number.parseInt(major, 10) || 0, Number.parseInt(minor, 10) || 0, Number.parseInt(patch, 10) || 0]
+  return [
+    Number.parseInt(major, 10) || 0,
+    Number.parseInt(minor, 10) || 0,
+    Number.parseInt(patch, 10) || 0,
+  ]
 }
 
 /** Devuelve negativo si a < b, 0 si iguales, positivo si a > b. */

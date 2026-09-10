@@ -45,7 +45,9 @@ Desktop.ini
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json.example
-.cursor/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 
 # Test / coverage
 coverage/

@@ -19,6 +19,7 @@ La carpeta **`docs/` está descontinuada** — no la uses como referencia, no la
 - Nunca hagas force push a `main`.
 - Nunca mergees PRs solo; el merge lo hace el humano.
 - Cualquier cambio de schema → **migración nueva**; nunca edites migraciones ya commitadas.
+- **Gate CI local:** antes de `git push` / crear o actualizar un PR con código, corrê `pnpm lint` en la raíz y asegurate exit 0. Si falla prettier/eslint, `--fix` y re-lint. No subir sabiendo que CI va a romper.
 
 ## Antes de empezar una tarea, confirma:
 

@@ -1,0 +1,25 @@
+---
+description: Gate obligatorio — lint/typecheck locales antes de commit/push/PR
+alwaysApply: true
+---
+
+# Gate CI local antes de PR
+
+**Nunca** hagas `git push` ni abras/actualices un PR con cambios de código sin haber corrido y pasado, en esta máquina, los checks que CI va a fallar.
+
+## Obligatorio (en este orden)
+
+1. `pnpm lint` en la raíz del monorepo (debe salir exit 0).
+2. Si tocaste `apps/api`: también `pnpm --filter api exec eslint . --fix` si lint falló por prettier, y re-correr `pnpm lint`.
+3. Si tocaste tests API relevantes y hay BD de test disponible: los specs afectados.
+
+## Si lint falla
+
+- Corregí con `pnpm --filter api exec eslint . --fix` y/o `pnpm --filter web exec eslint . --fix`.
+- Volvé a correr `pnpm lint` hasta verde.
+- **No** subas “y lo arreglamos después”: eso ya rompió CI varias veces.
+
+## Excepciones
+
+- Solo docs/markdown sin código: lint no es bloqueante.
+- Si un check no se puede correr localmente (p. ej. sin MySQL de test), decilo explícitamente al usuario antes de pushear.

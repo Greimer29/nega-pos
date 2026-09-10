@@ -38,7 +38,10 @@ test.group('App updates API', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const response = await client.get('/api/v1/app-updates/latest').qs({ current: '1.2.1' }).loginAs(user)
+    const response = await client
+      .get('/api/v1/app-updates/latest')
+      .qs({ current: '1.2.1' })
+      .loginAs(user)
 
     response.assertStatus(503)
     assert.equal(response.body().error.code, 'APP_UPDATES_NO_CONFIGURADO')

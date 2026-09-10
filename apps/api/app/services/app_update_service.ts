@@ -74,8 +74,8 @@ export default class AppUpdateService {
 
   private authHeaders(token: string): HeadersInit {
     return {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'Authorization': `Bearer ${token}`,
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'nega-pos-api',
     }
@@ -88,9 +88,7 @@ export default class AppUpdateService {
     })
 
     if (response.status === 404) {
-      throw new AppUpdatesNoConfiguradoException(
-        'No hay releases publicadas en GitHub todavía.'
-      )
+      throw new AppUpdatesNoConfiguradoException('No hay releases publicadas en GitHub todavía.')
     }
 
     if (!response.ok) {
@@ -138,9 +136,7 @@ export default class AppUpdateService {
         available: Boolean(androidAsset),
         fileName: androidAsset?.name ?? null,
       },
-      updateAvailable: currentNormalized
-        ? isSemverNewer(latestVersion, currentNormalized)
-        : true,
+      updateAvailable: currentNormalized ? isSemverNewer(latestVersion, currentNormalized) : true,
       current: currentNormalized,
     }
   }
