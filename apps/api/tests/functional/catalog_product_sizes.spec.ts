@@ -52,16 +52,19 @@ test.group('Catalog product sizes', (group) => {
   test('create with sizes sets stock sum and has_sizes', async ({ client, assert }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
 
-    const response = await client.post('/api/v1/catalog-products').loginAs(user).json({
-      name: 'Jean tallas',
-      category: 'Uniforme',
-      sale_price_usd: 40,
-      cost_usd: 20,
-      sizes: [
-        { size: '38', stock_quantity: 2 },
-        { size: '40', stock_quantity: 3 },
-      ],
-    })
+    const response = await client
+      .post('/api/v1/catalog-products')
+      .loginAs(user)
+      .json({
+        name: 'Jean tallas',
+        category: 'Uniforme',
+        sale_price_usd: 40,
+        cost_usd: 20,
+        sizes: [
+          { size: '38', stock_quantity: 2 },
+          { size: '40', stock_quantity: 3 },
+        ],
+      })
 
     response.assertStatus(200)
     const product = response.body().data.catalog_product
@@ -74,15 +77,18 @@ test.group('Catalog product sizes', (group) => {
   test('create rejects duplicate sizes case-insensitive', async ({ client }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
 
-    const response = await client.post('/api/v1/catalog-products').loginAs(user).json({
-      name: 'Duplicado',
-      category: 'Uniforme',
-      sale_price_usd: 10,
-      sizes: [
-        { size: '38', stock_quantity: 1 },
-        { size: '38', stock_quantity: 2 },
-      ],
-    })
+    const response = await client
+      .post('/api/v1/catalog-products')
+      .loginAs(user)
+      .json({
+        name: 'Duplicado',
+        category: 'Uniforme',
+        sale_price_usd: 10,
+        sizes: [
+          { size: '38', stock_quantity: 1 },
+          { size: '38', stock_quantity: 2 },
+        ],
+      })
 
     response.assertStatus(422)
     response.assertBodyContains({
@@ -94,13 +100,16 @@ test.group('Catalog product sizes', (group) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
     const formula = await Formula.create({ name: 'Fórmula tallas', active: true })
 
-    const response = await client.post('/api/v1/catalog-products').loginAs(user).json({
-      name: 'Con fórmula y tallas',
-      category: 'Uniforme',
-      sale_price_usd: 10,
-      formula_id: Number(formula.id),
-      sizes: [{ size: 'M', stock_quantity: 1 }],
-    })
+    const response = await client
+      .post('/api/v1/catalog-products')
+      .loginAs(user)
+      .json({
+        name: 'Con fórmula y tallas',
+        category: 'Uniforme',
+        sale_price_usd: 10,
+        formula_id: Number(formula.id),
+        sizes: [{ size: 'M', stock_quantity: 1 }],
+      })
 
     response.assertStatus(422)
     response.assertBodyContains({
@@ -110,15 +119,18 @@ test.group('Catalog product sizes', (group) => {
 
   test('PUT /sizes replaces and recalculates stock', async ({ client, assert }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const createResponse = await client.post('/api/v1/catalog-products').loginAs(user).json({
-      name: 'Replace sizes',
-      category: 'Uniforme',
-      sale_price_usd: 15,
-      sizes: [
-        { size: 'S', stock_quantity: 1 },
-        { size: 'M', stock_quantity: 1 },
-      ],
-    })
+    const createResponse = await client
+      .post('/api/v1/catalog-products')
+      .loginAs(user)
+      .json({
+        name: 'Replace sizes',
+        category: 'Uniforme',
+        sale_price_usd: 15,
+        sizes: [
+          { size: 'S', stock_quantity: 1 },
+          { size: 'M', stock_quantity: 1 },
+        ],
+      })
     createResponse.assertStatus(200)
     const productId = createResponse.body().data.catalog_product.id
 
@@ -145,22 +157,28 @@ test.group('Catalog product sizes', (group) => {
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
 
-    await client.post('/api/v1/catalog-products').loginAs(user).json({
-      name: 'Con 38',
-      category: 'Uniforme',
-      sale_price_usd: 10,
-      sizes: [
-        { size: '38', stock_quantity: 2 },
-        { size: '40', stock_quantity: 0 },
-      ],
-    })
+    await client
+      .post('/api/v1/catalog-products')
+      .loginAs(user)
+      .json({
+        name: 'Con 38',
+        category: 'Uniforme',
+        sale_price_usd: 10,
+        sizes: [
+          { size: '38', stock_quantity: 2 },
+          { size: '40', stock_quantity: 0 },
+        ],
+      })
 
-    await client.post('/api/v1/catalog-products').loginAs(user).json({
-      name: 'Sin 38 stock',
-      category: 'Uniforme',
-      sale_price_usd: 10,
-      sizes: [{ size: '38', stock_quantity: 0 }],
-    })
+    await client
+      .post('/api/v1/catalog-products')
+      .loginAs(user)
+      .json({
+        name: 'Sin 38 stock',
+        category: 'Uniforme',
+        sale_price_usd: 10,
+        sizes: [{ size: '38', stock_quantity: 0 }],
+      })
 
     await client.post('/api/v1/catalog-products').loginAs(user).json({
       name: 'Sin tallas',
@@ -178,28 +196,34 @@ test.group('Catalog product sizes', (group) => {
 
   test('confirm sale sized without size returns 422', async ({ client }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const createResponse = await client.post('/api/v1/catalog-products').loginAs(user).json({
-      name: 'Venta sin talla',
-      category: 'Uniforme',
-      sale_price_usd: 25,
-      sizes: [{ size: '42', stock_quantity: 3 }],
-    })
+    const createResponse = await client
+      .post('/api/v1/catalog-products')
+      .loginAs(user)
+      .json({
+        name: 'Venta sin talla',
+        category: 'Uniforme',
+        sale_price_usd: 25,
+        sizes: [{ size: '42', stock_quantity: 3 }],
+      })
     const productId = createResponse.body().data.catalog_product.id
 
-    const response = await client.post('/api/v1/sales').loginAs(user).json({
-      confirm: true,
-      guest_name: 'Cliente',
-      payment_method_code: 'cash_usd',
-      billing_mode: 'FAST',
-      payment_type: 'CASH',
-      lines: [
-        {
-          catalog_product_id: productId,
-          quantity: 1,
-          unit_price_usd: 25,
-        },
-      ],
-    })
+    const response = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        confirm: true,
+        guest_name: 'Cliente',
+        payment_method_code: 'cash_usd',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: productId,
+            quantity: 1,
+            unit_price_usd: 25,
+          },
+        ],
+      })
 
     response.assertStatus(422)
     response.assertBodyContains({
@@ -212,34 +236,40 @@ test.group('Catalog product sizes', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const createResponse = await client.post('/api/v1/catalog-products').loginAs(user).json({
-      name: 'Venta con talla',
-      category: 'Uniforme',
-      sale_price_usd: 30,
-      sizes: [
-        { size: '38', stock_quantity: 5 },
-        { size: '40', stock_quantity: 2 },
-      ],
-    })
+    const createResponse = await client
+      .post('/api/v1/catalog-products')
+      .loginAs(user)
+      .json({
+        name: 'Venta con talla',
+        category: 'Uniforme',
+        sale_price_usd: 30,
+        sizes: [
+          { size: '38', stock_quantity: 5 },
+          { size: '40', stock_quantity: 2 },
+        ],
+      })
     const product = createResponse.body().data.catalog_product
     const size38 = product.sizes.find((row: { size: string }) => row.size === '38')
 
-    const response = await client.post('/api/v1/sales').loginAs(user).json({
-      confirm: true,
-      guest_name: 'Cliente talla',
-      payment_method_code: 'cash_usd',
-      billing_mode: 'FAST',
-      payment_type: 'CASH',
-      lines: [
-        {
-          catalog_product_id: product.id,
-          catalog_product_size_id: size38.id,
-          size: '38',
-          quantity: 2,
-          unit_price_usd: 30,
-        },
-      ],
-    })
+    const response = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        confirm: true,
+        guest_name: 'Cliente talla',
+        payment_method_code: 'cash_usd',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: product.id,
+            catalog_product_size_id: size38.id,
+            size: '38',
+            quantity: 2,
+            unit_price_usd: 30,
+          },
+        ],
+      })
 
     response.assertStatus(200)
     assert.equal(response.body().data.sale.lines[0].size, '38')
@@ -268,20 +298,23 @@ test.group('Catalog product sizes', (group) => {
     })
     const productId = createResponse.body().data.catalog_product.id
 
-    const response = await client.post('/api/v1/sales').loginAs(user).json({
-      confirm: true,
-      guest_name: 'Cliente simple',
-      payment_method_code: 'cash_usd',
-      billing_mode: 'FAST',
-      payment_type: 'CASH',
-      lines: [
-        {
-          catalog_product_id: productId,
-          quantity: 1,
-          unit_price_usd: 12,
-        },
-      ],
-    })
+    const response = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        confirm: true,
+        guest_name: 'Cliente simple',
+        payment_method_code: 'cash_usd',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: productId,
+            quantity: 1,
+            unit_price_usd: 12,
+          },
+        ],
+      })
 
     response.assertStatus(200)
     assert.isNull(response.body().data.sale.lines[0].catalog_product_size_id)

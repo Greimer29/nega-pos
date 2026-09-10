@@ -107,9 +107,12 @@ export default class BusinessProfileService {
 
     const exists = await drive.use().exists(profile.logo_path)
     if (!exists) {
-      throw new ArchivoImagenNoDisponibleException('El logo no está disponible en almacenamiento.', {
-        status: 404,
-      })
+      throw new ArchivoImagenNoDisponibleException(
+        'El logo no está disponible en almacenamiento.',
+        {
+          status: 404,
+        }
+      )
     }
 
     const bytes = await drive.use().getBytes(profile.logo_path)

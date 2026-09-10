@@ -4,10 +4,7 @@ import PlatformAdmin from '#models/platform_admin'
 import TenantProvisionService from '#services/tenant_provision_service'
 import TenantPurgeService from '#services/tenant_purge_service'
 import { clearTenantClaims } from '#services/directory_auth_service'
-import {
-  PLATFORM_SESSION_KEY,
-  readPlatformClaims,
-} from '#middleware/platform_auth_middleware'
+import { PLATFORM_SESSION_KEY, readPlatformClaims } from '#middleware/platform_auth_middleware'
 import {
   createCompanyValidator,
   destroyCompanyValidator,

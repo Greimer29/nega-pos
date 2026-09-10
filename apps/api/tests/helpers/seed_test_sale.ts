@@ -85,8 +85,7 @@ export async function seedTestSale(input: SeedTestSaleInput) {
 
   for (const line of input.lines) {
     const subtotal =
-      line.subtotalUsd ??
-      (Number(line.quantity) * Number(line.unitPriceUsd)).toFixed(4)
+      line.subtotalUsd ?? (Number(line.quantity) * Number(line.unitPriceUsd)).toFixed(4)
 
     await SaleLine.create({
       saleId: Number(sale.id),

@@ -1026,8 +1026,7 @@ test.group('Ventas API — catálogo y ventas', (group) => {
       active: true,
     })
 
-    const note =
-      '1 sin cebolla, sin mayonesa, sin zanahoria\n2 sin mostaza\n1 sin cebolla'
+    const note = '1 sin cebolla, sin mayonesa, sin zanahoria\n2 sin mostaza\n1 sin cebolla'
 
     const createResponse = await client
       .post('/api/v1/sales')
@@ -1200,7 +1199,10 @@ test.group('Ventas API — catálogo y ventas', (group) => {
     assert.equal(second.body().data.next_code, first.body().data.next_code)
   })
 
-  test('POST sale draft then confirm assigns sequential invoice codes', async ({ client, assert }) => {
+  test('POST sale draft then confirm assigns sequential invoice codes', async ({
+    client,
+    assert,
+  }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
     const catalog = await CatalogProduct.create({
       name: 'Producto borrador',
@@ -1704,7 +1706,9 @@ test.group('Ventas API — catálogo y ventas', (group) => {
     second.assertStatus(200)
     const secondId = second.body().data.sale.id
 
-    await Sale.query().where('id', firstId).update({ soldAt: DateTime.fromISO('2026-01-15T10:00:00') })
+    await Sale.query()
+      .where('id', firstId)
+      .update({ soldAt: DateTime.fromISO('2026-01-15T10:00:00') })
     await Sale.query()
       .where('id', secondId)
       .update({ soldAt: DateTime.fromISO('2026-02-10T10:00:00') })

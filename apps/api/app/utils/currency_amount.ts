@@ -50,11 +50,6 @@ export function formatSaleNativeTotal(
     return null
   }
 
-  const amount = convertBaseToNativeAmount(
-    totalBase,
-    currencyCode,
-    ratePerBase,
-    baseCurrencyCode
-  )
+  const amount = convertBaseToNativeAmount(totalBase, currencyCode, ratePerBase, baseCurrencyCode)
   return formatNativeAmount(amount, currencyCode)
 }

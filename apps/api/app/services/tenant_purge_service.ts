@@ -25,10 +25,10 @@ export default class TenantPurgeService {
     const expected = company.slug.trim().toLowerCase()
     const provided = confirmSlug.trim().toLowerCase()
     if (!provided || provided !== expected) {
-      throw Object.assign(
-        new Error(`Para confirmar, escribí el slug exacto: "${company.slug}"`),
-        { code: 'CONFIRM_SLUG_MISMATCH', status: 422 }
-      )
+      throw Object.assign(new Error(`Para confirmar, escribí el slug exacto: "${company.slug}"`), {
+        code: 'CONFIRM_SLUG_MISMATCH',
+        status: 422,
+      })
     }
 
     const dbName = company.dbName?.trim()

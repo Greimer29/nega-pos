@@ -14,7 +14,10 @@ import ProductInventoryService from '#services/product_inventory_service'
 import type { CatalogItemKind } from '#constants/catalog_item_kind'
 import { isCatalogService } from '#constants/catalog_item_kind'
 import type { InventoryUnit } from '#constants/inventory_units'
-import { formatInventoryQuantityForStorage, normalizeInventoryQuantity } from '#constants/inventory_units'
+import {
+  formatInventoryQuantityForStorage,
+  normalizeInventoryQuantity,
+} from '#constants/inventory_units'
 import type { CostWarning } from '#types/cost_warning'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
@@ -217,9 +220,8 @@ export default class CatalogProductService {
     }
 
     if (input.sizes && input.sizes.length > 0 && input.formula_id) {
-      const { default: ProductoConFormulaNoPermiteTallasException } = await import(
-        '#exceptions/producto_con_formula_no_permite_tallas_exception'
-      )
+      const { default: ProductoConFormulaNoPermiteTallasException } =
+        await import('#exceptions/producto_con_formula_no_permite_tallas_exception')
       throw new ProductoConFormulaNoPermiteTallasException()
     }
 
@@ -294,9 +296,7 @@ export default class CatalogProductService {
           throw new ServicioCatalogoOperacionInvalidaException('Un servicio no admite tallas')
         }
         if (input.stock_quantity !== undefined) {
-          throw new ServicioCatalogoOperacionInvalidaException(
-            'Un servicio no maneja inventario'
-          )
+          throw new ServicioCatalogoOperacionInvalidaException('Un servicio no maneja inventario')
         }
       }
 
@@ -373,9 +373,8 @@ export default class CatalogProductService {
 
       if (touchingSizes) {
         if (product.formulaId) {
-          const { default: ProductoConFormulaNoPermiteTallasException } = await import(
-            '#exceptions/producto_con_formula_no_permite_tallas_exception'
-          )
+          const { default: ProductoConFormulaNoPermiteTallasException } =
+            await import('#exceptions/producto_con_formula_no_permite_tallas_exception')
           throw new ProductoConFormulaNoPermiteTallasException()
         }
         await this.sizeService.replaceSizes(product, input.sizes ?? [], trx)
@@ -722,8 +721,7 @@ export default class CatalogProductService {
       }
     }
 
-    const saleChanged =
-      params.trackedSalePrice && product.salePriceUsd !== params.previousSalePrice
+    const saleChanged = params.trackedSalePrice && product.salePriceUsd !== params.previousSalePrice
     const costChanged = params.trackedCost && product.costUsd !== params.previousCostUsd
 
     if (!saleChanged && !costChanged) {

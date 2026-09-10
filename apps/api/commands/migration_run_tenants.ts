@@ -45,9 +45,7 @@ export default class MigrationRunTenants extends BaseCommand {
     if (this.dryRun) {
       this.logger.info(`Dry-run: ${companies.length} company database(s)`)
       for (const company of companies) {
-        this.logger.info(
-          `  #${company.id} ${company.slug} → ${company.dbName} [${company.status}]`
-        )
+        this.logger.info(`  #${company.id} ${company.slug} → ${company.dbName} [${company.status}]`)
       }
       return
     }

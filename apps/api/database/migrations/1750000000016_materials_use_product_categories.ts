@@ -19,9 +19,7 @@ export default class extends BaseSchema {
       ])
     }
 
-    await this.db.rawQuery(
-      'ALTER TABLE materials MODIFY COLUMN category VARCHAR(100) NOT NULL'
-    )
+    await this.db.rawQuery('ALTER TABLE materials MODIFY COLUMN category VARCHAR(100) NOT NULL')
 
     const fallback = await this.db
       .from('categories')

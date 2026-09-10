@@ -328,8 +328,7 @@ test.group('Reports API', (group) => {
       )
     )
     assert.equal(currentBody.data.summary.purchasesUsd, '25.0000')
-    const expectedPending =
-      dueFuture <= monthEnd ? 150 : 100
+    const expectedPending = dueFuture <= monthEnd ? 150 : 100
     assert.equal(currentBody.data.summary.pendingPayablesUsd, `${expectedPending.toFixed(4)}`)
     if (dueFuture <= monthEnd) {
       const pending = currentBody.data.movements.find(
@@ -360,9 +359,7 @@ test.group('Reports API', (group) => {
     }
 
     assert.exists(
-      nextBody.data.movements.find(
-        (m) => m.isCreditPurchase && m.creditBalanceUsd === '80.0000'
-      )
+      nextBody.data.movements.find((m) => m.isCreditPurchase && m.creditBalanceUsd === '80.0000')
     )
     assert.equal(nextBody.data.summary.purchasesUsd, '0.0000')
     if (duePast < nextMonth.startOf('month')) {

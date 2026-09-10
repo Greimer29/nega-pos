@@ -9,12 +9,7 @@ export async function serializeExpense(expense: Expense) {
   const baseCode = await currencyService.getBaseCurrencyCode()
   const currencyCode = expense.currencyCode ?? baseCode
   const amountUsd = Number(expense.amountUsd ?? 0).toFixed(4)
-  const amount = nativeAmountFromBase(
-    Number(amountUsd),
-    expense.entryRate,
-    currencyCode,
-    baseCode
-  )
+  const amount = nativeAmountFromBase(Number(amountUsd), expense.entryRate, currencyCode, baseCode)
 
   return {
     id: Number(expense.id),

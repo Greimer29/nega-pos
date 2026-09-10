@@ -119,7 +119,10 @@ export default class PaymentMethodService {
     }
   }
 
-  applyTotalsFromRate(totalUsd: number, usdRate: string): { usdRate: string; totalBs: string | null } {
+  applyTotalsFromRate(
+    totalUsd: number,
+    usdRate: string
+  ): { usdRate: string; totalBs: string | null } {
     const rate = Number(usdRate)
     return {
       usdRate: usdRate,

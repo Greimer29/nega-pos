@@ -159,7 +159,10 @@ router
 
         router.get('reports/account-statement', [ReportsController, 'accountStatement'])
         router.get('reports/inventory', [ReportsController, 'inventory'])
-        router.get('reports/inventory/:productId/movements', [ReportsController, 'inventoryMovements'])
+        router.get('reports/inventory/:productId/movements', [
+          ReportsController,
+          'inventoryMovements',
+        ])
 
         router.get('settings/exchange-rate', [SettingsController, 'getExchangeRate'])
         router.put('settings/exchange-rate', [SettingsController, 'updateExchangeRate'])
@@ -209,10 +212,7 @@ router
           CatalogProductsController,
           'applyProfitMargin',
         ])
-        router.post('catalog-products/bulk-adjustment', [
-          CatalogProductsController,
-          'ajusteMasivo',
-        ])
+        router.post('catalog-products/bulk-adjustment', [CatalogProductsController, 'ajusteMasivo'])
         router.get('catalog-products/:id', [CatalogProductsController, 'show'])
         router.post('catalog-products/:id/adjustment', [CatalogProductsController, 'ajuste'])
         router.post('catalog-products', [CatalogProductsController, 'store'])

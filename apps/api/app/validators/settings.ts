@@ -1,6 +1,9 @@
 import vine from '@vinejs/vine'
 
-const hexColor = vine.string().trim().regex(/^#[0-9A-Fa-f]{6}$/)
+const hexColor = vine
+  .string()
+  .trim()
+  .regex(/^#[0-9A-Fa-f]{6}$/)
 
 export const updateExchangeRateValidator = vine.create({
   usd_rate: vine.number().positive(),

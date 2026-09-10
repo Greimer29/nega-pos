@@ -142,12 +142,7 @@ export default class PurchaseService {
   }
 
   async resumen(): Promise<PurchaseSummary> {
-    const rows = await Purchase.query().select(
-      'status',
-      'total_usd',
-      'total_bs',
-      'usd_rate'
-    )
+    const rows = await Purchase.query().select('status', 'total_usd', 'total_bs', 'usd_rate')
 
     let totalUsd = 0
     let count = 0
@@ -236,7 +231,9 @@ export default class PurchaseService {
       date: data.date,
       receivedDate: data.receivedDate,
       invoiceNumber: data.invoiceNumber,
-      ...(data.entryCurrencyCode !== undefined ? { entryCurrencyCode: data.entryCurrencyCode } : {}),
+      ...(data.entryCurrencyCode !== undefined
+        ? { entryCurrencyCode: data.entryCurrencyCode }
+        : {}),
       ...(data.usdRate !== undefined ? { usdRate: data.usdRate } : {}),
       notes: data.notes,
       ...(data.isCredit !== undefined ? { isCredit: data.isCredit } : {}),
@@ -778,8 +775,7 @@ export default class PurchaseService {
     const resolvedEntryCurrency = entryCurrencyCode
     let usdRate: string | null | undefined
     if (input.usd_rate !== undefined) {
-      usdRate =
-        resolvedEntryCurrency === baseCode ? null : this.formatTasaUsd(input.usd_rate)
+      usdRate = resolvedEntryCurrency === baseCode ? null : this.formatTasaUsd(input.usd_rate)
     } else if (resolvedEntryCurrency === baseCode) {
       usdRate = null
     }

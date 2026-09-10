@@ -52,9 +52,7 @@ export default class SalesController {
   async store({ request, auth, serialize }: HttpContext) {
     const payload = await request.validateUsing(createSaleValidator)
     const sale = await this.service.crear(
-      payload.confirm
-        ? { ...payload, sold_by_user_id: Number(auth.getUserOrFail().id) }
-        : payload
+      payload.confirm ? { ...payload, sold_by_user_id: Number(auth.getUserOrFail().id) } : payload
     )
 
     return serialize({

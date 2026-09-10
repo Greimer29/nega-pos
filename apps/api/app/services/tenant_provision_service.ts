@@ -259,8 +259,8 @@ export default class TenantProvisionService {
         '1750000000003_create_financial_base_tables',
         '1750000000019_set_base_currency_xau',
       ]
-      const missingByFile = required.filter((fragment) =>
-        !applied.some((name) => name.includes(fragment))
+      const missingByFile = required.filter(
+        (fragment) => !applied.some((name) => name.includes(fragment))
       )
       if (missingByFile.length > 0) {
         throw Object.assign(

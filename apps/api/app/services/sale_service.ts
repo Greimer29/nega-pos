@@ -38,7 +38,10 @@ import {
   type SaleLineFormulaMaterialInput,
 } from '#services/sale_line_formula'
 import { formatCantidadMovimiento } from '#services/order_stock'
-import { formatInventoryQuantityForStorage, normalizeInventoryQuantity } from '#constants/inventory_units'
+import {
+  formatInventoryQuantityForStorage,
+  normalizeInventoryQuantity,
+} from '#constants/inventory_units'
 import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
 import db from '@adonisjs/lucid/services/db'
@@ -208,9 +211,7 @@ export default class SaleService {
       .preload('soldBy')
       .preload('saleLines', (q) => {
         q.preload('catalogProduct', (cp) =>
-          cp.preload('formula', (f) =>
-            f.preload('materials', (fm) => fm.preload('material'))
-          )
+          cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
         )
           .preload('material')
           .preload('saleLineMaterials', (slm) => slm.preload('material'))
@@ -285,9 +286,7 @@ export default class SaleService {
       await sale.load('customer')
       await sale.load('saleLines', (q) => {
         q.preload('catalogProduct', (cp) =>
-          cp.preload('formula', (f) =>
-            f.preload('materials', (fm) => fm.preload('material'))
-          )
+          cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
         )
           .preload('material')
           .preload('saleLineMaterials', (slm) => slm.preload('material'))
@@ -366,7 +365,10 @@ export default class SaleService {
       await sale.load('paymentMethod')
       await sale.load('customer')
       await sale.load('saleLines', (q) => {
-        q.preload('catalogProduct').preload('material').preload('saleLineMaterials', (slm) => slm.preload('material')).orderBy('id', 'asc')
+        q.preload('catalogProduct')
+          .preload('material')
+          .preload('saleLineMaterials', (slm) => slm.preload('material'))
+          .orderBy('id', 'asc')
       })
 
       return sale
@@ -387,14 +389,13 @@ export default class SaleService {
   async confirmar(id: number, input: ConfirmSaleInput = {}): Promise<Sale> {
     return db.transaction(async (trx) => {
       const sale = await Sale.query({ client: trx })
-      .where('id', id)
-      .preload('customer')
-      .preload('paymentMethod')
-      .preload('saleLines', (q) => {
+        .where('id', id)
+        .preload('customer')
+        .preload('paymentMethod')
+        .preload('saleLines', (q) => {
           q.preload('catalogProduct', (cp) =>
             cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
-          )
-            .preload('saleLineMaterials', (slm) => slm.preload('material'))
+          ).preload('saleLineMaterials', (slm) => slm.preload('material'))
         })
         .forUpdate()
         .first()
@@ -446,9 +447,7 @@ export default class SaleService {
       await sale.load('soldBy')
       await sale.load('saleLines', (q) => {
         q.preload('catalogProduct', (cp) =>
-          cp.preload('formula', (f) =>
-            f.preload('materials', (fm) => fm.preload('material'))
-          )
+          cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
         )
           .preload('material')
           .preload('saleLineMaterials', (slm) => slm.preload('material'))
@@ -796,8 +795,7 @@ export default class SaleService {
       }
 
       if (line.materialId && !line.costUsd) {
-        const material =
-          line.material ?? (await Material.find(Number(line.materialId)))
+        const material = line.material ?? (await Material.find(Number(line.materialId)))
         if (material?.lastPurchasePriceUsd) {
           line.costUsd = material.lastPurchasePriceUsd
         }
@@ -974,7 +972,9 @@ export default class SaleService {
     const currencyCode = (options.currency_code?.trim() || method.currencyCode).toUpperCase()
     const currency = await this.currencyService.assertActiva(currencyCode)
     const overrideRate =
-      options.usd_rate !== undefined && options.usd_rate !== null ? Number(options.usd_rate) : NaN
+      options.usd_rate !== undefined && options.usd_rate !== null
+        ? Number(options.usd_rate)
+        : Number.NaN
     const rate = overrideRate > 0 ? overrideRate : Number(currency.ratePerUsd)
     const baseCode = await this.currencyService.getBaseCurrencyCode()
 

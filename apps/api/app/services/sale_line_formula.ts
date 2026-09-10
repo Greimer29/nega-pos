@@ -126,7 +126,12 @@ function calcProfitMarginPercent(
 }
 
 function calcSalePriceFromMargin(costUsd: number, marginPercent: number): number | null {
-  if (!Number.isFinite(costUsd) || costUsd <= 0 || !Number.isFinite(marginPercent) || marginPercent < 0) {
+  if (
+    !Number.isFinite(costUsd) ||
+    costUsd <= 0 ||
+    !Number.isFinite(marginPercent) ||
+    marginPercent < 0
+  ) {
     return null
   }
 

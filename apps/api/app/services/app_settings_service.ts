@@ -1,9 +1,6 @@
 import AppSetting from '#models/app_setting'
 import Currency from '#models/currency'
-import {
-  DEFAULT_BASE_CURRENCY,
-  KEY_BASE_CURRENCY,
-} from '#services/currency_service'
+import { DEFAULT_BASE_CURRENCY, KEY_BASE_CURRENCY } from '#services/currency_service'
 import { DateTime } from 'luxon'
 
 const KEY_EXCHANGE_RATE = 'current_usd_rate'

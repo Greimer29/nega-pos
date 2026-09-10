@@ -5,7 +5,7 @@ import {
   formatInventoryQuantityForStorage,
   normalizeInventoryQuantity,
 } from '#constants/inventory_units'
-import CatalogProduct from '#models/catalog_product'
+import type CatalogProduct from '#models/catalog_product'
 import CatalogProductSize from '#models/catalog_product_size'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
@@ -106,7 +106,10 @@ export default class CatalogProductSizeService {
     return db.transaction((client) => run(client))
   }
 
-  async loadSizes(productId: number, trx?: TransactionClientContract): Promise<CatalogProductSize[]> {
+  async loadSizes(
+    productId: number,
+    trx?: TransactionClientContract
+  ): Promise<CatalogProductSize[]> {
     const query = CatalogProductSize.query()
     if (trx) query.useTransaction(trx)
     return query.where('catalogProductId', productId).orderBy('size', 'asc')

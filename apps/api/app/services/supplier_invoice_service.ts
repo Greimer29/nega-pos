@@ -36,8 +36,7 @@ export default class SupplierInvoiceService {
     const invoiceNumber = input.invoice_number?.trim() || null
     const note = input.note?.trim() || null
     const description =
-      note ||
-      (invoiceNumber ? `Factura ${invoiceNumber}` : `Factura proveedor ${supplier.name}`)
+      note || (invoiceNumber ? `Factura ${invoiceNumber}` : `Factura proveedor ${supplier.name}`)
 
     if (input.is_credit) {
       const purchase = await Purchase.create({

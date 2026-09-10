@@ -72,7 +72,10 @@ export default class PrintConfigService {
     return this.guardarPatch('full', input)
   }
 
-  async guardarPatch(scope: PrintConfigSaveScope, patch: PrintConfigPatch): Promise<PrintConfigResult> {
+  async guardarPatch(
+    scope: PrintConfigSaveScope,
+    patch: PrintConfigPatch
+  ): Promise<PrintConfigResult> {
     const { stored: current } = await this.obtenerStored()
     const next = mergePrintConfigPatch(current, patch, scope)
     await this.persist(next)

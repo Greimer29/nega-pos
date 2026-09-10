@@ -13,7 +13,12 @@ import FormulaMaterial from '#models/formula_material'
 import Currency from '#models/currency'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
-import { resetTestSaleCodes, seedOpenSalesShift, seedTestSale, type SeedTestSaleInput } from '#tests/helpers/seed_test_sale'
+import {
+  resetTestSaleCodes,
+  seedOpenSalesShift,
+  seedTestSale,
+  type SeedTestSaleInput,
+} from '#tests/helpers/seed_test_sale'
 import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
 

@@ -89,9 +89,7 @@ test.group('Categories API', (group) => {
       active: true,
     })
 
-    const response = await client
-      .delete(`/api/v1/categories/${category.id}`)
-      .loginAs(user)
+    const response = await client.delete(`/api/v1/categories/${category.id}`).loginAs(user)
 
     response.assertStatus(409)
   })

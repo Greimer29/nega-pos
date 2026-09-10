@@ -1,4 +1,8 @@
-import { formatNativeAmount, formatSaleNativeTotal, nativeCurrencyDecimals } from '#utils/currency_amount'
+import {
+  formatNativeAmount,
+  formatSaleNativeTotal,
+  nativeCurrencyDecimals,
+} from '#utils/currency_amount'
 import { test } from '@japa/runner'
 
 test.group('currency_amount', () => {

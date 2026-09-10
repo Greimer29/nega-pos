@@ -38,7 +38,9 @@ test.group('Payment methods API', (group) => {
   group.each.setup(async () => {
     await resetTestDatabase()
     await seedAdminUser()
-    await PaymentMethod.query().whereNotIn('code', [...SEEDED_PAYMENT_METHOD_CODES]).delete()
+    await PaymentMethod.query()
+      .whereNotIn('code', [...SEEDED_PAYMENT_METHOD_CODES])
+      .delete()
   })
 
   group.each.teardown(async () => {

@@ -1,8 +1,6 @@
 import type SaleLine from '#models/sale_line'
-import { serializeFormulaMaterialItem } from '#transformers/formula_transformer'
-import {
-  resolveEffectiveFormulaMaterials,
-} from '#services/sale_line_formula'
+import { type serializeFormulaMaterialItem } from '#transformers/formula_transformer'
+import { resolveEffectiveFormulaMaterials } from '#services/sale_line_formula'
 
 function serializeSaleLineFormulaMaterialItem(item: {
   materialId: bigint | number
@@ -72,7 +70,9 @@ export function serializeSaleLineFormulaFields(line: SaleLine) {
   }
 }
 
-export function serializeSaleLineFormulaMaterialFromCatalog(item: Parameters<typeof serializeFormulaMaterialItem>[0]) {
+export function serializeSaleLineFormulaMaterialFromCatalog(
+  item: Parameters<typeof serializeFormulaMaterialItem>[0]
+) {
   return {
     material_id: Number(item.materialId),
     quantity_per_unit: item.quantity,
