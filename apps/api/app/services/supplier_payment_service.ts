@@ -58,6 +58,10 @@ export default class SupplierPaymentService {
         const applied = Math.min(remaining, balance)
         purchase.amountPaidUsd = (Number(purchase.amountPaidUsd) + applied).toFixed(4)
         purchase.balanceUsd = Math.max(0, balance - applied).toFixed(4)
+        if (input.account_id) {
+          // La cuenta del abono queda en la compra para detalle, listados y filtros de reportes.
+          purchase.accountId = input.account_id
+        }
         purchase.useTransaction(trx)
         await purchase.save()
         remaining -= applied
@@ -77,6 +81,9 @@ export default class SupplierPaymentService {
           const applied = Math.min(remaining, balance)
           purchase.amountPaidUsd = (Number(purchase.amountPaidUsd) + applied).toFixed(4)
           purchase.balanceUsd = Math.max(0, balance - applied).toFixed(4)
+          if (input.account_id) {
+            purchase.accountId = input.account_id
+          }
           purchase.useTransaction(trx)
           await purchase.save()
           remaining -= applied
