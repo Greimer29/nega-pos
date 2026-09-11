@@ -6,10 +6,12 @@ import {
   deleteMaterialImage,
   getHistorialPrecios,
   getMaterial,
+  importMaterials,
   listMaterials,
   updateMaterial,
   uploadMaterialImage,
 } from '@/features/materials/services/material-service'
+import { categoriesQueryKey } from '@/features/categories/hooks/use-categories'
 import type { AjusteStockInput, MaterialInput, MaterialListParams } from '@/features/materials/types'
 import { invalidateStockMovement } from '@/lib/query-invalidation'
 
@@ -109,6 +111,19 @@ export function useDeleteMaterialImageMutation() {
     onSuccess: (_, id) => {
       void queryClient.invalidateQueries({ queryKey: materialsQueryKey })
       void queryClient.invalidateQueries({ queryKey: [...materialsQueryKey, 'detail', id] })
+    },
+  })
+}
+
+export function useImportMaterialsMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: importMaterials,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: materialsQueryKey })
+      void queryClient.invalidateQueries({ queryKey: categoriesQueryKey })
+      invalidateStockMovement(queryClient)
     },
   })
 }

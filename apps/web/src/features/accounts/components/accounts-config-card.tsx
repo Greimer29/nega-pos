@@ -8,6 +8,7 @@ import { useAccountsQuery } from '@/features/accounts/hooks/use-accounts'
 import type { Account } from '@/features/accounts/types'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
+import { toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 
 export function AccountsConfigCard() {
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -39,7 +40,7 @@ export function AccountsConfigCard() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4">
+      <CardHeader className={toolbarHeaderClass}>
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
             <Wallet className="size-4" />

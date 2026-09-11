@@ -1,4 +1,5 @@
 import MachineNoEncontradaException from '#exceptions/maquina_no_encontrada_exception'
+import Expense from '#models/expense'
 import MachineExpense from '#models/machine_expense'
 import Machine from '#models/machine'
 import CurrencyService from '#services/currency_service'
@@ -38,7 +39,8 @@ export type EliminarMachineResult = {
 export type MachineDetalle = {
   machine: Machine
   totalSpent: string
-  expenses: MachineExpense[]
+  expenses: Expense[]
+  legacyExpenses: MachineExpense[]
 }
 
 export default class MachineService {
@@ -83,7 +85,16 @@ export default class MachineService {
   async obtenerDetalle(id: number): Promise<MachineDetalle> {
     const machine = await this.obtener(id)
     const totalSpent = await MachineService.calcularTotalGastado(Number(machine.id))
-    const expenses = await MachineExpense.query()
+    const expenses = await Expense.query()
+      .where('machineId', Number(machine.id))
+      .preload('account')
+      .preload('currency')
+      .preload('machine')
+      .orderBy('date', 'desc')
+      .orderBy('id', 'desc')
+      .limit(20)
+
+    const legacyExpenses = await MachineExpense.query()
       .where('machineId', Number(machine.id))
       .preload('supplier')
       .preload('account')
@@ -91,7 +102,7 @@ export default class MachineService {
       .orderBy('id', 'desc')
       .limit(20)
 
-    return { machine, totalSpent, expenses }
+    return { machine, totalSpent, expenses, legacyExpenses }
   }
 
   async crear(input: MachineInput): Promise<Machine> {
@@ -111,9 +122,14 @@ export default class MachineService {
   async eliminar(id: number): Promise<EliminarMachineResult> {
     const machine = await this.obtener(id)
 
-    const tieneGastos = await MachineExpense.query().where('machineId', Number(machine.id)).first()
+    const tieneGastosUnificados = await Expense.query()
+      .where('machineId', Number(machine.id))
+      .first()
+    const tieneGastosLegacy = await MachineExpense.query()
+      .where('machineId', Number(machine.id))
+      .first()
 
-    if (tieneGastos) {
+    if (tieneGastosUnificados || tieneGastosLegacy) {
       machine.active = false
       await machine.save()
       return { id: Number(machine.id), modo: 'soft' }
@@ -126,12 +142,19 @@ export default class MachineService {
   static async calcularTotalGastado(machineId: number): Promise<string> {
     const currencyService = new CurrencyService()
     const rates = await currencyService.getActiveRates()
-    const rows = await db
+
+    const expenseRows = await Expense.query().where('machineId', machineId).select(['amountUsd'])
+    let total = 0
+    for (const row of expenseRows) {
+      total += Number(row.amountUsd ?? 0)
+    }
+
+    const legacyRows = await db
       .from('machine_expenses')
       .where('machine_id', machineId)
       .select('amount', 'currency_code')
 
-    const total = sumMachineExpenseRowsUsd(rows, rates, currencyService)
+    total += sumMachineExpenseRowsUsd(legacyRows, rates, currencyService)
     return total.toFixed(2)
   }
 

@@ -77,6 +77,7 @@ import {
   normalizeInventoryQuantity,
 } from '@/lib/inventory-units'
 import { cn } from '@/lib/utils'
+import { pageHeaderClass, toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 
 function materialToSummary(material: Material): PurchaseItemMaterial {
   return {
@@ -724,7 +725,7 @@ export function PurchaseDetallePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className={pageHeaderClass}>
         <div className="space-y-2">
           <Button variant="ghost" size="sm" className="-ml-2 w-fit" asChild>
             <Link to="/purchases">
@@ -776,7 +777,7 @@ export function PurchaseDetallePage() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <CardHeader className={toolbarHeaderClass}>
           <CardTitle className="text-base">Datos de compra</CardTitle>
           <p className="text-muted-foreground text-sm">{formatFecha(purchase.date)}</p>
         </CardHeader>
@@ -1022,7 +1023,7 @@ export function PurchaseDetallePage() {
           ) : null}
 
           <div className="space-y-4 border-t pt-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className={pageHeaderClass}>
               <h3 className="font-medium">Ítems</h3>
               {isBorrador && canEditPurchase ? (
                 <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
@@ -1290,7 +1291,7 @@ export function PurchaseDetallePage() {
 
       {!isBorrador && purchase.isCredit && purchase.supplierId && Number(purchase.balanceUsd) > 0 ? (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <CardHeader className={toolbarHeaderClass}>
             <div>
               <CardTitle className="text-base">Abonos</CardTitle>
               <CardDescription>

@@ -12,6 +12,7 @@ import type { OrderEstado } from '@/features/orders/types'
 import { useCustomersQuery } from '@/features/customers/hooks/use-customers'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
+import { pageHeaderClass } from '@/components/layout/responsive-toolbar'
 
 const PER_PAGE = 20
 
@@ -50,12 +51,12 @@ export function OrdersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className={pageHeaderClass}>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Pedidos</h1>
           <p className="text-muted-foreground text-sm">Seguimiento de pedidos desde borrador hasta entrega.</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
+        <Button onClick={() => setDialogOpen(true)} className="w-fit shrink-0">
           <Plus />
           Nuevo pedido
         </Button>

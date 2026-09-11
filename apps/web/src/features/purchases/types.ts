@@ -149,10 +149,15 @@ export type Expense = {
   amountUsd: string
   accountId: number | null
   supplierId?: number | null
+  machineId?: number | null
   invoiceNumber?: string | null
   createdAt: string
   updatedAt: string
   account?: AccountResumen
+  machine?: {
+    id: number
+    name: string
+  }
 }
 
 export type ExpenseSummary = {
@@ -168,6 +173,7 @@ export type ExpenseInput = {
   currency_code?: string
   entry_rate?: number
   account_id?: number | null
+  machine_id?: number | null
 }
 
 export type ExpenseListParams = {
@@ -175,6 +181,7 @@ export type ExpenseListParams = {
   perPage?: number
   account_id?: number
   unassigned?: boolean
+  machine_id?: number
 }
 
 export type Income = {

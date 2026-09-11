@@ -45,12 +45,10 @@ export function CreditPurchaseBadge({
 
   const label =
     status === 'overdue'
-      ? compact
-        ? 'Vencido'
-        : 'Crédito vencido'
+      ? 'Pendiente vencida'
       : status === 'pending'
         ? compact
-          ? 'Por pagar'
+          ? 'Pendiente'
           : 'Crédito pendiente'
         : compact
           ? 'Pagada'

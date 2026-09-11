@@ -24,6 +24,7 @@ import {
   profitMarginIsNegative,
 } from '@/lib/profit-margin'
 import { cn } from '@/lib/utils'
+import { pageHeaderClass } from '@/components/layout/responsive-toolbar'
 
 function formatFechaHora(iso: string) {
   return new Date(iso).toLocaleString('es-VE', {
@@ -126,7 +127,7 @@ export function ProductDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className={pageHeaderClass}>
         <div className="space-y-2">
           <Button variant="ghost" size="sm" className="-ml-2 w-fit" asChild>
             <Link to="/productos">

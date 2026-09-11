@@ -1,5 +1,5 @@
 export const dashboardUi = {
-  page: 'flex flex-col gap-6',
+  page: 'flex min-w-0 flex-col gap-6',
   topGridRow: 'grid gap-4 xl:grid-cols-3 xl:items-stretch',
   topGridCell: 'flex min-h-0 flex-col',
   heroCard:

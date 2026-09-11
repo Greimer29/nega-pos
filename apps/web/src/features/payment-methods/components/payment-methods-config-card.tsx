@@ -11,6 +11,7 @@ import {
 import type { PaymentMethod } from '@/features/payment-methods/types'
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
+import { toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 
 export function PaymentMethodsConfigCard() {
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -52,7 +53,7 @@ export function PaymentMethodsConfigCard() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4">
+      <CardHeader className={toolbarHeaderClass}>
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
             <CreditCard className="size-4" />

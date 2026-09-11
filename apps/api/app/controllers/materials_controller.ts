@@ -5,6 +5,7 @@ import {
   createMaterialValidator,
   listMaterialsValidator,
   updateMaterialValidator,
+  importMaterialsValidator,
 } from '#validators/material'
 import { serializeCostWarning } from '#types/cost_warning'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -73,6 +74,16 @@ export default class MaterialsControleler {
     return serialize({
       material: serializeMaterial(material, { stockActual }),
     })
+  }
+
+  /**
+   * POST /api/v1/materials/import
+   */
+  async importar({ request, serialize }: HttpContext) {
+    const payload = await request.validateUsing(importMaterialsValidator)
+    const result = await this.service.importar(payload.rows)
+
+    return serialize(result)
   }
 
   /**

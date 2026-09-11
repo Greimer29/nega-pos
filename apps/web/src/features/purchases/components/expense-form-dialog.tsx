@@ -130,6 +130,7 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
     try {
       const payload = {
         ...values,
+        description: values.description.trim(),
         account_id: accountId,
         currency_code: currencyCode,
         ...(entryInNative ? { entry_rate: rateNum } : {}),
@@ -151,8 +152,7 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar gasto' : 'Registrar gasto'}</DialogTitle>
           <DialogDescription>
-            Ingresá el monto en la moneda elegida. Los reportes consolidan en{' '}
-            {baseCurrencyCode}.
+            Ingresá el monto en la moneda elegida. Los reportes consolidan en {baseCurrencyCode}.
           </DialogDescription>
         </DialogHeader>
 
@@ -165,7 +165,7 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
 
           <div className="space-y-2">
             <Label htmlFor="expense-description">Descripción *</Label>
-            <Input id="expense-description" {...register('description')} />
+            <Input id="expense-description" placeholder="Descripción del gasto" {...register('description')} />
             {errors.description ? (
               <p className="text-destructive text-sm">{errors.description.message}</p>
             ) : null}
@@ -187,12 +187,7 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
 
           <div className="space-y-2">
             <Label htmlFor="expense-amount">Monto ({symbol}) *</Label>
-            <MoneyInput
-              id="expense-amount"
-              min="0"
-              placeholder="0.00"
-              {...register('amount')}
-            />
+            <MoneyInput id="expense-amount" min="0" placeholder="0.00" {...register('amount')} />
             {errors.amount ? (
               <p className="text-destructive text-sm">{errors.amount.message}</p>
             ) : null}

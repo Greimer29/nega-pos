@@ -17,7 +17,7 @@ describe('CreditPurchaseBadge', () => {
     expect(html).not.toContain('Pendiente')
   })
 
-  it('shows Por pagar when credit still has balance', () => {
+  it('shows Pendiente when credit still has balance and is not due', () => {
     const html = renderToStaticMarkup(
       createElement(CreditPurchaseBadge, {
         creditDueDate: '2099-12-31',
@@ -25,7 +25,19 @@ describe('CreditPurchaseBadge', () => {
         compact: true,
       })
     )
-    expect(html).toContain('Por pagar')
+    expect(html).toContain('Pendiente')
+    expect(html).not.toContain('vencida')
+  })
+
+  it('shows Pendiente vencida when credit still has overdue balance', () => {
+    const html = renderToStaticMarkup(
+      createElement(CreditPurchaseBadge, {
+        creditDueDate: '2020-01-01',
+        balanceUsd: '5',
+        compact: true,
+      })
+    )
+    expect(html).toContain('Pendiente vencida')
   })
 
   it('respects reportStatus over due date', () => {

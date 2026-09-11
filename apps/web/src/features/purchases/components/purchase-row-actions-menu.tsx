@@ -11,11 +11,10 @@ import {
 } from '@/components/ui/dialog'
 import { useDeletePurchaseMutation, useReturnPurchaseMutation } from '@/features/purchases/hooks/use-purchases'
 import { PermissionGate } from '@/features/permissions/components/permission-gate'
-import type { Purchase } from '@/features/purchases/types'
 import { getApiErrorMessage } from '@/lib/api-error'
 
 type PurchaseRowActionsMenuProps = {
-  purchase: Purchase
+  purchase: { id: number; status: string; affectsInventory?: boolean }
   onActionComplete?: () => void
 }
 
@@ -26,15 +25,20 @@ export function PurchaseRowActionsMenu({ purchase, onActionComplete }: PurchaseR
   const deleteMutation = useDeletePurchaseMutation()
   const returnMutation = useReturnPurchaseMutation()
 
-  const canDelete = purchase.status === 'DRAFT'
+  const canDelete = purchase.status === 'DRAFT' || purchase.status === 'VOIDED'
   const canReturn = purchase.status === 'CONFIRMED'
+  const hasStock = purchase.affectsInventory !== false
 
   if (!canDelete && !canReturn) {
     return null
   }
 
   async function handleDelete() {
-    if (!window.confirm('¿Eliminar esta compra en borrador?')) {
+    const confirmMessage =
+      purchase.status === 'VOIDED'
+        ? '¿Eliminar definitivamente este registro anulado? No se podrá recuperar.'
+        : '¿Eliminar esta compra en borrador?'
+    if (!window.confirm(confirmMessage)) {
       return
     }
     try {
@@ -64,8 +68,8 @@ export function PurchaseRowActionsMenu({ purchase, onActionComplete }: PurchaseR
             <Button
               variant="ghost"
               size="sm"
-              title="Devolución de compra"
-              aria-label="Devolución de compra"
+              title="Devolución / anular compra"
+              aria-label="Devolución / anular compra"
               onClick={(e) => {
                 e.stopPropagation()
                 setReturnDialogOpen(true)
@@ -80,8 +84,12 @@ export function PurchaseRowActionsMenu({ purchase, onActionComplete }: PurchaseR
             <Button
               variant="ghost"
               size="sm"
-              title="Eliminar borrador"
-              aria-label="Eliminar borrador"
+              title={
+                purchase.status === 'VOIDED' ? 'Eliminar registro anulado' : 'Eliminar borrador'
+              }
+              aria-label={
+                purchase.status === 'VOIDED' ? 'Eliminar registro anulado' : 'Eliminar borrador'
+              }
               className="text-destructive hover:text-destructive"
               onClick={(e) => {
                 e.stopPropagation()
@@ -100,8 +108,9 @@ export function PurchaseRowActionsMenu({ purchase, onActionComplete }: PurchaseR
           <DialogHeader>
             <DialogTitle>Devolución de compra</DialogTitle>
             <DialogDescription>
-              Se revertirá el stock de todos los ítems y la compra quedará anulada. Solo es posible
-              si hay stock suficiente de cada material.
+              {hasStock
+                ? 'Se revertirá el stock de todos los ítems y la compra quedará anulada. Solo es posible si hay stock suficiente de cada material.'
+                : 'La factura/compra quedará anulada y dejará de generar saldo por pagar. No afecta inventario.'}
             </DialogDescription>
           </DialogHeader>
 

@@ -199,8 +199,17 @@ Credenciales alineadas con `apps/api/.env.example`: usuario `nega_pos`, BD `nega
 Arranque típico de trabajo diario:
 
 ```powershell
-pnpm dev:stack                # o abrir Docker Desktop y luego compose
-pnpm dev:web                  # http://localhost:5173 → proxy /api → :3333
+pnpm dev                      # Docker (MySQL+API) + Vite + abre http://localhost:5173
+# equivalentes por piezas:
+pnpm dev:stack                # solo MySQL + API Docker
+pnpm dev:web                  # solo Vite (exige API local en :3333)
+```
+
+Opciones:
+
+```powershell
+pnpm dev -- -NoBrowser        # no abre el navegador
+.\scripts\start-local-dev.ps1 -SkipStack   # solo Vite (stack ya arriba)
 ```
 
 Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca producción ni `nega_pos` de desarrollo).
@@ -376,7 +385,7 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda b
 | `app_settings` | `key` (PK); incluye `base_currency_code` (**por empresa**; en alta nueva default `USD`), tasa VES, margen, `business_profile`, `print_config` |
 | `customer_payments` | `customer_id`, `order_id?`, `sale_id?`, `amount_usd` (monto en moneda base), `payment_method_code`, `account_id` |
 | `supplier_payments` | `supplier_id`, `purchase_id?`, `amount_usd` (monto en moneda base), … |
-| `expenses` | `account_id`, `supplier_id?`, `date`, `description`, `invoice_number?`, `amount_usd` (monto canónico en moneda base), `currency_code` (moneda de ingreso), `entry_rate` (unidades de moneda de ingreso por 1 de base; `null` si es base) |
+| `expenses` | `account_id`, `supplier_id?`, `machine_id?` (FK opcional a `machines`; gasto vinculado a máquina), `date`, `description`, `invoice_number?`, `amount_usd` (monto canónico en moneda base), `currency_code` (moneda de ingreso), `entry_rate` (unidades de moneda de ingreso por 1 de base; `null` si es base) |
 | `incomes` | `account_id`, `date`, `description`, `amount_usd` (monto canónico en moneda base), `currency_code`, `entry_rate` — aportes / entradas de dinero |
 
 **Moneda base:** configurable **por empresa** (`GET/PUT /api/v1/currencies/base`, permiso `settings.edit`). Al provisionar un tenant nuevo la base por defecto es **USD**; la empresa puede crear monedas/métodos de pago y cambiar la base. Semántica de tasas: *unidades de moneda por 1 unidad de base* (`base = nativo / tasa`, `nativo = base * tasa`). Las columnas `*_usd` conservan el nombre pero almacenan montos en la moneda base. (Cutover histórico a XAU aplica solo a BD con data transaccional previa.)
@@ -440,7 +449,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 | Tabla | Campos clave |
 |-------|--------------|
 | `machines` | `name`, `type`, `brand`, `model`, `acquisition_cost`, `active` |
-| `machine_expenses` | `machine_id`, `category` (REPAIR/SUPPLY/MAINTENANCE/OTHER), `amount`, `receipt_file` |
+| `machine_expenses` | **Legacy (solo lectura de históricos):** `machine_id`, `category` (REPAIR/SUPPLY/MAINTENANCE/OTHER), `amount`, `receipt_file`. Los **altas nuevas** de gasto de máquina se registran en `expenses` con `machine_id`. |
 
 ### Relaciones principales
 
@@ -489,6 +498,7 @@ catalog_products ──< product_inventory_movements
 - Producto **con tallas** (`catalog_product_sizes`): stock por talla; `stock_quantity` del producto = suma. Ventas/pedidos exigen `catalog_product_size_id` o `size`; al confirmar se descuenta la talla y el total global (movimiento `SALE_OUT` con nota `… talla {size}`). Compras v1 no desglosan por talla. No aplica a `SERVICE`.
 - API: create/update aceptan `sizes[]` y `item_kind`; `PUT /catalog-products/:id/sizes` reemplaza el set (`[]` limpia). Listado `?size=` filtra productos con esa talla y stock > 0. Serialización siempre incluye `has_sizes` + `sizes[]`.
 - Ajustes manuales: `POST catalog-products/:id/adjustment`, `POST catalog-products/bulk-adjustment` (varios productos en una transacción) y `POST materials/:id/adjustment`. Los productos con tallas requieren `catalog_product_size_id`. Los productos con fórmula y los **servicios** no admiten ajuste manual de stock. Las ediciones de producto que cambian **stock** o **precio/costo** generan movimientos en `product_inventory_movements` (`MANUAL_ADJUSTMENT` / `PRICE_CHANGE`) con `created_by_user_id`; cambios de nombre/descripción no se registran.
+- **Importación masiva (Excel):** en Productos, Servicios y Materiales hay «Importar Excel». La app descarga una plantilla `.xls` (SpreadsheetML) con columnas de alta: las obligatorias llevan `*`. El usuario completa hasta **200 filas** y sube el archivo (plantilla `.xls` o CSV UTF-8; el `.xlsx` nativo de Excel no se parsea sin librería). `POST /catalog-products/import` (`item_kind` + `rows`, `catalog.edit`) y `POST /materials/import` (`rows`, `materials.edit`) crean ítem por ítem con éxito parcial. Si la categoría no existe, se crea activa. En productos y materiales, `stock` opcional carga cantidad inicial (en materiales, un `MANUAL_CARGO` con nota «Stock inicial (importación)»). No importa imágenes, tallas ni fórmulas.
 
 ### Pedidos (`order_service.ts` + `order_state_machine.ts`)
 
@@ -522,7 +532,7 @@ catalog_products ──< product_inventory_movements
 
 ### Reportes (`report_service.ts` / `inventory_report_service.ts`)
 
-- **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **ingresos** (aportes), compras de contado, abonos a proveedores, gastos, gastos de máquina y abonos de clientes en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). Balance neto (flujo de caja): `ventas + ingresos − compras_contado/abonos − gastos − gastos_máquina`. Las **cuentas por pagar** (compras/facturas a crédito con saldo) se listan como informativas (`pendingPayablesUsd` / `overduePayablesUsd`) y **no restan** del neto hasta el abono.
+- **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **ingresos** (aportes), compras de contado, abonos a proveedores, **gastos** (`expenses`, incluidos los vinculados a máquina), **gastos máquina legacy** (`machine_expenses`) y abonos de clientes en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). Balance neto (flujo de caja): `ventas + ingresos − compras_contado/abonos − gastos − gastos_máquina_legacy`. KPI principal de egresos operativos: card **Gastos** (= suma de `expenses`). La card de gastos máquina solo muestra el total **legacy** si es > 0. Las **cuentas por pagar** (compras/facturas a crédito con saldo) se listan como informativas (`pendingPayablesUsd` / `overduePayablesUsd`) y **no restan** del neto hasta el abono.
 - **Inventario** (`GET /reports/inventory`): snapshot de stock de productos de catálogo (`item_kind=PRODUCT`) y materiales en una sola lista (paginada). Los servicios no aparecen. Filtros: `search`, `category`, `sort_by`/`sort_dir` (`id`|`name`|`sale_price`|`quantity`), `active`, `low_stock`, `hide_zero`, `page`, `per_page`, `export=true` (set completo para Excel). Cada ítem incluye `kind` (`product`|`material`), precios/costos, unidad, `stock_source`, `low_stock`, `has_sizes` y `lines[]` (por talla si aplica; si no, una línea con `size: null`). Con `hide_zero`, se omiten tallas con cantidad ≤ 0 y productos/materiales con total 0. UI: `/reportes?vista=inventario` (query `inv_*`).
 - **Movimientos de producto** (`GET /reports/inventory/:productId/movements`): historial de `product_inventory_movements` de un producto de catálogo (no materiales). Filtros de período (`month`|`from`/`to`) y `types` (PURCHASE_IN, SALE_OUT, ajustes manuales, REVERSAL_ADJUSTMENT). UI: `/reportes/inventario/:productId`.
 
@@ -539,7 +549,7 @@ catalog_products ──< product_inventory_movements
 ## 9. API REST — referencia
 
 **Prefijo:** `/api/v1`  
-**Total de rutas definidas:** 147 (incluye `/health` fuera del prefijo).
+**Total de rutas definidas:** 149 (incluye `/health` fuera del prefijo).
 
 **Leyenda auth:**
 
@@ -659,6 +669,7 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 | PUT | `/api/v1/catalog-products/:id/sizes` | `catalog.edit` | `CatalogProductsController.replaceSizes` |
 | DELETE | `/api/v1/catalog-products/:id` | `catalog.edit` | `CatalogProductsController.destroy` |
 | POST | `/api/v1/catalog-products/apply-profit-margin` | `catalog.pricing` | `CatalogProductsController.applyProfitMargin` |
+| POST | `/api/v1/catalog-products/import` | `catalog.edit` | `CatalogProductsController.importar` |
 | POST | `/api/v1/catalog-products/bulk-adjustment` | `catalog.edit` | `CatalogProductsController.ajusteMasivo` |
 | POST | `/api/v1/catalog-products/:id/adjustment` | `catalog.edit` | `CatalogProductsController.ajuste` |
 | POST | `/api/v1/catalog-products/:id/image` | `catalog.edit` | `CatalogProductsController.uploadImage` |
@@ -693,6 +704,7 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 | GET | `/api/v1/materials` | `materials.view` | `Materials.index` |
 | GET | `/api/v1/materials/:id` | `materials.view` | `Materials.show` |
 | POST | `/api/v1/materials` | `materials.edit` | `Materials.store` |
+| POST | `/api/v1/materials/import` | `materials.edit` | `Materials.importar` |
 | PUT | `/api/v1/materials/:id` | `materials.edit` | `Materials.update` |
 | DELETE | `/api/v1/materials/:id` | `materials.edit` | `Materials.destroy` |
 | POST | `/api/v1/materials/:id/adjustment` | `materials.adjust` | `Materials.ajuste` |
@@ -738,7 +750,7 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 
 ### Gastos (`expenses.*`)
 
-Alta/edición: `amount` (nativo), `currency_code` (cualquier activa), `entry_rate?` (default catálogo). Persistencia: `amount_usd = amount / entry_rate` (o `amount` si moneda = base). Listados y estado de cuenta consolidan con `amount_usd`.
+Alta/edición: `amount` (nativo), `currency_code` (cualquier activa), `entry_rate?` (default catálogo). `machine_id` se asigna solo al registrar desde la ficha de máquina (`POST /machines/:id/expenses`); el hub de Gastos no expone ese vínculo en UI. Si `description` viene vacío y hay máquina, se usa `Gasto máquina — {nombre}`. Persistencia: `amount_usd = amount / entry_rate` (o `amount` si moneda = base). Listados y estado de cuenta consolidan con `amount_usd`.
 
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
@@ -772,7 +784,11 @@ Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuent
 | GET | `/api/v1/machines/:id/expenses` | `machines.view` | `Machines.indexExpenses` |
 | POST | `/api/v1/machines/:id/expenses` | `machines.edit` | `Machines.storeExpense` |
 
-### Gastos de máquina (`machines.*`)
+`POST /machines/:id/expenses` crea un registro en **`expenses`** con `machine_id` (no escribe en `machine_expenses`). `GET` lista gastos unificados + legacy etiquetados.
+
+### Gastos de máquina legacy (`machines.*`)
+
+Endpoints sobre la tabla histórica `machine_expenses` (lectura/edición de datos viejos; UI de alta nueva usa gastos unificados).
 
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
@@ -895,14 +911,14 @@ pwsh scripts/publish-github-release.ps1
 | `/customers` | Listado clientes |
 | `/customers/:id` | Detalle cliente |
 | `/customers/:id/cuenta` | Estado de cuenta cliente |
-| `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), botón de registrar gasto de empresa (sin salir del POS; permiso `expenses.edit`), cliente walk-in por defecto «Generico», tabs Productos/Materiales/**Servicios**, precio por línea (atajos −5/−10/−20 %), detalle opcional en líneas de servicio, fórmula por línea si el producto tiene, descuento de factura aparte; en móvil carrito en drawer y filtros de catálogo en botón desplegable |
+| `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), botón de registrar gasto de empresa (sin salir del POS; permiso `expenses.edit`), cliente walk-in por defecto «Generico», tabs Productos/Materiales/**Servicios**, precio por línea (atajos −5/−10/−20 %), detalle opcional en líneas de servicio, fórmula por línea si el producto tiene, descuento de factura aparte; en desktop carrito anclado; en tablet el carrito ocupa el área de contenido (sidebar visible); en móvil carrito a pantalla completa y filtros de catálogo en botón desplegable |
 | `/ventas/:id` | Detalle factura |
 | `/orders/:id` | Detalle pedido |
-| `/productos` | Catálogo de productos físicos (`item_kind=PRODUCT`). Filtros de categoría en botón desplegable (mismo patrón que ventas). Botón «Movimientos» → cargo/descargo/ajuste masivo |
+| `/productos` | Catálogo de productos físicos (`item_kind=PRODUCT`). Filtros de categoría en botón desplegable (mismo patrón que ventas). Botón «Movimientos» → cargo/descargo/ajuste masivo. «Importar Excel» descarga plantilla y carga masiva (`catalog.edit`) |
 | `/productos/movimientos` | Cargo, descargo o ajuste de stock sobre varios productos (y tallas) en un solo registro |
 | `/productos/:id` | Detalle producto |
-| `/productos/servicios` | Catálogo de servicios (`item_kind=SERVICE`): nombre, precio, activo/categoría; sin stock/fórmula/tallas. Permisos `catalog.view` / `catalog.edit` |
-| `/productos/materiales` | Materiales |
+| `/productos/servicios` | Catálogo de servicios (`item_kind=SERVICE`): nombre, precio, activo/categoría; sin stock/fórmula/tallas. Permisos `catalog.view` / `catalog.edit`. «Importar Excel» |
+| `/productos/materiales` | Materiales. «Importar Excel» (`materials.edit`) descarga plantilla y carga masiva |
 | `/productos/materiales/:id` | Detalle material |
 | `/purchases` | Hub Compras (`?tab=compras\|gastos\|ingresos`) |
 | `/purchases/:id` | Detalle compra |
@@ -928,7 +944,7 @@ Cada feature encapsula servicios API (axios), hooks TanStack Query, componentes 
 | `ventas` | sales, orders |
 | `customers` | customers, payments |
 | `suppliers` | suppliers, payments |
-| `catalog` / `formulas` | catalog-products, formulas, categories |
+| `catalog` / `formulas` | catalog-products (incl. importación Excel), formulas, categories |
 | `materials` | materials |
 | `purchases` | purchases |
 | `dashboard` | dashboard/* |
@@ -1014,6 +1030,7 @@ pnpm test
 
 | Comando | Acción |
 |---------|--------|
+| `pnpm dev` | Entorno local completo: Docker Desktop si hace falta, MySQL+API, Vite, abre `:5173` |
 | `pnpm dev:db` | Levanta MySQL (Docker) |
 | `pnpm dev:stack` | Levanta MySQL + API (Docker, `:3333`) |
 | `pnpm dev:api` | API en modo desarrollo (HMR) en el host |

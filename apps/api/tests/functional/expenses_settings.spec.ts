@@ -245,6 +245,58 @@ test.group('Expenses and settings API', (group) => {
     missingLogo.assertStatus(404)
   })
 
+  test('POST /api/v1/expenses accepts machine_id and appears in account statement expenses', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const machine = await Machine.create({
+      name: 'Recta unificada',
+      type: 'STRAIGHT_STITCH',
+      status: 'OPERATIONAL',
+      active: true,
+    })
+
+    const createResponse = await client
+      .post('/api/v1/expenses')
+      .loginAs(user)
+      .json({
+        date: '2026-06-15',
+        description: 'Aceite',
+        amount: 12.5,
+        machine_id: Number(machine.id),
+      })
+
+    createResponse.assertStatus(200)
+    createResponse.assertBodyContains({
+      data: {
+        expense: {
+          machineId: Number(machine.id),
+          description: 'Aceite',
+          amountUsd: '12.5000',
+        },
+      },
+    })
+
+    const statement = await client
+      .get('/api/v1/reports/account-statement')
+      .loginAs(user)
+      .qs({ month: '2026-06', types: 'expenses' })
+
+    statement.assertStatus(200)
+    assert.equal(statement.body().data.summary.expensesUsd, '12.5000')
+    const movement = statement
+      .body()
+      .data.movements.find(
+        (item: { type: string; label: string }) =>
+          item.type === 'expense' && item.label === 'Aceite'
+      )
+    assert.exists(movement)
+
+    const legacyCount = await db.from('machine_expenses').count('* as total')
+    assert.equal(Number(legacyCount[0].total), 0)
+  })
+
   test('GET/PUT /api/v1/settings/profit-margin', async ({ client }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
 

@@ -108,6 +108,30 @@ export async function ajustarStockProductoMasivo(payload: BulkAjusteStockProduct
   return data.data
 }
 
+export async function importCatalogProducts(payload: {
+  item_kind: 'PRODUCT' | 'SERVICE'
+  rows: Array<{
+    row: number
+    name?: string
+    category?: string
+    description?: string
+    sale_unit?: string
+    sale_price_usd?: number
+    cost_usd?: number
+    stock_quantity?: number
+    minimum_stock?: number
+  }>
+}) {
+  const { data } = await api.post<{
+    data: {
+      created: number
+      failed: number
+      results: Array<{ row: number; ok: boolean; id?: number; error?: string }>
+    }
+  }>('/catalog-products/import', payload, { timeout: 60_000 })
+  return data.data
+}
+
 export async function replaceCatalogProductSizes(id: number, sizes: CatalogProductSizeInput[]) {
   const { data } = await api.put<CatalogProductResponse>(`/catalog-products/${id}/sizes`, {
     sizes,

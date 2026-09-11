@@ -1,5 +1,5 @@
-import { useFormatMoney } from '@/features/currencies/context/display-currency-context'
-import { toUsd } from '@/features/currencies/utils/convert-currency'
+import { useDisplayCurrency } from '@/features/currencies/context/display-currency-context'
+import { formatMoneyLabel, fromBase, toUsd } from '@/features/currencies/utils/convert-currency'
 import { cn } from '@/lib/utils'
 
 type PrecioBimonetarioProps = {
@@ -10,6 +10,17 @@ type PrecioBimonetarioProps = {
   showNative?: boolean
 }
 
+export function counterpartLabel(
+  amountBase: number,
+  displayCurrency: string,
+  rates: Record<string, number>,
+  baseCurrencyCode: string
+): string | null {
+  const other = displayCurrency === 'USD' ? 'VES' : displayCurrency === 'VES' ? 'USD' : null
+  if (!other) return null
+  return formatMoneyLabel(fromBase(amountBase, other, rates, baseCurrencyCode), other)
+}
+
 export function PrecioBimonetario({
   precioUsd,
   precioBs,
@@ -17,7 +28,7 @@ export function PrecioBimonetario({
   size = 'md',
   showNative = true,
 }: PrecioBimonetarioProps) {
-  const { formatFromUsd, formatNative, displayCurrency, rates } = useFormatMoney()
+  const { formatFromUsd, displayCurrency, rates, baseCurrencyCode } = useDisplayCurrency()
 
   const usdNum =
     precioUsd !== null && precioUsd !== undefined && precioUsd !== ''
@@ -31,35 +42,15 @@ export function PrecioBimonetario({
   }
 
   const display = formatFromUsd(usdNum)
-  const nativeUsd =
-    showNative && precioUsd !== null && precioUsd !== undefined && precioUsd !== ''
-      ? formatNative(precioUsd, 'USD')
-      : null
-  const nativeBs =
-    showNative && precioBs !== null && precioBs !== undefined && precioBs !== ''
-      ? formatNative(precioBs, 'VES')
-      : null
-  const showSecondary =
-    showNative &&
-    displayCurrency !== 'USD' &&
-    displayCurrency !== 'VES' &&
-    (nativeUsd || nativeBs)
+  const secondary = showNative ? counterpartLabel(usdNum, displayCurrency, rates, baseCurrencyCode) : null
 
   return (
     <span className={cn('inline-flex flex-col', className)}>
       <span className={cn('font-medium tabular-nums', size === 'sm' ? 'text-sm' : 'text-base')}>
         {display}
       </span>
-      {displayCurrency === 'USD' && nativeBs && nativeBs !== '—' ? (
-        <span className="text-muted-foreground text-xs tabular-nums">{nativeBs}</span>
-      ) : null}
-      {displayCurrency === 'VES' && nativeUsd && nativeUsd !== '—' ? (
-        <span className="text-muted-foreground text-xs tabular-nums">{nativeUsd}</span>
-      ) : null}
-      {showSecondary ? (
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {[nativeUsd, nativeBs].filter(Boolean).join(' · ')}
-        </span>
+      {secondary ? (
+        <span className="text-muted-foreground text-xs tabular-nums">{secondary}</span>
       ) : null}
     </span>
   )

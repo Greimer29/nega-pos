@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Layers, Loader2, PackageMinus, Plus, SlidersHorizontal } from 'lucide-react'
+import { FileSpreadsheet, Layers, Loader2, PackageMinus, Plus, SlidersHorizontal } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { CatalogImportDialog } from '@/features/catalog-import/components/catalog-import-dialog'
+import type { CatalogProductImportRow } from '@/features/catalog-import/types'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { CatalogFormDialog } from '@/features/ventas/components/catalog-form-dialog'
 import {
@@ -15,12 +17,20 @@ import { useAuth } from '@/features/auth/hooks/use-auth'
 import {
   useCatalogProductsQuery,
   useDeleteCatalogProductMutation,
+  useImportCatalogProductsMutation,
 } from '@/features/ventas/hooks/use-catalog'
 import type { CatalogProduct } from '@/features/ventas/types'
 import { notifyApiError, QueryErrorState, EmptyListState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
+import {
+  toolbarActionsClass,
+  toolbarButtonClass,
+  toolbarButtonLabelClass,
+  toolbarContainerClass,
+  toolbarHeaderClass,
+} from '@/components/layout/responsive-toolbar'
 
 const PER_PAGE = 30
 
@@ -47,7 +57,9 @@ export function ProductosPage() {
   const [searchInput, setSearchInput] = useState(filters.search)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const deleteMutation = useDeleteCatalogProductMutation()
+  const importMutation = useImportCatalogProductsMutation()
   const { data: categories = [] } = useActiveCategoriesQuery()
   const activeFilterCount = filters.category ? 1 : 0
 
@@ -104,7 +116,7 @@ export function ProductosPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className={cn('flex flex-col gap-6', toolbarContainerClass)}>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Productos</h1>
         <p className="text-muted-foreground text-sm">
@@ -113,14 +125,14 @@ export function ProductosPage() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardHeader className={toolbarHeaderClass}>
           <div className="min-w-0 space-y-1.5">
             <CardTitle className="text-base">Catálogo</CardTitle>
             <CardDescription>
               {meta ? `${meta.total} producto${meta.total === 1 ? '' : 's'}` : 'Cargando…'}
             </CardDescription>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className={toolbarActionsClass}>
             <Button
               type="button"
               variant="outline"
@@ -139,41 +151,45 @@ export function ProductosPage() {
                 </span>
               ) : null}
             </Button>
-            <Button
-              variant="outline"
-              asChild
-              className="size-9 sm:h-9 sm:w-auto sm:px-4"
-            >
+            <Button variant="outline" asChild className={toolbarButtonClass}>
               <Link to="/productos/materiales" title="Ver materiales" aria-label="Ver materiales">
                 <Layers className="size-4" />
-                <span className="hidden sm:inline">Ver materiales</span>
+                <span className={toolbarButtonLabelClass}>Ver materiales</span>
               </Link>
             </Button>
             <PermissionGate permission="catalog.edit">
-              <Button
-                variant="outline"
-                asChild
-                className="size-9 sm:h-9 sm:w-auto sm:px-4"
-              >
+              <Button variant="outline" asChild className={toolbarButtonClass}>
                 <Link
                   to="/productos/movimientos"
                   title="Cargo, descargo o ajuste masivo"
                   aria-label="Movimiento de inventario"
                 >
                   <PackageMinus className="size-4" />
-                  <span className="hidden sm:inline">Movimientos</span>
+                  <span className={toolbarButtonLabelClass}>Movimientos</span>
                 </Link>
               </Button>
             </PermissionGate>
             <PermissionGate permission="catalog.edit">
               <Button
+                variant="outline"
+                onClick={() => setImportOpen(true)}
+                className={toolbarButtonClass}
+                title="Importar productos desde Excel"
+                aria-label="Importar productos desde Excel"
+              >
+                <FileSpreadsheet className="size-4" />
+                <span className={toolbarButtonLabelClass}>Importar Excel</span>
+              </Button>
+            </PermissionGate>
+            <PermissionGate permission="catalog.edit">
+              <Button
                 onClick={openCreateDialog}
-                className="size-9 sm:h-9 sm:w-auto sm:px-4"
+                className={toolbarButtonClass}
                 title="Nuevo producto"
                 aria-label="Nuevo producto"
               >
                 <Plus />
-                <span className="hidden sm:inline">Nuevo producto</span>
+                <span className={toolbarButtonLabelClass}>Nuevo producto</span>
               </Button>
             </PermissionGate>
           </div>
@@ -266,6 +282,18 @@ export function ProductosPage() {
       </Card>
 
       <CatalogFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <CatalogImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        kind="PRODUCT"
+        isPending={importMutation.isPending}
+        onImport={(rows) =>
+          importMutation.mutateAsync({
+            item_kind: 'PRODUCT',
+            rows: rows as CatalogProductImportRow[],
+          })
+        }
+      />
     </div>
   )
 }

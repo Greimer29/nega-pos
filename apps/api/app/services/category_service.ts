@@ -57,6 +57,20 @@ export default class CategoryService {
     }
   }
 
+  /** Importación masiva: reutiliza la categoría o la crea activa. */
+  async asegurarActiva(name: string): Promise<Category> {
+    const trimmed = name.trim()
+    const existing = await this.obtenerPorNombre(trimmed)
+    if (existing) {
+      if (!existing.active) {
+        existing.active = true
+        await existing.save()
+      }
+      return existing
+    }
+    return this.crear({ name: trimmed })
+  }
+
   async crear(input: CategoryInput): Promise<Category> {
     await this.assertNombreValido(input.name)
 

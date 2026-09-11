@@ -97,6 +97,7 @@ router
         router.post('suppliers/:id/invoices', [controllers.Suppliers, 'storeInvoice'])
 
         router.get('materials', [controllers.Materials, 'index'])
+        router.post('materials/import', [controllers.Materials, 'importar'])
         router.get('materials/:id', [controllers.Materials, 'show'])
         router.post('materials', [controllers.Materials, 'store'])
         router.put('materials/:id', [controllers.Materials, 'update'])
@@ -217,6 +218,7 @@ router
           'applyProfitMargin',
         ])
         router.post('catalog-products/bulk-adjustment', [CatalogProductsController, 'ajusteMasivo'])
+        router.post('catalog-products/import', [CatalogProductsController, 'importar'])
         router.get('catalog-products/:id', [CatalogProductsController, 'show'])
         router.post('catalog-products/:id/adjustment', [CatalogProductsController, 'ajuste'])
         router.post('catalog-products', [CatalogProductsController, 'store'])

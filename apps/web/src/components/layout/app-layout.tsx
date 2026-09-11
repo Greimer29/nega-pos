@@ -16,7 +16,7 @@ export function AppLayout() {
           <AppHeader
             leading={<AppMobileNavTrigger onClick={() => setMobileNavOpen(true)} />}
           />
-          <main className="min-h-0 flex-1 overflow-x-auto overflow-y-auto p-4 md:p-6">
+          <main className="@container min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6">
             <RoutePermissionOutlet />
           </main>
         </div>

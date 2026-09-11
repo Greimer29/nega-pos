@@ -36,7 +36,21 @@ export const listMachinesValidator = vine.create({
 
 const CATEGORIAS = ['REPAIR', 'SUPPLY', 'MAINTENANCE', 'OTHER'] as const
 
-const expenseFields = {
+/** Alta unificada: escribe en `expenses` (category/supplier/notes se ignoran si vienen de clientes viejos). */
+export const createMachineExpenseValidator = vine.create({
+  date: isoDate,
+  description: vine.string().trim().maxLength(255).optional(),
+  amount: vine.number().min(0).optional(),
+  amount_usd: vine.number().min(0).optional(),
+  currency_code: vine.string().trim().toUpperCase().fixedLength(3).optional(),
+  entry_rate: vine.number().positive().optional(),
+  account_id: vine.number().min(1).nullable().optional(),
+  category: vine.enum(CATEGORIAS).optional(),
+  supplier_id: vine.number().min(1).optional(),
+  notes: vine.string().trim().optional(),
+})
+
+const legacyExpenseFields = {
   date: isoDate,
   category: vine.enum(CATEGORIAS),
   description: vine.string().trim().minLength(1).maxLength(255),
@@ -47,12 +61,8 @@ const expenseFields = {
   account_id: vine.number().min(1).nullable().optional(),
 }
 
-export const createMachineExpenseValidator = vine.create({
-  ...expenseFields,
-})
-
 export const updateMachineExpenseValidator = vine.create({
-  ...expenseFields,
+  ...legacyExpenseFields,
 })
 
 export const listMachineExpensesValidator = vine.create({
@@ -70,9 +80,6 @@ export const listMachineExpensesValidator = vine.create({
 export const listGastosPorMachineValidator = vine.create({
   page: vine.number().min(1).optional(),
   per_page: vine.number().min(1).max(100).optional(),
-  category: vine.enum(CATEGORIAS).optional(),
-  date_desde: isoDate.optional(),
-  date_hasta: isoDate.optional(),
   account_id: vine.number().min(1).optional(),
   unassigned: vine.boolean().optional(),
 })

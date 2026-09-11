@@ -54,6 +54,7 @@ import { getApiError, parseStockInsuficienteDetails } from '@/lib/api-error'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { cn } from '@/lib/utils'
+import { pageHeaderClass } from '@/components/layout/responsive-toolbar'
 import { formatDraftMaterialNotice } from '@/lib/material-availability'
 import { OrderReturnDialog } from '@/features/orders/components/order-return-dialog'
 import { useAuth } from '@/features/auth/hooks/use-auth'
@@ -405,7 +406,7 @@ export function OrderDetallePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className={pageHeaderClass}>
         <div className="space-y-2">
           <Button variant="ghost" size="sm" className="-ml-2 w-fit" asChild>
             <Link to="/ventas">

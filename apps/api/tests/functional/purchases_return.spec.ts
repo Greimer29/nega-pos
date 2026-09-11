@@ -22,6 +22,7 @@ async function resetDatabase() {
   await db.from('formulas').delete()
   await db.from('catalog_products').delete()
   await db.from('purchase_items').delete()
+  await db.from('supplier_payments').delete()
   await db.from('purchases').delete()
   await db.from('order_materials').delete()
   await db.from('orders').delete()
@@ -33,6 +34,7 @@ async function resetDatabase() {
   await db.from('customers').delete()
   await db.from('counters').delete()
   await db.from('suppliers').delete()
+  await db.from('accounts').delete()
   await db.from('sales_shifts').delete()
   await db.from('users').delete()
 }
@@ -126,10 +128,26 @@ test.group('Purchases return API', (group) => {
 
     await purchase.refresh()
     assert.isNotNull(purchase.voidedAt)
+    assert.equal(Number(purchase.balanceUsd), 0)
 
     const reversals = await InventoryMovement.query().where('type', 'REVERSAL_ADJUSTMENT')
     assert.lengthOf(reversals, 1)
     assert.equal(reversals[0].quantity, '-9.000')
+
+    const deleteResponse = await client.delete(`/api/v1/purchases/${purchase.id}`).loginAs(user)
+    deleteResponse.assertStatus(200)
+
+    const deleted = await Purchase.find(purchase.id)
+    assert.isNull(deleted)
+  })
+
+  test('DELETE /api/v1/purchases/:id rejects confirmed purchase', async ({ client, assert }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const { purchase } = await seedConfirmedPurchase()
+
+    const response = await client.delete(`/api/v1/purchases/${purchase.id}`).loginAs(user)
+    response.assertStatus(409)
+    assert.equal(response.body().error.code, 'COMPRA_NO_EDITABLE')
   })
 
   test('POST /api/v1/purchases/:id/return blocks when stock was consumed', async ({

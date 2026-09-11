@@ -13,7 +13,10 @@ function serializeSupplierResumen(supplier: Supplier) {
 
 export default class MachineTransformer extends BaseTransformer<Machine> {
   toObject(
-    extra: { totalSpent?: string; expenses?: ReturnType<typeof serializeMachineExpense>[] } = {}
+    extra: {
+      totalSpent?: string
+      expenses?: Array<ReturnType<typeof serializeMachineExpense> | Record<string, unknown>>
+    } = {}
   ) {
     return {
       id: Number(this.resource.id),
@@ -38,7 +41,10 @@ export default class MachineTransformer extends BaseTransformer<Machine> {
 
 export function serializeMachine(
   machine: Machine,
-  extra: { totalSpent?: string; expenses?: ReturnType<typeof serializeMachineExpense>[] } = {}
+  extra: {
+    totalSpent?: string
+    expenses?: Array<ReturnType<typeof serializeMachineExpense> | Record<string, unknown>>
+  } = {}
 ) {
   return new MachineTransformer(machine).toObject(extra)
 }

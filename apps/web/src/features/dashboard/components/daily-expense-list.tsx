@@ -3,7 +3,7 @@ import type { DailyExpenseItem } from '@/features/dashboard/types'
 import { cn } from '@/lib/utils'
 
 function expenseKindLabel(item: DailyExpenseItem) {
-  return item.kind === 'machine_expense' ? 'Gasto máquina' : 'Gasto empresa'
+  return item.kind === 'machine_expense' ? 'Histórico' : 'Gasto'
 }
 
 function expenseDetail(item: DailyExpenseItem) {
@@ -41,7 +41,7 @@ export function DailyExpenseList({
                 className={cn(
                   'inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
                   item.kind === 'machine_expense'
-                    ? 'bg-teal-50 text-teal-800'
+                    ? 'bg-amber-50 text-amber-800'
                     : 'bg-slate-100 text-slate-700'
                 )}
               >

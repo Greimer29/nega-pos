@@ -2,6 +2,7 @@ import { Copy, Eye, Loader2, Pencil, Plus, Save, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 import { DocumentPreview } from '@/features/printing/components/document-preview'
 import { FormatFormDialog } from '@/features/printing/components/format-form-dialog'
 import { createSampleSale } from '@/features/printing/render-document'
@@ -212,7 +213,7 @@ export function SettingsFormatosPanel() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <CardHeader className={toolbarHeaderClass}>
           <div>
             <CardTitle className="text-base">Formatos guardados</CardTitle>
             <CardDescription>

@@ -250,6 +250,7 @@ export class ExpenseSchema extends BaseModel {
     'entryRate',
     'id',
     'invoiceNumber',
+    'machineId',
     'supplierId',
     'updatedAt',
   ] as const
@@ -272,6 +273,8 @@ export class ExpenseSchema extends BaseModel {
   declare id: bigint | number
   @column()
   declare invoiceNumber: string | null
+  @column()
+  declare machineId: bigint | number | null
   @column()
   declare supplierId: bigint | number | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })

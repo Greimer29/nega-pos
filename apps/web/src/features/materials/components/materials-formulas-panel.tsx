@@ -12,6 +12,7 @@ import {
 import type { Formula } from '@/features/formulas/types'
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
+import { toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 
 const PER_PAGE = 30
 
@@ -83,7 +84,7 @@ export function MaterialsFormulasPanel() {
   return (
     <>
       <Card>
-        <CardHeader className="grid grid-cols-1 items-center gap-4 pb-4 sm:grid-cols-[1fr_auto]">
+        <CardHeader className={`${toolbarHeaderClass} pb-4`}>
           <div className="relative min-w-0">
             <Input
               placeholder="Buscar fórmula…"

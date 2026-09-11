@@ -7,15 +7,19 @@ import { AccountSelect } from '@/features/accounts/components/account-select'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { NuevaPurchaseDialog } from '@/features/purchases/components/new-purchase-dialog'
 import { PermissionGate } from '@/features/permissions/components/permission-gate'
-import { CreditPurchaseBadge } from '@/features/purchases/components/credit-purchase-badge'
 import { PrecioBimonetario } from '@/features/purchases/components/bi-currency-price'
 import { PurchaseRowActionsMenu } from '@/features/purchases/components/purchase-row-actions-menu'
-import { ESTADO_LABELS, formatFecha } from '@/features/purchases/constants'
+import { formatFecha } from '@/features/purchases/constants'
 import { usePurchasesQuery } from '@/features/purchases/hooks/use-purchases'
-import type { PurchaseEstado } from '@/features/purchases/constants'
+import {
+  PURCHASE_STATUS_LEGEND,
+  purchaseStatusToneClass,
+  resolvePurchaseStatusBadges,
+} from '@/features/purchases/utils/purchase-status-badges'
 import { useSuppliersQuery } from '@/features/suppliers/hooks/use-suppliers'
 import { QueryErrorState, EmptyListState } from '@/features/notifications/query-error-state'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
+import { toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 import { cn } from '@/lib/utils'
 
 const PER_PAGE = 20
@@ -32,20 +36,30 @@ const DEFAULT_PURCHASES_COMPRAS_FILTERS: PurchasesComprasFilters = {
   page: 1,
 }
 
-function EstadoBadge({ status }: { status: PurchaseEstado }) {
+function PurchaseEstadoBadges({
+  status,
+  isCredit,
+  balanceUsd,
+  creditDueDate,
+}: {
+  status: Parameters<typeof resolvePurchaseStatusBadges>[0]['status']
+  isCredit: boolean
+  balanceUsd?: string | number | null
+  creditDueDate?: string | null
+}) {
+  const badges = resolvePurchaseStatusBadges({ status, isCredit, balanceUsd, creditDueDate })
+
   return (
-    <span
-      className={cn(
-        'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-        status === 'DRAFT'
-          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200'
-          : status === 'VOIDED'
-            ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200'
-            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
-      )}
-    >
-      {ESTADO_LABELS[status]}
-    </span>
+    <div className="flex flex-wrap items-center gap-1.5">
+      {badges.map((badge) => (
+        <span
+          key={badge.tone}
+          title={badge.label}
+          aria-label={badge.label}
+          className={cn('inline-block size-3 rounded-full', purchaseStatusToneClass(badge.tone))}
+        />
+      ))}
+    </div>
   )
 }
 
@@ -71,12 +85,10 @@ export function PurchasesComprasPanel() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4">
+      <CardHeader className={toolbarHeaderClass}>
         <div>
           <CardTitle className="text-base">Compras realizadas</CardTitle>
-          <CardDescription>
-            {meta ? `${meta.total} compra${meta.total === 1 ? '' : 's'}` : 'Cargando…'}
-          </CardDescription>
+          {!meta ? <CardDescription>Cargando…</CardDescription> : null}
         </div>
         <PermissionGate permission="purchases.edit">
           <Button onClick={() => setDialogOpen(true)}>
@@ -141,10 +153,10 @@ export function PurchasesComprasPanel() {
                     <th className="px-4 py-3 font-medium">Proveedor</th>
                     <th className="px-4 py-3 font-medium">Cuenta</th>
                     <th className="px-4 py-3 font-medium">Nro. factura</th>
-                    <th className="px-4 py-3 font-medium">Total</th>
+                    <th className="min-w-[9rem] px-4 py-3 font-medium">Total</th>
                     <th className="px-4 py-3 font-medium">Fecha</th>
-                    <th className="px-4 py-3 font-medium">Estado</th>
-                    <th className="px-4 py-3 font-medium text-right">Acciones</th>
+                    <th className="w-px px-2 py-3 font-medium whitespace-nowrap">Estado</th>
+                    <th className="w-px px-2 py-3 text-right font-medium whitespace-nowrap">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -169,27 +181,23 @@ export function PurchasesComprasPanel() {
                       <td className="text-muted-foreground px-4 py-3">
                         {purchase.invoiceNumber ?? '—'}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="min-w-[9rem] px-4 py-3">
                         <PrecioBimonetario
                           precioUsd={purchase.totalUsd}
                           precioBs={purchase.totalBs}
                           size="sm"
                         />
                       </td>
-                      <td className="px-4 py-3">{formatFecha(purchase.date)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <EstadoBadge status={purchase.status} />
-                          {purchase.isCredit && purchase.status === 'CONFIRMED' ? (
-                            <CreditPurchaseBadge
-                              creditDueDate={purchase.creditDueDate}
-                              balanceUsd={purchase.balanceUsd}
-                              compact
-                            />
-                          ) : null}
-                        </div>
+                      <td className="px-4 py-3 whitespace-nowrap">{formatFecha(purchase.date)}</td>
+                      <td className="w-px px-2 py-3">
+                        <PurchaseEstadoBadges
+                          status={purchase.status}
+                          isCredit={purchase.isCredit}
+                          balanceUsd={purchase.balanceUsd}
+                          creditDueDate={purchase.creditDueDate}
+                        />
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="w-px px-2 py-3 text-right">
                         <div
                           className="flex items-center justify-end gap-1"
                           onClick={(e) => e.stopPropagation()}
@@ -206,29 +214,49 @@ export function PurchasesComprasPanel() {
               </table>
             </div>
 
-            {meta && meta.lastPage > 1 ? (
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-muted-foreground text-sm">
-                  Página {meta.currentPage} de {meta.lastPage}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={filters.page <= 1}
-                    onClick={() => setFilters((prev) => ({ ...prev, page: prev.page - 1 }))}
-                  >
-                    Anterior
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={filters.page >= meta.lastPage}
-                    onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
-                  >
-                    Siguiente
-                  </Button>
+            {meta ? (
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-2">
+                  <p className="text-muted-foreground text-sm">
+                    Mostrando {(meta.currentPage - 1) * meta.perPage + 1}–
+                    {Math.min(meta.currentPage * meta.perPage, meta.total)} de {meta.total}
+                    {meta.lastPage > 1 ? ` · Página ${meta.currentPage} de ${meta.lastPage}` : ''}
+                  </p>
+                  <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                    {PURCHASE_STATUS_LEGEND.map((item) => (
+                      <li key={item.tone} className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                        <span
+                          className={cn(
+                            'inline-block size-2.5 shrink-0 rounded-full',
+                            purchaseStatusToneClass(item.tone)
+                          )}
+                          aria-hidden
+                        />
+                        {item.label}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
+                {meta.lastPage > 1 ? (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={filters.page <= 1}
+                      onClick={() => setFilters((prev) => ({ ...prev, page: prev.page - 1 }))}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={filters.page >= meta.lastPage}
+                      onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </>

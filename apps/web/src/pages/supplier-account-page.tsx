@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { CreditPurchaseBadge } from '@/features/purchases/components/credit-purchase-badge'
 import { PurchasePaymentFormDialog } from '@/features/purchases/components/purchase-payment-form-dialog'
+import { PurchaseRowActionsMenu } from '@/features/purchases/components/purchase-row-actions-menu'
 import { ESTADO_LABELS, formatFecha, type PurchaseEstado } from '@/features/purchases/constants'
 import { SupplierAccountSummaryCards } from '@/features/suppliers/components/supplier-account-summary-cards'
 import { SupplierInvoiceFormDialog } from '@/features/suppliers/components/supplier-invoice-form-dialog'
@@ -14,6 +15,7 @@ import { computeSupplierAccountSummary } from '@/features/suppliers/utils/suppli
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { cn } from '@/lib/utils'
+import { pageHeaderClass } from '@/components/layout/responsive-toolbar'
 
 function purchaseStatusBadge(status: string) {
   const purchaseStatus = status as PurchaseEstado
@@ -116,7 +118,7 @@ export function SupplierAccountPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className={pageHeaderClass}>
         <div className="space-y-2">
           <Button variant="ghost" size="sm" className="-ml-2 w-fit" asChild>
             <Link to="/suppliers">
@@ -150,8 +152,8 @@ export function SupplierAccountPage() {
         <CardHeader>
           <CardTitle className="text-base">Historial de compras</CardTitle>
           <CardDescription>
-            Borradores, confirmadas, anuladas y compras a crédito o contado. Las facturas sin stock
-            aparecen con la etiqueta correspondiente.
+            Borradores, confirmadas, anuladas y compras a crédito o contado. En confirmadas podés
+            abonar o devolver/anular (icono de flechas). Las facturas sin stock aparecen etiquetadas.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -213,9 +215,10 @@ export function SupplierAccountPage() {
                         </td>
                         <td className="px-4 py-3">{purchaseStatusBadge(purchase.status)}</td>
                         <td className="px-4 py-3">
-                          {purchase.isCredit ? (
+                          {isCreditConfirmed ? (
                             <CreditPurchaseBadge
                               creditDueDate={purchase.creditDueDate}
+                              balanceUsd={purchase.balanceUsd}
                               reportStatus={
                                 creditStatus?.label === 'Vencida'
                                   ? 'overdue'
@@ -227,6 +230,10 @@ export function SupplierAccountPage() {
                               }
                               compact
                             />
+                          ) : purchase.isCredit && purchase.status === 'VOIDED' ? (
+                            <span className="text-muted-foreground text-xs">No aplica</span>
+                          ) : purchase.isCredit ? (
+                            <span className="text-muted-foreground text-xs">—</span>
                           ) : (
                             <span className="inline-flex rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
                               Contado
@@ -234,28 +241,38 @@ export function SupplierAccountPage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {purchase.isCredit ? formatFecha(purchase.creditDueDate) : '—'}
+                          {isCreditConfirmed ? formatFecha(purchase.creditDueDate) : '—'}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <DisplayMoneyFromUsd amountUsd={purchase.totalUsd} size="sm" />
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {purchase.isCredit ? (
+                          {isCreditConfirmed ? (
                             <DisplayMoneyFromUsd amountUsd={purchase.balanceUsd} size="sm" />
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {canPay ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openPayment(purchase.id, balance)}
-                            >
-                              Abonar
-                            </Button>
-                          ) : null}
+                          <div className="flex items-center justify-end gap-1">
+                            {canPay ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openPayment(purchase.id, balance)}
+                              >
+                                Abonar
+                              </Button>
+                            ) : null}
+                            <PurchaseRowActionsMenu
+                              purchase={{
+                                id: purchase.id,
+                                status: purchase.status,
+                                affectsInventory: purchase.affectsInventory,
+                              }}
+                              onActionComplete={() => void refetch()}
+                            />
+                          </div>
                         </td>
                       </tr>
                     )

@@ -36,20 +36,20 @@ export function AppHeader({ leading }: AppHeaderProps) {
   }
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-3 md:px-6">
+    <header className="flex h-14 min-w-0 shrink-0 items-center justify-between gap-2 overflow-hidden border-b px-3 md:px-6">
       <div className="flex min-w-0 items-center gap-2 md:gap-3">
         {leading}
         {companyName ? (
           <p
-            className="max-w-[min(100%,22rem)] truncate text-[13px] leading-tight font-semibold tracking-[-0.01em] text-foreground sm:max-w-[26rem] md:max-w-[32rem]"
+            className="max-w-[9rem] truncate text-[13px] leading-tight font-semibold tracking-[-0.01em] text-foreground sm:max-w-[14rem] lg:max-w-[22rem] xl:max-w-[32rem]"
             title={companyName}
           >
             {companyName}
           </p>
         ) : null}
-        <DisplayCurrencyToggle />
+        <DisplayCurrencyToggle className="shrink-0" />
       </div>
-      <div className="flex shrink-0 items-center gap-2 md:gap-3">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2 md:gap-3">
         <Button
           variant="ghost"
           size="sm"
@@ -65,14 +65,14 @@ export function AppHeader({ leading }: AppHeaderProps) {
           )}
         </Button>
         {user ? (
-          <p className="hidden text-sm sm:block">
+          <p className="hidden min-w-0 truncate text-sm xl:block">
             <span className="text-muted-foreground">Hola, </span>
             <span className="font-medium">{user.name}</span>
           </p>
         ) : null}
         <Button variant="outline" size="sm" onClick={handleLogout} disabled={isLoggingOut}>
           <LogOut className="size-4" />
-          <span className="hidden sm:inline">Salir</span>
+          <span className="hidden lg:inline">Salir</span>
         </Button>
       </div>
     </header>

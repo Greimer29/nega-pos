@@ -28,10 +28,10 @@ export function ReportBreakdownChart({ summary }: ReportBreakdownChartProps) {
       isIncome: true,
     },
     { key: 'purchases', label: 'Compras', value: Number(summary.purchases), isIncome: false },
-    { key: 'expenses', label: 'Gastos empresa', value: Number(summary.expenses), isIncome: false },
+    { key: 'expenses', label: 'Gastos', value: Number(summary.expenses), isIncome: false },
     {
       key: 'machine',
-      label: 'Gastos máquina',
+      label: 'Gastos máquina (histórico)',
       value: Number(summary.machineExpenses),
       isIncome: false,
     },
