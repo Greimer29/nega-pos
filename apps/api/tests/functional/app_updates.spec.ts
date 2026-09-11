@@ -33,6 +33,13 @@ test.group('App updates API', (group) => {
     response.assertStatus(401)
   })
 
+  test('GET /api/v1/app-updates/download/desktop is public and does not return 401', async ({
+    client,
+  }) => {
+    const response = await client.get('/api/v1/app-updates/download/desktop')
+    response.assertStatus(503)
+  })
+
   test('GET /api/v1/app-updates/latest without GitHub token returns 503', async ({
     client,
     assert,

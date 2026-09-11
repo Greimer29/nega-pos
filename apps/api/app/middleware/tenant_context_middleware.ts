@@ -5,7 +5,13 @@ import { ensureTenantConnection } from '#utils/tenant_connection'
 import { runWithTenant } from '#utils/tenant_context'
 import { readTenantClaims } from '#services/directory_auth_service'
 
-const PUBLIC_PREFIXES = ['/api/v1/auth/login', '/api/v1/auth/google', '/api/v1/csrf', '/health']
+const PUBLIC_PREFIXES = [
+  '/api/v1/auth/login',
+  '/api/v1/auth/google',
+  '/api/v1/csrf',
+  '/api/v1/app-updates/download',
+  '/health',
+]
 const PLATFORM_PREFIX = '/api/v1/platform'
 
 function isPublicPath(pathname: string): boolean {

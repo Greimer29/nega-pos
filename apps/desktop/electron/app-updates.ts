@@ -57,6 +57,7 @@ export async function downloadAndLaunchDesktopUpdater(
       method: 'GET',
       url: downloadUrl,
       session,
+      useSessionCookies: true,
       redirect: 'follow',
     })
 

@@ -103,8 +103,6 @@ const PROTECTED_API_ROUTES: Array<[string, string]> = [
   ['GET', '/settings/printing'],
   ['PUT', '/settings/printing'],
   ['GET', '/app-updates/latest'],
-  ['GET', '/app-updates/download/desktop'],
-  ['GET', '/app-updates/download/android'],
   ['GET', '/dashboard/summary'],
   ['GET', '/dashboard/overview'],
   ['GET', '/dashboard/daily-product-sales'],
@@ -195,9 +193,5 @@ test.group('route_permissions', () => {
     ])
     assert.equal(resolveRoutePermission('GET', '/api/v1/settings/general'), 'settings.view')
     assert.equal(resolveRoutePermission('GET', '/api/v1/app-updates/latest'), 'settings.view')
-    assert.equal(
-      resolveRoutePermission('GET', '/api/v1/app-updates/download/desktop'),
-      'settings.view'
-    )
   })
 })
