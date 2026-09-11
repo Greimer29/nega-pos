@@ -31,6 +31,9 @@ router
     router.get('csrf', [CsrfController, 'show'])
     router.post('auth/login', [controllers.Auth, 'login'])
     router.post('auth/google', [controllers.Auth, 'google'])
+    // Public: the desktop updater downloads without session cookies (Electron net.request).
+    // Binaries are already public on GitHub Releases; this only proxies them.
+    router.get('app-updates/download/:platform', [AppUpdatesController, 'download'])
 
     router
       .group(() => {
@@ -179,7 +182,6 @@ router
         router.put('settings/printing', [SettingsController, 'updatePrinting'])
 
         router.get('app-updates/latest', [AppUpdatesController, 'latest'])
-        router.get('app-updates/download/:platform', [AppUpdatesController, 'download'])
 
         router.get('dashboard/summary', [controllers.Dashboard, 'resumen'])
         router.get('dashboard/overview', [controllers.Dashboard, 'overview'])

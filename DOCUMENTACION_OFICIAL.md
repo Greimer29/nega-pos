@@ -869,7 +869,7 @@ Instaladores publicados en **GitHub Releases**. La API consulta la última relea
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
 | GET | `/api/v1/app-updates/latest?current=1.2.1` | `settings.view` | `AppUpdatesController.latest` |
-| GET | `/api/v1/app-updates/download/:platform` | `settings.view` | `AppUpdatesController.download` (`desktop` \| `android`) |
+| GET | `/api/v1/app-updates/download/:platform` | público | `AppUpdatesController.download` (`desktop` \| `android`). Proxifica el asset de GitHub (ya público). Sin sesión: el updater de Electron no enviaba cookies (`useSessionCookies`). |
 
 **Assets obligatorios en el release** (tag `vX.Y.Z`):
 
