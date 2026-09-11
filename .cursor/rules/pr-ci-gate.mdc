@@ -1,27 +1,30 @@
 ---
-description: Gate obligatorio — lint/typecheck locales antes de commit/push/PR
+description: Gate obligatorio — lint/typecheck/tests antes de commit/push/PR
 alwaysApply: true
 ---
 
 # Gate CI local antes de PR
 
-**Nunca** hagas `git push` ni abras/actualices un PR con cambios de código sin haber corrido y pasado, en esta máquina, los checks que CI va a fallar.
+**Nunca** hagas `git push` ni abras/actualices un PR con cambios de código sin haber corrido y pasado los checks que CI ejecuta.
 
 ## Obligatorio (en este orden)
 
-1. `pnpm lint` en la raíz del monorepo (exit 0).
-2. `pnpm typecheck` en la raíz del monorepo (exit 0).
-3. Si lint falló por prettier: `pnpm --filter api exec eslint . --fix` y/o web, luego re-correr lint + typecheck.
-4. Si tocaste tests API relevantes y hay BD de test disponible: los specs afectados.
+1. `pnpm lint` en la raíz (exit 0).
+2. `pnpm typecheck` en la raíz (exit 0).
+3. Si tocaste o agregaste tests en `apps/api/tests/**`:
+   - Arrancá MySQL de test (`docker compose up -d mysql` o el stack de test).
+   - Corré **al menos** los specs tocados, p. ej.  
+     `pnpm --filter api exec node ace test --files="tests/functional/suppliers.spec.ts"`
+   - Si Docker/MySQL no está disponible: **no pushees**; pedile al usuario que levante Docker o avisá el bloqueo.
+4. Si agregás un `assertStatus(N)`: alinealo con el controller y con tests hermanos del mismo endpoint (este repo suele devolver **200**, no 201, en POSTs de Lucid/serialize).
 
-## Si lint o typecheck fallan
+## Si fallan
 
-- Lint: corregí con `eslint . --fix` en el package afectado.
-- Typecheck: arreglá los errores de `tsc` (tipos DOM como `HeadersInit` no existen en API Node — usá tipos explícitos).
-- Volvé a correr `pnpm lint` y `pnpm typecheck` hasta verde.
-- **No** subas “y lo arreglamos después”: eso ya rompió CI varias veces.
+- Lint: `eslint . --fix` en el package → re-lint.
+- Typecheck: arreglá `tsc` (sin tipos DOM en API Node).
+- Tests: arreglá hasta verde **antes** del push.
+- **Prohibido** subir sabiendo que CI va a romper.
 
 ## Excepciones
 
-- Solo docs/markdown sin código: lint no es bloqueante.
-- Si un check no se puede correr localmente (p. ej. sin MySQL de test), decilo explícitamente al usuario antes de pushear.
+- Solo docs/markdown sin código ejecutable.

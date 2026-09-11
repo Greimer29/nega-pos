@@ -418,7 +418,7 @@ test.group('Suppliers API', (group) => {
         date: '2026-10-15',
       })
 
-    response.assertStatus(201)
+    response.assertStatus(200)
 
     await purchase.refresh()
     assert.equal(Number(purchase.balanceUsd), 0)
