@@ -8,7 +8,7 @@ export const MOVEMENT_TYPE_LABELS = {
   purchase: 'Compra',
   supplier_payment: 'Pago proveedor',
   expense: 'Gasto empresa',
-  machine_expense: 'Gasto máquina',
+  machine_expense: 'Gasto máquina (histórico)',
   income: 'Ingreso',
 } as const
 

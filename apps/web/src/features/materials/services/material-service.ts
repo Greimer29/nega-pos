@@ -76,6 +76,30 @@ export async function uploadMaterialImage(id: number, file: File) {
   return data.data.material
 }
 
+export async function importMaterials(
+  rows: Array<{
+    row: number
+    code?: string
+    name?: string
+    category?: string
+    unit?: string
+    description?: string
+    stock_quantity?: number
+    minimum_stock?: number
+    location?: string
+    last_purchase_price_usd?: number
+  }>
+) {
+  const { data } = await api.post<{
+    data: {
+      created: number
+      failed: number
+      results: Array<{ row: number; ok: boolean; id?: number; error?: string }>
+    }
+  }>('/materials/import', { rows }, { timeout: 60_000 })
+  return data.data
+}
+
 export async function deleteMaterialImage(id: number) {
   const { data } = await api.delete<MaterialResponse>(`/materials/${id}/image`)
   return data.data.material

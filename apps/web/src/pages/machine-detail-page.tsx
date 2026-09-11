@@ -13,12 +13,14 @@ import {
   formatMachineTypeLabel,
 } from '@/features/machines/constants'
 import { useMachineQuery } from '@/features/machines/hooks/use-machines'
+import type { MachineExpenseCategory } from '@/features/machines/constants'
 import { AccountSelect } from '@/features/accounts/components/account-select'
 import { DisplayMoney } from '@/features/currencies/components/display-money'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
+import { pageHeaderClass } from '@/components/layout/responsive-toolbar'
 
 type MachineDetailExpenseFilters = {
   accountId: number | null
@@ -39,6 +41,11 @@ function formatDateTime(value: string | null | undefined) {
     dateStyle: 'short',
     timeStyle: 'short',
   })
+}
+
+function categoryLabel(category: MachineExpenseCategory | null | undefined) {
+  if (!category) return '—'
+  return MACHINE_EXPENSE_CATEGORY_LABELS[category] ?? category
 }
 
 export function MachineDetailPage() {
@@ -110,7 +117,7 @@ export function MachineDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className={pageHeaderClass}>
         <div className="space-y-2">
           <Button variant="ghost" size="sm" className="-ml-2 w-fit" asChild>
             <Link to="/machines">
@@ -234,24 +241,30 @@ export function MachineDetailPage() {
                 <thead>
                   <tr className="bg-muted/50 border-b text-left">
                     <th className="px-4 py-3 font-medium">Fecha</th>
-                    <th className="px-4 py-3 font-medium">Categoría</th>
                     <th className="px-4 py-3 font-medium">Descripción</th>
                     <th className="px-4 py-3 font-medium">Cuenta</th>
-                    <th className="px-4 py-3 font-medium">Proveedor</th>
                     <th className="px-4 py-3 font-medium">Monto</th>
                     <th className="px-4 py-3 font-medium">Registro</th>
                   </tr>
                 </thead>
                 <tbody>
                   {expenses.map((expense) => (
-                    <tr key={expense.id} className="border-b last:border-b-0">
+                    <tr key={`${expense.legacy ? 'legacy' : 'expense'}-${expense.id}`} className="border-b last:border-b-0">
                       <td className="px-4 py-3">{formatDate(expense.date)}</td>
-                      <td className="px-4 py-3">{MACHINE_EXPENSE_CATEGORY_LABELS[expense.category]}</td>
-                      <td className="px-4 py-3">{expense.description}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>{expense.description}</span>
+                          {expense.legacy ? (
+                            <span className="inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
+                              Histórico
+                              {expense.category ? ` · ${categoryLabel(expense.category)}` : ''}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
                       <td className="text-muted-foreground px-4 py-3">
                         {expense.account?.name ?? '—'}
                       </td>
-                      <td className="text-muted-foreground px-4 py-3">{expense.supplier?.name ?? '—'}</td>
                       <td className="px-4 py-3">
                         <DisplayMoney
                           amount={expense.amount}

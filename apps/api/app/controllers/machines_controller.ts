@@ -1,5 +1,6 @@
-import MachineExpenseService from '#services/machine_expense_service'
+import ExpenseService from '#services/expense_service'
 import MachineService from '#services/machine_service'
+import { serializeExpense } from '#transformers/expense_transformer'
 import { serializeMachineExpense, serializeMachine } from '#transformers/machine_transformer'
 import {
   createMachineExpenseValidator,
@@ -12,7 +13,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 
 export default class MachinesControleler {
   private service = new MachineService()
-  private expenseService = new MachineExpenseService()
+  private expenseService = new ExpenseService()
 
   /**
    * GET /api/v1/machines
@@ -40,10 +41,18 @@ export default class MachinesControleler {
   async show({ params, serialize }: HttpContext) {
     const detalle = await this.service.obtenerDetalle(Number(params.id))
 
+    const expenses = [
+      ...(await Promise.all(detalle.expenses.map((expense) => serializeExpense(expense)))),
+      ...detalle.legacyExpenses.map((expense) => ({
+        ...serializeMachineExpense(expense),
+        legacy: true as const,
+      })),
+    ]
+
     return serialize({
       machine: serializeMachine(detalle.machine, {
         totalSpent: detalle.totalSpent,
-        expenses: detalle.expenses.map((expense) => serializeMachineExpense(expense)),
+        expenses,
       }),
     })
   }
@@ -87,40 +96,55 @@ export default class MachinesControleler {
 
   /**
    * GET /api/v1/machines/:id/expenses
+   * Lista gastos unificados (`expenses`) + legacy `machine_expenses` en meta.
    */
   async indexExpenses({ params, request, serialize }: HttpContext) {
     const filters = await request.validateUsing(listGastosPorMachineValidator)
-    const { paginator, totalMonto } = await this.expenseService.listarPorMachine(
-      Number(params.id),
-      {
+    const { paginator, totalUsd, legacyExpenses, legacyTotalUsd } =
+      await this.expenseService.listarPorMachine(Number(params.id), {
         page: filters.page,
         perPage: filters.per_page,
-        category: filters.category,
-        date_desde: filters.date_desde,
-        date_hasta: filters.date_hasta,
         account_id: filters.account_id,
         unassigned: filters.unassigned,
-      }
-    )
+      })
+
+    const expenses = await Promise.all(paginator.all().map((expense) => serializeExpense(expense)))
 
     return serialize({
-      expenses: paginator.all().map((expense) => serializeMachineExpense(expense)),
+      expenses: [
+        ...expenses,
+        ...legacyExpenses.map((expense) => ({
+          ...serializeMachineExpense(expense),
+          legacy: true as const,
+        })),
+      ],
       meta: {
         ...paginator.getMeta(),
-        total_amount: totalMonto,
+        total_amount: (Number(totalUsd) + Number(legacyTotalUsd)).toFixed(4),
+        total_usd: totalUsd,
+        legacy_total_usd: legacyTotalUsd,
       },
     })
   }
 
   /**
    * POST /api/v1/machines/:id/expenses
+   * Crea un gasto de empresa vinculado a la máquina (ya no escribe en machine_expenses).
    */
   async storeExpense({ params, request, serialize }: HttpContext) {
     const payload = await request.validateUsing(createMachineExpenseValidator)
-    const expense = await this.expenseService.crear(Number(params.id), payload)
+    const expense = await this.expenseService.crearParaMachine(Number(params.id), {
+      date: payload.date,
+      description: payload.description ?? '',
+      amount: payload.amount,
+      amount_usd: payload.amount_usd,
+      currency_code: payload.currency_code,
+      entry_rate: payload.entry_rate,
+      account_id: payload.account_id,
+    })
 
     return serialize({
-      expense: serializeMachineExpense(expense),
+      expense: await serializeExpense(expense),
     })
   }
 }

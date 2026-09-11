@@ -33,6 +33,7 @@ export async function listExpenses(params: ExpenseListParams = {}) {
       per_page: params.perPage,
       account_id: params.account_id,
       unassigned: params.unassigned,
+      machine_id: params.machine_id,
     },
   })
   return data.data

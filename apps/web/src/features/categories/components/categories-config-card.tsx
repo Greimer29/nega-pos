@@ -12,6 +12,7 @@ import type { Category } from '@/features/categories/types'
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { INVENTORY_UNIT_OPTIONS } from '@/lib/inventory-units'
 import { cn } from '@/lib/utils'
+import { toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 
 export function CategoriesConfigCard() {
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -53,7 +54,7 @@ export function CategoriesConfigCard() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4">
+      <CardHeader className={toolbarHeaderClass}>
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
             <FolderTree className="size-4" />

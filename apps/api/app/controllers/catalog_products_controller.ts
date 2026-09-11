@@ -15,6 +15,7 @@ import {
   ajusteCatalogProductValidator,
   bulkAjusteCatalogProductValidator,
   replaceCatalogProductSizesValidator,
+  importCatalogProductsValidator,
 } from '#validators/catalog_product'
 import { serializeCostWarning } from '#types/cost_warning'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -146,6 +147,13 @@ export default class CatalogProductsController {
       updatedCount: result.updatedCount,
       skipped: result.skipped,
     })
+  }
+
+  async importar({ request, serialize }: HttpContext) {
+    const payload = await request.validateUsing(importCatalogProductsValidator)
+    const result = await this.service.importar(payload.item_kind, payload.rows)
+
+    return serialize(result)
   }
 
   async destroy({ params, serialize }: HttpContext) {

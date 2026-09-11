@@ -83,3 +83,23 @@ export const bulkAjusteCatalogProductValidator = vine.create({
     .minLength(1)
     .maxLength(200),
 })
+
+export const importCatalogProductsValidator = vine.create({
+  item_kind: vine.enum(CATALOG_ITEM_KINDS),
+  rows: vine
+    .array(
+      vine.object({
+        row: vine.number().min(1),
+        name: vine.string().trim().maxLength(150).optional(),
+        category: vine.string().trim().maxLength(100).optional(),
+        description: vine.string().trim().maxLength(2000).optional(),
+        sale_unit: vine.string().trim().maxLength(10).optional(),
+        sale_price_usd: vine.number().min(0).optional(),
+        cost_usd: vine.number().min(0).optional(),
+        stock_quantity: vine.number().min(0).optional(),
+        minimum_stock: vine.number().min(0).optional(),
+      })
+    )
+    .minLength(1)
+    .maxLength(200),
+})

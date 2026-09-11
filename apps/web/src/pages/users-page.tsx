@@ -15,6 +15,7 @@ import { isAppUserActionable, isAppUserListIncomplete } from '@/features/users/p
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
+import { pageHeaderClass, toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 
 const PER_PAGE = 20
 
@@ -113,15 +114,15 @@ export function UsersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+      <div className={pageHeaderClass}>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Usuarios</h1>
           <p className="text-muted-foreground text-sm">
             Gestioná accesos y permisos por módulo.
           </p>
         </div>
         <PermissionGate permission="users.manage">
-          <Button onClick={openCreateDialog}>
+          <Button onClick={openCreateDialog} className="w-fit shrink-0">
             <Plus />
             Nuevo usuario
           </Button>
@@ -137,14 +138,14 @@ export function UsersPage() {
       ) : null}
 
       <Card>
-        <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <CardHeader className={toolbarHeaderClass}>
+          <div className="min-w-0">
             <CardTitle className="text-base">Listado</CardTitle>
             <CardDescription>
               {meta ? `${meta.total} usuario${meta.total === 1 ? '' : 's'} en total` : '—'}
             </CardDescription>
           </div>
-          <div className="relative w-full sm:max-w-xs">
+          <div className="relative min-w-0 w-full sm:max-w-xs">
             <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
             <Input
               value={searchInput}

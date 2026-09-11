@@ -14,6 +14,7 @@ import type { OrderEstado } from '@/features/orders/types'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { cn } from '@/lib/utils'
+import { pageHeaderClass } from '@/components/layout/responsive-toolbar'
 
 export function CustomerDetallePage() {
   const { id } = useParams<{ id: string }>()
@@ -72,7 +73,7 @@ export function CustomerDetallePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className={pageHeaderClass}>
         <div className="space-y-2">
           <Button variant="ghost" size="sm" className="-ml-2 w-fit" asChild>
             <Link to="/customers">

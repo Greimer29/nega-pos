@@ -21,9 +21,18 @@ export async function serializeExpense(expense: Expense) {
     amountUsd,
     accountId: expense.accountId ? Number(expense.accountId) : null,
     supplierId: expense.supplierId ? Number(expense.supplierId) : null,
+    machineId: expense.machineId ? Number(expense.machineId) : null,
     invoiceNumber: expense.invoiceNumber,
     createdAt: expense.createdAt,
     updatedAt: expense.updatedAt,
     ...(expense.account ? { account: serializeAccountResumen(expense.account) } : {}),
+    ...(expense.machine
+      ? {
+          machine: {
+            id: Number(expense.machine.id),
+            name: expense.machine.name,
+          },
+        }
+      : {}),
   }
 }

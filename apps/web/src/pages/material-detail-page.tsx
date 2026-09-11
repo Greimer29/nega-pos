@@ -35,6 +35,7 @@ import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 
 import { cn } from '@/lib/utils'
+import { pageHeaderClass } from '@/components/layout/responsive-toolbar'
 
 
 
@@ -184,7 +185,7 @@ export function MaterialDetallePage() {
 
     <div className="flex flex-col gap-6">
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className={pageHeaderClass}>
 
         <div className="space-y-2">
 
@@ -248,7 +249,7 @@ export function MaterialDetallePage() {
 
         <CardHeader>
 
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className={pageHeaderClass}>
 
             <div>
 

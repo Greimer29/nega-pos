@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Plus, SlidersHorizontal } from 'lucide-react'
+import { FileSpreadsheet, Loader2, Plus, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { CatalogImportDialog } from '@/features/catalog-import/components/catalog-import-dialog'
+import type { CatalogProductImportRow } from '@/features/catalog-import/types'
 import { PermissionGate } from '@/features/permissions/components/permission-gate'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { ServiceFormDialog } from '@/features/ventas/components/service-form-dialog'
@@ -13,6 +15,7 @@ import {
 import {
   useCatalogProductsQuery,
   useDeleteCatalogProductMutation,
+  useImportCatalogProductsMutation,
 } from '@/features/ventas/hooks/use-catalog'
 import type { CatalogProduct } from '@/features/ventas/types'
 import {
@@ -23,6 +26,13 @@ import {
 import { toast } from '@/features/notifications/toast'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
+import {
+  toolbarActionsClass,
+  toolbarButtonClass,
+  toolbarButtonLabelClass,
+  toolbarContainerClass,
+  toolbarHeaderClass,
+} from '@/components/layout/responsive-toolbar'
 
 const PER_PAGE = 30
 
@@ -48,8 +58,10 @@ export function ServiciosPage() {
   const [searchInput, setSearchInput] = useState(filters.search)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editing, setEditing] = useState<CatalogProduct | null>(null)
   const deleteMutation = useDeleteCatalogProductMutation()
+  const importMutation = useImportCatalogProductsMutation()
   const activeFilterCount = filters.category ? 1 : 0
 
   useEffect(() => {
@@ -107,7 +119,7 @@ export function ServiciosPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className={cn('flex flex-col gap-6', toolbarContainerClass)}>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Servicios</h1>
         <p className="text-muted-foreground text-sm">
@@ -116,14 +128,14 @@ export function ServiciosPage() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardHeader className={toolbarHeaderClass}>
           <div className="min-w-0 space-y-1.5">
             <CardTitle className="text-base">Catálogo de servicios</CardTitle>
             <CardDescription>
               {meta ? `${meta.total} servicio${meta.total === 1 ? '' : 's'}` : 'Cargando…'}
             </CardDescription>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className={toolbarActionsClass}>
             <Button
               type="button"
               variant="outline"
@@ -144,13 +156,25 @@ export function ServiciosPage() {
             </Button>
             <PermissionGate permission="catalog.edit">
               <Button
+                variant="outline"
+                onClick={() => setImportOpen(true)}
+                className={toolbarButtonClass}
+                title="Importar servicios desde Excel"
+                aria-label="Importar servicios desde Excel"
+              >
+                <FileSpreadsheet className="size-4" />
+                <span className={toolbarButtonLabelClass}>Importar Excel</span>
+              </Button>
+            </PermissionGate>
+            <PermissionGate permission="catalog.edit">
+              <Button
                 onClick={openCreateDialog}
-                className="size-9 sm:h-9 sm:w-auto sm:px-4"
+                className={toolbarButtonClass}
                 title="Nuevo servicio"
                 aria-label="Nuevo servicio"
               >
                 <Plus />
-                <span className="hidden sm:inline">Nuevo servicio</span>
+                <span className={toolbarButtonLabelClass}>Nuevo servicio</span>
               </Button>
             </PermissionGate>
           </div>
@@ -247,6 +271,18 @@ export function ServiciosPage() {
         onSaved={() => {
           void refetch()
         }}
+      />
+      <CatalogImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        kind="SERVICE"
+        isPending={importMutation.isPending}
+        onImport={(rows) =>
+          importMutation.mutateAsync({
+            item_kind: 'SERVICE',
+            rows: rows as CatalogProductImportRow[],
+          })
+        }
       />
     </div>
   )

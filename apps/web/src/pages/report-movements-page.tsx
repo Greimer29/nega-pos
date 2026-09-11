@@ -104,7 +104,6 @@ export function ReportMovementsPage() {
           <ReportMovementsTable
             movements={movements}
             title={category.title}
-            subtitle={`${movements.length} registro${movements.length === 1 ? '' : 's'}`}
             categorySlug={category.slug}
           />
         </div>

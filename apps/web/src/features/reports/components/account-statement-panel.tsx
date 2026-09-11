@@ -184,10 +184,7 @@ export function AccountStatementPanel() {
             </div>
           </div>
 
-          <ReportMovementsTable
-            movements={data.movements}
-            subtitle={`${data.movements.length} registro${data.movements.length === 1 ? '' : 's'} en el período`}
-          />
+          <ReportMovementsTable movements={data.movements} />
         </>
       )}
     </div>

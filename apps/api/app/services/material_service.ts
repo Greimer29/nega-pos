@@ -5,6 +5,7 @@ import {
   type InventoryAdjustmentMode,
 } from '#constants/inventory_adjustment'
 import {
+  INVENTORY_UNITS,
   formatInventoryQuantityForStorage,
   normalizeInventoryQuantity,
 } from '#constants/inventory_units'
@@ -578,4 +579,111 @@ export default class MaterialService {
       active: input.active ?? true,
     }
   }
+
+  async importar(rows: MaterialImportRow[]): Promise<MaterialImportResult> {
+    const results: MaterialImportRowResult[] = []
+    let created = 0
+
+    for (const row of rows) {
+      const label = `Fila ${row.row}`
+      try {
+        const code = row.code?.trim() ?? ''
+        const name = row.name?.trim() ?? ''
+        const category = row.category?.trim() ?? ''
+        const unitRaw = row.unit?.trim().toUpperCase() ?? ''
+
+        if (!code) {
+          results.push({ row: row.row, ok: false, error: `${label}: el código es obligatorio` })
+          continue
+        }
+        if (!name) {
+          results.push({ row: row.row, ok: false, error: `${label}: el nombre es obligatorio` })
+          continue
+        }
+        if (!category) {
+          results.push({ row: row.row, ok: false, error: `${label}: la categoría es obligatoria` })
+          continue
+        }
+        if (!INVENTORY_UNITS.includes(unitRaw as (typeof INVENTORY_UNITS)[number])) {
+          results.push({
+            row: row.row,
+            ok: false,
+            error: `${label}: unidad inválida (usá UND, PAR, CAJ, ROL, SET, MTS o KG)`,
+          })
+          continue
+        }
+
+        const stock = row.stock_quantity !== undefined ? Number(row.stock_quantity) : 0
+        if (Number.isNaN(stock) || stock < 0) {
+          results.push({
+            row: row.row,
+            ok: false,
+            error: `${label}: el stock inicial no puede ser negativo`,
+          })
+          continue
+        }
+
+        await this.categoryService.asegurarActiva(category)
+
+        const material = await this.crear({
+          code,
+          name,
+          description: row.description?.trim() || undefined,
+          category,
+          unit: unitRaw as Material['unit'],
+          minimum_stock: row.minimum_stock !== undefined ? Number(row.minimum_stock) : 1,
+          location: row.location?.trim() || undefined,
+          last_purchase_price_usd:
+            row.last_purchase_price_usd !== undefined
+              ? Number(row.last_purchase_price_usd)
+              : undefined,
+        })
+
+        if (stock > 0) {
+          await this.ajustar(Number(material.id), {
+            mode: 'CARGO',
+            quantity: stock,
+            note: 'Stock inicial (importación)',
+          })
+        }
+
+        created += 1
+        results.push({ row: row.row, ok: true, id: Number(material.id) })
+      } catch (error) {
+        results.push({
+          row: row.row,
+          ok: false,
+          error: `${label}: ${error instanceof Error ? error.message : 'No se pudo crear'}`,
+        })
+      }
+    }
+
+    return { created, failed: results.filter((item) => !item.ok).length, results }
+  }
+}
+
+export type MaterialImportRow = {
+  row: number
+  code?: string
+  name?: string
+  category?: string
+  unit?: string
+  description?: string
+  stock_quantity?: number
+  minimum_stock?: number
+  location?: string
+  last_purchase_price_usd?: number
+}
+
+export type MaterialImportRowResult = {
+  row: number
+  ok: boolean
+  id?: number
+  error?: string
+}
+
+export type MaterialImportResult = {
+  created: number
+  failed: number
+  results: MaterialImportRowResult[]
 }

@@ -11,6 +11,7 @@ import { useIncomesQuery } from '@/features/purchases/hooks/use-incomes'
 import type { Income } from '@/features/purchases/types'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
+import { toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 
 const PER_PAGE = 20
 
@@ -57,12 +58,10 @@ export function PurchasesIngresosPanel() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4">
+      <CardHeader className={toolbarHeaderClass}>
         <div>
           <CardTitle className="text-base">Ingresos</CardTitle>
-          <CardDescription>
-            {meta ? `${meta.total} ingreso${meta.total === 1 ? '' : 's'}` : 'Cargando…'}
-          </CardDescription>
+          {!meta ? <CardDescription>Cargando…</CardDescription> : null}
         </div>
         <Button onClick={openCreate}>
           <Plus />
@@ -160,29 +159,33 @@ export function PurchasesIngresosPanel() {
               </table>
             </div>
 
-            {meta && meta.lastPage > 1 ? (
+            {meta ? (
               <div className="flex items-center justify-between">
                 <p className="text-muted-foreground text-sm">
-                  Página {meta.currentPage} de {meta.lastPage}
+                  Mostrando {(meta.currentPage - 1) * meta.perPage + 1}–
+                  {Math.min(meta.currentPage * meta.perPage, meta.total)} de {meta.total}
+                  {meta.lastPage > 1 ? ` · Página ${meta.currentPage} de ${meta.lastPage}` : ''}
                 </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={filters.page <= 1}
-                    onClick={() => setFilters((prev) => ({ ...prev, page: prev.page - 1 }))}
-                  >
-                    Anterior
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={filters.page >= meta.lastPage}
-                    onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
-                  >
-                    Siguiente
-                  </Button>
-                </div>
+                {meta.lastPage > 1 ? (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={filters.page <= 1}
+                      onClick={() => setFilters((prev) => ({ ...prev, page: prev.page - 1 }))}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={filters.page >= meta.lastPage}
+                      onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </>

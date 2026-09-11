@@ -1480,7 +1480,7 @@ function VentasCreateView() {
 
       <div
         className={cn(
-          'fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 xl:hidden',
+          'fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 xl:hidden md:left-56',
           cartOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
         )}
         aria-hidden={!cartOpen}
@@ -1488,7 +1488,7 @@ function VentasCreateView() {
       />
       <div
         className={cn(
-          'fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-xl transition-transform duration-300 xl:hidden',
+          'fixed inset-y-0 left-0 right-0 z-50 flex flex-col bg-white shadow-xl transition-transform duration-300 xl:hidden md:left-56',
           'pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]',
           cartOpen ? 'translate-x-0' : 'pointer-events-none translate-x-full'
         )}
@@ -1496,7 +1496,7 @@ function VentasCreateView() {
         aria-modal={cartOpen}
         aria-label="Facturación"
       >
-        <div className="min-h-0 flex-1 p-3">
+        <div className="flex h-full min-h-0 w-full flex-col p-3">
           {renderBillingCart({ onClose: () => setCartOpen(false) })}
         </div>
       </div>

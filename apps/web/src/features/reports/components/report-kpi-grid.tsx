@@ -75,18 +75,20 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
       />
       <MetricCard
         icon={Receipt}
-        label="Gastos empresa"
+        label="Gastos"
         value={formatUsd(summary.expensesUsd)}
         tone="expense"
         href={reportCategoryHref('gastos', filterSearch)}
       />
-      <MetricCard
-        icon={Wrench}
-        label="Gastos máquina"
-        value={formatUsd(summary.machineExpensesUsd)}
-        tone="machine"
-        href={reportCategoryHref('maquina', filterSearch)}
-      />
+      {Number(summary.machineExpensesUsd) > 0 ? (
+        <MetricCard
+          icon={Wrench}
+          label="Gastos máquina (histórico)"
+          value={formatUsd(summary.machineExpensesUsd)}
+          tone="machine"
+          href={reportCategoryHref('maquina', filterSearch)}
+        />
+      ) : null}
     </div>
   )
 }

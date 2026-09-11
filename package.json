@@ -8,6 +8,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "npx pnpm@9.15.4 -r typecheck",
+    "dev": "powershell -ExecutionPolicy Bypass -File scripts/start-local-dev.ps1",
     "dev:db": "docker compose up -d mysql",
     "dev:stack": "docker compose up -d",
     "dev:api": "npx pnpm@9.15.4 --filter api dev",

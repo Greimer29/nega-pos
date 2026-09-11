@@ -37,7 +37,7 @@ export const REPORT_CATEGORIES: Record<ReportMovementCategorySlug, ReportCategor
   },
   gastos: {
     slug: 'gastos',
-    title: 'Historial de gastos empresa',
+    title: 'Historial de gastos',
     subtitle: 'Egresos operativos en el período seleccionado',
     movementType: 'expense',
     apiType: 'expenses',
@@ -46,8 +46,8 @@ export const REPORT_CATEGORIES: Record<ReportMovementCategorySlug, ReportCategor
   },
   maquina: {
     slug: 'maquina',
-    title: 'Historial de gastos máquina',
-    subtitle: 'Egresos por mantenimiento y máquinas en el período seleccionado',
+    title: 'Historial de gastos máquina (histórico)',
+    subtitle: 'Registros legacy en machine_expenses; los nuevos gastos de máquina van en Gastos',
     movementType: 'machine_expense',
     apiType: 'machine_expenses',
     tone: 'machine',

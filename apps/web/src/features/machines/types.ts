@@ -11,18 +11,22 @@ export type PaginationMeta = {
   firstPage: number
 }
 
+/** Gasto unificado o legacy en ficha de máquina. */
 export type MachineExpense = {
   id: number
-  machineId: number
+  machineId?: number | null
   date: string
-  category: MachineExpenseCategory
+  category?: MachineExpenseCategory | null
   description: string
   amount: string
+  amountUsd?: string
   currencyCode?: string
+  entryRate?: string | null
   accountId: number | null
-  supplierId: number | null
-  tieneComprobante: boolean
-  notes: string | null
+  supplierId?: number | null
+  tieneComprobante?: boolean
+  notes?: string | null
+  legacy?: boolean
   createdAt: string
   updatedAt: string
   supplier?: {
@@ -33,6 +37,10 @@ export type MachineExpense = {
     id: number
     name: string
     isActive: boolean
+  }
+  machine?: {
+    id: number
+    name: string
   }
 }
 
@@ -99,15 +107,17 @@ export type MachineInput = {
   active?: boolean
 }
 
+/** Payload unificado (POST /machines/:id/expenses → expenses). */
 export type MachineExpenseInput = {
   date: string
-  category: MachineExpenseCategory
-  description: string
+  description?: string
   amount: number
   currency_code?: string
+  entry_rate?: number
+  account_id?: number | null
+  category?: MachineExpenseCategory
   supplier_id?: number
   notes?: string
-  account_id?: number | null
 }
 
 export type MachineExpenseResponse = {

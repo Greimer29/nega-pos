@@ -43,3 +43,23 @@ export const ajusteMaterialValidator = vine.create({
   quantity: vine.number().min(0),
   note: vine.string().trim().maxLength(255).optional(),
 })
+
+export const importMaterialsValidator = vine.create({
+  rows: vine
+    .array(
+      vine.object({
+        row: vine.number().min(1),
+        code: vine.string().trim().maxLength(30).optional(),
+        name: vine.string().trim().maxLength(150).optional(),
+        category: vine.string().trim().maxLength(100).optional(),
+        unit: vine.string().trim().maxLength(10).optional(),
+        description: vine.string().trim().maxLength(2000).optional(),
+        stock_quantity: vine.number().min(0).optional(),
+        minimum_stock: vine.number().min(0).optional(),
+        location: vine.string().trim().maxLength(100).optional(),
+        last_purchase_price_usd: vine.number().min(0).optional(),
+      })
+    )
+    .minLength(1)
+    .maxLength(200),
+})

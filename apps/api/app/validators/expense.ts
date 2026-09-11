@@ -10,6 +10,7 @@ const expenseFields = {
   currency_code: vine.string().trim().toUpperCase().fixedLength(3).optional(),
   entry_rate: vine.number().positive().optional(),
   account_id: vine.number().min(1).nullable().optional(),
+  machine_id: vine.number().min(1).nullable().optional(),
 }
 
 export const createExpenseValidator = vine.create({
@@ -25,6 +26,7 @@ export const listExpensesValidator = vine.create({
   per_page: vine.number().min(1).max(100).optional(),
   account_id: vine.number().min(1).optional(),
   unassigned: vine.boolean().optional(),
+  machine_id: vine.number().min(1).optional(),
 })
 
 export type ExpenseValidatorPayload = {
@@ -35,6 +37,7 @@ export type ExpenseValidatorPayload = {
   currency_code?: string
   entry_rate?: number
   account_id?: number | null
+  machine_id?: number | null
 }
 
 export function resolveExpenseAmount(payload: ExpenseValidatorPayload): number {

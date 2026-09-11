@@ -1,12 +1,11 @@
-import { MONETARY_REGISTRATION_BASE_MESSAGE } from '#utils/monetary_registration'
 import Currency from '#models/currency'
 import MachineExpense from '#models/machine_expense'
 import Machine from '#models/machine'
-import Supplier from '#models/supplier'
 import User from '#models/user'
 import MachineService from '#services/machine_service'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
+import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
 
@@ -181,9 +180,11 @@ test.group('Machines API', (group) => {
     })
   })
 
-  test('POST /api/v1/machines/:id/expenses creates expense', async ({ client }) => {
+  test('POST /api/v1/machines/:id/expenses creates company expense with machine_id', async ({
+    client,
+    assert,
+  }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const supplier = await Supplier.create({ name: 'Proveedor X', active: true })
     const machine = await Machine.create({
       name: 'Collaretera',
       type: 'COVERSTITCH',
@@ -199,7 +200,6 @@ test.group('Machines API', (group) => {
         category: 'REPAIR',
         description: 'Motor',
         amount: 500,
-        supplier_id: Number(supplier.id),
       })
 
     response.assertStatus(200)
@@ -207,16 +207,25 @@ test.group('Machines API', (group) => {
       data: {
         expense: {
           amount: '500.0000',
-          category: 'REPAIR',
+          amountUsd: '500.0000',
+          machineId: Number(machine.id),
+          description: 'Motor',
         },
       },
     })
+
+    const expenseRows = await db.from('expenses').where('machine_id', Number(machine.id))
+    assert.lengthOf(expenseRows, 1)
+    const legacyRows = await db.from('machine_expenses').where('machine_id', Number(machine.id))
+    assert.lengthOf(legacyRows, 0)
   })
 
-  test('POST /api/v1/machines/:id/expenses rejects VES currency with USD registration message', async ({
+  test('POST /api/v1/machines/:id/expenses accepts VES with entry_rate', async ({
     client,
+    assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
+    await db.from('currencies').where('code', 'VES').update({ rate_per_usd: '100.0000' })
     const machine = await Machine.create({
       name: 'Collaretera VES',
       type: 'COVERSTITCH',
@@ -229,17 +238,45 @@ test.group('Machines API', (group) => {
       .loginAs(user)
       .json({
         date: '2026-05-12',
-        category: 'REPAIR',
         description: 'Motor',
-        amount: 500,
+        amount: 400,
         currency_code: 'VES',
+        entry_rate: 40,
       })
 
-    response.assertStatus(422)
+    response.assertStatus(200)
+    assert.equal(response.body().data.expense.currencyCode, 'VES')
+    assert.equal(response.body().data.expense.amountUsd, '10.0000')
+    assert.equal(response.body().data.expense.machineId, Number(machine.id))
+  })
+
+  test('POST /api/v1/machines/:id/expenses defaults description from machine name', async ({
+    client,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const machine = await Machine.create({
+      name: 'Overlock Pro',
+      type: 'OVERLOCK',
+      status: 'OPERATIONAL',
+      active: true,
+    })
+
+    const response = await client
+      .post(`/api/v1/machines/${machine.id}/expenses`)
+      .loginAs(user)
+      .json({
+        date: '2026-05-12',
+        description: '',
+        amount: 25,
+      })
+
+    response.assertStatus(200)
     response.assertBodyContains({
-      error: {
-        code: 'MONEDA_REGISTRO_USD_REQUERIDA',
-        message: `${MONETARY_REGISTRATION_BASE_MESSAGE} (XAU).`,
+      data: {
+        expense: {
+          description: 'Gasto máquina — Overlock Pro',
+          machineId: Number(machine.id),
+        },
       },
     })
   })

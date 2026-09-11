@@ -20,6 +20,7 @@ import {
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
+import { pageHeaderClass } from '@/components/layout/responsive-toolbar'
 
 type DashboardChartState = {
   chartMode: DashboardChartMode
@@ -101,12 +102,12 @@ export function DashboardPage() {
 
   return (
     <div className={dashboardUi.page}>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+      <div className={pageHeaderClass}>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Dashboard</h1>
           <p className="text-sm text-neutral-500">Resumen del día — {todayLabel()}</p>
         </div>
-        <Button variant="outline" size="sm" asChild title="Cierre diario">
+        <Button variant="outline" size="sm" asChild title="Cierre diario" className="w-fit shrink-0">
           <Link to="/dashboard/cierre-diario">
             <Receipt />
             Cierre diario

@@ -9,8 +9,10 @@ import {
   uploadCatalogImage,
   ajustarStockProducto,
   ajustarStockProductoMasivo,
+  importCatalogProducts,
   type BulkAjusteStockProductoInput,
 } from '@/features/ventas/services/catalog-service'
+import { categoriesQueryKey } from '@/features/categories/hooks/use-categories'
 import type { CatalogListParams, CatalogProductInput } from '@/features/ventas/types'
 import { invalidateStockMovement } from '@/lib/query-invalidation'
 
@@ -118,6 +120,19 @@ export function useBulkAjusteStockProductoMutation() {
     mutationFn: (payload: BulkAjusteStockProductoInput) => ajustarStockProductoMasivo(payload),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['catalog-products'] })
+      invalidateStockMovement(queryClient)
+    },
+  })
+}
+
+export function useImportCatalogProductsMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: importCatalogProducts,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['catalog-products'] })
+      void queryClient.invalidateQueries({ queryKey: categoriesQueryKey })
       invalidateStockMovement(queryClient)
     },
   })

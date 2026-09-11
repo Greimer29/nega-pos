@@ -17,6 +17,7 @@ export default class ExpensesController {
       perPage: filters.per_page,
       account_id: filters.account_id,
       unassigned: filters.unassigned,
+      machine_id: filters.machine_id,
     })
 
     const expenses = await Promise.all(paginator.all().map((expense) => serializeExpense(expense)))

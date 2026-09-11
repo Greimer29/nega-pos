@@ -598,9 +598,16 @@ export default class DashboardService {
 
     const expenseRows = await db
       .from('expenses')
-      .whereIn('date', dates)
-      .select('id', 'description', 'amount_usd as amountUsd', 'currency_code as currencyCode')
-      .orderBy('amount_usd', 'desc')
+      .leftJoin('machines', 'machines.id', 'expenses.machine_id')
+      .whereIn('expenses.date', dates)
+      .select(
+        'expenses.id',
+        'expenses.description',
+        'expenses.amount_usd as amountUsd',
+        'expenses.currency_code as currencyCode',
+        'machines.name as machineName'
+      )
+      .orderBy('expenses.amount_usd', 'desc')
 
     const machineRows = await db
       .from('machine_expenses')
@@ -625,7 +632,7 @@ export default class DashboardService {
           kind: 'expense' as const,
           description: String(row.description),
           amountUsd: amountUsd.toFixed(4),
-          machineName: null,
+          machineName: row.machineName ? String(row.machineName) : null,
           category: null,
         }
       }),
@@ -662,9 +669,16 @@ export default class DashboardService {
 
     const expenseRows = await db
       .from('expenses')
-      .where('date', date)
-      .select('id', 'description', 'amount_usd as amountUsd', 'currency_code as currencyCode')
-      .orderBy('amount_usd', 'desc')
+      .leftJoin('machines', 'machines.id', 'expenses.machine_id')
+      .where('expenses.date', date)
+      .select(
+        'expenses.id',
+        'expenses.description',
+        'expenses.amount_usd as amountUsd',
+        'expenses.currency_code as currencyCode',
+        'machines.name as machineName'
+      )
+      .orderBy('expenses.amount_usd', 'desc')
 
     const machineRows = await db
       .from('machine_expenses')
@@ -689,7 +703,7 @@ export default class DashboardService {
           kind: 'expense' as const,
           description: String(row.description),
           amountUsd: amountUsd.toFixed(4),
-          machineName: null,
+          machineName: row.machineName ? String(row.machineName) : null,
           category: null,
         }
       }),

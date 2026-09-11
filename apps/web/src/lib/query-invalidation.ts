@@ -50,9 +50,10 @@ export function invalidatePurchasesFinancials(queryClient: QueryClient) {
   void queryClient.invalidateQueries({ queryKey: ['orders'] })
 }
 
-/** Gastos de empresa. */
+/** Gastos de empresa (pueden vincular máquina). */
 export function invalidateExpensesFinancials(queryClient: QueryClient) {
   invalidatePurchasesHub(queryClient)
+  void queryClient.invalidateQueries({ queryKey: ['machines'] })
   invalidateDashboardAndReports(queryClient)
 }
 

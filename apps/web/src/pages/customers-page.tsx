@@ -17,6 +17,7 @@ import { notifyApiError, QueryErrorState, EmptyListState } from '@/features/noti
 import { toast } from '@/features/notifications/toast'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
+import { pageHeaderClass, toolbarActionsClass, toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 
 const PER_PAGE = 20
 
@@ -110,30 +111,30 @@ export function CustomersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className={pageHeaderClass}>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Clientes</h1>
           <p className="text-muted-foreground text-sm">
             Gestioná los clientes y consultá su historial de pedidos.
           </p>
         </div>
-        <Button onClick={openCreateDialog}>
+        <Button onClick={openCreateDialog} className="w-fit shrink-0">
           <Plus />
           Nuevo cliente
         </Button>
       </div>
 
       <Card>
-        <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <CardHeader className={toolbarHeaderClass}>
+          <div className="min-w-0">
             <CardTitle className="text-base">Listado</CardTitle>
             <CardDescription>
               {meta ? `${meta.total} cliente${meta.total === 1 ? '' : 's'} en total` : 'Cargando…'}
             </CardDescription>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className={toolbarActionsClass}>
             <select
-              className="border-input bg-background flex h-9 min-w-[140px] rounded-md border px-3 text-sm"
+                className="border-input bg-background flex h-9 min-w-0 w-full rounded-md border px-3 text-sm sm:w-auto sm:min-w-[140px]"
               value={filters.type}
               onChange={(e) => {
                 const type = e.target.value as CustomerTipo | ''

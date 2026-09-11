@@ -20,6 +20,7 @@ import Material from '#models/material'
 import CatalogProduct from '#models/catalog_product'
 import CompraCreditoSinVencimientoException from '#exceptions/compra_credito_sin_vencimiento_exception'
 import InventoryMovement from '#models/inventory_movement'
+import ProductInventoryMovement from '#models/product_inventory_movement'
 import { isCatalogService } from '#constants/catalog_item_kind'
 import SupplierService from '#services/supplier_service'
 import AccountService from '#services/account_service'
@@ -246,10 +247,40 @@ export default class PurchaseService {
 
   async eliminar(id: number): Promise<{ id: number; eliminado: true }> {
     const purchase = await this.obtener(id)
-    this.assertBorrador(purchase)
 
-    await purchase.delete()
-    return { id: Number(purchase.id), eliminado: true }
+    if (purchase.status === 'CONFIRMED') {
+      throw new PurchaseNoEditableException(
+        'No se puede eliminar una compra confirmada. Primero devolvela o anulala.'
+      )
+    }
+
+    if (purchase.status !== 'DRAFT' && purchase.status !== 'VOIDED') {
+      throw new PurchaseNoEditableException()
+    }
+
+    if (purchase.status === 'DRAFT') {
+      await purchase.delete()
+      return { id: Number(purchase.id), eliminado: true }
+    }
+
+    // VOIDED: desenganchar movimientos de inventario (RESTRICT) y borrar el registro.
+    return db.transaction(async (trx) => {
+      const items = await PurchaseItem.query({ client: trx }).where('purchaseId', id)
+      const itemIds = items.map((item) => Number(item.id))
+
+      if (itemIds.length > 0) {
+        await InventoryMovement.query({ client: trx })
+          .whereIn('purchaseItemId', itemIds)
+          .update({ purchaseItemId: null })
+        await ProductInventoryMovement.query({ client: trx })
+          .whereIn('purchaseItemId', itemIds)
+          .update({ purchaseItemId: null })
+      }
+
+      purchase.useTransaction(trx)
+      await purchase.delete()
+      return { id: Number(purchase.id), eliminado: true }
+    })
   }
 
   async agregarItem(purchaseId: number, input: PurchaseItemInput): Promise<PurchaseItem> {
@@ -643,6 +674,8 @@ export default class PurchaseService {
 
       purchase.status = 'VOIDED'
       purchase.voidedAt = DateTime.now()
+      // Anulada: ya no hay CxP ni "por pagar".
+      purchase.balanceUsd = '0.0000'
       purchase.useTransaction(trx)
       await purchase.save()
 

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Loader2, Plus } from 'lucide-react'
+import { ArrowLeft, FileSpreadsheet, Loader2, Plus } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/features/auth/hooks/use-auth'
+import { CatalogImportDialog } from '@/features/catalog-import/components/catalog-import-dialog'
+import type { MaterialImportRow } from '@/features/catalog-import/types'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { MaterialDeleteDialog } from '@/features/materials/components/material-delete-dialog'
 import { MaterialFiltersBar } from '@/features/materials/components/material-filters-bar'
@@ -13,13 +15,22 @@ import { MaterialsFormulasPanel } from '@/features/materials/components/material
 import type { MaterialSortBy } from '@/features/materials/constants'
 import {
   useDeleteMaterialMutation,
+  useImportMaterialsMutation,
   useMaterialsQuery,
 } from '@/features/materials/hooks/use-materials'
 import type { Material, MaterialCategoria, MaterialStatusFilter } from '@/features/materials/types'
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
+import { PermissionGate } from '@/features/permissions/components/permission-gate'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
+import {
+  pageHeaderClass,
+  toolbarActionsClass,
+  toolbarButtonClass,
+  toolbarButtonLabelClass,
+  toolbarContainerClass,
+} from '@/components/layout/responsive-toolbar'
 
 const PER_PAGE = 30
 
@@ -54,9 +65,11 @@ export function MaterialsPage() {
   )
   const [searchInput, setSearchInput] = useState(filters.search)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [materialToDelete, setMaterialToDelete] = useState<Material | null>(null)
   const deleteMutation = useDeleteMaterialMutation()
+  const importMutation = useImportMaterialsMutation()
   const { data: categories = [] } = useActiveCategoriesQuery()
 
   useEffect(() => {
@@ -133,9 +146,9 @@ export function MaterialsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <div className={cn('flex flex-col gap-6', toolbarContainerClass)}>
+      <div className={pageHeaderClass}>
+        <div className="min-w-0">
           <Button variant="ghost" size="sm" className="mb-2 w-fit px-0" asChild>
             <Link to="/productos">
               <ArrowLeft className="size-4" />
@@ -148,10 +161,29 @@ export function MaterialsPage() {
           </p>
         </div>
         {tab === 'materiales' ? (
-          <Button onClick={openCreateDialog}>
-            <Plus />
-            Nuevo material
-          </Button>
+          <div className={toolbarActionsClass}>
+            <PermissionGate permission="materials.edit">
+              <Button
+                variant="outline"
+                onClick={() => setImportOpen(true)}
+                className={toolbarButtonClass}
+                title="Importar materiales desde Excel"
+                aria-label="Importar materiales desde Excel"
+              >
+                <FileSpreadsheet className="size-4" />
+                <span className={toolbarButtonLabelClass}>Importar Excel</span>
+              </Button>
+            </PermissionGate>
+            <Button
+              onClick={openCreateDialog}
+              className={toolbarButtonClass}
+              title="Nuevo material"
+              aria-label="Nuevo material"
+            >
+              <Plus />
+              <span className={toolbarButtonLabelClass}>Nuevo material</span>
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -280,6 +312,13 @@ export function MaterialsPage() {
         }
         isPending={deleteMutation.isPending}
         onConfirm={() => void confirmDelete()}
+      />
+      <CatalogImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        kind="MATERIAL"
+        isPending={importMutation.isPending}
+        onImport={(rows) => importMutation.mutateAsync(rows as MaterialImportRow[])}
       />
     </div>
   )
