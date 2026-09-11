@@ -477,7 +477,7 @@ catalog_products ──< product_inventory_movements
 `POST /api/v1/suppliers/:id/invoices` (permiso `suppliers.payments`):
 
 - **Contado** (`is_credit: false`): crea un `expense` con `supplier_id`, `account_id` obligatorio, `invoice_number` opcional. No toca inventario. Aparece en Gastos y en el estado de cuenta del proveedor.
-- **Crédito** (`is_credit: true`): crea un `purchase` ya `CONFIRMED` con `affects_inventory: false`, sin ítems, `balance_usd = total`. El **Abono** existente baja ese saldo. No toca inventario. En Reportes/Dashboard aparece como **cuenta por pagar** (informativo; no afecta flujo de caja hasta el abono).
+- **Crédito** (`is_credit: true`): crea un `purchase` ya `CONFIRMED` con `affects_inventory: false`, sin ítems, `balance_usd = total`, `account_id` null al alta. El **Abono** baja ese saldo y, si el abono trae `account_id`, **copia esa cuenta a la compra** (detalle, listados y filtro de reportes “por cuenta” / “sin cuenta”). No toca inventario. En Reportes/Dashboard aparece como **cuenta por pagar** (informativo; no afecta flujo de caja hasta el abono).
 
 ### Catálogo, fórmulas y tallas
 

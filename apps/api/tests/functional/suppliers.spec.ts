@@ -1,3 +1,4 @@
+import Account from '#models/account'
 import Purchase from '#models/purchase'
 import Supplier from '#models/supplier'
 import User from '#models/user'
@@ -374,5 +375,53 @@ test.group('Suppliers API', (group) => {
     await purchase.refresh()
     assert.equal(purchase.balanceUsd, '10.0000')
     assert.equal(purchase.amountPaidUsd, '0.0000')
+  })
+
+  test('POST /api/v1/suppliers/:id/payments copies account_id onto the credit purchase', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const account = await Account.create({
+      name: 'Greimer Ops',
+      description: null,
+      isActive: true,
+    })
+
+    const supplier = await Supplier.create({
+      name: 'Proveedor Cuenta Abono',
+      active: true,
+    })
+
+    const purchase = await Purchase.create({
+      supplierId: supplier.id,
+      accountId: null,
+      date: DateTime.now().minus({ days: 2 }),
+      invoiceNumber: 'F-CTA',
+      totalUsd: '21.3200',
+      totalBs: '0.00',
+      status: 'CONFIRMED',
+      isCredit: true,
+      affectsInventory: false,
+      creditDueDate: DateTime.fromISO('2026-10-15'),
+      balanceUsd: '21.3200',
+      amountPaidUsd: '0.0000',
+    })
+
+    const response = await client
+      .post(`/api/v1/suppliers/${supplier.id}/payments`)
+      .loginAs(user)
+      .json({
+        purchase_id: purchase.id,
+        account_id: account.id,
+        amount_usd: 21.32,
+        date: '2026-10-15',
+      })
+
+    response.assertStatus(201)
+
+    await purchase.refresh()
+    assert.equal(Number(purchase.balanceUsd), 0)
+    assert.equal(Number(purchase.accountId), Number(account.id))
   })
 })
