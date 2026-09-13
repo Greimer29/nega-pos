@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FileText, FolderOpen, Loader2, Plus, Search, ShoppingCart, SlidersHorizontal } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { BarcodeScanButton } from '@/components/barcode-scan-button'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -61,6 +62,12 @@ import { toast } from '@/features/notifications/toast'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { isValidEntityId } from '@/lib/route-id'
 import { normalizeInventoryQuantity } from '@/lib/inventory-units'
+import {
+  lookupInventoryBarcode,
+  lookupMaterialByBarcode,
+  lookupProductByBarcode,
+  normalizeBarcodeInput,
+} from '@/lib/barcode-scan'
 import { VentasPaymentMethodDialog } from '@/features/ventas/components/ventas-payment-method-dialog'
 import { useCurrentSalesShiftQuery } from '@/features/ventas/hooks/use-sales-shifts'
 import { SaleLineFormulaDialog } from '@/features/ventas/components/sale-line-formula-dialog'
@@ -104,6 +111,7 @@ type CatalogSource = 'products' | 'materials' | 'services'
 type VentasCatalogFilters = {
   source: CatalogSource
   search: string
+  barcode: string
   category: string
   size: string
   page: number
@@ -112,6 +120,7 @@ type VentasCatalogFilters = {
 const DEFAULT_VENTAS_CATALOG_FILTERS: VentasCatalogFilters = {
   source: 'products',
   search: '',
+  barcode: '',
   category: '',
   size: '',
   page: 1,
@@ -241,7 +250,8 @@ function VentasCreateView() {
     {
       page,
       perPage: CATALOG_PER_PAGE,
-      search: catalogFilters.search || undefined,
+      search: catalogFilters.barcode ? undefined : catalogFilters.search || undefined,
+      barcode: catalogFilters.barcode || undefined,
       category: category || undefined,
       size: catalogFilters.size || undefined,
       active: true,
@@ -280,7 +290,8 @@ function VentasCreateView() {
     {
       page,
       perPage: CATALOG_PER_PAGE,
-      search: catalogFilters.search || undefined,
+      search: catalogFilters.barcode ? undefined : catalogFilters.search || undefined,
+      barcode: catalogFilters.barcode || undefined,
       category: category || undefined,
       status: 'active',
       sortBy: 'name',
@@ -300,11 +311,21 @@ function VentasCreateView() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const nextSearch = searchInput.trim()
-      setCatalogFilters((prev) => ({
-        ...prev,
-        search: nextSearch,
-        page: nextSearch === prev.search ? prev.page : 1,
-      }))
+      setCatalogFilters((prev) => {
+        if (!nextSearch) {
+          if (!prev.search && !prev.barcode) return prev
+          return { ...prev, search: '', barcode: '', page: 1 }
+        }
+        if (prev.barcode && nextSearch === prev.barcode) {
+          return prev
+        }
+        return {
+          ...prev,
+          search: nextSearch,
+          barcode: '',
+          page: nextSearch === prev.search ? prev.page : 1,
+        }
+      })
     }, 300)
     return () => window.clearTimeout(timer)
   }, [searchInput, setCatalogFilters])
@@ -613,6 +634,69 @@ function VentasCreateView() {
         },
       ]
     })
+  }
+
+  async function filterCatalogByBarcode(rawCode: string) {
+    const code = normalizeBarcodeInput(rawCode)
+    if (!code) return
+
+    try {
+      if (catalogSource === 'products') {
+        const product = await lookupProductByBarcode(code)
+        if (!product) {
+          toast.error('Código no encontrado')
+          return
+        }
+        setSearchInput(code)
+        setCatalogFilters((prev) => ({
+          ...prev,
+          search: code,
+          barcode: code,
+          page: 1,
+        }))
+        return
+      }
+
+      if (catalogSource === 'materials') {
+        const material = await lookupMaterialByBarcode(code)
+        if (!material) {
+          toast.error('Código no encontrado')
+          return
+        }
+        setSearchInput(code)
+        setCatalogFilters((prev) => ({
+          ...prev,
+          search: code,
+          barcode: code,
+          page: 1,
+        }))
+        return
+      }
+
+      toast.error('Código no encontrado')
+    } catch (error) {
+      notifyApiError(error)
+    }
+  }
+
+  async function addToCartByBarcode(rawCode: string) {
+    const code = normalizeBarcodeInput(rawCode)
+    if (!code) return
+
+    try {
+      const hit = await lookupInventoryBarcode(code)
+      if (!hit) {
+        toast.error('Código no encontrado')
+        return
+      }
+      if (hit.kind === 'product') {
+        addToCart(hit.product)
+        return
+      }
+      addMaterialToCart(hit.material)
+    } catch (error) {
+      notifyApiError(error)
+    }
   }
 
   function openEditProduct(product: CatalogProduct) {
@@ -966,17 +1050,24 @@ function VentasCreateView() {
         onBillingMethodChange={setBillingMethod}
         onClose={options?.onClose}
         headerAction={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            title="Cargar factura"
-            aria-label="Cargar factura"
-            onClick={() => setLoadDraftOpen(true)}
-          >
-            <FolderOpen className="size-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <BarcodeScanButton
+              className="size-8"
+              title="Escanear para agregar al carrito"
+              onScan={(code) => void addToCartByBarcode(code)}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              title="Cargar factura"
+              aria-label="Cargar factura"
+              onClick={() => setLoadDraftOpen(true)}
+            >
+              <FolderOpen className="size-4" />
+            </Button>
+          </div>
         }
       >
         <div className="space-y-3 pt-1">
@@ -1228,8 +1319,18 @@ function VentasCreateView() {
                   }
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return
+                    e.preventDefault()
+                    if (catalogSource === 'services') return
+                    const code = searchInput.trim()
+                    if (code) void filterCatalogByBarcode(code)
+                  }}
                   className="min-w-0 flex-1 bg-white md:max-w-xs"
                 />
+                {catalogSource !== 'services' ? (
+                  <BarcodeScanButton onScan={(code) => void filterCatalogByBarcode(code)} />
+                ) : null}
               </div>
               <div
                 id="ventas-catalog-filters"

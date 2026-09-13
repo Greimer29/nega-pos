@@ -37,7 +37,7 @@ const DEFAULT_TYPES: ReportTypeFilters = {
   incomes: true,
   purchases: true,
   expenses: true,
-  machine_expenses: true,
+  machine_expenses: false,
 }
 
 function defaultAccountStatementFilters(): AccountStatementFilters {
@@ -92,7 +92,9 @@ export function AccountStatementPanel() {
 
   const queryParams = useMemo(() => {
     const selectedTypes = (
-      Object.entries(types) as Array<[keyof typeof types, boolean]>
+      Object.entries({ ...types, machine_expenses: false }) as Array<
+        [keyof typeof types, boolean]
+      >
     )
       .filter(([, enabled]) => enabled)
       .map(([key]) => key)

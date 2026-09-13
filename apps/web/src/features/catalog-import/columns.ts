@@ -38,6 +38,12 @@ export function getImportColumns(kind: CatalogImportKind): CatalogImportColumn[]
         required: false,
         hint: 'Último precio de compra',
       },
+      {
+        key: 'barcode',
+        header: 'codigo_barras',
+        required: false,
+        hint: 'Código de barras o QR (único)',
+      },
     ]
   }
 
@@ -50,6 +56,12 @@ export function getImportColumns(kind: CatalogImportKind): CatalogImportColumn[]
     { key: 'cost_usd', header: 'costo', required: false, hint: 'Costo. Por defecto 0' },
     { key: 'stock_quantity', header: 'stock', required: false, hint: 'Stock inicial. Por defecto 0' },
     { key: 'minimum_stock', header: 'stock_minimo', required: false, hint: 'Por defecto 0' },
+    {
+      key: 'barcode',
+      header: 'codigo_barras',
+      required: false,
+      hint: 'Código de barras o QR (único)',
+    },
   ]
 }
 

@@ -237,6 +237,7 @@ Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca produc
 - CORS: setear `MOBILE_APP_ORIGIN=https://localhost` en la API (Railway / `.env`)
 - Build de release: `$env:VITE_API_URL="https://tu-api"; pnpm build:mobile` luego `pnpm --filter mobile build:apk:release`
 - Actualizaciones: misma card **Aplicación** descarga el APK; Android **no** permite silent replace — el usuario confirma la instalación desde Descargas.
+- **Escáner de código de barras:** `@capacitor/barcode-scanner` ^2.2.6 (oficial Ionic, compatible con Capacitor 7) + `@capacitor/core` en `apps/web` y `apps/mobile`. Abre la cámara en Android nativo (permiso `CAMERA`) y también en el navegador/desktop vía la UI web del plugin. El lector USB sigue escribiendo en el input de búsqueda y confirma con Enter.
 - Detalle: [`apps/mobile/README.md`](apps/mobile/README.md)
 - Impresión térmica es **exclusiva del desktop**; la config de impresión se ve/edita también desde el navegador vía API
 
@@ -399,7 +400,7 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda b
 | `categories` | `name`, `active`, `sort_order` |
 | `formulas` | `name`, `active` |
 | `formula_materials` | `formula_id`, `material_id`, `quantity` |
-| `catalog_products` | `name`, `category`, `item_kind` (`PRODUCT`\|`SERVICE`, default `PRODUCT`), `sale_unit`, `formula_id?`, `sale_price_usd`, `cost_usd`, `stock_quantity`, `minimum_stock`, `active`. Los `SERVICE` no usan inventario/fórmula/tallas (`stock`/`minimum` en 0, `formula_id` null). |
+| `catalog_products` | `name`, `category`, `item_kind` (`PRODUCT`\|`SERVICE`, default `PRODUCT`), `sale_unit`, `formula_id?`, `sale_price_usd`, `cost_usd`, `stock_quantity`, `minimum_stock`, `barcode?` (string ≤64, unique por tabla cuando no es null; solo aplica a `PRODUCT`), `active`. Los `SERVICE` no usan inventario/fórmula/tallas (`stock`/`minimum` en 0, `formula_id` null) ni barcode. |
 | `catalog_product_sizes` | Tallas opcionales por producto: `catalog_product_id`, `size` (texto libre ≤20), `stock_quantity`; UNIQUE `(catalog_product_id, size)`. Si hay filas, el stock del producto es la suma de tallas. Incompatible con `formula_id`. |
 
 Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
@@ -408,7 +409,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 
 | Tabla | Campos clave |
 |-------|--------------|
-| `materials` | `code`, `name`, `category` (FABRIC/THREAD/…), `unit`, `minimum_stock`, `default_supplier_id`, precios, `active` |
+| `materials` | `code`, `name`, `category` (FABRIC/THREAD/…), `unit`, `minimum_stock`, `default_supplier_id`, precios, `barcode?` (string ≤64, unique por tabla cuando no es null; no reemplaza `code`), `active` |
 | `inventory_movements` | `material_id`, `type`, `quantity`, refs a compra/pedido/venta |
 | `product_inventory_movements` | `catalog_product_id`, `type`, `quantity`, refs, `created_by_user_id` |
 
@@ -439,7 +440,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 | Tabla | Campos clave |
 |-------|--------------|
 | `sales_shifts` | `opened_at`, `closed_at`, `opened_by_user_id`, `closed_by_user_id`, `status` (OPEN/CLOSED), `notes` |
-| `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), `discount_usd` (descuento de factura, default 0), `total_usd` (subtotal de líneas − descuento) |
+| `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), `discount_usd` (descuento de factura, default 0), `total_usd` (subtotal de líneas − descuento), `notes?` (nota de factura financiera / carga manual) |
 | `sale_lines` | `catalog_product_id?`, `catalog_product_size_id?`, `size?` (snapshot), `material_id?`, `description`, `kitchen_note?` (indicaciones de cocina para comanda), cantidades y precios |
 
 **Turnos de venta:** solo puede haber un turno `OPEN`. Confirmar venta (`POST /sales/:id/confirm` o `POST /sales` con `confirm: true`) exige turno abierto; sin turno → `TURNO_NO_ABIERTO` (409). La venta confirmada guarda `sales.sales_shift_id`.
@@ -473,7 +474,7 @@ catalog_products ──< product_inventory_movements
 ### Compras (`purchase_service.ts`)
 
 1. **Crear borrador** (`status: DRAFT`) con proveedor y cuenta opcional.
-2. **Agregar ítems** — material y/o producto de catálogo (`PRODUCT`; productos con fórmula y servicios no admiten compra directa de stock).
+2. **Agregar ítems** — material y/o producto de catálogo (`PRODUCT`; productos con fórmula y servicios no admiten compra directa de stock). En borrador, el botón **Escanear** (Android) o un código ya conocido busca por `barcode` exacto del tab activo (materiales o productos); si no hay match → toast «Código no encontrado»; si el ítem ya está en la lista → suma 1. Compras v1 no desglosan por talla.
 3. **Confirmar** (`POST .../confirm`):
    - Requiere `invoice_number` y al menos un ítem (salvo `affects_inventory = false`).
    - Si `affects_inventory` es true (default): por cada ítem material → movimiento `PURCHASE_IN` + actualización de `last_purchase_price_usd`; por cada ítem producto sin fórmula → `PURCHASE_IN` en `product_inventory_movements` + `cost_usd`.
@@ -488,6 +489,14 @@ catalog_products ──< product_inventory_movements
 - **Contado** (`is_credit: false`): crea un `expense` con `supplier_id`, `account_id` obligatorio, `invoice_number` opcional. No toca inventario. Aparece en Gastos y en el estado de cuenta del proveedor.
 - **Crédito** (`is_credit: true`): crea un `purchase` ya `CONFIRMED` con `affects_inventory: false`, sin ítems, `balance_usd = total`, `account_id` null al alta. El **Abono** baja ese saldo y, si el abono trae `account_id`, **copia esa cuenta a la compra** (detalle, listados y filtro de reportes “por cuenta” / “sin cuenta”). No toca inventario. En Reportes/Dashboard aparece como **cuenta por pagar** (informativo; no afecta flujo de caja hasta el abono).
 
+### Factura desde ficha de cliente (`customer_invoice_service.ts`)
+
+`POST /api/v1/customers/:id/invoices` (permiso `customers.payments`):
+
+- **Contado** (`is_credit: false`): crea una `sale` `COMPLETED` con `payment_type=CASH`, sin líneas, `amount_paid_usd = total_usd`, `payment_method_code` obligatorio. No toca inventario ni exige turno abierto (`sales_shift_id` null). Aparece en el historial del estado de cuenta y suma a ventas/caja vía `total_usd`.
+- **Crédito** (`is_credit: true`): crea una `sale` `COMPLETED` con `payment_type=CREDIT`, sin líneas, `balance_usd = total`, requiere cliente con `credit_days > 0`. Vencimiento = `credit_due_date` del payload o fecha + días de crédito. El **Abono** baja ese saldo como en ventas a crédito del POS. Nota opcional en `sales.notes`.
+- UI: botón **Factura** en estado de cuenta / ficha del cliente; las ventas sin líneas se etiquetan «Sin ítems».
+
 ### Catálogo, fórmulas y tallas
 
 - `item_kind`:
@@ -496,9 +505,10 @@ catalog_products ──< product_inventory_movements
 - Producto **con** `formula_id`: el stock de venta/pedido se descuenta de **materiales** según `formula_materials`, no de `stock_quantity`. No admite tallas. No aplica a `SERVICE`.
 - Producto **sin** fórmula: stock en `catalog_products.stock_quantity` vía `product_inventory_movements`.
 - Producto **con tallas** (`catalog_product_sizes`): stock por talla; `stock_quantity` del producto = suma. Ventas/pedidos exigen `catalog_product_size_id` o `size`; al confirmar se descuenta la talla y el total global (movimiento `SALE_OUT` con nota `… talla {size}`). Compras v1 no desglosan por talla. No aplica a `SERVICE`.
-- API: create/update aceptan `sizes[]` y `item_kind`; `PUT /catalog-products/:id/sizes` reemplaza el set (`[]` limpia). Listado `?size=` filtra productos con esa talla y stock > 0. Serialización siempre incluye `has_sizes` + `sizes[]`.
+- **Código de barras (`barcode`):** campo opcional adicional en productos físicos y materiales (no reemplaza el id interno del producto ni el `code` del material). Normalización: trim; vacío → `null`; máx. 64. Unique **por tabla** cuando no es null (varios NULL permitidos). Unicidad no se comparte entre `catalog_products` y `materials`. Los `SERVICE` ignoran/rechazan barcode en create/update. Filtro de listado exacto: `GET /catalog-products?barcode=` y `GET /materials?barcode=` (no LIKE; no se mezcla con `search` de nombre). Duplicado → `BARCODE_DUPLICADO` (422).
+- API: create/update aceptan `sizes[]` y `item_kind`; `PUT /catalog-products/:id/sizes` reemplaza el set (`[]` limpia). Listado `?size=` filtra productos con esa talla y stock > 0. Serialización siempre incluye `has_sizes` + `sizes[]` y `barcode` (nullable).
 - Ajustes manuales: `POST catalog-products/:id/adjustment`, `POST catalog-products/bulk-adjustment` (varios productos en una transacción) y `POST materials/:id/adjustment`. Los productos con tallas requieren `catalog_product_size_id`. Los productos con fórmula y los **servicios** no admiten ajuste manual de stock. Las ediciones de producto que cambian **stock** o **precio/costo** generan movimientos en `product_inventory_movements` (`MANUAL_ADJUSTMENT` / `PRICE_CHANGE`) con `created_by_user_id`; cambios de nombre/descripción no se registran.
-- **Importación masiva (Excel):** en Productos, Servicios y Materiales hay «Importar Excel». La app descarga una plantilla `.xls` (SpreadsheetML) con columnas de alta: las obligatorias llevan `*`. El usuario completa hasta **200 filas** y sube el archivo (plantilla `.xls` o CSV UTF-8; el `.xlsx` nativo de Excel no se parsea sin librería). `POST /catalog-products/import` (`item_kind` + `rows`, `catalog.edit`) y `POST /materials/import` (`rows`, `materials.edit`) crean ítem por ítem con éxito parcial. Si la categoría no existe, se crea activa. En productos y materiales, `stock` opcional carga cantidad inicial (en materiales, un `MANUAL_CARGO` con nota «Stock inicial (importación)»). No importa imágenes, tallas ni fórmulas.
+- **Importación masiva (Excel):** en Productos, Servicios y Materiales hay «Importar Excel». La app descarga una plantilla `.xls` (SpreadsheetML) con columnas de alta: las obligatorias llevan `*`. El usuario completa hasta **200 filas** y sube el archivo (plantilla `.xls` o CSV UTF-8; el `.xlsx` nativo de Excel no se parsea sin librería). `POST /catalog-products/import` (`item_kind` + `rows`, `catalog.edit`) y `POST /materials/import` (`rows`, `materials.edit`) crean ítem por ítem con éxito parcial. Si la categoría no existe, se crea activa. En productos y materiales, `stock` opcional carga cantidad inicial (en materiales, un `MANUAL_CARGO` con nota «Stock inicial (importación)»). Columna opcional `codigo_barras` / `barcode` solo en PRODUCT y MATERIAL (servicios la ignoran). No importa imágenes, tallas ni fórmulas.
 
 ### Pedidos (`order_service.ts` + `order_state_machine.ts`)
 
@@ -521,7 +531,7 @@ catalog_products ──< product_inventory_movements
 
 ### Ventas (`sale_service.ts`)
 
-1. **Borrador** (`DRAFT`): líneas de catálogo (producto o **servicio**) o material, cliente opcional. En el POS de facturar hay tabs **Productos / Materiales / Servicios**; al confirmar, productos y materiales descuentan stock (`SALE_OUT`), los **servicios no mueven inventario**. Línea de servicio: `catalog_product_id` de un `SERVICE`, `quantity`, `unit_price_usd` editable y `description` opcional (detalle en factura; si falta, se usa el nombre del servicio). El precio unitario de cada línea es el enviado por el cliente (se puede cambiar en el carrito; atajos −5/−10/−20 % vs precio de lista). Si el producto tiene fórmula, se pueden ajustar materiales de esa venta. El descuento de factura (`discount_usd`) es independiente del precio por línea: `total_usd = suma(líneas) − discount_usd` (nunca negativo).
+1. **Borrador** (`DRAFT`): líneas de catálogo (producto o **servicio**) o material, cliente opcional. En el POS de facturar hay tabs **Productos / Materiales / Servicios**; al confirmar, productos y materiales descuentan stock (`SALE_OUT`), los **servicios no mueven inventario**. Línea de servicio: `catalog_product_id` de un `SERVICE`, `quantity`, `unit_price_usd` editable y `description` opcional (detalle en factura; si falta, se usa el nombre del servicio). El precio unitario de cada línea es el enviado por el cliente (se puede cambiar en el carrito; atajos −5/−10/−20 % vs precio de lista). Si el producto tiene fórmula, se pueden ajustar materiales de esa venta. El descuento de factura (`discount_usd`) es independiente del precio por línea: `total_usd = suma(líneas) − discount_usd` (nunca negativo). **Escaneo de barcode:** en catálogo (tabs producto/material), Escanear o Enter tras un código USB filtra al ítem del tab (`?barcode=` exacto); en el carrito, Escanear agrega qty 1 o suma 1 (productos con tallas abren `SizePickDialog`). Código inexistente → toast «Código no encontrado». Los servicios no se agregan por barcode.
 2. **Confirmar** (`POST .../confirm`):
    - Genera `code`, `status → COMPLETED`, `sold_at` / `confirmed_at`.
    - `billing_mode FAST` → `order_status DELIVERED`; `ORDER` → `order_status PENDING`.
@@ -540,7 +550,9 @@ catalog_products ──< product_inventory_movements
 
 - Resumen del día: productos vendidos, montos, crédito, gastos, ganancia estimada (KPIs del turno abierto cuando existe).
 - Endpoints adicionales: overview, ventas diarias por producto, gastos del día, cierre diario.
-- **Cierre diario** (`GET /dashboard/daily-closing?sales_shift_id=`): agrega ventas del turno (`sales.sales_shift_id`), métodos de pago, facturas, productos vendidos, devoluciones y **gastos** en las fechas calendario que cubre el turno (`opened_at` → `closed_at` / ahora, TZ `America/Caracas`). El resumen incluye `expenses_count`, `expenses_total_usd` y `net_cash_usd` (contado − gastos). Parámetro legacy `date` sigue disponible si no se envía `sales_shift_id`.
+- **Cierre diario** (`GET /dashboard/daily-closing?sales_shift_id=`): agrega ventas del turno (`sales.sales_shift_id`), métodos de pago, facturas, productos vendidos, devoluciones y **gastos** en las fechas calendario que cubre el turno (`opened_at` → `closed_at` / ahora, TZ `America/Caracas`). Montos de ventas/caja usan `sales.total_usd` (**neto de `discount_usd`**); el resumen incluye `discounts_total_usd`, `expenses_count`, `expenses_total_usd` y `net_cash_usd` (contado − gastos). Parámetro legacy `date` sigue disponible si no se envía `sales_shift_id`.
+- **Dashboard / entradas del día:** `ventasDelDia.montoProductosUsd` y series del gráfico suman `sales.total_usd` (lo cobrado/facturado), no el bruto de líneas. La ganancia del día resta los descuentos de factura de contado.
+- **Descuentos de venta:** (1) por línea = precio unitario editado en el POS; (2) general de factura = `sales.discount_usd` (`total_usd = subtotal líneas − descuento`). Reportes financieros (`account-statement`) usan `total_usd`. El detalle «productos vendidos» / cierre reparte el descuento general **proporcional** a cada producto para que la suma de totales de producto coincida con lo facturado/neto. En **devoluciones**, el monto a devolver y el recálculo de `total_usd`/`discount_usd` usan la misma proporción (no se devuelve el bruto de líneas).
 - **Gastos del día** aceptan fecha opcional en servicio; el endpoint público sigue usando hoy salvo extensión futura.
 - Alertas de bajo stock en materiales y productos.
 
@@ -610,6 +622,7 @@ catalog_products ──< product_inventory_movements
 | GET | `/api/v1/customers/:id/image` | `customers.view` | `Customers.downloadImage` |
 | DELETE | `/api/v1/customers/:id/image` | `customers.edit` | `Customers.deleteImage` |
 | POST | `/api/v1/customers/:id/payments` | `customers.payments` | `Customers.storePayment` |
+| POST | `/api/v1/customers/:id/invoices` | `customers.payments` | `Customers.storeInvoice` |
 
 ### Pedidos (`ventas.*`)
 
@@ -911,7 +924,7 @@ pwsh scripts/publish-github-release.ps1
 | `/customers` | Listado clientes |
 | `/customers/:id` | Detalle cliente |
 | `/customers/:id/cuenta` | Estado de cuenta cliente |
-| `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), botón de registrar gasto de empresa (sin salir del POS; permiso `expenses.edit`), cliente walk-in por defecto «Generico», tabs Productos/Materiales/**Servicios**, precio por línea (atajos −5/−10/−20 %), detalle opcional en líneas de servicio, fórmula por línea si el producto tiene, descuento de factura aparte; en desktop carrito anclado; en tablet el carrito ocupa el área de contenido (sidebar visible); en móvil carrito a pantalla completa y filtros de catálogo en botón desplegable |
+| `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), botón de registrar gasto de empresa (sin salir del POS; permiso `expenses.edit`), cliente walk-in por defecto «Generico», tabs Productos/Materiales/**Servicios**, escaneo barcode (filtro en catálogo / sumar en carrito; tallas con diálogo), precio por línea (atajos −5/−10/−20 %), detalle opcional en líneas de servicio, fórmula por línea si el producto tiene, descuento de factura aparte; en desktop carrito anclado; en tablet el carrito ocupa el área de contenido (sidebar visible); en móvil carrito a pantalla completa y filtros de catálogo en botón desplegable |
 | `/ventas/:id` | Detalle factura |
 | `/orders/:id` | Detalle pedido |
 | `/productos` | Catálogo de productos físicos (`item_kind=PRODUCT`). Filtros de categoría en botón desplegable (mismo patrón que ventas). Botón «Movimientos» → cargo/descargo/ajuste masivo. «Importar Excel» descarga plantilla y carga masiva (`catalog.edit`) |
@@ -921,7 +934,7 @@ pwsh scripts/publish-github-release.ps1
 | `/productos/materiales` | Materiales. «Importar Excel» (`materials.edit`) descarga plantilla y carga masiva |
 | `/productos/materiales/:id` | Detalle material |
 | `/purchases` | Hub Compras (`?tab=compras\|gastos\|ingresos`) |
-| `/purchases/:id` | Detalle compra |
+| `/purchases/:id` | Detalle compra (en borrador: escaneo barcode para sumar línea de material/producto del tab activo) |
 | `/suppliers` | Proveedores |
 | `/suppliers/:id/cuenta` | Estado de cuenta proveedor |
 | `/machines` | Máquinas |

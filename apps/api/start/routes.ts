@@ -68,6 +68,7 @@ router
         router.get('customers/:id/image', [controllers.Customers, 'downloadImage'])
         router.delete('customers/:id/image', [controllers.Customers, 'deleteImage'])
         router.post('customers/:id/payments', [controllers.Customers, 'storePayment'])
+        router.post('customers/:id/invoices', [controllers.Customers, 'storeInvoice'])
 
         router.get('orders', [controllers.Orders, 'index'])
         router.get('orders/:id', [controllers.Orders, 'show'])

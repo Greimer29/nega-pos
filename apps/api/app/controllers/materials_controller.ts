@@ -22,6 +22,7 @@ export default class MaterialsControleler {
       page: filters.page,
       perPage: filters.per_page,
       search: filters.search,
+      barcode: filters.barcode,
       category: filters.category,
       active: filters.active,
       lowStock: filters.low_stock,

@@ -12,6 +12,7 @@ import {
 import { VentasOrderReturnDialog } from '@/features/ventas/components/ventas-order-return-dialog'
 import { SALE_ORDER_STATUS_LABELS, paymentMethodLabel } from '@/features/ventas/constants'
 import type { SaleOrderStatus } from '@/features/ventas/types'
+import { invoiceDiscountLabel } from '@/features/ventas/utils/invoice-discount'
 import { notifyApiError } from '@/features/notifications/query-error-state'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { getApiErrorMessage } from '@/lib/api-error'
@@ -263,7 +264,9 @@ export function SaleDetailPage() {
           </div>
           {Number(sale.discount_usd ?? 0) > 0 ? (
             <div>
-              <p className="text-muted-foreground text-xs">Descuento</p>
+              <p className="text-muted-foreground text-xs">
+                {invoiceDiscountLabel(sale.total_usd, sale.discount_usd) ?? 'Descuento'}
+              </p>
               <p className="text-sm font-medium text-violet-800">
                 −<DisplayMoneyFromUsd amountUsd={sale.discount_usd} />
               </p>

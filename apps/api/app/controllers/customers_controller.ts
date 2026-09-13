@@ -1,17 +1,21 @@
 import CustomerService from '#services/customer_service'
+import CustomerInvoiceService from '#services/customer_invoice_service'
 import CustomerPaymentService from '#services/customer_payment_service'
 import { serializeCustomer, serializeCustomerConOrders } from '#transformers/customer_transformer'
+import { serializeSale } from '#transformers/sale_transformer'
 import {
   createCustomerValidator,
   listCustomersValidator,
   updateCustomerValidator,
 } from '#validators/customer'
+import { createCustomerInvoiceValidator } from '#validators/customer_invoice'
 import { createCustomerPaymentValidator } from '#validators/payment'
 import type { HttpContext } from '@adonisjs/core/http'
 
 export default class CustomersControleler {
   private service = new CustomerService()
   private paymentService = new CustomerPaymentService()
+  private invoiceService = new CustomerInvoiceService()
 
   /**
    * GET /api/v1/customers
@@ -146,6 +150,8 @@ export default class CustomersControleler {
         balanceUsd: sale.balanceUsd,
         creditDueDate: sale.creditDueDate?.toISODate() ?? null,
         guestName: sale.guestName,
+        notes: sale.notes ?? null,
+        hasItems: (sale.saleLines?.length ?? 0) > 0,
       })),
       payments: data.payments.map((payment) => ({
         id: Number(payment.id),
@@ -156,6 +162,15 @@ export default class CustomersControleler {
         note: payment.note,
       })),
       saldoPendienteUsd: data.saldoPendienteUsd,
+    })
+  }
+
+  async storeInvoice({ params, request, serialize }: HttpContext) {
+    const payload = await request.validateUsing(createCustomerInvoiceValidator)
+    const sale = await this.invoiceService.registrar(Number(params.id), payload)
+
+    return serialize({
+      sale: serializeSale(sale),
     })
   }
 

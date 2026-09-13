@@ -49,6 +49,7 @@ export default class CatalogProductsController {
       page: filters.page,
       perPage: filters.per_page,
       search: filters.search,
+      barcode: filters.barcode,
       category: filters.category,
       size: filters.size,
       active: filters.active,

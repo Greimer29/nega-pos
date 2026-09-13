@@ -1,10 +1,11 @@
-import { ArrowLeft, Loader2, Pencil, Plus } from 'lucide-react'
+import { ArrowLeft, Loader2, Pencil, Plus, Receipt } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { TIPO_LABELS } from '@/features/customers/constants'
 import { CustomerFormDialog } from '@/features/customers/components/customer-form-dialog'
+import { CustomerInvoiceFormDialog } from '@/features/customers/components/customer-invoice-form-dialog'
 import { CustomerPaymentFormDialog } from '@/features/customers/components/customer-payment-form-dialog'
 import { useCustomerQuery } from '@/features/customers/hooks/use-customers'
 import { formatFecha } from '@/features/orders/constants'
@@ -21,6 +22,7 @@ export function CustomerDetallePage() {
   const { id: customerId, isValid: isValidCustomerId } = parsePositiveIntRouteParam(id)
   const [editOpen, setEditOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [invoiceOpen, setInvoiceOpen] = useState(false)
 
   const { data: customer, isLoading, isError, error } = useCustomerQuery(customerId)
 
@@ -97,6 +99,10 @@ export function CustomerDetallePage() {
           <p className="text-muted-foreground text-sm">{TIPO_LABELS[customer.type]}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setInvoiceOpen(true)}>
+            <Receipt />
+            Factura
+          </Button>
           {(customer.creditDays ?? 0) > 0 ? (
             <>
               <Button variant="outline" asChild>
@@ -107,7 +113,11 @@ export function CustomerDetallePage() {
                 Registrar abono
               </Button>
             </>
-          ) : null}
+          ) : (
+            <Button variant="outline" asChild>
+              <Link to={`/customers/${customerId}/cuenta`}>Ver estado de cuenta</Link>
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setEditOpen(true)}>
             <Pencil />
             Editar
@@ -202,6 +212,12 @@ export function CustomerDetallePage() {
         open={paymentOpen}
         onOpenChange={setPaymentOpen}
         customerId={customerId}
+      />
+      <CustomerInvoiceFormDialog
+        open={invoiceOpen}
+        onOpenChange={setInvoiceOpen}
+        customerId={customerId}
+        defaultCreditDays={customer.creditDays}
       />
     </div>
   )

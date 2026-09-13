@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { CircularImageField } from '@/components/circular-image-field'
+import { BarcodeScanButton } from '@/components/barcode-scan-button'
 import { DecimalInput, MoneyInput } from '@/components/decimal-input'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -83,6 +84,7 @@ export function CatalogFormDialog({
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
+  const [barcode, setBarcode] = useState('')
   const [saleUnit, setSaleUnit] = useState<ProductSaleUnit>('UND')
   const [salePrice, setSalePrice] = useState('')
   const [costPrice, setCostPrice] = useState('0')
@@ -205,6 +207,7 @@ export function CatalogFormDialog({
       setName(product.name)
       setDescription(product.description ?? '')
       setCategory(product.category)
+      setBarcode(product.barcode ?? '')
       setSaleUnit(product.sale_unit ?? 'UND')
       setSalePrice(product.sale_price_usd)
       setCostPrice(product.cost_usd)
@@ -230,6 +233,7 @@ export function CatalogFormDialog({
       setName('')
       setDescription('')
       setCategory(categories[0]?.name ?? '')
+      setBarcode('')
       setSaleUnit('UND')
       setSalePrice('')
       setCostPrice('0')
@@ -416,6 +420,7 @@ export function CatalogFormDialog({
       name: name.trim(),
       description: description.trim() || undefined,
       category,
+      barcode: barcode.trim() || null,
       sale_unit: saleUnit,
       sale_price_usd: Number(salePrice),
       ...(hasFormula
@@ -499,6 +504,24 @@ export function CatalogFormDialog({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
+              </div>
+              <div className="space-y-0.5">
+                <Label htmlFor="catalog-barcode" className="text-xs">
+                  Código de barras
+                </Label>
+                <div className="flex gap-1.5">
+                  <Input
+                    id="catalog-barcode"
+                    className="h-8 min-w-0 flex-1"
+                    value={barcode}
+                    onChange={(e) => setBarcode(e.target.value)}
+                    placeholder="Opcional"
+                  />
+                  <BarcodeScanButton
+                    className="size-8"
+                    onScan={(code) => setBarcode(code)}
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-[7fr_3fr] gap-2">
                 <div className="space-y-0.5">

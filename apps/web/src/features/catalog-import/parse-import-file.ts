@@ -39,6 +39,10 @@ const HEADER_ALIASES: Record<string, string> = {
   minimum_stock: 'minimum_stock',
   codigo: 'code',
   code: 'code',
+  codigo_barras: 'barcode',
+  codigo_de_barras: 'barcode',
+  barcode: 'barcode',
+  barras: 'barcode',
   ubicacion: 'location',
   location: 'location',
   precio_compra: 'last_purchase_price_usd',
@@ -246,6 +250,7 @@ function mapProductRow(
     cost_usd: numberField(values.cost_usd, 'costo', row),
     stock_quantity: numberField(values.stock_quantity, 'stock', row),
     minimum_stock: numberField(values.minimum_stock, 'stock_minimo', row),
+    barcode: stringField(values.barcode),
   }
 }
 
@@ -261,6 +266,7 @@ function mapMaterialRow(values: Record<string, string>, row: number): MaterialIm
     minimum_stock: numberField(values.minimum_stock, 'stock_minimo', row),
     location: stringField(values.location),
     last_purchase_price_usd: numberField(values.last_purchase_price_usd, 'precio_compra', row),
+    barcode: stringField(values.barcode),
   }
 }
 

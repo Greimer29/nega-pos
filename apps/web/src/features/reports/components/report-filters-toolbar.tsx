@@ -35,7 +35,6 @@ const TYPE_OPTIONS: Array<{ key: keyof ReportTypeFilters; label: string }> = [
   { key: 'incomes', label: 'Ingresos' },
   { key: 'purchases', label: 'Compras' },
   { key: 'expenses', label: 'Gastos' },
-  { key: 'machine_expenses', label: 'Gastos máquina (histórico)' },
 ]
 
 export function ReportFiltersToolbar({

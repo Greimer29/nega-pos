@@ -11,6 +11,7 @@ import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-mo
 import { useSalesQuery } from '@/features/ventas/hooks/use-sales'
 import { SALE_ORDER_STATUS_LABELS, paymentMethodLabel } from '@/features/ventas/constants'
 import type { SaleOrderStatus } from '@/features/ventas/types'
+import { invoiceDiscountLabel } from '@/features/ventas/utils/invoice-discount'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
@@ -259,6 +260,7 @@ export function VentasHistoryPanel() {
                   {sales.map((sale) => {
                     const isExpanded = expandedSaleId === sale.id
                     const canReturn = sale.status === 'COMPLETED'
+                    const discountLabel = invoiceDiscountLabel(sale.total_usd, sale.discount_usd)
 
                     return (
                       <Fragment key={sale.id}>
@@ -319,7 +321,14 @@ export function VentasHistoryPanel() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <DisplayMoneyFromUsd amountUsd={sale.total_usd} size="sm" />
+                            <div className="flex flex-col items-end gap-0.5">
+                              <DisplayMoneyFromUsd amountUsd={sale.total_usd} size="sm" />
+                              {discountLabel ? (
+                                <span className="text-xs font-medium text-violet-700">
+                                  {discountLabel}
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex justify-end gap-1">

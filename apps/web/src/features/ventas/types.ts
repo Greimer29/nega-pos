@@ -26,6 +26,7 @@ export type CatalogItemKind = 'PRODUCT' | 'SERVICE'
 export type CatalogProduct = {
   id: number
   name: string
+  barcode?: string | null
   description: string | null
   category: string
   item_kind?: CatalogItemKind
@@ -103,6 +104,7 @@ export type CatalogProductInput = {
   cost_usd?: number
   formula_id?: number | null
   stock_quantity?: number
+  barcode?: string | null
   sizes?: CatalogProductSizeInput[]
 }
 
@@ -110,6 +112,7 @@ export type CatalogListParams = {
   page?: number
   perPage?: number
   search?: string
+  barcode?: string
   category?: string
   size?: string
   active?: boolean

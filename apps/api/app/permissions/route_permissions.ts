@@ -27,6 +27,7 @@ const ROUTE_RULES: RouteRule[] = [
 
   { method: 'GET', pattern: /^\/customers(\/|$)/, permission: 'customers.view' },
   { method: 'POST', pattern: /^\/customers\/[^/]+\/payments$/, permission: 'customers.payments' },
+  { method: 'POST', pattern: /^\/customers\/[^/]+\/invoices$/, permission: 'customers.payments' },
   { method: 'POST', pattern: /^\/customers(\/|$)/, permission: 'customers.edit' },
   { method: 'PUT', pattern: /^\/customers(\/|$)/, permission: 'customers.edit' },
   { method: 'DELETE', pattern: /^\/customers(\/|$)/, permission: 'customers.edit' },

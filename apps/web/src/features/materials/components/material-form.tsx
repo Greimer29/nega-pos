@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { CircularImageField } from '@/components/circular-image-field'
+import { BarcodeScanButton } from '@/components/barcode-scan-button'
 import { Button } from '@/components/ui/button'
 import { DecimalInput, MoneyInput } from '@/components/decimal-input'
 import { Input } from '@/components/ui/input'
@@ -32,6 +33,7 @@ import { inventoryQuantityDecimals, normalizeInventoryQuantity } from '@/lib/inv
 
 const materialSchema = z.object({
   code: z.string().trim().min(1, 'El código es obligatorio').max(30),
+  barcode: z.string().trim().max(64).optional(),
   name: z.string().trim().min(1, 'El producto es obligatorio').max(150),
   description: z.string().trim().optional(),
   category: z.string().trim().min(1, 'Seleccioná una categoría'),
@@ -58,6 +60,7 @@ export type MaterialFormProps = {
 function emptyValues(defaultCategory = ''): MaterialFormInput {
   return {
     code: '',
+    barcode: '',
     name: '',
     description: '',
     category: defaultCategory,
@@ -73,6 +76,7 @@ function emptyValues(defaultCategory = ''): MaterialFormInput {
 function toFormValues(material: Material): MaterialFormInput {
   return {
     code: material.code,
+    barcode: material.barcode ?? '',
     name: material.name,
     description: material.description ?? '',
     category: material.category,
@@ -102,6 +106,7 @@ function toPayload(values: MaterialFormValues) {
     supplier_habitual_id:
       values.supplier_habitual_id === '' ? undefined : Number(values.supplier_habitual_id),
     last_purchase_price_usd: optionalNumber(values.last_purchase_price_usd),
+    barcode: values.barcode?.trim() || null,
     ...(values.active !== undefined ? { active: values.active } : {}),
   }
 }
@@ -151,6 +156,7 @@ export function MaterialForm({
     handleSubmit,
     reset,
     setError,
+    setValue,
     watch,
     formState: { errors, isSubmitting },
   } = useForm<MaterialFormInput, unknown, MaterialFormValues>({
@@ -294,6 +300,17 @@ export function MaterialForm({
             <Label htmlFor="code">Código interno *</Label>
             <Input id="code" {...register('code')} />
             {errors.code ? <p className="text-destructive text-sm">{errors.code.message}</p> : null}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="barcode">Código de barras</Label>
+            <div className="flex gap-2">
+              <Input id="barcode" className="min-w-0 flex-1" placeholder="Opcional" {...register('barcode')} />
+              <BarcodeScanButton
+                onScan={(code) => {
+                  setValue('barcode', code, { shouldDirty: true })
+                }}
+              />
+            </div>
           </div>
           <div className="space-y-1">
             <Label htmlFor="name">Producto *</Label>

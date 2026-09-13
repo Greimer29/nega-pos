@@ -11,6 +11,7 @@ import { useDailyClosingQuery } from '@/features/dashboard/hooks/use-dashboard'
 import { useSalesShiftsQuery } from '@/features/ventas/hooks/use-sales-shifts'
 import type { SalesShift } from '@/features/ventas/services/sales-shift-service'
 import { paymentMethodLabel } from '@/features/ventas/constants'
+import { invoiceDiscountLabel } from '@/features/ventas/utils/invoice-discount'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
 
 function formatShiftRange(shift: SalesShift) {
@@ -272,7 +273,12 @@ export function DashboardDailyClosingPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.invoices.map((invoice) => (
+                    {data.invoices.map((invoice) => {
+                      const discountLabel = invoiceDiscountLabel(
+                        invoice.total_usd,
+                        invoice.discount_usd
+                      )
+                      return (
                       <tr key={invoice.id} className="border-b last:border-b-0">
                         <td className="px-3 py-2">
                           <Link className="text-primary hover:underline" to={`/ventas/${invoice.id}`}>
@@ -293,10 +299,18 @@ export function DashboardDailyClosingPage() {
                               )}
                         </td>
                         <td className="px-3 py-2 text-right">
-                          <DisplayMoneyFromUsd amountUsd={invoice.total_usd} size="sm" />
+                          <div className="flex flex-col items-end gap-0.5">
+                            <DisplayMoneyFromUsd amountUsd={invoice.total_usd} size="sm" />
+                            {discountLabel ? (
+                              <span className="text-xs font-medium text-violet-700">
+                                {discountLabel}
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               )}
@@ -312,6 +326,16 @@ export function DashboardDailyClosingPage() {
                   amountUsd={data.summary.products_amount_usd}
                   className="inline text-sm font-medium"
                 />
+                {Number(data.summary.discounts_total_usd ?? 0) > 0.0001 ? (
+                  <span className="text-violet-700">
+                    {' '}
+                    · descuentos −
+                    <DisplayMoneyFromUsd
+                      amountUsd={data.summary.discounts_total_usd}
+                      className="inline text-sm font-medium"
+                    />
+                  </span>
+                ) : null}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

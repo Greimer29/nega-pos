@@ -30,6 +30,7 @@ export type CatalogProductImportRow = {
   cost_usd?: number
   stock_quantity?: number
   minimum_stock?: number
+  barcode?: string
 }
 
 export type MaterialImportRow = {
@@ -43,6 +44,7 @@ export type MaterialImportRow = {
   minimum_stock?: number
   location?: string
   last_purchase_price_usd?: number
+  barcode?: string
 }
 
 export const MAX_IMPORT_ROWS = 200

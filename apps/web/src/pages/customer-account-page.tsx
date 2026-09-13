@@ -1,9 +1,10 @@
-import { ArrowLeft, Loader2, Plus } from 'lucide-react'
+import { ArrowLeft, Loader2, Plus, Receipt } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CustomerAccountSummaryCards } from '@/features/customers/components/customer-account-summary-cards'
+import { CustomerInvoiceFormDialog } from '@/features/customers/components/customer-invoice-form-dialog'
 import { CustomerPaymentFormDialog } from '@/features/customers/components/customer-payment-form-dialog'
 import { useCustomerAccountStatementQuery } from '@/features/customers/hooks/use-customers'
 import { computeCustomerAccountSummary } from '@/features/customers/utils/customer-account-summary'
@@ -31,6 +32,7 @@ export function CustomerAccountPage() {
   const { id } = useParams<{ id: string }>()
   const { id: customerId, isValid: isValidCustomerId } = parsePositiveIntRouteParam(id)
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false)
   const [paymentSaleId, setPaymentSaleId] = useState<number | undefined>()
   const [paymentMaxUsd, setPaymentMaxUsd] = useState<number | undefined>()
 
@@ -112,10 +114,16 @@ export function CustomerAccountPage() {
             </p>
           ) : null}
         </div>
-        <Button onClick={() => openPayment()}>
-          <Plus />
-          Registrar abono
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setInvoiceDialogOpen(true)}>
+            <Receipt />
+            Factura
+          </Button>
+          <Button onClick={() => openPayment()}>
+            <Plus />
+            Registrar abono
+          </Button>
+        </div>
       </div>
 
       <CustomerAccountSummaryCards summary={summary!} />
@@ -124,7 +132,8 @@ export function CustomerAccountPage() {
         <CardHeader>
           <CardTitle className="text-base">Historial de ventas</CardTitle>
           <CardDescription>
-            Borradores, confirmados, cancelados y ventas a crédito o contado.
+            Borradores, confirmados, cancelados y ventas a crédito o contado. Las facturas sin ítems
+            aparecen etiquetadas.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -158,9 +167,16 @@ export function CustomerAccountPage() {
                     return (
                       <tr key={sale.id} className="border-b last:border-b-0">
                         <td className="px-4 py-3 font-medium">
-                          <Link to={`/ventas/${sale.id}`} className="hover:underline">
-                            {sale.code ?? `#${sale.id}`}
-                          </Link>
+                          <div className="flex flex-col gap-1">
+                            <Link to={`/ventas/${sale.id}`} className="hover:underline">
+                              {sale.code ?? `#${sale.id}`}
+                            </Link>
+                            {sale.hasItems === false ? (
+                              <span className="inline-flex w-fit rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800">
+                                Sin ítems
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="text-muted-foreground px-4 py-3">
                           {sale.soldAt ? formatFecha(sale.soldAt) : '—'}
@@ -279,6 +295,14 @@ export function CustomerAccountPage() {
         customerId={customerId}
         saleId={paymentSaleId}
         maxAmountUsd={paymentMaxUsd}
+        onSuccess={() => void refetch()}
+      />
+
+      <CustomerInvoiceFormDialog
+        open={invoiceDialogOpen}
+        onOpenChange={setInvoiceDialogOpen}
+        customerId={customerId}
+        defaultCreditDays={customer.creditDays}
         onSuccess={() => void refetch()}
       />
     </div>

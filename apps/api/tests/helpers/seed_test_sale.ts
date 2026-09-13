@@ -26,6 +26,7 @@ export type SeedTestSaleInput = {
   paymentType?: 'CASH' | 'CREDIT'
   paymentMethodCode?: string | null
   totalUsd: string
+  discountUsd?: string
   amountPaidUsd?: string
   balanceUsd?: string
   creditDueDate?: DateTime | null
@@ -74,6 +75,7 @@ export async function seedTestSale(input: SeedTestSaleInput) {
     orderStatus: input.orderStatus ?? 'DELIVERED',
     paymentType: input.paymentType ?? 'CASH',
     paymentMethodCode: input.paymentMethodCode ?? (isCredit ? null : 'cash_usd'),
+    discountUsd: input.discountUsd ?? '0.0000',
     totalUsd: total,
     amountPaidUsd: amountPaid,
     balanceUsd: balance,

@@ -166,4 +166,81 @@ test.group('Sale devolución venta API', (group) => {
 
     assert.equal(Number(stockResult?.$extras.total), 94)
   })
+
+  test('POST /api/v1/sales/:id/return scales invoice discount into net refund totals', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const productA = await CatalogProduct.create({
+      name: 'Prod A',
+      category: 'General',
+      salePriceUsd: '10.0000',
+      costUsd: '4.0000',
+      stockQuantity: '20.000',
+      active: true,
+    })
+    const productB = await CatalogProduct.create({
+      name: 'Prod B',
+      category: 'General',
+      salePriceUsd: '5.0000',
+      costUsd: '2.0000',
+      stockQuantity: '20.000',
+      active: true,
+    })
+
+    const createResponse = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        confirm: true,
+        guest_name: 'Cliente desc',
+        payment_method_code: 'cash_usd',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        discount_usd: 6,
+        lines: [
+          { catalog_product_id: Number(productA.id), quantity: 2, unit_price_usd: 10 },
+          { catalog_product_id: Number(productB.id), quantity: 2, unit_price_usd: 5 },
+        ],
+      })
+
+    createResponse.assertStatus(200)
+    const sale = createResponse.body().data.sale as {
+      id: number
+      total_usd: string
+      discount_usd: string
+      lines: Array<{ id: number; catalog_product_id: number }>
+    }
+    assert.equal(sale.total_usd, '24.0000')
+    assert.equal(sale.discount_usd, '6.0000')
+
+    const lineA = sale.lines.find((line) => line.catalog_product_id === Number(productA.id))!
+
+    const partial = await client
+      .post(`/api/v1/sales/${sale.id}/return`)
+      .loginAs(user)
+      .json({ lines: [{ line_id: lineA.id, quantity: 2 }] })
+
+    partial.assertStatus(200)
+    const afterPartial = partial.body().data.sale as {
+      status: string
+      total_usd: string
+      discount_usd: string
+    }
+    assert.equal(afterPartial.status, 'COMPLETED')
+    assert.equal(afterPartial.total_usd, '8.0000')
+    assert.equal(afterPartial.discount_usd, '2.0000')
+
+    const full = await client.post(`/api/v1/sales/${sale.id}/return`).loginAs(user)
+    full.assertStatus(200)
+    const afterFull = full.body().data.sale as {
+      status: string
+      total_usd: string
+      discount_usd: string
+    }
+    assert.equal(afterFull.status, 'RETURNED')
+    assert.equal(afterFull.total_usd, '0.0000')
+    assert.equal(afterFull.discount_usd, '0.0000')
+  })
 })

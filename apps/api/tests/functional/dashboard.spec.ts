@@ -975,6 +975,85 @@ test.group('Dashboard API', (group) => {
     assert.equal(cashUsd.total_usd, '25.0000')
   })
 
+  test('dashboard overview and daily-closing use invoice total after discount', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const product = await CatalogProduct.create({
+      name: 'Prod descuento',
+      category: 'General',
+      saleUnit: 'UND',
+      salePriceUsd: '15.0000',
+      costUsd: '5.0000',
+      stockQuantity: '20.000',
+      active: true,
+    })
+
+    await seedDashboardSale({
+      totalUsd: '24.0000',
+      discountUsd: '6.0000',
+      paymentMethodCode: 'cash_usd',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '2',
+          unitPriceUsd: '10.0000',
+          subtotalUsd: '20.0000',
+          costUsd: '5.0000',
+        },
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '2',
+          unitPriceUsd: '5.0000',
+          subtotalUsd: '10.0000',
+          costUsd: '2.0000',
+        },
+      ],
+    })
+
+    const overviewFull = await client
+      .get('/api/v1/dashboard/overview')
+      .qs({ chart: 'weekly' })
+      .loginAs(user)
+    overviewFull.assertStatus(200)
+
+    const ventas = overviewFull.body().data.ventasDelDia as {
+      productosVendidos: number
+      montoProductosUsd: string
+    }
+    assert.equal(ventas.productosVendidos, 4)
+    assert.equal(ventas.montoProductosUsd, '24.0000')
+
+    const closing = await client
+      .get('/api/v1/dashboard/daily-closing')
+      .qs({ sales_shift_id: openShiftId })
+      .loginAs(user)
+    closing.assertStatus(200)
+
+    const closingData = closing.body().data
+    assert.equal(closingData.summary.cash_total_usd, '24.0000')
+    assert.equal(closingData.summary.products_amount_usd, '24.0000')
+    assert.equal(closingData.summary.discounts_total_usd, '6.0000')
+    assert.equal(closingData.invoices[0].discount_usd, '6.0000')
+    assert.equal(closingData.invoices[0].total_usd, '24.0000')
+
+    const productSales = await client.get('/api/v1/dashboard/daily-product-sales').loginAs(user)
+    productSales.assertStatus(200)
+    const productsBody = productSales.body().data as {
+      products: Array<{ total_usd: string; quantity_sold: number }>
+      summary: { monto_productos_usd: string }
+    }
+    assert.equal(productsBody.summary.monto_productos_usd, '24.0000')
+    const productsNet = productsBody.products.reduce(
+      (sum, product) => sum + Number(product.total_usd),
+      0
+    )
+    assert.equal(Number(productsNet.toFixed(4)), 24)
+  })
+
   test('GET /api/v1/dashboard/daily-closing includes expenses for the selected shift', async ({
     client,
     assert,

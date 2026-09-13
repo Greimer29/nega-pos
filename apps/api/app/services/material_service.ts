@@ -17,6 +17,7 @@ import OrderService from '#services/order_service'
 import ProductCodeService from '#services/product_code_service'
 import CategoryService from '#services/category_service'
 import type { CostWarning } from '#types/cost_warning'
+import { assertMaterialBarcodeAvailable, normalizeBarcode } from '#utils/barcode'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
@@ -35,6 +36,7 @@ export type MaterialInput = {
   location?: string | null
   default_supplier_id?: number | null
   last_purchase_price_usd?: number | null
+  barcode?: string | null
   active?: boolean
 }
 
@@ -45,6 +47,7 @@ export type ListMaterialsFilters = {
   page?: number
   perPage?: number
   search?: string
+  barcode?: string
   category?: Material['category']
   active?: boolean
   lowStock?: boolean
@@ -263,7 +266,10 @@ export default class MaterialService {
       .select(db.raw(`${USED_QTY_SQL} as used_qty`))
       .select(db.raw(`${FLOW_QTY_SQL} as flow_qty`))
 
-    if (filters.search) {
+    const barcode = filters.barcode?.trim()
+    if (barcode) {
+      query.where('barcode', barcode)
+    } else if (filters.search) {
       query.where((builder) => {
         builder
           .whereILike('code', `%${filters.search}%`)
@@ -359,6 +365,7 @@ export default class MaterialService {
     await this.categoryService.assertCategoriaActiva(input.category)
     const data = this.prepareInput(input)
     await this.productCodeService.assertUnique(data.code)
+    await assertMaterialBarcodeAvailable(data.barcode)
 
     return Material.create(data)
   }
@@ -376,11 +383,16 @@ export default class MaterialService {
       })
     }
 
+    if (data.barcode !== material.barcode) {
+      await assertMaterialBarcodeAvailable(data.barcode, Number(material.id))
+    }
+
     const previousCost = material.lastPurchasePriceUsd
     const nextCost = data.lastPurchasePriceUsd
 
     material.merge({
       code: data.code,
+      barcode: data.barcode,
       name: data.name,
       description: data.description,
       category: data.category,
@@ -572,6 +584,7 @@ export default class MaterialService {
       minimumStock: formatInventoryQuantityForStorage(input.minimum_stock ?? 1, unit),
       location: input.location?.trim() || null,
       defaultSupplierId: input.default_supplier_id ?? null,
+      barcode: normalizeBarcode(input.barcode),
       lastPurchasePriceUsd:
         input.last_purchase_price_usd === undefined
           ? undefined
@@ -637,6 +650,7 @@ export default class MaterialService {
             row.last_purchase_price_usd !== undefined
               ? Number(row.last_purchase_price_usd)
               : undefined,
+          barcode: row.barcode,
         })
 
         if (stock > 0) {
@@ -673,6 +687,7 @@ export type MaterialImportRow = {
   minimum_stock?: number
   location?: string
   last_purchase_price_usd?: number
+  barcode?: string
 }
 
 export type MaterialImportRowResult = {

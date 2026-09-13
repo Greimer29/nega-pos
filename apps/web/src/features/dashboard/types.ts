@@ -133,6 +133,7 @@ export type DailyClosingInvoice = {
   payment_type: string
   payment_method_code: string | null
   payment_method_name: string | null
+  discount_usd: string
   total_usd: string
   total_bs: string | null
   status: string
@@ -154,6 +155,7 @@ export type DailyClosing = {
     credit_total_usd: string
     products_sold: number
     products_amount_usd: string
+    discounts_total_usd?: string
     expenses_count: number
     expenses_total_usd: string
     net_cash_usd: string

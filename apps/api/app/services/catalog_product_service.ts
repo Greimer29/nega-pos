@@ -23,6 +23,7 @@ import type { CostWarning } from '#types/cost_warning'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
+import { assertProductBarcodeAvailable, normalizeBarcode } from '#utils/barcode'
 import db from '@adonisjs/lucid/services/db'
 import { randomUUID } from 'node:crypto'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
@@ -38,6 +39,7 @@ export type CatalogProductInput = {
   formula_id?: number | null
   stock_quantity?: number
   minimum_stock?: number
+  barcode?: string | null
   active?: boolean
   sizes?: Array<{ size: string; stock_quantity: number }>
 }
@@ -48,6 +50,7 @@ export type ListCatalogProductsFilters = {
   page?: number
   perPage?: number
   search?: string
+  barcode?: string
   category?: string
   size?: string
   active?: boolean
@@ -129,7 +132,10 @@ export default class CatalogProductService {
 
     const query = CatalogProduct.query().preload('sizes', (q) => q.orderBy('size', 'asc'))
 
-    if (filters.search) {
+    const barcode = filters.barcode?.trim()
+    if (barcode) {
+      query.where('barcode', barcode)
+    } else if (filters.search) {
       const term = `%${filters.search.trim()}%`
       query.where((builder) => {
         builder.whereILike('name', term).orWhereILike('description', term)
@@ -226,6 +232,11 @@ export default class CatalogProductService {
       throw new ProductoConFormulaNoPermiteTallasException()
     }
 
+    const barcode = isService ? null : normalizeBarcode(input.barcode)
+    if (!isService) {
+      await assertProductBarcodeAvailable(barcode)
+    }
+
     return db.transaction(async (trx) => {
       const saleUnit = input.sale_unit ?? 'UND'
       const stockQty =
@@ -248,6 +259,7 @@ export default class CatalogProductService {
             isService ? 0 : (input.minimum_stock ?? 0),
             saleUnit
           ),
+          barcode,
           active: input.active ?? true,
         },
         { client: trx }
@@ -364,6 +376,12 @@ export default class CatalogProductService {
 
       if (input.active !== undefined) {
         product.active = input.active
+      }
+
+      if (!isService && input.barcode !== undefined) {
+        const barcode = normalizeBarcode(input.barcode)
+        await assertProductBarcodeAvailable(barcode, Number(product.id))
+        product.barcode = barcode
       }
 
       if (input.cost_usd !== undefined) {
@@ -834,6 +852,7 @@ export default class CatalogProductService {
           cost_usd: row.cost_usd !== undefined ? Number(row.cost_usd) : 0,
           stock_quantity: isService ? 0 : Number(row.stock_quantity ?? 0),
           minimum_stock: isService ? 0 : Number(row.minimum_stock ?? 0),
+          barcode: isService ? null : row.barcode,
         })
 
         created += 1
@@ -861,6 +880,7 @@ export type CatalogImportRow = {
   cost_usd?: number
   stock_quantity?: number
   minimum_stock?: number
+  barcode?: string
 }
 
 export type CatalogImportRowResult = {

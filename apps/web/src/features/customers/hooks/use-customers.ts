@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createCustomer,
+  createCustomerInvoice,
   createCustomerPayment,
   deleteCustomer,
   getCustomer,
@@ -10,6 +11,7 @@ import {
 } from '@/features/customers/services/customer-service'
 import type {
   CustomerInput,
+  CustomerInvoiceInput,
   CustomerListParams,
   CustomerPaymentInput,
 } from '@/features/customers/types'
@@ -87,6 +89,27 @@ export function useCreateCustomerPaymentMutation() {
       customerId: number
       payload: CustomerPaymentInput
     }) => createCustomerPayment(customerId, payload),
+    onSuccess: (_, { customerId }) => {
+      void queryClient.invalidateQueries({ queryKey: [...customersQueryKey, 'detail', customerId] })
+      void queryClient.invalidateQueries({
+        queryKey: [...customersQueryKey, 'account-statement', customerId],
+      })
+      invalidateCustomerPayments(queryClient)
+    },
+  })
+}
+
+export function useCreateCustomerInvoiceMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      customerId,
+      payload,
+    }: {
+      customerId: number
+      payload: CustomerInvoiceInput
+    }) => createCustomerInvoice(customerId, payload),
     onSuccess: (_, { customerId }) => {
       void queryClient.invalidateQueries({ queryKey: [...customersQueryKey, 'detail', customerId] })
       void queryClient.invalidateQueries({
