@@ -1,6 +1,9 @@
-import { ChevronDown, Loader2, RotateCcw, Search } from 'lucide-react'
+import { CalendarRange, ChevronDown, Loader2, RotateCcw, Search } from 'lucide-react'
 import { Fragment, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
+import { FilterSection, FiltersPanel } from '@/components/filters/filters-panel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -110,6 +113,7 @@ export function VentasHistoryPanel() {
     DEFAULT_VENTAS_HISTORY_FILTERS
   )
   const [searchInput, setSearchInput] = useState(filters.search)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [returnSaleId, setReturnSaleId] = useState<number | null>(null)
   const [expandedSaleId, setExpandedSaleId] = useState<number | null>(null)
 
@@ -177,53 +181,83 @@ export function VentasHistoryPanel() {
                 onChange={(e) => setSearchInput(e.target.value)}
               />
             </div>
+            <FiltersIconButton
+              count={filters.dateFilter !== DEFAULT_VENTAS_HISTORY_FILTERS.dateFilter ? 1 : 0}
+              expanded={filtersOpen}
+              controls="ventas-history-filters"
+              onClick={() => setFiltersOpen(true)}
+            />
+          </div>
 
-            <select
-              className="border-input flex h-9 rounded-md border bg-white px-3 text-sm"
-              value={filters.dateFilter}
-              onChange={(e) => {
+          <FiltersDrawer
+            open={filtersOpen}
+            onOpenChange={setFiltersOpen}
+            id="ventas-history-filters"
+            title="Filtros del historial"
+            description="Período de las facturas confirmadas."
+          >
+            <FiltersPanel
+              onClearAll={() =>
                 setFilters((prev) => ({
                   ...prev,
-                  dateFilter: e.target.value as DateFilter,
+                  dateFilter: DEFAULT_VENTAS_HISTORY_FILTERS.dateFilter,
+                  customFrom: '',
+                  customTo: '',
                   page: 1,
                 }))
-              }}
+              }
             >
-              <option value="today">Hoy</option>
-              <option value="month">Este mes</option>
-              <option value="all">Todas</option>
-              <option value="custom">Rango personalizado</option>
-            </select>
-
-            {filters.dateFilter === 'custom' ? (
-              <>
-                <Input
-                  type="date"
-                  className="w-auto"
-                  value={filters.customFrom}
-                  onChange={(e) => {
-                    setFilters((prev) => ({
-                      ...prev,
-                      customFrom: e.target.value,
-                      page: 1,
-                    }))
-                  }}
-                />
-                <Input
-                  type="date"
-                  className="w-auto"
-                  value={filters.customTo}
-                  onChange={(e) => {
-                    setFilters((prev) => ({
-                      ...prev,
-                      customTo: e.target.value,
-                      page: 1,
-                    }))
-                  }}
-                />
-              </>
-            ) : null}
-          </div>
+              <FilterSection
+                title="Período"
+                icon={<CalendarRange className="size-4 text-neutral-500" />}
+              >
+                <div className="space-y-3">
+                  <select
+                    className="border-input flex h-9 w-full rounded-md border bg-white px-3 text-sm"
+                    value={filters.dateFilter}
+                    onChange={(e) => {
+                      setFilters((prev) => ({
+                        ...prev,
+                        dateFilter: e.target.value as DateFilter,
+                        page: 1,
+                      }))
+                    }}
+                  >
+                    <option value="today">Hoy</option>
+                    <option value="month">Este mes</option>
+                    <option value="all">Todas</option>
+                    <option value="custom">Rango personalizado</option>
+                  </select>
+                  {filters.dateFilter === 'custom' ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="date"
+                        value={filters.customFrom}
+                        onChange={(e) => {
+                          setFilters((prev) => ({
+                            ...prev,
+                            customFrom: e.target.value,
+                            page: 1,
+                          }))
+                        }}
+                      />
+                      <Input
+                        type="date"
+                        value={filters.customTo}
+                        onChange={(e) => {
+                          setFilters((prev) => ({
+                            ...prev,
+                            customTo: e.target.value,
+                            page: 1,
+                          }))
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </FilterSection>
+            </FiltersPanel>
+          </FiltersDrawer>
         </CardHeader>
 
         <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">

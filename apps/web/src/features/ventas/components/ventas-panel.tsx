@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FileText, FolderOpen, Loader2, Plus, Search, ShoppingCart, SlidersHorizontal } from 'lucide-react'
+import { FileText, FolderOpen, Loader2, Plus, Search, ShoppingCart } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { BarcodeScanButton } from '@/components/barcode-scan-button'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 import {
   VentasCatalogFiltersPanel,
   type VentasCatalogSortOption,
@@ -1477,24 +1473,12 @@ function VentasCreateView() {
                     />
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="relative shrink-0 bg-white"
-                      title="Filtros"
-                      aria-label="Filtros"
-                      aria-expanded={filtersOpen}
-                      aria-controls="ventas-catalog-filters"
+                    <FiltersIconButton
+                      count={activeFilterCount}
+                      expanded={filtersOpen}
+                      controls="ventas-catalog-filters"
                       onClick={() => setFiltersOpen(true)}
-                    >
-                      <SlidersHorizontal className="size-4" />
-                      {activeFilterCount > 0 ? (
-                        <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-semibold text-white">
-                          {activeFilterCount}
-                        </span>
-                      ) : null}
-                    </Button>
+                    />
                     {catalogSource !== 'services' ? (
                       <BarcodeScanButton
                         className="bg-white"
@@ -1506,32 +1490,15 @@ function VentasCreateView() {
               </div>
             </div>
 
-            <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
-              <DialogContent
-                id="ventas-catalog-filters"
-                closeButtonClassName="top-3 right-3 flex size-11 items-center justify-center rounded-full bg-neutral-100 opacity-100 shadow-sm hover:bg-neutral-200 hover:opacity-100"
-                closeIconClassName="size-5"
-                className={cn(
-                  'fixed z-50 flex translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0 shadow-xl duration-300',
-                  'data-[state=closed]:zoom-out-100 data-[state=open]:zoom-in-100',
-                  // Móvil: sheet desde abajo (~80% altura)
-                  'inset-x-0 top-auto bottom-0 left-0 right-0 h-[80dvh] max-h-[80dvh] w-full max-w-none rounded-t-2xl border-x-0 border-b-0',
-                  'max-md:data-[state=open]:slide-in-from-bottom max-md:data-[state=closed]:slide-out-to-bottom',
-                  // Desktop: drawer desde la derecha
-                  'md:inset-y-0 md:top-0 md:right-0 md:bottom-0 md:left-auto md:h-svh md:max-h-svh md:w-[min(100vw,22rem)] md:max-w-[22rem]',
-                  'md:rounded-none md:rounded-l-2xl md:border md:border-y-0 md:border-r-0',
-                  'md:data-[state=open]:slide-in-from-right md:data-[state=closed]:slide-out-to-right'
-                )}
-              >
-                <DialogTitle className="sr-only">Filtros del catálogo</DialogTitle>
-                <DialogDescription className="sr-only">
-                  Categoría, orden, talla y rango de precio del catálogo de ventas.
-                </DialogDescription>
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3 pt-14 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:p-4 md:pt-14">
-                  {renderFiltersPanel()}
-                </div>
-              </DialogContent>
-            </Dialog>
+            <FiltersDrawer
+              open={filtersOpen}
+              onOpenChange={setFiltersOpen}
+              id="ventas-catalog-filters"
+              title="Filtros del catálogo"
+              description="Categoría, orden, talla y rango de precio del catálogo de ventas."
+            >
+              {renderFiltersPanel()}
+            </FiltersDrawer>
 
             <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto pr-1">
               {catalogSource === 'products' ? (

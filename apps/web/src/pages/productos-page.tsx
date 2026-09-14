@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { FileSpreadsheet, Layers, Loader2, PackageMinus, Plus, SlidersHorizontal } from 'lucide-react'
+import { FileSpreadsheet, Layers, Loader2, PackageMinus, Plus } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -8,6 +10,7 @@ import { CatalogImportDialog } from '@/features/catalog-import/components/catalo
 import type { CatalogProductImportRow } from '@/features/catalog-import/types'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { CatalogFormDialog } from '@/features/ventas/components/catalog-form-dialog'
+import { CatalogAdminFiltersPanel } from '@/features/ventas/components/catalog-admin-filters-panel'
 import {
   CatalogProductCard,
   catalogProductGridClassName,
@@ -37,12 +40,14 @@ const PER_PAGE = 30
 type ProductosFilters = {
   search: string
   category: string
+  sortBy: 'name' | 'most_sold'
   page: number
 }
 
 const DEFAULT_PRODUCTOS_FILTERS: ProductosFilters = {
   search: '',
   category: '',
+  sortBy: 'name',
   page: 1,
 }
 
@@ -61,7 +66,8 @@ export function ProductosPage() {
   const deleteMutation = useDeleteCatalogProductMutation()
   const importMutation = useImportCatalogProductsMutation()
   const { data: categories = [] } = useActiveCategoriesQuery()
-  const activeFilterCount = filters.category ? 1 : 0
+  const activeFilterCount =
+    (filters.category ? 1 : 0) + (filters.sortBy !== DEFAULT_PRODUCTOS_FILTERS.sortBy ? 1 : 0)
 
   useEffect(() => {
     setSearchInput(filters.search)
@@ -86,8 +92,8 @@ export function ProductosPage() {
     category: filters.category || undefined,
     active: true,
     itemKind: 'PRODUCT',
-    sortBy: 'name',
-    sortDir: 'asc',
+    sortBy: filters.sortBy,
+    sortDir: filters.sortBy === 'name' ? 'asc' : 'desc',
   })
 
   const products = data?.catalog_products ?? []
@@ -133,24 +139,12 @@ export function ProductosPage() {
             </CardDescription>
           </div>
           <div className={toolbarActionsClass}>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="relative shrink-0"
-              title="Filtros"
-              aria-label="Filtros"
-              aria-expanded={filtersOpen}
-              aria-controls="productos-catalog-filters"
-              onClick={() => setFiltersOpen((open) => !open)}
-            >
-              <SlidersHorizontal className="size-4" />
-              {activeFilterCount > 0 ? (
-                <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-semibold text-white">
-                  {activeFilterCount}
-                </span>
-              ) : null}
-            </Button>
+            <FiltersIconButton
+              count={activeFilterCount}
+              expanded={filtersOpen}
+              controls="productos-catalog-filters"
+              onClick={() => setFiltersOpen(true)}
+            />
             <Button variant="outline" asChild className={toolbarButtonClass}>
               <Link to="/productos/materiales" title="Ver materiales" aria-label="Ver materiales">
                 <Layers className="size-4" />
@@ -202,27 +196,33 @@ export function ProductosPage() {
               onChange={(e) => setSearchInput(e.target.value)}
               className="max-w-xs"
             />
-            <div
-              id="productos-catalog-filters"
-              className={cn('flex-wrap gap-3', filtersOpen ? 'flex' : 'hidden')}
-            >
-              <select
-                className="border-input flex h-9 rounded-md border bg-white px-3 text-sm"
-                value={filters.category}
-                onChange={(e) => {
-                  const category = e.target.value
-                  setFilters((prev) => ({ ...prev, category, page: 1 }))
-                }}
-              >
-                <option value="">Todas las categorías</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
+
+          <FiltersDrawer
+            open={filtersOpen}
+            onOpenChange={setFiltersOpen}
+            id="productos-catalog-filters"
+            title="Filtros del catálogo"
+            description="Categoría y orden del catálogo de productos."
+          >
+            <CatalogAdminFiltersPanel
+              categories={categories}
+              category={filters.category}
+              onCategoryChange={(category) =>
+                setFilters((prev) => ({ ...prev, category, page: 1 }))
+              }
+              sortBy={filters.sortBy}
+              onSortByChange={(sortBy) => setFilters((prev) => ({ ...prev, sortBy, page: 1 }))}
+              onClearAll={() =>
+                setFilters((prev) => ({
+                  ...prev,
+                  category: '',
+                  sortBy: DEFAULT_PRODUCTOS_FILTERS.sortBy,
+                  page: 1,
+                }))
+              }
+            />
+          </FiltersDrawer>
 
           {isLoading ? (
             <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">

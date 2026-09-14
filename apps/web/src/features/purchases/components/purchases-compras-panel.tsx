@@ -1,9 +1,11 @@
 import { Loader2, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { AccountListFiltersPanel } from '@/components/filters/account-list-filters-panel'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { AccountSelect } from '@/features/accounts/components/account-select'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { NuevaPurchaseDialog } from '@/features/purchases/components/new-purchase-dialog'
 import { PermissionGate } from '@/features/permissions/components/permission-gate'
@@ -69,6 +71,7 @@ export function PurchasesComprasPanel() {
     sessionFilterKey('purchases-compras', company?.id),
     DEFAULT_PURCHASES_COMPRAS_FILTERS
   )
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const { data: suppliersData } = useSuppliersQuery({ page: 1, perPage: 100, active: true })
@@ -90,47 +93,48 @@ export function PurchasesComprasPanel() {
           <CardTitle className="text-base">Compras realizadas</CardTitle>
           {!meta ? <CardDescription>Cargando…</CardDescription> : null}
         </div>
-        <PermissionGate permission="purchases.edit">
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus />
-            Comprar
-          </Button>
-        </PermissionGate>
+        <div className="flex items-center gap-2">
+          <FiltersIconButton
+            count={(filters.accountId != null ? 1 : 0) + (filters.unassignedOnly ? 1 : 0)}
+            expanded={filtersOpen}
+            controls="purchases-compras-filters"
+            onClick={() => setFiltersOpen(true)}
+          />
+          <PermissionGate permission="purchases.edit">
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus />
+              Comprar
+            </Button>
+          </PermissionGate>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <AccountSelect
-            value={filters.unassignedOnly ? null : filters.accountId}
-            onChange={(value) => {
+        <FiltersDrawer
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          id="purchases-compras-filters"
+          title="Filtros de compras"
+          description="Cuenta asociada a las compras."
+        >
+          <AccountListFiltersPanel
+            accountId={filters.accountId}
+            unassignedOnly={filters.unassignedOnly}
+            onAccountIdChange={(accountId) =>
+              setFilters((prev) => ({ ...prev, accountId, page: 1 }))
+            }
+            onUnassignedOnlyChange={(unassignedOnly) =>
               setFilters((prev) => ({
                 ...prev,
-                unassignedOnly: false,
-                accountId: value,
+                unassignedOnly,
+                accountId: unassignedOnly ? null : prev.accountId,
                 page: 1,
               }))
-            }}
-            disabled={filters.unassignedOnly}
-            label="Filtrar por cuenta"
+            }
+            onClearAll={() =>
+              setFilters((prev) => ({ ...prev, accountId: null, unassignedOnly: false, page: 1 }))
+            }
           />
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={filters.unassignedOnly}
-                onChange={(e) => {
-                  const checked = e.target.checked
-                  setFilters((prev) => ({
-                    ...prev,
-                    unassignedOnly: checked,
-                    accountId: checked ? null : prev.accountId,
-                    page: 1,
-                  }))
-                }}
-              />
-              Solo sin cuenta
-            </label>
-          </div>
-        </div>
+        </FiltersDrawer>
 
         {isLoading ? (
           <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">

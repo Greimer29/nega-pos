@@ -927,10 +927,10 @@ pwsh scripts/publish-github-release.ps1
 | `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), botón de registrar gasto de empresa (sin salir del POS; permiso `expenses.edit`), cliente walk-in por defecto «Generico», tabs Productos/Materiales/**Servicios**, búsqueda/barcode en la barra superior, panel de filtros (categorías, orden, talla, precio) en drawer (desktop desde la derecha; móvil sheet desde abajo ~80% altura) al pulsar **Filtros**, escaneo barcode (filtro en catálogo / sumar en carrito; tallas con diálogo), precio por línea (atajos −5/−10/−20 %), detalle opcional en líneas de servicio, fórmula por línea si el producto tiene, descuento de factura aparte; en desktop carrito anclado; en tablet el carrito ocupa el área de contenido (sidebar visible); en móvil carrito a pantalla completa |
 | `/ventas/:id` | Detalle factura |
 | `/orders/:id` | Detalle pedido |
-| `/productos` | Catálogo de productos físicos (`item_kind=PRODUCT`). Filtros de categoría en botón desplegable (mismo patrón que ventas). Botón «Movimientos» → cargo/descargo/ajuste masivo. «Importar Excel» descarga plantilla y carga masiva (`catalog.edit`) |
+| `/productos` | Catálogo de productos físicos (`item_kind=PRODUCT`). Botón de filtros (icono) abre drawer (desktop derecha / móvil sheet abajo) con categorías y orden; la búsqueda queda visible. Botón «Movimientos» → cargo/descargo/ajuste masivo. «Importar Excel» descarga plantilla y carga masiva (`catalog.edit`) |
 | `/productos/movimientos` | Cargo, descargo o ajuste de stock sobre varios productos (y tallas) en un solo registro |
 | `/productos/:id` | Detalle producto |
-| `/productos/servicios` | Catálogo de servicios (`item_kind=SERVICE`): nombre, precio, activo/categoría; sin stock/fórmula/tallas. Permisos `catalog.view` / `catalog.edit`. «Importar Excel» |
+| `/productos/servicios` | Catálogo de servicios (`item_kind=SERVICE`): nombre, precio, activo/categoría; sin stock/fórmula/tallas. Permisos `catalog.view` / `catalog.edit`. Filtros en el mismo drawer de icono (categorías y orden). «Importar Excel» |
 | `/productos/materiales` | Materiales. «Importar Excel» (`materials.edit`) descarga plantilla y carga masiva |
 | `/productos/materiales/:id` | Detalle material |
 | `/purchases` | Hub Compras (`?tab=compras\|gastos\|ingresos`) |
@@ -939,7 +939,7 @@ pwsh scripts/publish-github-release.ps1
 | `/suppliers/:id/cuenta` | Estado de cuenta proveedor |
 | `/machines` | Máquinas |
 | `/machines/:id` | Detalle máquina |
-| `/reportes` | Reportes (`?vista=inventario` → snapshot de inventario) |
+| `/reportes` | Reportes financieros: período visible; botón de filtros (icono) abre drawer de cuenta y tipos. `?vista=inventario` → snapshot de inventario con el mismo botón/drawer (categoría, orden, visibilidad) |
 | `/reportes/inventario/:productId` | Movimientos de inventario de un producto |
 | `/reportes/movimientos/:category` | Movimientos por categoría (estado de cuenta) |
 | `/users` | Usuarios |
@@ -973,7 +973,7 @@ Cada feature encapsula servicios API (axios), hooks TanStack Query, componentes 
 
 - **TanStack Query**: caché servidor, invalidación tras mutaciones.
 - **Carrito de ventas**: `sessionStorage` vía `ventas-cart-draft.ts` — persiste borrador del POS entre recargas de pestaña.
-- **Filtros de listado**: `sessionStorage` vía `session-persisted-state.ts` (`nega-pos:filters:…`, scoped por empresa). Se mantienen al navegar entre módulos en la misma pestaña hasta que el usuario los cambie; se limpian al logout y al cerrar la pestaña. No incluye diálogos abiertos ni UI efímera (acordeones, filas expandidas).
+- **Filtros de listado**: `sessionStorage` vía `session-persisted-state.ts` (`nega-pos:filters:…`, scoped por empresa). El disparador UI es un **botón de icono** (`SlidersHorizontal`) con badge de filtros activos; el panel abre en drawer (desktop desde la derecha; móvil sheet ~80% desde abajo), con «Limpiar todo» y secciones plegables. El contenido del panel varía por módulo (catálogo vs período/cuenta vs estado). Se mantienen al navegar entre módulos en la misma pestaña hasta que el usuario los cambie; se limpian al logout y al cerrar la pestaña. No incluye diálogos abiertos ni UI efímera (acordeones, filas expandidas).
 - **Formatos de impresión**: leídos/escritos vía API (`app_settings.print_config`). El PUT acepta `scope: devices | formats | full` para que Ventas y Formatos no se pisen. En Desktop, si la BD está vacía, se importa una vez el JSON legacy de userData.
 
 ---

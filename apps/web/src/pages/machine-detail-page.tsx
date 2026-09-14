@@ -1,6 +1,9 @@
 import { ArrowLeft, Loader2, Pencil, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { AccountListFiltersPanel } from '@/components/filters/account-list-filters-panel'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/features/auth/hooks/use-auth'
@@ -14,7 +17,6 @@ import {
 } from '@/features/machines/constants'
 import { useMachineQuery } from '@/features/machines/hooks/use-machines'
 import type { MachineExpenseCategory } from '@/features/machines/constants'
-import { AccountSelect } from '@/features/accounts/components/account-select'
 import { DisplayMoney } from '@/features/currencies/components/display-money'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
@@ -54,6 +56,7 @@ export function MachineDetailPage() {
   const { id: machineId, isValid: isValidMachineId } = parsePositiveIntRouteParam(id)
   const [editOpen, setEditOpen] = useState(false)
   const [expenseOpen, setExpenseOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [filters, setFilters] = useSessionPersistedState(
     sessionFilterKey(
       `machine-detail-expenses${machineId ? `:${machineId}` : ''}`,
@@ -197,41 +200,39 @@ export function MachineDetailPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle className="text-base">Últimos gastos</CardTitle>
+          <FiltersIconButton
+            count={(filters.accountId != null ? 1 : 0) + (filters.unassignedOnly ? 1 : 0)}
+            expanded={filtersOpen}
+            controls="machine-detail-expense-filters"
+            onClick={() => setFiltersOpen(true)}
+          />
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <AccountSelect
-              value={filters.unassignedOnly ? null : filters.accountId}
-              onChange={(value) => {
+          <FiltersDrawer
+            open={filtersOpen}
+            onOpenChange={setFiltersOpen}
+            id="machine-detail-expense-filters"
+            title="Filtros de gastos"
+            description="Cuenta de los gastos de esta máquina."
+          >
+            <AccountListFiltersPanel
+              accountId={filters.accountId}
+              unassignedOnly={filters.unassignedOnly}
+              onAccountIdChange={(accountId) => setFilters((prev) => ({ ...prev, accountId }))}
+              onUnassignedOnlyChange={(unassignedOnly) =>
                 setFilters((prev) => ({
                   ...prev,
-                  unassignedOnly: false,
-                  accountId: value,
+                  unassignedOnly,
+                  accountId: unassignedOnly ? null : prev.accountId,
                 }))
-              }}
-              disabled={filters.unassignedOnly}
-              label="Filtrar por cuenta"
+              }
+              onClearAll={() =>
+                setFilters({ accountId: null, unassignedOnly: false })
+              }
             />
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={filters.unassignedOnly}
-                  onChange={(e) => {
-                    const checked = e.target.checked
-                    setFilters((prev) => ({
-                      ...prev,
-                      unassignedOnly: checked,
-                      accountId: checked ? null : prev.accountId,
-                    }))
-                  }}
-                />
-                Solo sin cuenta
-              </label>
-            </div>
-          </div>
+          </FiltersDrawer>
 
           {expenses.length === 0 ? (
             <p className="text-muted-foreground text-sm">Esta máquina aún no tiene gastos registrados.</p>

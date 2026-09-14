@@ -1,6 +1,9 @@
-import { Eye, Loader2, Plus } from 'lucide-react'
+import { Eye, Loader2, Plus, Users } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
+import { FilterSection, FiltersPanel } from '@/components/filters/filters-panel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/features/auth/hooks/use-auth'
@@ -34,6 +37,7 @@ export function OrdersPage() {
     sessionFilterKey('orders', company?.id),
     DEFAULT_ORDERS_FILTERS
   )
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const { data: customersData } = useCustomersQuery({ page: 1, perPage: 100, active: true })
@@ -56,21 +60,35 @@ export function OrdersPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Pedidos</h1>
           <p className="text-muted-foreground text-sm">Seguimiento de pedidos desde borrador hasta entrega.</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="w-fit shrink-0">
-          <Plus />
-          Nuevo pedido
-        </Button>
+        <div className="flex w-fit shrink-0 items-center gap-2">
+          <FiltersIconButton
+            count={(filters.status ? 1 : 0) + (filters.customerId ? 1 : 0)}
+            expanded={filtersOpen}
+            controls="orders-list-filters"
+            onClick={() => setFiltersOpen(true)}
+          />
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus />
+            Nuevo pedido
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base">Filtros</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-4">
-          <div className="space-y-1">
-            <label className="text-muted-foreground text-xs font-medium">Estado</label>
+      <FiltersDrawer
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        id="orders-list-filters"
+        title="Filtros de pedidos"
+        description="Estado y cliente del listado de pedidos."
+      >
+        <FiltersPanel
+          onClearAll={() =>
+            setFilters((prev) => ({ ...prev, status: '', customerId: '', page: 1 }))
+          }
+        >
+          <FilterSection title="Estado" icon={<Users className="size-4 text-neutral-500" />}>
             <select
-              className="border-input bg-background flex h-9 min-w-[160px] rounded-md border px-3 text-sm"
+              className="border-input flex h-9 w-full rounded-md border bg-white px-3 text-sm"
               value={filters.status}
               onChange={(e) => {
                 setFilters((prev) => ({
@@ -89,11 +107,10 @@ export function OrdersPage() {
                 </option>
               ))}
             </select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-muted-foreground text-xs font-medium">Cliente</label>
+          </FilterSection>
+          <FilterSection title="Cliente" icon={<Users className="size-4 text-neutral-500" />}>
             <select
-              className="border-input bg-background flex h-9 min-w-[180px] rounded-md border px-3 text-sm"
+              className="border-input flex h-9 w-full rounded-md border bg-white px-3 text-sm"
               value={filters.customerId}
               onChange={(e) => {
                 setFilters((prev) => ({
@@ -110,9 +127,9 @@ export function OrdersPage() {
                 </option>
               ))}
             </select>
-          </div>
-        </CardContent>
-      </Card>
+          </FilterSection>
+        </FiltersPanel>
+      </FiltersDrawer>
 
       <Card>
         <CardHeader>
