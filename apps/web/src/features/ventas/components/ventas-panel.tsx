@@ -5,8 +5,18 @@ import { BarcodeScanButton } from '@/components/barcode-scan-button'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  VentasCatalogFiltersPanel,
+  type VentasCatalogSortOption,
+} from '@/features/ventas/components/ventas-catalog-filters-panel'
 import { CustomerFormDialog } from '@/features/customers/components/customer-form-dialog'
 import type { Customer } from '@/features/customers/types'
 import { useAuth } from '@/features/auth/hooks/use-auth'
@@ -114,6 +124,9 @@ type VentasCatalogFilters = {
   barcode: string
   category: string
   size: string
+  sortBy: VentasCatalogSortOption
+  minPrice: string
+  maxPrice: string
   page: number
 }
 
@@ -123,7 +136,14 @@ const DEFAULT_VENTAS_CATALOG_FILTERS: VentasCatalogFilters = {
   barcode: '',
   category: '',
   size: '',
+  sortBy: 'most_sold',
+  minPrice: '',
+  maxPrice: '',
   page: 1,
+}
+
+function defaultSortForSource(source: CatalogSource): VentasCatalogSortOption {
+  return source === 'products' ? 'most_sold' : 'name'
 }
 
 function cartLineUnitPrice(line: CartLine): number {
@@ -186,9 +206,12 @@ function VentasCreateView() {
   )
   const [searchInput, setSearchInput] = useState(catalogFilters.search)
   const [sizeFilter, setSizeFilter] = useState(catalogFilters.size)
+  const [minPriceInput, setMinPriceInput] = useState(catalogFilters.minPrice)
+  const [maxPriceInput, setMaxPriceInput] = useState(catalogFilters.maxPrice)
   const catalogSource = catalogFilters.source
   const category = catalogFilters.category
   const page = catalogFilters.page
+  const sortBy = catalogFilters.sortBy ?? defaultSortForSource(catalogSource)
   const [sizePickProduct, setSizePickProduct] = useState<CatalogProduct | null>(null)
   const [sizePickOpen, setSizePickOpen] = useState(false)
   const [customerId, setCustomerId] = useState<number | ''>(() => initialDraft?.customerId ?? '')
@@ -256,8 +279,8 @@ function VentasCreateView() {
       size: catalogFilters.size || undefined,
       active: true,
       itemKind: 'PRODUCT',
-      sortBy: 'most_sold',
-      sortDir: 'desc',
+      sortBy: sortBy === 'name' ? 'name' : 'most_sold',
+      sortDir: sortBy === 'name' ? 'asc' : 'desc',
     },
     { enabled: catalogSource === 'products' }
   )
@@ -294,8 +317,8 @@ function VentasCreateView() {
       barcode: catalogFilters.barcode || undefined,
       category: category || undefined,
       status: 'active',
-      sortBy: 'name',
-      sortDir: 'asc',
+      sortBy: sortBy === 'most_sold' ? 'most_used' : 'name',
+      sortDir: sortBy === 'most_sold' ? 'desc' : 'asc',
     },
     { enabled: catalogSource === 'materials' }
   )
@@ -307,6 +330,26 @@ function VentasCreateView() {
   useEffect(() => {
     setSizeFilter(catalogFilters.size)
   }, [catalogFilters.size])
+
+  useEffect(() => {
+    setMinPriceInput(catalogFilters.minPrice ?? '')
+  }, [catalogFilters.minPrice])
+
+  useEffect(() => {
+    setMaxPriceInput(catalogFilters.maxPrice ?? '')
+  }, [catalogFilters.maxPrice])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setCatalogFilters((prev) => {
+        if ((prev.minPrice ?? '') === minPriceInput && (prev.maxPrice ?? '') === maxPriceInput) {
+          return prev
+        }
+        return { ...prev, minPrice: minPriceInput, maxPrice: maxPriceInput, page: 1 }
+      })
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [minPriceInput, maxPriceInput, setCatalogFilters])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -398,13 +441,117 @@ function VentasCreateView() {
     invoiceDiscountUsd,
   ])
 
-  const products = catalogData?.catalog_products ?? []
+  const productsRaw = catalogData?.catalog_products ?? []
   const catalogMeta = catalogData?.meta
-  const services = servicesData?.catalog_products ?? []
+  const servicesRaw = servicesData?.catalog_products ?? []
   const servicesMeta = servicesData?.meta
-  const materials = materialsData?.materials ?? []
+  const materialsRaw = materialsData?.materials ?? []
   const materialsMeta = materialsData?.meta
-  const activeFilterCount = (category ? 1 : 0) + (sizeFilter.trim() ? 1 : 0)
+
+  const priceBounds = useMemo(() => {
+    const prices =
+      catalogSource === 'products'
+        ? productsRaw.map((item) => Number(item.sale_price_usd))
+        : catalogSource === 'services'
+          ? servicesRaw.map((item) => Number(item.sale_price_usd))
+          : materialsRaw.map((item) => Number(materialSaleUnitPriceUsd(item)))
+    const finite = prices.filter((value) => Number.isFinite(value) && value >= 0)
+    if (finite.length === 0) return { min: 0, max: 100 }
+    return { min: Math.min(...finite), max: Math.max(...finite) }
+  }, [catalogSource, productsRaw, servicesRaw, materialsRaw])
+
+  const products = useMemo(() => {
+    const min = Number(catalogFilters.minPrice)
+    const max = Number(catalogFilters.maxPrice)
+    return productsRaw.filter((item) => {
+      const price = Number(item.sale_price_usd)
+      if (Number.isFinite(min) && catalogFilters.minPrice.trim() && price < min) return false
+      if (Number.isFinite(max) && catalogFilters.maxPrice.trim() && price > max) return false
+      return true
+    })
+  }, [productsRaw, catalogFilters.minPrice, catalogFilters.maxPrice])
+
+  const services = useMemo(() => {
+    const min = Number(catalogFilters.minPrice)
+    const max = Number(catalogFilters.maxPrice)
+    return servicesRaw.filter((item) => {
+      const price = Number(item.sale_price_usd)
+      if (Number.isFinite(min) && catalogFilters.minPrice.trim() && price < min) return false
+      if (Number.isFinite(max) && catalogFilters.maxPrice.trim() && price > max) return false
+      return true
+    })
+  }, [servicesRaw, catalogFilters.minPrice, catalogFilters.maxPrice])
+
+  const materials = useMemo(() => {
+    const min = Number(catalogFilters.minPrice)
+    const max = Number(catalogFilters.maxPrice)
+    return materialsRaw.filter((item) => {
+      const price = materialSaleUnitPriceUsd(item)
+      if (Number.isFinite(min) && catalogFilters.minPrice.trim() && price < min) return false
+      if (Number.isFinite(max) && catalogFilters.maxPrice.trim() && price > max) return false
+      return true
+    })
+  }, [materialsRaw, catalogFilters.minPrice, catalogFilters.maxPrice])
+
+  const sizeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(productsRaw.flatMap((product) => (product.sizes ?? []).map((size) => size.size)))
+      ).sort((a, b) => a.localeCompare(b, 'es', { numeric: true })),
+    [productsRaw]
+  )
+
+  const defaultSort = defaultSortForSource(catalogSource)
+  const activeFilterCount =
+    (category ? 1 : 0) +
+    (sizeFilter.trim() ? 1 : 0) +
+    (sortBy !== defaultSort ? 1 : 0) +
+    (catalogFilters.minPrice.trim() || catalogFilters.maxPrice.trim() ? 1 : 0)
+
+  function clearCatalogFilters() {
+    setSearchInput('')
+    setSizeFilter('')
+    setMinPriceInput('')
+    setMaxPriceInput('')
+    setCatalogFilters((prev) => ({
+      ...prev,
+      search: '',
+      barcode: '',
+      category: '',
+      size: '',
+      sortBy: defaultSortForSource(prev.source),
+      minPrice: '',
+      maxPrice: '',
+      page: 1,
+    }))
+  }
+
+  function renderFiltersPanel() {
+    return (
+      <VentasCatalogFiltersPanel
+        catalogSource={catalogSource}
+        categories={categories}
+        category={category}
+        onCategoryChange={(value) => {
+          setCatalogFilters((prev) => ({ ...prev, category: value, page: 1 }))
+        }}
+        sortBy={sortBy}
+        onSortByChange={(value) => {
+          setCatalogFilters((prev) => ({ ...prev, sortBy: value, page: 1 }))
+        }}
+        sizeFilter={sizeFilter}
+        onSizeFilterChange={setSizeFilter}
+        sizeOptions={sizeOptions}
+        minPrice={minPriceInput}
+        maxPrice={maxPriceInput}
+        onMinPriceChange={setMinPriceInput}
+        onMaxPriceChange={setMaxPriceInput}
+        priceBounds={priceBounds}
+        onClearAll={clearCatalogFilters}
+        className="h-full min-h-0 border-0 shadow-none"
+      />
+    )
+  }
   const cartItemCount = useMemo(
     () => cart.reduce((sum, line) => sum + line.quantity, 0),
     [cart]
@@ -1229,24 +1376,6 @@ function VentasCreateView() {
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="relative shrink-0 md:hidden"
-                  title="Filtros"
-                  aria-label="Filtros"
-                  aria-expanded={filtersOpen}
-                  aria-controls="ventas-catalog-filters"
-                  onClick={() => setFiltersOpen((open) => !open)}
-                >
-                  <SlidersHorizontal className="size-4" />
-                  {activeFilterCount > 0 ? (
-                    <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-semibold text-white">
-                      {activeFilterCount}
-                    </span>
-                  ) : null}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
                   className="relative shrink-0 xl:hidden"
                   title="Abrir carrito"
                   aria-label="Abrir carrito"
@@ -1264,122 +1393,140 @@ function VentasCreateView() {
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-3 pt-0 sm:px-6">
             <div className="flex shrink-0 flex-col gap-3">
-              <div className="bg-muted inline-flex w-fit rounded-lg p-1">
-                <button
-                  type="button"
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs font-medium',
-                    catalogSource === 'products'
-                      ? 'bg-background shadow-sm'
-                      : 'text-muted-foreground'
-                  )}
-                  onClick={() => {
-                    setCatalogFilters((prev) => ({ ...prev, source: 'products', page: 1 }))
-                  }}
-                >
-                  Productos
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs font-medium',
-                    catalogSource === 'materials'
-                      ? 'bg-background shadow-sm'
-                      : 'text-muted-foreground'
-                  )}
-                  onClick={() => {
-                    setCatalogFilters((prev) => ({ ...prev, source: 'materials', page: 1 }))
-                  }}
-                >
-                  Materiales
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs font-medium',
-                    catalogSource === 'services'
-                      ? 'bg-background shadow-sm'
-                      : 'text-muted-foreground'
-                  )}
-                  onClick={() => {
-                    setCatalogFilters((prev) => ({ ...prev, source: 'services', page: 1 }))
-                  }}
-                >
-                  Servicios
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder={
-                    catalogSource === 'products'
-                      ? 'Buscar producto…'
-                      : catalogSource === 'services'
-                        ? 'Buscar servicio…'
-                        : 'Buscar material…'
-                  }
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'Enter') return
-                    e.preventDefault()
-                    if (catalogSource === 'services') return
-                    const code = searchInput.trim()
-                    if (code) void filterCatalogByBarcode(code)
-                  }}
-                  className="min-w-0 flex-1 bg-white md:max-w-xs"
-                />
-                {catalogSource !== 'services' ? (
-                  <BarcodeScanButton onScan={(code) => void filterCatalogByBarcode(code)} />
-                ) : null}
-              </div>
-              <div
-                id="ventas-catalog-filters"
-                className={cn('flex-wrap gap-3', filtersOpen ? 'flex' : 'hidden', 'md:flex')}
-              >
-              <select
-                className="border-input flex h-9 rounded-md border bg-white px-3 text-sm"
-                value={category}
-                onChange={(e) => {
-                  setCatalogFilters((prev) => ({
-                    ...prev,
-                    category: e.target.value,
-                    page: 1,
-                  }))
-                }}
-              >
-                <option value="">Todas las categorías</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              {catalogSource === 'products' ? (
-                <>
-                  <Input
-                    list="ventas-size-filter-options"
-                    placeholder="Filtrar talla…"
-                    value={sizeFilter}
-                    onChange={(e) => setSizeFilter(e.target.value)}
-                    className="h-9 w-36 bg-white"
-                  />
-                  <datalist id="ventas-size-filter-options">
-                    {Array.from(
-                      new Set(
-                        products.flatMap((product) =>
-                          (product.sizes ?? []).map((size) => size.size)
-                        )
-                      )
-                    )
-                      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
-                      .map((size) => (
-                        <option key={size} value={size} />
-                      ))}
-                  </datalist>
-                </>
-              ) : null}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="bg-muted inline-flex w-fit rounded-lg p-1">
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-md px-3 py-1.5 text-xs font-medium',
+                      catalogSource === 'products'
+                        ? 'bg-background shadow-sm'
+                        : 'text-muted-foreground'
+                    )}
+                    onClick={() => {
+                      setCatalogFilters((prev) => ({
+                        ...prev,
+                        source: 'products',
+                        sortBy: defaultSortForSource('products'),
+                        page: 1,
+                      }))
+                    }}
+                  >
+                    Productos
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-md px-3 py-1.5 text-xs font-medium',
+                      catalogSource === 'materials'
+                        ? 'bg-background shadow-sm'
+                        : 'text-muted-foreground'
+                    )}
+                    onClick={() => {
+                      setCatalogFilters((prev) => ({
+                        ...prev,
+                        source: 'materials',
+                        sortBy: defaultSortForSource('materials'),
+                        page: 1,
+                      }))
+                    }}
+                  >
+                    Materiales
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-md px-3 py-1.5 text-xs font-medium',
+                      catalogSource === 'services'
+                        ? 'bg-background shadow-sm'
+                        : 'text-muted-foreground'
+                    )}
+                    onClick={() => {
+                      setCatalogFilters((prev) => ({
+                        ...prev,
+                        source: 'services',
+                        sortBy: defaultSortForSource('services'),
+                        page: 1,
+                      }))
+                    }}
+                  >
+                    Servicios
+                  </button>
+                </div>
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:max-w-xl sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="relative shrink-0 bg-white"
+                    title="Filtros"
+                    aria-label="Filtros"
+                    aria-expanded={filtersOpen}
+                    aria-controls="ventas-catalog-filters"
+                    onClick={() => setFiltersOpen(true)}
+                  >
+                    <SlidersHorizontal className="size-4" />
+                    {activeFilterCount > 0 ? (
+                      <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-semibold text-white">
+                        {activeFilterCount}
+                      </span>
+                    ) : null}
+                  </Button>
+                  <div className="relative min-w-0 flex-1 basis-[12rem]">
+                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" />
+                    <Input
+                      placeholder={
+                        catalogSource === 'products'
+                          ? 'Buscar producto…'
+                          : catalogSource === 'services'
+                            ? 'Buscar servicio…'
+                            : 'Buscar material…'
+                      }
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return
+                        e.preventDefault()
+                        if (catalogSource === 'services') return
+                        const code = searchInput.trim()
+                        if (code) void filterCatalogByBarcode(code)
+                      }}
+                      className="bg-white pl-9"
+                    />
+                  </div>
+                  {catalogSource !== 'services' ? (
+                    <BarcodeScanButton onScan={(code) => void filterCatalogByBarcode(code)} />
+                  ) : null}
+                </div>
               </div>
             </div>
+
+            <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
+              <DialogContent
+                id="ventas-catalog-filters"
+                closeButtonClassName="top-3 right-3 flex size-11 items-center justify-center rounded-full bg-neutral-100 opacity-100 shadow-sm hover:bg-neutral-200 hover:opacity-100"
+                closeIconClassName="size-5"
+                className={cn(
+                  'fixed z-50 flex translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0 shadow-xl duration-300',
+                  'data-[state=closed]:zoom-out-100 data-[state=open]:zoom-in-100',
+                  // Móvil: sheet desde abajo (~80% altura)
+                  'inset-x-0 top-auto bottom-0 left-0 right-0 h-[80dvh] max-h-[80dvh] w-full max-w-none rounded-t-2xl border-x-0 border-b-0',
+                  'max-md:data-[state=open]:slide-in-from-bottom max-md:data-[state=closed]:slide-out-to-bottom',
+                  // Desktop: drawer desde la derecha
+                  'md:inset-y-0 md:top-0 md:right-0 md:bottom-0 md:left-auto md:h-svh md:max-h-svh md:w-[min(100vw,22rem)] md:max-w-[22rem]',
+                  'md:rounded-none md:rounded-l-2xl md:border md:border-y-0 md:border-r-0',
+                  'md:data-[state=open]:slide-in-from-right md:data-[state=closed]:slide-out-to-right'
+                )}
+              >
+                <DialogTitle className="sr-only">Filtros del catálogo</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Categoría, orden, talla y rango de precio del catálogo de ventas.
+                </DialogDescription>
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3 pt-14 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:p-4 md:pt-14">
+                  {renderFiltersPanel()}
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto pr-1">
               {catalogSource === 'products' ? (
