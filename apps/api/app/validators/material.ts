@@ -15,6 +15,7 @@ const materialFields = {
   location: vine.string().trim().maxLength(100).optional(),
   default_supplier_id: vine.number().min(1).optional(),
   last_purchase_price_usd: vine.number().min(0).optional(),
+  barcode: vine.string().trim().maxLength(64).nullable().optional(),
 }
 
 export const createMaterialValidator = vine.create({
@@ -30,6 +31,7 @@ export const listMaterialsValidator = vine.create({
   page: vine.number().min(1).optional(),
   per_page: vine.number().min(1).max(100).optional(),
   search: vine.string().trim().maxLength(150).optional(),
+  barcode: vine.string().trim().maxLength(64).optional(),
   category: vine.string().trim().minLength(1).maxLength(100).optional(),
   active: vine.boolean().optional(),
   low_stock: vine.boolean().optional(),
@@ -58,6 +60,7 @@ export const importMaterialsValidator = vine.create({
         minimum_stock: vine.number().min(0).optional(),
         location: vine.string().trim().maxLength(100).optional(),
         last_purchase_price_usd: vine.number().min(0).optional(),
+        barcode: vine.string().trim().maxLength(64).optional(),
       })
     )
     .minLength(1)

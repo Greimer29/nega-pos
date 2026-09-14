@@ -1,15 +1,14 @@
-import { SlidersHorizontal } from 'lucide-react'
+import { Landmark, Layers } from 'lucide-react'
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
+import { FilterSection, FiltersPanel } from '@/components/filters/filters-panel'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
 import { useActiveAccountsQuery } from '@/features/accounts/hooks/use-accounts'
 import { ReportPeriodFilters } from '@/features/reports/components/report-period-filters'
 import type { ReportPeriodState } from '@/features/reports/report-period'
 import { reportUi } from '@/features/reports/report-ui'
+import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
-
-const ALL_ACCOUNTS = ''
-const UNASSIGNED = '__unassigned__'
 
 export type ReportTypeFilters = {
   sales: boolean
@@ -30,12 +29,19 @@ type ReportFiltersToolbarProps = {
   onTypesChange: (value: ReportTypeFilters) => void
 }
 
+const DEFAULT_TYPES: ReportTypeFilters = {
+  sales: true,
+  incomes: true,
+  purchases: true,
+  expenses: true,
+  machine_expenses: false,
+}
+
 const TYPE_OPTIONS: Array<{ key: keyof ReportTypeFilters; label: string }> = [
   { key: 'sales', label: 'Ventas' },
   { key: 'incomes', label: 'Ingresos' },
   { key: 'purchases', label: 'Compras' },
   { key: 'expenses', label: 'Gastos' },
-  { key: 'machine_expenses', label: 'Gastos máquina (histórico)' },
 ]
 
 export function ReportFiltersToolbar({
@@ -48,15 +54,17 @@ export function ReportFiltersToolbar({
   onUnassignedOnlyChange,
   onTypesChange,
 }: ReportFiltersToolbarProps) {
-  const [expanded, setExpanded] = useState(false)
-  const { data: accountsData, isLoading: accountsLoading } = useActiveAccountsQuery()
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const { data: accountsData } = useActiveAccountsQuery()
   const accounts = accountsData?.accounts ?? []
 
-  const accountFilterValue = unassignedOnly
-    ? UNASSIGNED
-    : accountId != null
-      ? String(accountId)
-      : ALL_ACCOUNTS
+  const typesDiffer =
+    types.sales !== DEFAULT_TYPES.sales ||
+    types.incomes !== DEFAULT_TYPES.incomes ||
+    types.purchases !== DEFAULT_TYPES.purchases ||
+    types.expenses !== DEFAULT_TYPES.expenses
+  const activeFilterCount =
+    (accountId != null ? 1 : 0) + (unassignedOnly ? 1 : 0) + (typesDiffer ? 1 : 0)
 
   function toggleType(key: keyof ReportTypeFilters) {
     const next = { ...types, [key]: !types[key] }
@@ -64,75 +72,85 @@ export function ReportFiltersToolbar({
     onTypesChange(next)
   }
 
-  function onAccountFilterChange(raw: string) {
-    if (raw === UNASSIGNED) {
-      onUnassignedOnlyChange(true)
-      onAccountIdChange(null)
-      return
-    }
+  function clearAll() {
+    onAccountIdChange(null)
     onUnassignedOnlyChange(false)
-    onAccountIdChange(raw === ALL_ACCOUNTS ? null : Number(raw))
+    onTypesChange({ ...DEFAULT_TYPES })
   }
 
   return (
     <div className={cn(reportUi.panel, 'p-5 md:p-6')}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ReportPeriodFilters value={period} onChange={onPeriodChange} />
-
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setExpanded((value) => !value)}
-          className={reportUi.btnGhost}
-        >
-          <SlidersHorizontal className="size-4" />
-          Filtros
-        </Button>
+        <FiltersIconButton
+          count={activeFilterCount}
+          expanded={filtersOpen}
+          controls="reportes-financieros-filters"
+          onClick={() => setFiltersOpen(true)}
+        />
       </div>
 
-      {expanded ? (
-        <div className={cn('mt-5 space-y-4 border-t pt-5', reportUi.divider)}>
-          <div className="max-w-md space-y-2">
-            <Label htmlFor="report-account-filter" className="text-neutral-600">
-              Cuenta
-            </Label>
-            <select
-              id="report-account-filter"
-              disabled={accountsLoading}
-              value={accountFilterValue}
-              onChange={(e) => onAccountFilterChange(e.target.value)}
-              className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-lg border border-neutral-300 bg-white px-3 py-1 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value={ALL_ACCOUNTS}>Todas las cuentas</option>
-              <option value={UNASSIGNED}>Solo sin cuenta</option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {TYPE_OPTIONS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => toggleType(key)}
-                className={types[key] ? reportUi.pillActive : reportUi.pillInactive}
+      <FiltersDrawer
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        id="reportes-financieros-filters"
+        title="Filtros del reporte financiero"
+        description="Cuenta y tipos de movimiento del estado de cuenta."
+      >
+        <FiltersPanel onClearAll={clearAll}>
+          <FilterSection title="Cuenta" icon={<Landmark className="size-4 text-neutral-500" />}>
+            <div className="space-y-3">
+              <select
+                className="border-input flex h-9 w-full rounded-md border bg-white px-3 text-sm"
+                value={unassignedOnly ? '__unassigned__' : accountId != null ? String(accountId) : ''}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  if (raw === '__unassigned__') {
+                    onUnassignedOnlyChange(true)
+                    onAccountIdChange(null)
+                    return
+                  }
+                  onUnassignedOnlyChange(false)
+                  onAccountIdChange(raw === '' ? null : Number(raw))
+                }}
               >
-                {label}
-              </button>
-            ))}
-          </div>
+                <option value="">Todas las cuentas</option>
+                <option value="__unassigned__">Solo sin cuenta</option>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-muted-foreground text-xs">
+                Compras, gastos e ingresos se filtran por cuenta. Las ventas no tienen cuenta y
+                siguen visibles salvo que desactives el tipo Ventas.
+              </p>
+            </div>
+          </FilterSection>
 
-          <p className={reportUi.muted}>
-            Compras, gastos e ingresos se filtran por cuenta. Ventas no tienen cuenta asignada y
-            siguen visibles salvo que desactives el tipo Ventas.
-          </p>
-        </div>
-      ) : null}
+          <FilterSection
+            title="Tipos de movimiento"
+            icon={<Layers className="size-4 text-neutral-500" />}
+          >
+            <div className="space-y-2.5">
+              {TYPE_OPTIONS.map(({ key, label }) => (
+                <label
+                  key={key}
+                  className="flex cursor-pointer items-center gap-2.5 text-sm text-neutral-700"
+                >
+                  <Checkbox
+                    checked={types[key]}
+                    onChange={() => toggleType(key)}
+                    className="accent-violet-700"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </FilterSection>
+        </FiltersPanel>
+      </FiltersDrawer>
     </div>
   )
 }

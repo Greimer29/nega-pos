@@ -18,6 +18,7 @@ export async function listMaterials(params: MaterialListParams = {}) {
       page: params.page,
       per_page: params.perPage,
       search: params.search || undefined,
+      barcode: params.barcode || undefined,
       category: params.category,
       status: params.status || undefined,
       sort_by: params.sortBy,
@@ -88,6 +89,7 @@ export async function importMaterials(
     minimum_stock?: number
     location?: string
     last_purchase_price_usd?: number
+    barcode?: string
   }>
 ) {
   const { data } = await api.post<{

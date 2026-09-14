@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react'
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { useSaleQuery } from '@/features/ventas/hooks/use-sales'
 import { catalogProductCode } from '@/features/ventas/components/ventas-order-cart'
+import { invoiceDiscountLabel } from '@/features/ventas/utils/invoice-discount'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
 
 type VentasHistoryOrderLinesProps = {
@@ -15,6 +16,14 @@ function activeQuantity(quantity: string, returned: string | undefined) {
 export function VentasHistoryOrderLines({ saleId }: VentasHistoryOrderLinesProps) {
   const { data: sale, isLoading, isError, error } = useSaleQuery(saleId)
   const lines = sale?.lines ?? []
+  const linesSubtotal = lines.reduce((sum, line) => {
+    const netQty = activeQuantity(line.quantity, line.returned_quantity)
+    return sum + netQty * Number(line.unit_price_usd)
+  }, 0)
+  const discountUsd = Number(sale?.discount_usd ?? 0)
+  const discountLabel = sale
+    ? invoiceDiscountLabel(sale.total_usd, sale.discount_usd)
+    : null
 
   return (
     <tr className="bg-muted/20 border-b last:border-b-0">
@@ -71,6 +80,34 @@ export function VentasHistoryOrderLines({ saleId }: VentasHistoryOrderLinesProps
                   )
                 })}
               </tbody>
+              <tfoot>
+                <tr className="border-t bg-muted/20">
+                  <td colSpan={4} className="px-3 py-2 text-right text-muted-foreground">
+                    Subtotal
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <DisplayMoneyFromUsd amountUsd={linesSubtotal} size="sm" />
+                  </td>
+                </tr>
+                {discountUsd > 0.0001 ? (
+                  <tr className="bg-muted/20">
+                    <td colSpan={4} className="px-3 py-2 text-right font-medium text-violet-700">
+                      {discountLabel ?? 'Descuento'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium text-violet-700">
+                      −<DisplayMoneyFromUsd amountUsd={discountUsd} size="sm" />
+                    </td>
+                  </tr>
+                ) : null}
+                <tr className="bg-muted/30 font-semibold">
+                  <td colSpan={4} className="px-3 py-2 text-right">
+                    Total
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <DisplayMoneyFromUsd amountUsd={sale?.total_usd ?? 0} size="sm" />
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}

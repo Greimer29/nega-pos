@@ -15,6 +15,7 @@ export async function listCatalogProducts(params: CatalogListParams = {}) {
       page: params.page,
       per_page: params.perPage,
       search: params.search || undefined,
+      barcode: params.barcode || undefined,
       category: params.category,
       size: params.size || undefined,
       active: params.active,
@@ -120,6 +121,7 @@ export async function importCatalogProducts(payload: {
     cost_usd?: number
     stock_quantity?: number
     minimum_stock?: number
+    barcode?: string
   }>
 }) {
   const { data } = await api.post<{

@@ -8,6 +8,7 @@ import MachineExpenseNoEncontradoException from '#exceptions/gasto_maquina_no_en
 import MachineNoEncontradaException from '#exceptions/maquina_no_encontrada_exception'
 import MaterialNoEncontradoException from '#exceptions/material_no_encontrado_exception'
 import CodigoDuplicadoException from '#exceptions/codigo_duplicado_exception'
+import BarcodeDuplicadoException from '#exceptions/barcode_duplicado_exception'
 import CodigoMonedaDuplicadoException from '#exceptions/codigo_moneda_duplicado_exception'
 import MonedaNoEncontradaException from '#exceptions/moneda_no_encontrada_exception'
 import MonedaProtegidaException from '#exceptions/moneda_protegida_exception'
@@ -68,6 +69,7 @@ import LineaVentaInvalidaException from '#exceptions/linea_venta_invalida_except
 import PagoClienteExcedeSaldoException from '#exceptions/pago_cliente_excede_saldo_exception'
 import PagoProveedorExcedeSaldoException from '#exceptions/pago_proveedor_excede_saldo_exception'
 import MetodoPagoRequeridoException from '#exceptions/metodo_pago_requerido_exception'
+import ClienteSinCreditoException from '#exceptions/cliente_sin_credito_exception'
 import MetodoPagoNoEncontradoException from '#exceptions/metodo_pago_no_encontrado_exception'
 import CodigoMetodoPagoDuplicadoException from '#exceptions/codigo_metodo_pago_duplicado_exception'
 import UltimoMetodoPagoActivoException from '#exceptions/ultimo_metodo_pago_activo_exception'
@@ -258,6 +260,15 @@ export default class HttpExceptionHandler extends ExceptionHandler {
         error: {
           code: CodigoDuplicadoException.code,
           message: error.message || CodigoDuplicadoException.message,
+        },
+      })
+    }
+
+    if (error instanceof BarcodeDuplicadoException) {
+      return ctx.response.status(422).json({
+        error: {
+          code: BarcodeDuplicadoException.code,
+          message: error.message || BarcodeDuplicadoException.message,
         },
       })
     }
@@ -701,6 +712,15 @@ export default class HttpExceptionHandler extends ExceptionHandler {
         error: {
           code: MetodoPagoRequeridoException.code,
           message: error.message || MetodoPagoRequeridoException.message,
+        },
+      })
+    }
+
+    if (error instanceof ClienteSinCreditoException) {
+      return ctx.response.status(ClienteSinCreditoException.status).json({
+        error: {
+          code: ClienteSinCreditoException.code,
+          message: error.message,
         },
       })
     }

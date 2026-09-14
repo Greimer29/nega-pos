@@ -1,9 +1,14 @@
-import { Loader2 } from 'lucide-react'
-import { forwardRef } from 'react'
+import { LayoutGrid, Loader2, Search } from 'lucide-react'
+import { forwardRef, useState } from 'react'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
+import { FilterSection, FiltersPanel } from '@/components/filters/filters-panel'
 import { Button } from '@/components/ui/button'
 import { DecimalInput } from '@/components/decimal-input'
 import { Label } from '@/components/ui/label'
-import { ProfitMarginCatalogFilters } from '@/features/purchases/components/profit-margin-catalog-filters'
+import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 
 type ProfitMarginFiltersPanelProps = {
   marginInput: string
@@ -42,6 +47,10 @@ export const ProfitMarginFiltersPanel = forwardRef<HTMLElement, ProfitMarginFilt
     },
     ref
   ) {
+    const [filtersOpen, setFiltersOpen] = useState(false)
+    const { data: categories = [] } = useActiveCategoriesQuery()
+    const activeFilterCount = (category ? 1 : 0) + (activeOnly ? 0 : 1)
+
     return (
       <aside
         ref={ref}
@@ -86,15 +95,71 @@ export const ProfitMarginFiltersPanel = forwardRef<HTMLElement, ProfitMarginFilt
         </div>
 
         <div className="border-t pt-4">
-          <p className="text-muted-foreground mb-3 text-xs font-medium uppercase tracking-wide">Filtros</p>
-          <ProfitMarginCatalogFilters
-            searchInput={searchInput}
-            onSearchChange={onSearchChange}
-            category={category}
-            onCategoryChange={onCategoryChange}
-            activeOnly={activeOnly}
-            onActiveOnlyChange={onActiveOnlyChange}
-          />
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+              Catálogo
+            </p>
+            <FiltersIconButton
+              count={activeFilterCount}
+              expanded={filtersOpen}
+              controls="profit-margin-filters"
+              onClick={() => setFiltersOpen(true)}
+            />
+          </div>
+          <div className="relative">
+            <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+            <Input
+              className="pl-9"
+              placeholder="Nombre del producto…"
+              value={searchInput}
+              onChange={(e) => onSearchChange(e.target.value)}
+            />
+          </div>
+          <FiltersDrawer
+            open={filtersOpen}
+            onOpenChange={setFiltersOpen}
+            id="profit-margin-filters"
+            title="Filtros del catálogo"
+            description="Categoría y visibilidad de productos para aplicar margen."
+          >
+            <FiltersPanel
+              onClearAll={() => {
+                onCategoryChange('')
+                onActiveOnlyChange(true)
+              }}
+            >
+              <FilterSection
+                title="Categorías"
+                icon={<LayoutGrid className="size-4 text-neutral-500" />}
+              >
+                <select
+                  className="border-input flex h-9 w-full rounded-md border bg-white px-3 text-sm"
+                  value={category}
+                  onChange={(e) => onCategoryChange(e.target.value)}
+                >
+                  <option value="">Todas</option>
+                  {categories.map((item) => (
+                    <option key={item.id} value={item.name}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </FilterSection>
+              <FilterSection
+                title="Visibilidad"
+                icon={<LayoutGrid className="size-4 text-neutral-500" />}
+              >
+                <label className="flex cursor-pointer items-center gap-2.5 text-sm text-neutral-700">
+                  <Checkbox
+                    checked={activeOnly}
+                    onChange={(e) => onActiveOnlyChange(e.target.checked)}
+                    className="accent-violet-700"
+                  />
+                  Solo productos activos
+                </label>
+              </FilterSection>
+            </FiltersPanel>
+          </FiltersDrawer>
         </div>
       </aside>
     )

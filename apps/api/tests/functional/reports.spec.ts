@@ -129,6 +129,60 @@ test.group('Reports API', (group) => {
     assert.exists(response.body().data.summary)
   })
 
+  test('GET account-statement uses invoice total_usd after discount for sales income', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const product = await CatalogProduct.create({
+      name: 'Prod reporte descuento',
+      category: 'General',
+      salePriceUsd: '15.0000',
+      costUsd: '5.0000',
+      active: true,
+    })
+
+    await seedTestSale({
+      soldAt: DateTime.fromISO('2026-06-16'),
+      confirmedAt: DateTime.fromISO('2026-06-16'),
+      totalUsd: '24.0000',
+      discountUsd: '6.0000',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '2',
+          unitPriceUsd: '10.0000',
+          subtotalUsd: '20.0000',
+        },
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '2',
+          unitPriceUsd: '5.0000',
+          subtotalUsd: '10.0000',
+        },
+      ],
+    })
+
+    const response = await client
+      .get('/api/v1/reports/account-statement')
+      .qs({ month: '2026-06', types: 'sales', display_currency: 'USD' })
+      .loginAs(user)
+
+    response.assertStatus(200)
+    const body = response.body() as {
+      data: {
+        movements: Array<{ amountUsd: string; label: string }>
+        summary: { salesUsd: string }
+      }
+    }
+
+    assert.equal(body.data.movements[0].amountUsd, '24.0000')
+    assert.match(body.data.movements[0].label, /descuento/i)
+    assert.equal(body.data.summary.salesUsd, '24.0000')
+  })
+
   test('GET /api/v1/reports/account-statement uses USD for catalog sales with returns', async ({
     client,
     assert,

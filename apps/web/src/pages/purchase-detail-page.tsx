@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { BarcodeScanButton } from '@/components/barcode-scan-button'
 import { Button } from '@/components/ui/button'
 import { useFormatMoney } from '@/features/currencies/context/display-currency-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -69,6 +70,11 @@ import { useSuppliersQuery } from '@/features/suppliers/hooks/use-suppliers'
 import { supplierImageUrl } from '@/features/suppliers/constants'
 import { PublicImage } from '@/components/public-image'
 import { notifyApiError } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
+import {
+  lookupMaterialByBarcode,
+  lookupProductByBarcode,
+} from '@/lib/barcode-scan'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { parseDecimalInput } from '@/lib/numeric-input'
@@ -512,6 +518,32 @@ export function PurchaseDetallePage() {
         setLocalItems((prev) => [...prev, purchaseItemToLocal(created)])
       }
       markDirty()
+    } catch (err) {
+      notifyApiError(err)
+    }
+  }
+
+  async function addItemByBarcode(rawCode: string) {
+    const code = rawCode.trim()
+    if (!code || !isBorrador || !canEditPurchase) return
+
+    try {
+      if (itemAddMode === 'material') {
+        const material = await lookupMaterialByBarcode(code)
+        if (!material) {
+          toast.error('Código no encontrado')
+          return
+        }
+        await addMaterialToItems(material)
+        return
+      }
+
+      const product = await lookupProductByBarcode(code)
+      if (!product) {
+        toast.error('Código no encontrado')
+        return
+      }
+      await addProductToItems(product)
     } catch (err) {
       notifyApiError(err)
     }
@@ -1054,22 +1086,28 @@ export function PurchaseDetallePage() {
                     </button>
                   </div>
 
-                  <div className="min-w-[260px] flex-1 sm:max-w-md">
-                    {itemAddMode === 'material' ? (
-                      <MaterialSearchPicker
-                        variant="dropdown"
-                        label=""
-                        placeholder="Buscar material por código o nombre…"
-                        onSelect={(material) => void addMaterialToItems(material)}
-                      />
-                    ) : (
-                      <CatalogProductSearchPicker
-                        variant="dropdown"
-                        label=""
-                        placeholder="Buscar producto por código o nombre…"
-                        onSelect={(product) => void addProductToItems(product)}
-                      />
-                    )}
+                  <div className="flex min-w-[260px] flex-1 items-end gap-2 sm:max-w-lg">
+                    <div className="min-w-0 flex-1">
+                      {itemAddMode === 'material' ? (
+                        <MaterialSearchPicker
+                          variant="dropdown"
+                          label=""
+                          placeholder="Buscar material por código o nombre…"
+                          onSelect={(material) => void addMaterialToItems(material)}
+                        />
+                      ) : (
+                        <CatalogProductSearchPicker
+                          variant="dropdown"
+                          label=""
+                          placeholder="Buscar producto por código o nombre…"
+                          onSelect={(product) => void addProductToItems(product)}
+                        />
+                      )}
+                    </div>
+                    <BarcodeScanButton
+                      className="shrink-0"
+                      onScan={(code) => void addItemByBarcode(code)}
+                    />
                   </div>
 
                   {itemAddMode === 'material' ? (

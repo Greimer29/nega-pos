@@ -47,6 +47,7 @@ export function serializeSale(sale: Sale) {
     total_usd: sale.totalUsd,
     total_bs: sale.totalBs,
     usd_rate: sale.usdRate,
+    notes: sale.notes ?? null,
     status: sale.status,
     sold_at: sale.soldAt?.toISO() ?? null,
     confirmed_at: sale.confirmedAt?.toISO() ?? null,

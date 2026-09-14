@@ -252,6 +252,10 @@ export default class ReportService {
         } else {
           salesUsd += grossUsd
 
+          const discountUsd = Number(sale.discountUsd ?? 0)
+          const discountNote =
+            discountUsd > 0.0001 ? ` · descuento −${discountUsd.toFixed(2)}` : ''
+
           movements.push(
             this.buildMovement({
               id: Number(sale.id),
@@ -260,7 +264,7 @@ export default class ReportService {
 
               date: saleDate,
 
-              label: `Factura ${sale.code} — ${saleLabel}`,
+              label: `Factura ${sale.code} — ${saleLabel}${discountNote}`,
 
               account: null,
 
@@ -795,13 +799,8 @@ export default class ReportService {
     sale: Sale,
     _rates: Record<string, number>
   ): { usd: number; native: number; currencyCode: string } {
-    const lines = sale.saleLines ?? []
-
-    const usd = lines.reduce((sum, line) => {
-      const active = Math.max(0, Number(line.quantity) - Number(line.returnedQuantity ?? 0))
-
-      return sum + active * Number(line.unitPriceUsd)
-    }, 0)
+    // Invoice net (lines − invoice discount − returns already reflected in total_usd).
+    const usd = Math.max(0, Number(sale.totalUsd ?? 0))
 
     return { usd, native: usd, currencyCode: 'USD' }
   }

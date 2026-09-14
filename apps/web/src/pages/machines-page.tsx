@@ -1,6 +1,9 @@
-import { Eye, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { Eye, Loader2, Pencil, Plus, Search, Trash2, Activity, Tag } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
+import { FilterSection, FiltersPanel } from '@/components/filters/filters-panel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -47,6 +50,7 @@ export function MachinesPage() {
     DEFAULT_MACHINES_FILTERS
   )
   const [searchInput, setSearchInput] = useState(filters.search)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null)
@@ -141,34 +145,12 @@ export function MachinesPage() {
             </CardDescription>
           </div>
           <div className={toolbarActionsClass}>
-            <Input
-              className="min-w-0 w-full sm:max-w-[160px]"
-              placeholder="Filtrar por tipo…"
-              value={filters.type}
-              onChange={(e) => {
-                setFilters((prev) => ({ ...prev, type: e.target.value, page: 1 }))
-              }}
+            <FiltersIconButton
+              count={(filters.type.trim() ? 1 : 0) + (filters.status ? 1 : 0)}
+              expanded={filtersOpen}
+              controls="machines-list-filters"
+              onClick={() => setFiltersOpen(true)}
             />
-
-            <select
-              className="border-input bg-background flex h-9 min-w-0 w-full rounded-md border px-3 text-sm sm:w-auto sm:min-w-[180px]"
-              value={filters.status}
-              onChange={(e) => {
-                setFilters((prev) => ({
-                  ...prev,
-                  status: e.target.value as MachineStatus | '',
-                  page: 1,
-                }))
-              }}
-            >
-              <option value="">Todos los estados</option>
-              {MACHINE_STATUSES.map((currentStatus) => (
-                <option key={currentStatus} value={currentStatus}>
-                  {MACHINE_STATUS_LABELS[currentStatus]}
-                </option>
-              ))}
-            </select>
-
             <div className="relative min-w-0 w-full sm:max-w-xs">
               <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
               <Input
@@ -180,6 +162,50 @@ export function MachinesPage() {
             </div>
           </div>
         </CardHeader>
+
+        <FiltersDrawer
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          id="machines-list-filters"
+          title="Filtros de máquinas"
+          description="Tipo y estado operativo del listado."
+        >
+          <FiltersPanel
+            onClearAll={() =>
+              setFilters((prev) => ({ ...prev, type: '', status: '', page: 1 }))
+            }
+          >
+            <FilterSection title="Tipo" icon={<Tag className="size-4 text-neutral-500" />}>
+              <Input
+                placeholder="Filtrar por tipo…"
+                value={filters.type}
+                onChange={(e) => {
+                  setFilters((prev) => ({ ...prev, type: e.target.value, page: 1 }))
+                }}
+              />
+            </FilterSection>
+            <FilterSection title="Estado" icon={<Activity className="size-4 text-neutral-500" />}>
+              <select
+                className="border-input flex h-9 w-full rounded-md border bg-white px-3 text-sm"
+                value={filters.status}
+                onChange={(e) => {
+                  setFilters((prev) => ({
+                    ...prev,
+                    status: e.target.value as MachineStatus | '',
+                    page: 1,
+                  }))
+                }}
+              >
+                <option value="">Todos los estados</option>
+                {MACHINE_STATUSES.map((currentStatus) => (
+                  <option key={currentStatus} value={currentStatus}>
+                    {MACHINE_STATUS_LABELS[currentStatus]}
+                  </option>
+                ))}
+              </select>
+            </FilterSection>
+          </FiltersPanel>
+        </FiltersDrawer>
 
         <CardContent className="space-y-4">
           {isLoading ? (

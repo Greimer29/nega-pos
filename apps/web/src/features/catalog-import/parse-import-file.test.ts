@@ -91,6 +91,20 @@ describe('parseImportText', () => {
     })
   })
 
+  it('parses optional barcode column for products and materials', () => {
+    const productCsv =
+      'nombre*;categoria*;precio_venta*;codigo_barras\nCamisa;Uniforme;15;7790001112223'
+    expect(parseImportText(productCsv, 'PRODUCT').rows[0]).toMatchObject({
+      barcode: '7790001112223',
+    })
+
+    const materialCsv =
+      'codigo*;nombre*;categoria*;unidad*;codigo_barras\nT-02;Hilo;Uniforme;UND;MATQR001'
+    expect(parseImportText(materialCsv, 'MATERIAL').rows[0]).toMatchObject({
+      barcode: 'MATQR001',
+    })
+  })
+
   it('rejects files without the required headers', () => {
     expect(() => parseImportText('foo;bar\n1;2', 'PRODUCT')).toThrow(/columnas de la plantilla/)
   })

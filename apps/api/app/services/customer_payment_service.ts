@@ -119,6 +119,7 @@ export default class CustomerPaymentService {
     const sales = await Sale.query()
       .where('customerId', customerId)
       .where('status', 'COMPLETED')
+      .preload('saleLines')
       .orderBy('confirmedAt', 'desc')
       .orderBy('createdAt', 'desc')
       .orderBy('id', 'desc')

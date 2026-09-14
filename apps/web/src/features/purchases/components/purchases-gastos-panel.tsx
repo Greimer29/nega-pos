@@ -1,8 +1,10 @@
 import { Loader2, Pencil, Plus } from 'lucide-react'
 import { useState } from 'react'
+import { AccountListFiltersPanel } from '@/components/filters/account-list-filters-panel'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { AccountSelect } from '@/features/accounts/components/account-select'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { ExpenseFormDialog } from '@/features/purchases/components/expense-form-dialog'
 import { DisplayDocumentMoney } from '@/features/currencies/components/display-money'
@@ -33,6 +35,7 @@ export function PurchasesGastosPanel() {
     sessionFilterKey('purchases-gastos', company?.id),
     DEFAULT_PURCHASES_GASTOS_FILTERS
   )
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
 
@@ -63,45 +66,46 @@ export function PurchasesGastosPanel() {
           <CardTitle className="text-base">Gastos</CardTitle>
           {!meta ? <CardDescription>Cargando…</CardDescription> : null}
         </div>
-        <Button onClick={openCreate}>
-          <Plus />
-          Registrar gasto
-        </Button>
+        <div className="flex items-center gap-2">
+          <FiltersIconButton
+            count={(filters.accountId != null ? 1 : 0) + (filters.unassignedOnly ? 1 : 0)}
+            expanded={filtersOpen}
+            controls="purchases-gastos-filters"
+            onClick={() => setFiltersOpen(true)}
+          />
+          <Button onClick={openCreate}>
+            <Plus />
+            Registrar gasto
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2">
-          <AccountSelect
-            value={filters.unassignedOnly ? null : filters.accountId}
-            onChange={(value) => {
+        <FiltersDrawer
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          id="purchases-gastos-filters"
+          title="Filtros de gastos"
+          description="Cuenta asociada a los gastos."
+        >
+          <AccountListFiltersPanel
+            accountId={filters.accountId}
+            unassignedOnly={filters.unassignedOnly}
+            onAccountIdChange={(accountId) =>
+              setFilters((prev) => ({ ...prev, accountId, page: 1 }))
+            }
+            onUnassignedOnlyChange={(unassignedOnly) =>
               setFilters((prev) => ({
                 ...prev,
-                unassignedOnly: false,
-                accountId: value,
+                unassignedOnly,
+                accountId: unassignedOnly ? null : prev.accountId,
                 page: 1,
               }))
-            }}
-            disabled={filters.unassignedOnly}
-            label="Filtrar por cuenta"
+            }
+            onClearAll={() =>
+              setFilters((prev) => ({ ...prev, accountId: null, unassignedOnly: false, page: 1 }))
+            }
           />
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={filters.unassignedOnly}
-                onChange={(e) => {
-                  const checked = e.target.checked
-                  setFilters((prev) => ({
-                    ...prev,
-                    unassignedOnly: checked,
-                    accountId: checked ? null : prev.accountId,
-                    page: 1,
-                  }))
-                }}
-              />
-              Solo sin cuenta
-            </label>
-          </div>
-        </div>
+        </FiltersDrawer>
 
         {isLoading ? (
           <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">

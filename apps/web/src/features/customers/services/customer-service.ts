@@ -4,6 +4,7 @@ import type {
   CustomerDeleteResponse,
   CustomerDetalle,
   CustomerInput,
+  CustomerInvoiceInput,
   CustomerListParams,
   CustomerListResponse,
   CustomerPaymentInput,
@@ -58,4 +59,12 @@ export async function createCustomerPayment(customerId: number, payload: Custome
     payload
   )
   return data.data.payment
+}
+
+export async function createCustomerInvoice(customerId: number, payload: CustomerInvoiceInput) {
+  const { data } = await api.post<{ data: { sale: { id: number } } }>(
+    `/customers/${customerId}/invoices`,
+    payload
+  )
+  return data.data.sale
 }

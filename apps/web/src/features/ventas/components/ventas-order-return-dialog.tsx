@@ -24,6 +24,7 @@ import {
   normalizeInventoryQuantity,
 } from '@/lib/inventory-units'
 import { parseDecimalInput } from '@/lib/numeric-input'
+import { invoiceDiscountLabel, invoiceReturnNetUsd } from '@/features/ventas/utils/invoice-discount'
 import { cn } from '@/lib/utils'
 
 type ReturnSelection = {
@@ -57,6 +58,7 @@ export function VentasOrderReturnDialog({
   const [loading, setLoading] = useState(false)
   const [saleCode, setSaleCode] = useState('')
   const [lines, setLines] = useState<SaleLine[]>([])
+  const [invoiceDiscountUsd, setInvoiceDiscountUsd] = useState(0)
   const [selection, setSelection] = useState<ReturnSelection[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -73,6 +75,7 @@ export function VentasOrderReturnDialog({
       .then((sale) => {
         if (cancelled) return
         setSaleCode(sale.code ?? `#${sale.id}`)
+        setInvoiceDiscountUsd(Number(sale.discount_usd ?? 0))
         const saleLines = sale.lines ?? []
         setLines(saleLines)
         setSelection(
@@ -101,7 +104,11 @@ export function VentasOrderReturnDialog({
     }
   }, [open, saleId])
 
-  const selectedTotal = useMemo(() => {
+  const remainingActiveGross = useMemo(() => {
+    return lines.reduce((sum, line) => sum + remainingQty(line) * Number(line.unit_price_usd), 0)
+  }, [lines])
+
+  const selectedGross = useMemo(() => {
     return selection.reduce((sum, item) => {
       if (!item.selected) return sum
       const line = lines.find((l) => l.id === item.lineId)
@@ -109,6 +116,15 @@ export function VentasOrderReturnDialog({
       return sum + item.quantity * Number(line.unit_price_usd)
     }, 0)
   }, [selection, lines])
+
+  const selectedTotal = useMemo(() => {
+    return invoiceReturnNetUsd(selectedGross, remainingActiveGross, invoiceDiscountUsd)
+  }, [selectedGross, remainingActiveGross, invoiceDiscountUsd])
+
+  const discountLabel = invoiceDiscountLabel(
+    Math.max(0, remainingActiveGross - invoiceDiscountUsd),
+    invoiceDiscountUsd
+  )
 
   function toggleLine(lineId: number, selected: boolean) {
     setSelection((prev) =>
@@ -252,9 +268,17 @@ export function VentasOrderReturnDialog({
           </div>
         )}
 
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Monto a devolver</span>
-          <DisplayMoneyFromUsd amountUsd={selectedTotal} />
+        <div className="space-y-1 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Monto a devolver</span>
+            <DisplayMoneyFromUsd amountUsd={selectedTotal} />
+          </div>
+          {invoiceDiscountUsd > 0.0001 && selectedGross > 0 ? (
+            <p className="text-muted-foreground text-xs">
+              Neto de factura{discountLabel ? ` (${discountLabel})` : ''}. Bruto líneas{' '}
+              <DisplayMoneyFromUsd amountUsd={selectedGross} className="inline text-xs" />.
+            </p>
+          ) : null}
         </div>
 
         {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}

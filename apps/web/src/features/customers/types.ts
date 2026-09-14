@@ -82,6 +82,18 @@ export type CustomerPaymentInput = {
   note?: string
 }
 
+export type CustomerInvoiceInput = {
+  date: string
+  amount: number
+  currency_code?: string
+  entry_rate?: number
+  note?: string
+  is_credit: boolean
+  payment_method_code?: string | null
+  credit_due_date?: string | null
+  usd_rate?: number
+}
+
 export type CustomerPayment = {
   id: number
   saleId: number | null
@@ -105,6 +117,8 @@ export type CustomerAccountSale = {
   balanceUsd: string
   creditDueDate: string | null
   guestName: string | null
+  notes?: string | null
+  hasItems?: boolean
 }
 
 export type CustomerAccountStatement = {

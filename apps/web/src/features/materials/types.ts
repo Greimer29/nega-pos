@@ -13,6 +13,7 @@ export type InventoryMovement = {
 export type Material = {
   id: number
   code: string
+  barcode?: string | null
   name: string
   description: string | null
   category: MaterialCategoria
@@ -85,6 +86,7 @@ export type MaterialInput = {
   location?: string
   supplier_habitual_id?: number
   last_purchase_price_usd?: number
+  barcode?: string | null
   active?: boolean
 }
 
@@ -92,6 +94,7 @@ export type MaterialListParams = {
   page?: number
   perPage?: number
   search?: string
+  barcode?: string
   category?: MaterialCategoria
   status?: MaterialStatusFilter | ''
   sortBy?: MaterialSortBy

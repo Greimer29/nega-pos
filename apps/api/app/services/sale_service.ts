@@ -1124,14 +1124,27 @@ export default class SaleService {
 
   private async actualizarMontosTrasDevolucion(sale: Sale, trx: TransactionClientContract) {
     const lines = await SaleLine.query({ client: trx }).where('saleId', Number(sale.id))
-    let netTotal = 0
+    let remainingGross = 0
 
     for (const line of lines) {
       const activeQty = Number(line.quantity) - Number(line.returnedQuantity ?? 0)
-      netTotal += activeQty * Number(line.unitPriceUsd)
+      remainingGross += Math.max(0, activeQty) * Number(line.unitPriceUsd)
     }
 
-    const { discountUsd, totalUsd } = applyInvoiceDiscount(netTotal, Number(sale.discountUsd))
+    // Before this update, total+discount is the gross still “active” on the invoice.
+    const previousDiscount = Number(sale.discountUsd ?? 0)
+    const previousTotal = Number(sale.totalUsd ?? 0)
+    const previousRemainingGross = previousTotal + previousDiscount
+
+    const discountUsd =
+      remainingGross <= 0 || previousRemainingGross <= 0
+        ? 0
+        : Math.min(
+            remainingGross,
+            (previousDiscount * remainingGross) / previousRemainingGross
+          )
+    const totalUsd = Math.max(0, remainingGross - discountUsd)
+
     sale.discountUsd = discountUsd.toFixed(4)
     sale.totalUsd = totalUsd.toFixed(4)
 

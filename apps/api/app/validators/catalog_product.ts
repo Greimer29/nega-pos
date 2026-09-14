@@ -19,6 +19,7 @@ const catalogProductFields = {
   formula_id: vine.number().min(1).nullable().optional(),
   stock_quantity: vine.number().min(0).optional(),
   minimum_stock: vine.number().min(0).optional(),
+  barcode: vine.string().trim().maxLength(64).nullable().optional(),
   sizes: vine.array(sizeRowSchema).optional(),
 }
 
@@ -37,6 +38,7 @@ export const updateCatalogProductValidator = vine.create({
   formula_id: vine.number().min(1).nullable().optional(),
   stock_quantity: vine.number().min(0).optional(),
   minimum_stock: vine.number().min(0).optional(),
+  barcode: vine.string().trim().maxLength(64).nullable().optional(),
   active: vine.boolean().optional(),
   sizes: vine.array(sizeRowSchema).optional(),
 })
@@ -49,6 +51,7 @@ export const listCatalogProductsValidator = vine.create({
   page: vine.number().min(1).optional(),
   per_page: vine.number().min(1).max(100).optional(),
   search: vine.string().trim().maxLength(150).optional(),
+  barcode: vine.string().trim().maxLength(64).optional(),
   category: vine.string().trim().maxLength(100).optional(),
   size: vine.string().trim().maxLength(20).optional(),
   active: vine.boolean().optional(),
@@ -98,6 +101,7 @@ export const importCatalogProductsValidator = vine.create({
         cost_usd: vine.number().min(0).optional(),
         stock_quantity: vine.number().min(0).optional(),
         minimum_stock: vine.number().min(0).optional(),
+        barcode: vine.string().trim().maxLength(64).optional(),
       })
     )
     .minLength(1)

@@ -1,18 +1,22 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, FileSpreadsheet, Loader2, Plus } from 'lucide-react'
+import { ArrowLeft, FileSpreadsheet, Loader2, Plus, ArrowUpDown, LayoutGrid, Activity, Search } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
+import { FilterSection, FiltersPanel } from '@/components/filters/filters-panel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { CatalogImportDialog } from '@/features/catalog-import/components/catalog-import-dialog'
 import type { MaterialImportRow } from '@/features/catalog-import/types'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { MaterialDeleteDialog } from '@/features/materials/components/material-delete-dialog'
-import { MaterialFiltersBar } from '@/features/materials/components/material-filters-bar'
 import { MaterialFormDialog } from '@/features/materials/components/material-form-dialog'
 import { MaterialProductCard } from '@/features/materials/components/material-product-card'
 import { MaterialsFormulasPanel } from '@/features/materials/components/materials-formulas-panel'
 import type { MaterialSortBy } from '@/features/materials/constants'
+import { SORT_BY_LABELS, STATUS_FILTER_LABELS } from '@/features/materials/constants'
 import {
   useDeleteMaterialMutation,
   useImportMaterialsMutation,
@@ -64,6 +68,7 @@ export function MaterialsPage() {
     DEFAULT_MATERIALS_FILTERS
   )
   const [searchInput, setSearchInput] = useState(filters.search)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -162,6 +167,16 @@ export function MaterialsPage() {
         </div>
         {tab === 'materiales' ? (
           <div className={toolbarActionsClass}>
+            <FiltersIconButton
+              count={
+                (filters.status ? 1 : 0) +
+                (filters.category ? 1 : 0) +
+                (filters.sortBy !== DEFAULT_MATERIALS_FILTERS.sortBy ? 1 : 0)
+              }
+              expanded={filtersOpen}
+              controls="materials-catalog-filters"
+              onClick={() => setFiltersOpen(true)}
+            />
             <PermissionGate permission="materials.edit">
               <Button
                 variant="outline"
@@ -217,23 +232,103 @@ export function MaterialsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className={cn('space-y-4')}>
-            <MaterialFiltersBar
-              searchInput={searchInput}
-              onSearchChange={setSearchInput}
-              status={filters.status}
-              onStatusChange={(value) => {
-                setFilters((prev) => ({ ...prev, status: value, page: 1 }))
-              }}
-              category={filters.category}
-              onCategoryChange={(value) => {
-                setFilters((prev) => ({ ...prev, category: value, page: 1 }))
-              }}
-              sortBy={filters.sortBy}
-              onSortByChange={(value) => {
-                setFilters((prev) => ({ ...prev, sortBy: value, page: 1 }))
-              }}
-              categories={categories}
-            />
+            <div className="relative max-w-sm">
+              <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+              <Input
+                className="pl-9"
+                placeholder="Código, código prov. o nombre…"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+            </div>
+
+            <FiltersDrawer
+              open={filtersOpen}
+              onOpenChange={setFiltersOpen}
+              id="materials-catalog-filters"
+              title="Filtros de materiales"
+              description="Estatus, categoría y ranking del listado de materiales."
+            >
+              <FiltersPanel
+                onClearAll={() =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    status: '',
+                    category: '',
+                    sortBy: DEFAULT_MATERIALS_FILTERS.sortBy,
+                    page: 1,
+                  }))
+                }
+              >
+                <FilterSection title="Estatus" icon={<Activity className="size-4 text-neutral-500" />}>
+                  <select
+                    className="border-input flex h-9 w-full rounded-md border bg-white px-3 text-sm"
+                    value={filters.status}
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        status: e.target.value as MaterialStatusFilter | '',
+                        page: 1,
+                      }))
+                    }
+                  >
+                    <option value="">Todos</option>
+                    {(Object.keys(STATUS_FILTER_LABELS) as MaterialStatusFilter[]).map((key) => (
+                      <option key={key} value={key}>
+                        {STATUS_FILTER_LABELS[key]}
+                      </option>
+                    ))}
+                  </select>
+                </FilterSection>
+
+                <FilterSection
+                  title="Categorías"
+                  icon={<LayoutGrid className="size-4 text-neutral-500" />}
+                >
+                  <select
+                    className="border-input flex h-9 w-full rounded-md border bg-white px-3 text-sm"
+                    value={filters.category}
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        category: e.target.value as MaterialCategoria | '',
+                        page: 1,
+                      }))
+                    }
+                  >
+                    <option value="">Todas</option>
+                    {categories.map((item) => (
+                      <option key={item.id} value={item.name}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </FilterSection>
+
+                <FilterSection
+                  title="Ordenar por"
+                  icon={<ArrowUpDown className="size-4 text-neutral-500" />}
+                >
+                  <select
+                    className="border-input flex h-9 w-full rounded-md border bg-white px-3 text-sm"
+                    value={filters.sortBy}
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        sortBy: e.target.value as MaterialSortBy,
+                        page: 1,
+                      }))
+                    }
+                  >
+                    {(Object.keys(SORT_BY_LABELS) as MaterialSortBy[]).map((key) => (
+                      <option key={key} value={key}>
+                        {SORT_BY_LABELS[key]}
+                      </option>
+                    ))}
+                  </select>
+                </FilterSection>
+              </FiltersPanel>
+            </FiltersDrawer>
 
             {isLoading ? (
               <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">

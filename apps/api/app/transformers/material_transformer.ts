@@ -18,6 +18,7 @@ export default class MaterialTransformer extends BaseTransformer<Material> {
       ...this.pick(this.resource, [
         'id',
         'code',
+        'barcode',
         'name',
         'description',
         'category',

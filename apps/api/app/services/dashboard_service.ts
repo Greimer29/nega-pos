@@ -20,6 +20,7 @@ import {
   buildMonthlyVentasBuckets,
   buildWeeklyVentasBuckets,
 } from '#utils/dashboard_chart_periods'
+import { allocateInvoiceDiscountToSaleLines } from '#utils/allocate_invoice_discount'
 
 export type BajoStockItem = {
   id: number
@@ -140,6 +141,7 @@ export type DailyClosingInvoiceItem = {
   paymentType: string
   paymentMethodCode: string | null
   paymentMethodName: string | null
+  discountUsd: string
   totalUsd: string
   totalBs: string | null
   status: string
@@ -161,6 +163,7 @@ export type DailyClosingResult = {
     creditTotalUsd: string
     productsSold: number
     productsAmountUsd: string
+    discountsTotalUsd: string
     expensesCount: number
     expensesTotalUsd: string
     netCashUsd: string
@@ -445,7 +448,8 @@ export default class DashboardService {
     }
   }
 
-  /** Ventas del dashboard usan el turno abierto actual (sales_shift_id). */
+  /** Ventas del dashboard usan el turno abierto actual (sales_shift_id).
+   * Montos = `sales.total_usd` (ya neto de descuento de factura), no suma bruta de líneas. */
   private async ventasDelDia(): Promise<VentasDelDia> {
     const shift = await this.salesShiftService.current()
     if (!shift) {
@@ -460,35 +464,191 @@ export default class DashboardService {
     }
 
     const shiftId = Number(shift.id)
-    const ventas = await db
+
+    const money = await db
+      .from('sales')
+      .whereIn('sales.status', [...SALE_STATUSES])
+      .where('sales.sales_shift_id', shiftId)
+      .select(
+        db.raw('COALESCE(SUM(sales.total_usd), 0) as total_usd'),
+        db.raw(
+          `COALESCE(SUM(CASE WHEN sales.payment_type = 'CREDIT' THEN sales.total_usd ELSE 0 END), 0) as credit_usd`
+        ),
+        db.raw(
+          `COUNT(CASE WHEN sales.payment_type = 'CREDIT' THEN 1 END) as pedidos_credito`
+        )
+      )
+      .first()
+
+    const qtyRow = await db
       .from('sales')
       .join('sale_lines', 'sale_lines.sale_id', 'sales.id')
       .whereIn('sales.status', [...SALE_STATUSES])
       .where('sales.sales_shift_id', shiftId)
       .select(
-        db.raw('COALESCE(SUM(sale_lines.quantity - sale_lines.returned_quantity), 0) as qty'),
-        db.raw(
-          'COALESCE(SUM((sale_lines.quantity - sale_lines.returned_quantity) * sale_lines.unit_price_usd), 0) as total_usd'
-        ),
-        db.raw(
-          `COALESCE(SUM(CASE WHEN sales.payment_type = 'CREDIT' THEN (sale_lines.quantity - sale_lines.returned_quantity) * sale_lines.unit_price_usd ELSE 0 END), 0) as credit_usd`
-        ),
-        db.raw(
-          `COUNT(DISTINCT CASE WHEN sales.payment_type = 'CREDIT' THEN sales.id END) as pedidos_credito`
-        )
+        db.raw('COALESCE(SUM(sale_lines.quantity - sale_lines.returned_quantity), 0) as qty')
       )
       .first()
 
     const gastos = await this.gastosDelTurno(shift)
 
     return {
-      productosVendidos: Number(ventas?.qty ?? 0),
-      montoProductosUsd: Number(ventas?.total_usd ?? 0).toFixed(4),
-      montoCreditoUsd: Number(ventas?.credit_usd ?? 0).toFixed(4),
-      pedidosCredito: Number(ventas?.pedidos_credito ?? 0),
+      productosVendidos: Number(qtyRow?.qty ?? 0),
+      montoProductosUsd: Number(money?.total_usd ?? 0).toFixed(4),
+      montoCreditoUsd: Number(money?.credit_usd ?? 0).toFixed(4),
+      pedidosCredito: Number(money?.pedidos_credito ?? 0),
       gastosCantidad: gastos.cantidad,
       gastosMontoUsd: gastos.montoUsd.toFixed(4),
     }
+  }
+
+  /**
+   * Product sales with invoice-level discount allocated proportionally across lines
+   * so product totals sum to cash/net billed amount.
+   */
+  private async aggregateSoldCatalogProductsNet(options: {
+    salesShiftId?: number
+    date?: string
+  }): Promise<DailySoldProductItem[]> {
+    const lineQuery = db
+      .from('sales')
+      .join('sale_lines', 'sale_lines.sale_id', 'sales.id')
+      .join('catalog_products', 'catalog_products.id', 'sale_lines.catalog_product_id')
+      .whereIn('sales.status', [...SALE_STATUSES])
+      .whereNotNull('sale_lines.catalog_product_id')
+
+    if (options.salesShiftId) {
+      lineQuery.where('sales.sales_shift_id', options.salesShiftId)
+    } else if (options.date) {
+      lineQuery.whereRaw('DATE(sales.sold_at) = ?', [options.date])
+    } else {
+      return []
+    }
+
+    const lineRows = await lineQuery.select(
+      'sales.id as saleId',
+      'sales.discount_usd as discountUsd',
+      'catalog_products.id as productId',
+      'catalog_products.name as name',
+      'catalog_products.category as category',
+      'catalog_products.sale_unit as saleUnit',
+      'catalog_products.image_path as imagePath',
+      'catalog_products.stock_quantity as stockQuantity',
+      db.raw('(sale_lines.quantity - sale_lines.returned_quantity) as quantity'),
+      db.raw(
+        '((sale_lines.quantity - sale_lines.returned_quantity) * sale_lines.unit_price_usd) as grossUsd'
+      )
+    )
+
+    type Agg = {
+      id: number
+      name: string
+      category: string
+      saleUnit: string
+      imagePath: string | null
+      stockQuantity: number
+      quantitySold: number
+      totalUsd: number
+    }
+
+    const byProduct = new Map<number, Agg>()
+    const linesBySale = new Map<
+      number,
+      Array<{
+        productId: number
+        name: string
+        category: string
+        saleUnit: string
+        imagePath: string | null
+        stockQuantity: number
+        quantity: number
+        grossUsd: number
+        discountUsd: number
+      }>
+    >()
+
+    for (const row of lineRows) {
+      const quantity = Number(row.quantity ?? 0)
+      if (quantity <= 0) continue
+
+      const saleId = Number(row.saleId)
+      const list = linesBySale.get(saleId) ?? []
+      list.push({
+        productId: Number(row.productId),
+        name: String(row.name),
+        category: String(row.category),
+        saleUnit: String(row.saleUnit),
+        imagePath: row.imagePath ? String(row.imagePath) : null,
+        stockQuantity: Number(row.stockQuantity ?? 0),
+        quantity,
+        grossUsd: Number(row.grossUsd ?? 0),
+        discountUsd: Number(row.discountUsd ?? 0),
+      })
+      linesBySale.set(saleId, list)
+    }
+
+    for (const [, saleLines] of linesBySale) {
+      const discountUsd = saleLines[0]?.discountUsd ?? 0
+      const allocated = allocateInvoiceDiscountToSaleLines(
+        saleLines.map((line) => ({
+          key: line.productId,
+          grossUsd: line.grossUsd,
+          quantity: line.quantity,
+        })),
+        discountUsd
+      )
+
+      for (let index = 0; index < saleLines.length; index++) {
+        const line = saleLines[index]!
+        const net = allocated[index]!
+        const current = byProduct.get(line.productId) ?? {
+          id: line.productId,
+          name: line.name,
+          category: line.category,
+          saleUnit: line.saleUnit,
+          imagePath: line.imagePath,
+          stockQuantity: line.stockQuantity,
+          quantitySold: 0,
+          totalUsd: 0,
+        }
+        current.quantitySold += line.quantity
+        current.totalUsd += net.netUsd
+        byProduct.set(line.productId, current)
+      }
+    }
+
+    const productIds = [...byProduct.keys()]
+    const catalogProducts =
+      productIds.length > 0
+        ? await CatalogProduct.query()
+            .whereIn('id', productIds)
+            .preload('formula', (query) =>
+              query.preload('materials', (materialQuery) => materialQuery.preload('material'))
+            )
+        : []
+    const stockByProductId =
+      await this.catalogProductStockService.calcularStockForProducts(catalogProducts)
+
+    return [...byProduct.values()]
+      .map((row) => {
+        const stock = stockByProductId.get(row.id)
+        const quantitySold = row.quantitySold
+        const totalUsd = row.totalUsd
+        const unitPriceUsd = quantitySold > 0 ? (totalUsd / quantitySold).toFixed(4) : '0.0000'
+
+        return {
+          id: row.id,
+          name: row.name,
+          category: row.category,
+          saleUnit: row.saleUnit,
+          imagePath: row.imagePath,
+          stockQuantity: (stock?.quantity ?? row.stockQuantity).toFixed(3),
+          quantitySold,
+          unitPriceUsd,
+          totalUsd: totalUsd.toFixed(4),
+        }
+      })
+      .sort((a, b) => Number(b.totalUsd) - Number(a.totalUsd))
   }
 
   async productosVendidosDelDia(): Promise<DailyProductSalesResult> {
@@ -506,70 +666,9 @@ export default class DashboardService {
       }
     }
 
-    const shiftId = Number(shift.id)
-    const rows = await db
-      .from('sales')
-      .join('sale_lines', 'sale_lines.sale_id', 'sales.id')
-      .join('catalog_products', 'catalog_products.id', 'sale_lines.catalog_product_id')
-      .whereIn('sales.status', [...SALE_STATUSES])
-      .where('sales.sales_shift_id', shiftId)
-      .whereNotNull('sale_lines.catalog_product_id')
-      .groupBy(
-        'catalog_products.id',
-        'catalog_products.name',
-        'catalog_products.category',
-        'catalog_products.sale_unit',
-        'catalog_products.image_path',
-        'catalog_products.stock_quantity'
-      )
-      .select(
-        'catalog_products.id',
-        'catalog_products.name',
-        'catalog_products.category',
-        'catalog_products.sale_unit as saleUnit',
-        'catalog_products.image_path as imagePath',
-        'catalog_products.stock_quantity as stockQuantity',
-        db.raw(
-          'COALESCE(SUM(sale_lines.quantity - sale_lines.returned_quantity), 0) as quantitySold'
-        ),
-        db.raw(
-          'COALESCE(SUM((sale_lines.quantity - sale_lines.returned_quantity) * sale_lines.unit_price_usd), 0) as totalUsd'
-        )
-      )
-      .orderBy('totalUsd', 'desc')
-
-    const productIds = rows.map((row) => Number(row.id))
-    const catalogProducts =
-      productIds.length > 0
-        ? await CatalogProduct.query()
-            .whereIn('id', productIds)
-            .preload('formula', (query) =>
-              query.preload('materials', (materialQuery) => materialQuery.preload('material'))
-            )
-        : []
-    const stockByProductId =
-      await this.catalogProductStockService.calcularStockForProducts(catalogProducts)
-
-    const products: DailySoldProductItem[] = rows.map((row) => {
-      const quantitySold = Number(row.quantitySold ?? 0)
-      const totalUsd = Number(row.totalUsd ?? 0)
-      const unitPriceUsd = quantitySold > 0 ? (totalUsd / quantitySold).toFixed(4) : '0.0000'
-      const productId = Number(row.id)
-      const stock = stockByProductId.get(productId)
-
-      return {
-        id: productId,
-        name: String(row.name),
-        category: String(row.category),
-        saleUnit: String(row.saleUnit),
-        imagePath: row.imagePath ? String(row.imagePath) : null,
-        stockQuantity: (stock?.quantity ?? Number(row.stockQuantity ?? 0)).toFixed(3),
-        quantitySold,
-        unitPriceUsd,
-        totalUsd: totalUsd.toFixed(4),
-      }
+    const products = await this.aggregateSoldCatalogProductsNet({
+      salesShiftId: Number(shift.id),
     })
-
     const summary = await this.ventasDelDia()
 
     return {
@@ -757,24 +856,36 @@ export default class DashboardService {
           'COALESCE(SUM((sale_lines.unit_price_usd - COALESCE(sale_lines.cost_usd, catalog_products.cost_usd)) * (sale_lines.quantity - sale_lines.returned_quantity)), 0) as profit'
         ),
         db.raw(
-          'COALESCE(SUM((sale_lines.quantity - sale_lines.returned_quantity) * sale_lines.unit_price_usd), 0) as sales'
-        ),
-        db.raw(
           `COALESCE(SUM(CASE WHEN sales.payment_type = 'CREDIT' THEN (sale_lines.unit_price_usd - COALESCE(sale_lines.cost_usd, catalog_products.cost_usd)) * (sale_lines.quantity - sale_lines.returned_quantity) ELSE 0 END), 0) as credit_profit`
+        )
+      )
+      .first()
+
+    const money = await db
+      .from('sales')
+      .whereIn('sales.status', [...SALE_STATUSES])
+      .where('sales.sales_shift_id', shiftId)
+      .select(
+        db.raw(
+          `COALESCE(SUM(CASE WHEN sales.payment_type = 'CASH' THEN sales.discount_usd ELSE 0 END), 0) as cash_discount`
         ),
         db.raw(
-          `COALESCE(SUM(CASE WHEN sales.payment_type = 'CREDIT' THEN (sale_lines.quantity - sale_lines.returned_quantity) * sale_lines.unit_price_usd ELSE 0 END), 0) as credit_sales`
+          `COALESCE(SUM(CASE WHEN sales.payment_type = 'CREDIT' THEN sales.discount_usd ELSE 0 END), 0) as credit_discount`
+        ),
+        db.raw(
+          `COALESCE(SUM(CASE WHEN sales.payment_type = 'CASH' THEN sales.total_usd ELSE 0 END), 0) as cash_sales`
         )
       )
       .first()
 
     const profit = Number(row?.profit ?? 0)
-    const sales = Number(row?.sales ?? 0)
-    const creditProfit = Number(row?.credit_profit ?? 0)
-    const creditSales = Number(row?.credit_sales ?? 0)
+    const creditProfitGross = Number(row?.credit_profit ?? 0)
+    const cashDiscount = Number(money?.cash_discount ?? 0)
+    const creditDiscount = Number(money?.credit_discount ?? 0)
+    const creditProfit = creditProfitGross - creditDiscount
     const gastos = await this.gastosDelTurno(shift)
-    const netProfit = profit - creditProfit - gastos.montoUsd
-    const ventasContado = sales - creditSales
+    const netProfit = profit - creditProfitGross - cashDiscount - gastos.montoUsd
+    const ventasContado = Number(money?.cash_sales ?? 0)
     const porcentaje = ventasContado > 0 ? (netProfit / ventasContado) * 100 : 0
 
     return {
@@ -799,15 +910,10 @@ export default class DashboardService {
     for (const bucket of buckets) {
       const row = await db
         .from('sales')
-        .join('sale_lines', 'sale_lines.sale_id', 'sales.id')
         .whereIn('sales.status', [...SALE_STATUSES])
         .whereRaw('DATE(sales.sold_at) >= ?', [bucket.desde])
         .whereRaw('DATE(sales.sold_at) <= ?', [bucket.hasta])
-        .select(
-          db.raw(
-            'COALESCE(SUM((sale_lines.quantity - sale_lines.returned_quantity) * sale_lines.unit_price_usd), 0) as total_usd'
-          )
-        )
+        .select(db.raw('COALESCE(SUM(sales.total_usd), 0) as total_usd'))
         .first()
 
       const total = Number(row?.total_usd ?? 0)
@@ -919,6 +1025,7 @@ export default class DashboardService {
         'sales.code',
         'sales.payment_type as paymentType',
         'sales.payment_method_code as paymentMethodCode',
+        'sales.discount_usd as discountUsd',
         'sales.total_usd as totalUsd',
         'sales.total_bs as totalBs',
         'sales.status',
@@ -929,84 +1036,19 @@ export default class DashboardService {
       )
       .orderBy('sales.confirmed_at', 'asc')
 
-    const productQuery = db
-      .from('sales')
-      .join('sale_lines', 'sale_lines.sale_id', 'sales.id')
-      .join('catalog_products', 'catalog_products.id', 'sale_lines.catalog_product_id')
-      .whereIn('sales.status', [...SALE_STATUSES])
+    const productQueryOptions = salesShiftId
+      ? { salesShiftId }
+      : { date }
 
-    if (salesShiftId) {
-      productQuery.where('sales.sales_shift_id', salesShiftId)
-    } else {
-      productQuery.whereRaw('DATE(sales.sold_at) = ?', [date])
-    }
-
-    const productRows = await productQuery
-      .whereNotNull('sale_lines.catalog_product_id')
-      .groupBy(
-        'catalog_products.id',
-        'catalog_products.name',
-        'catalog_products.category',
-        'catalog_products.sale_unit',
-        'catalog_products.image_path',
-        'catalog_products.stock_quantity'
-      )
-      .select(
-        'catalog_products.id',
-        'catalog_products.name',
-        'catalog_products.category',
-        'catalog_products.sale_unit as saleUnit',
-        'catalog_products.image_path as imagePath',
-        'catalog_products.stock_quantity as stockQuantity',
-        db.raw(
-          'COALESCE(SUM(sale_lines.quantity - sale_lines.returned_quantity), 0) as quantitySold'
-        ),
-        db.raw(
-          'COALESCE(SUM((sale_lines.quantity - sale_lines.returned_quantity) * sale_lines.unit_price_usd), 0) as totalUsd'
-        )
-      )
-      .orderBy('quantitySold', 'desc')
-
-    const productIds = productRows.map((row) => Number(row.id))
-    const catalogProducts =
-      productIds.length > 0
-        ? await CatalogProduct.query()
-            .whereIn('id', productIds)
-            .preload('formula', (query) =>
-              query.preload('materials', (materialQuery) => materialQuery.preload('material'))
-            )
-        : []
-    const stockByProductId =
-      await this.catalogProductStockService.calcularStockForProducts(catalogProducts)
-
-    const products: DailySoldProductItem[] = productRows.map((row) => {
-      const quantitySold = Number(row.quantitySold ?? 0)
-      const totalUsd = Number(row.totalUsd ?? 0)
-      const unitPriceUsd = quantitySold > 0 ? (totalUsd / quantitySold).toFixed(4) : '0.0000'
-      const productId = Number(row.id)
-      const stock = stockByProductId.get(productId)
-
-      return {
-        id: productId,
-        name: String(row.name),
-        category: String(row.category),
-        saleUnit: String(row.saleUnit),
-        imagePath: row.imagePath ? String(row.imagePath) : null,
-        stockQuantity: (stock?.quantity ?? Number(row.stockQuantity ?? 0)).toFixed(3),
-        quantitySold,
-        unitPriceUsd,
-        totalUsd: totalUsd.toFixed(4),
-      }
-    })
+    const products = await this.aggregateSoldCatalogProductsNet(productQueryOptions)
 
     let cashTotalUsd = 0
     let creditTotalUsd = 0
     let productsSold = 0
-    let productsAmountUsd = 0
+    let discountsTotalUsd = 0
 
     for (const product of products) {
       productsSold += product.quantitySold
-      productsAmountUsd += Number(product.totalUsd)
     }
 
     const methodTotals = new Map<
@@ -1018,7 +1060,10 @@ export default class DashboardService {
 
     for (const sale of sales) {
       const totalUsd = Number(sale.totalUsd ?? 0)
+      const discountUsd = Number(sale.discountUsd ?? 0)
       const paymentType = String(sale.paymentType)
+
+      discountsTotalUsd += discountUsd
 
       if (paymentType === 'CREDIT') {
         creditTotalUsd += totalUsd
@@ -1033,6 +1078,7 @@ export default class DashboardService {
         paymentType,
         paymentMethodCode: sale.paymentMethodCode ? String(sale.paymentMethodCode) : null,
         paymentMethodName: sale.paymentMethodName ? String(sale.paymentMethodName) : null,
+        discountUsd: discountUsd.toFixed(4),
         totalUsd: totalUsd.toFixed(4),
         totalBs: sale.totalBs ? String(sale.totalBs) : null,
         status: String(sale.status),
@@ -1052,6 +1098,9 @@ export default class DashboardService {
         methodTotals.set(code, current)
       }
     }
+
+    // Net billed amount (after invoice discounts), not gross line subtotals.
+    const productsAmountUsd = cashTotalUsd + creditTotalUsd
 
     const returnsQuery = db.from('sales').where('status', 'RETURNED')
 
@@ -1123,6 +1172,7 @@ export default class DashboardService {
         creditTotalUsd: creditTotalUsd.toFixed(4),
         productsSold,
         productsAmountUsd: productsAmountUsd.toFixed(4),
+        discountsTotalUsd: discountsTotalUsd.toFixed(4),
         expensesCount: expenses.summary.gastosCantidad,
         expensesTotalUsd: expenses.summary.gastosMontoUsd,
         netCashUsd: netCashUsd.toFixed(4),

@@ -1,6 +1,9 @@
-import { ChevronDown, Loader2, RotateCcw, Search } from 'lucide-react'
+import { CalendarRange, ChevronDown, Loader2, RotateCcw, Search } from 'lucide-react'
 import { Fragment, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
+import { FilterSection, FiltersPanel } from '@/components/filters/filters-panel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,6 +14,7 @@ import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-mo
 import { useSalesQuery } from '@/features/ventas/hooks/use-sales'
 import { SALE_ORDER_STATUS_LABELS, paymentMethodLabel } from '@/features/ventas/constants'
 import type { SaleOrderStatus } from '@/features/ventas/types'
+import { invoiceDiscountLabel } from '@/features/ventas/utils/invoice-discount'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
@@ -109,6 +113,7 @@ export function VentasHistoryPanel() {
     DEFAULT_VENTAS_HISTORY_FILTERS
   )
   const [searchInput, setSearchInput] = useState(filters.search)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [returnSaleId, setReturnSaleId] = useState<number | null>(null)
   const [expandedSaleId, setExpandedSaleId] = useState<number | null>(null)
 
@@ -176,53 +181,83 @@ export function VentasHistoryPanel() {
                 onChange={(e) => setSearchInput(e.target.value)}
               />
             </div>
+            <FiltersIconButton
+              count={filters.dateFilter !== DEFAULT_VENTAS_HISTORY_FILTERS.dateFilter ? 1 : 0}
+              expanded={filtersOpen}
+              controls="ventas-history-filters"
+              onClick={() => setFiltersOpen(true)}
+            />
+          </div>
 
-            <select
-              className="border-input flex h-9 rounded-md border bg-white px-3 text-sm"
-              value={filters.dateFilter}
-              onChange={(e) => {
+          <FiltersDrawer
+            open={filtersOpen}
+            onOpenChange={setFiltersOpen}
+            id="ventas-history-filters"
+            title="Filtros del historial"
+            description="Período de las facturas confirmadas."
+          >
+            <FiltersPanel
+              onClearAll={() =>
                 setFilters((prev) => ({
                   ...prev,
-                  dateFilter: e.target.value as DateFilter,
+                  dateFilter: DEFAULT_VENTAS_HISTORY_FILTERS.dateFilter,
+                  customFrom: '',
+                  customTo: '',
                   page: 1,
                 }))
-              }}
+              }
             >
-              <option value="today">Hoy</option>
-              <option value="month">Este mes</option>
-              <option value="all">Todas</option>
-              <option value="custom">Rango personalizado</option>
-            </select>
-
-            {filters.dateFilter === 'custom' ? (
-              <>
-                <Input
-                  type="date"
-                  className="w-auto"
-                  value={filters.customFrom}
-                  onChange={(e) => {
-                    setFilters((prev) => ({
-                      ...prev,
-                      customFrom: e.target.value,
-                      page: 1,
-                    }))
-                  }}
-                />
-                <Input
-                  type="date"
-                  className="w-auto"
-                  value={filters.customTo}
-                  onChange={(e) => {
-                    setFilters((prev) => ({
-                      ...prev,
-                      customTo: e.target.value,
-                      page: 1,
-                    }))
-                  }}
-                />
-              </>
-            ) : null}
-          </div>
+              <FilterSection
+                title="Período"
+                icon={<CalendarRange className="size-4 text-neutral-500" />}
+              >
+                <div className="space-y-3">
+                  <select
+                    className="border-input flex h-9 w-full rounded-md border bg-white px-3 text-sm"
+                    value={filters.dateFilter}
+                    onChange={(e) => {
+                      setFilters((prev) => ({
+                        ...prev,
+                        dateFilter: e.target.value as DateFilter,
+                        page: 1,
+                      }))
+                    }}
+                  >
+                    <option value="today">Hoy</option>
+                    <option value="month">Este mes</option>
+                    <option value="all">Todas</option>
+                    <option value="custom">Rango personalizado</option>
+                  </select>
+                  {filters.dateFilter === 'custom' ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="date"
+                        value={filters.customFrom}
+                        onChange={(e) => {
+                          setFilters((prev) => ({
+                            ...prev,
+                            customFrom: e.target.value,
+                            page: 1,
+                          }))
+                        }}
+                      />
+                      <Input
+                        type="date"
+                        value={filters.customTo}
+                        onChange={(e) => {
+                          setFilters((prev) => ({
+                            ...prev,
+                            customTo: e.target.value,
+                            page: 1,
+                          }))
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </FilterSection>
+            </FiltersPanel>
+          </FiltersDrawer>
         </CardHeader>
 
         <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
@@ -259,6 +294,7 @@ export function VentasHistoryPanel() {
                   {sales.map((sale) => {
                     const isExpanded = expandedSaleId === sale.id
                     const canReturn = sale.status === 'COMPLETED'
+                    const discountLabel = invoiceDiscountLabel(sale.total_usd, sale.discount_usd)
 
                     return (
                       <Fragment key={sale.id}>
@@ -319,7 +355,14 @@ export function VentasHistoryPanel() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <DisplayMoneyFromUsd amountUsd={sale.total_usd} size="sm" />
+                            <div className="flex flex-col items-end gap-0.5">
+                              <DisplayMoneyFromUsd amountUsd={sale.total_usd} size="sm" />
+                              {discountLabel ? (
+                                <span className="text-xs font-medium text-violet-700">
+                                  {discountLabel}
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex justify-end gap-1">

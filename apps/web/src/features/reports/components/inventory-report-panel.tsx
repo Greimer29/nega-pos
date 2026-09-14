@@ -1,7 +1,10 @@
-import { Download, Loader2, Package, SlidersHorizontal } from 'lucide-react'
+import { Download, Loader2, Package, ArrowUpDown, LayoutGrid, Tag } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PublicImage } from '@/components/public-image'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
+import { FilterSection, FiltersPanel } from '@/components/filters/filters-panel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuth } from '@/features/auth/hooks/use-auth'
@@ -174,6 +177,13 @@ export function InventoryReportPanel() {
   const products = data?.products ?? []
   const meta = data?.meta
   const sortValue = `${filters.sortBy}:${filters.sortDir}`
+  const defaults = defaultInventoryListFilters()
+  const activeFilterCount =
+    (filters.category ? 1 : 0) +
+    (filters.sortBy !== defaults.sortBy || filters.sortDir !== defaults.sortDir ? 1 : 0) +
+    (filters.activeOnly !== defaults.activeOnly ? 1 : 0) +
+    (filters.lowStockOnly ? 1 : 0) +
+    (filters.hideZero ? 1 : 0)
 
   return (
     <div className="space-y-5">
@@ -211,87 +221,100 @@ export function InventoryReportPanel() {
             placeholder="Buscar código, descripción, marca…"
             className={cn(reportUi.input, 'max-w-sm')}
           />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className={reportUi.btnGhost}
-            onClick={() => setFiltersOpen((v) => !v)}
-          >
-            <SlidersHorizontal className="size-4" />
-            Filtros
-          </Button>
+          <FiltersIconButton
+            count={activeFilterCount}
+            expanded={filtersOpen}
+            controls="inventario-report-filters"
+            onClick={() => setFiltersOpen(true)}
+          />
         </div>
+      </div>
 
-        {filtersOpen ? (
-          <div className={cn('mt-4 grid gap-4 border-t pt-4 md:grid-cols-2 lg:grid-cols-3', reportUi.divider)}>
-            <label className="space-y-1.5 text-sm">
-              <span className={reportUi.muted}>Categoría</span>
-              <select
-                className={cn(reportUi.input, 'w-full px-3')}
-                value={filters.category}
-                onChange={(e) => patchFilters({ category: e.target.value })}
-              >
-                <option value="">Todas</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+      <FiltersDrawer
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        id="inventario-report-filters"
+        title="Filtros de inventario"
+        description="Categoría, orden y visibilidad del snapshot de stock."
+      >
+        <FiltersPanel
+          onClearAll={() =>
+            patchFilters({
+              category: '',
+              sortBy: defaults.sortBy,
+              sortDir: defaults.sortDir,
+              activeOnly: true,
+              lowStockOnly: false,
+              hideZero: false,
+            })
+          }
+        >
+          <FilterSection title="Categorías" icon={<LayoutGrid className="size-4 text-neutral-500" />}>
+            <select
+              className="border-input flex h-9 w-full rounded-md border bg-white px-3 text-sm"
+              value={filters.category}
+              onChange={(e) => patchFilters({ category: e.target.value })}
+            >
+              <option value="">Todas</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </FilterSection>
 
-            <label className="space-y-1.5 text-sm">
-              <span className={reportUi.muted}>Ordenar</span>
-              <select
-                className={cn(reportUi.input, 'w-full px-3')}
-                value={sortValue}
-                onChange={(e) => {
-                  const option = INVENTORY_SORT_OPTIONS.find((o) => o.value === e.target.value)
-                  if (!option) return
-                  patchFilters({ sortBy: option.sortBy, sortDir: option.sortDir })
-                }}
-              >
-                {INVENTORY_SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <FilterSection title="Ordenar por" icon={<ArrowUpDown className="size-4 text-neutral-500" />}>
+            <select
+              className="border-input flex h-9 w-full rounded-md border bg-white px-3 text-sm"
+              value={sortValue}
+              onChange={(e) => {
+                const option = INVENTORY_SORT_OPTIONS.find((o) => o.value === e.target.value)
+                if (!option) return
+                patchFilters({ sortBy: option.sortBy, sortDir: option.sortDir })
+              }}
+            >
+              {INVENTORY_SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </FilterSection>
 
-            <div className="flex flex-col justify-end gap-2 pb-1 text-sm text-neutral-700">
-              <label className="flex items-center gap-2">
+          <FilterSection title="Visibilidad" icon={<Tag className="size-4 text-neutral-500" />}>
+            <div className="space-y-2.5 text-sm text-neutral-700">
+              <label className="flex cursor-pointer items-center gap-2.5">
                 <input
                   type="checkbox"
-                  className="accent-neutral-900"
+                  className="accent-violet-700"
                   checked={filters.activeOnly}
                   onChange={(e) => patchFilters({ activeOnly: e.target.checked })}
                 />
                 Solo activos
               </label>
-              <label className="flex items-center gap-2">
+              <label className="flex cursor-pointer items-center gap-2.5">
                 <input
                   type="checkbox"
-                  className="accent-neutral-900"
+                  className="accent-violet-700"
                   checked={filters.lowStockOnly}
                   onChange={(e) => patchFilters({ lowStockOnly: e.target.checked })}
                 />
                 Solo bajo stock
               </label>
-              <label className="flex items-center gap-2">
+              <label className="flex cursor-pointer items-center gap-2.5">
                 <input
                   type="checkbox"
-                  className="accent-neutral-900"
+                  className="accent-violet-700"
                   checked={filters.hideZero}
                   onChange={(e) => patchFilters({ hideZero: e.target.checked })}
                 />
                 Ocultar tallas sin stock
               </label>
             </div>
-          </div>
-        ) : null}
-      </div>
+          </FilterSection>
+        </FiltersPanel>
+      </FiltersDrawer>
 
       {isLoading ? (
         <div

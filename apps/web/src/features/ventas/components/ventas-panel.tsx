@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FileText, FolderOpen, Loader2, Plus, Search, ShoppingCart, SlidersHorizontal } from 'lucide-react'
+import { FileText, FolderOpen, Loader2, Plus, Search, ShoppingCart } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { BarcodeScanButton } from '@/components/barcode-scan-button'
+import { FiltersDrawer } from '@/components/filters/filters-drawer'
+import { FiltersIconButton } from '@/components/filters/filters-icon-button'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
+import {
+  VentasCatalogFiltersPanel,
+  type VentasCatalogSortOption,
+} from '@/features/ventas/components/ventas-catalog-filters-panel'
 import { CustomerFormDialog } from '@/features/customers/components/customer-form-dialog'
 import type { Customer } from '@/features/customers/types'
 import { useAuth } from '@/features/auth/hooks/use-auth'
@@ -61,6 +68,12 @@ import { toast } from '@/features/notifications/toast'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { isValidEntityId } from '@/lib/route-id'
 import { normalizeInventoryQuantity } from '@/lib/inventory-units'
+import {
+  lookupInventoryBarcode,
+  lookupMaterialByBarcode,
+  lookupProductByBarcode,
+  normalizeBarcodeInput,
+} from '@/lib/barcode-scan'
 import { VentasPaymentMethodDialog } from '@/features/ventas/components/ventas-payment-method-dialog'
 import { useCurrentSalesShiftQuery } from '@/features/ventas/hooks/use-sales-shifts'
 import { SaleLineFormulaDialog } from '@/features/ventas/components/sale-line-formula-dialog'
@@ -104,17 +117,29 @@ type CatalogSource = 'products' | 'materials' | 'services'
 type VentasCatalogFilters = {
   source: CatalogSource
   search: string
+  barcode: string
   category: string
   size: string
+  sortBy: VentasCatalogSortOption
+  minPrice: string
+  maxPrice: string
   page: number
 }
 
 const DEFAULT_VENTAS_CATALOG_FILTERS: VentasCatalogFilters = {
   source: 'products',
   search: '',
+  barcode: '',
   category: '',
   size: '',
+  sortBy: 'most_sold',
+  minPrice: '',
+  maxPrice: '',
   page: 1,
+}
+
+function defaultSortForSource(source: CatalogSource): VentasCatalogSortOption {
+  return source === 'products' ? 'most_sold' : 'name'
 }
 
 function cartLineUnitPrice(line: CartLine): number {
@@ -177,9 +202,12 @@ function VentasCreateView() {
   )
   const [searchInput, setSearchInput] = useState(catalogFilters.search)
   const [sizeFilter, setSizeFilter] = useState(catalogFilters.size)
+  const [minPriceInput, setMinPriceInput] = useState(catalogFilters.minPrice)
+  const [maxPriceInput, setMaxPriceInput] = useState(catalogFilters.maxPrice)
   const catalogSource = catalogFilters.source
   const category = catalogFilters.category
   const page = catalogFilters.page
+  const sortBy = catalogFilters.sortBy ?? defaultSortForSource(catalogSource)
   const [sizePickProduct, setSizePickProduct] = useState<CatalogProduct | null>(null)
   const [sizePickOpen, setSizePickOpen] = useState(false)
   const [customerId, setCustomerId] = useState<number | ''>(() => initialDraft?.customerId ?? '')
@@ -241,13 +269,14 @@ function VentasCreateView() {
     {
       page,
       perPage: CATALOG_PER_PAGE,
-      search: catalogFilters.search || undefined,
+      search: catalogFilters.barcode ? undefined : catalogFilters.search || undefined,
+      barcode: catalogFilters.barcode || undefined,
       category: category || undefined,
       size: catalogFilters.size || undefined,
       active: true,
       itemKind: 'PRODUCT',
-      sortBy: 'most_sold',
-      sortDir: 'desc',
+      sortBy: sortBy === 'name' ? 'name' : 'most_sold',
+      sortDir: sortBy === 'name' ? 'asc' : 'desc',
     },
     { enabled: catalogSource === 'products' }
   )
@@ -280,11 +309,12 @@ function VentasCreateView() {
     {
       page,
       perPage: CATALOG_PER_PAGE,
-      search: catalogFilters.search || undefined,
+      search: catalogFilters.barcode ? undefined : catalogFilters.search || undefined,
+      barcode: catalogFilters.barcode || undefined,
       category: category || undefined,
       status: 'active',
-      sortBy: 'name',
-      sortDir: 'asc',
+      sortBy: sortBy === 'most_sold' ? 'most_used' : 'name',
+      sortDir: sortBy === 'most_sold' ? 'desc' : 'asc',
     },
     { enabled: catalogSource === 'materials' }
   )
@@ -298,13 +328,43 @@ function VentasCreateView() {
   }, [catalogFilters.size])
 
   useEffect(() => {
+    setMinPriceInput(catalogFilters.minPrice ?? '')
+  }, [catalogFilters.minPrice])
+
+  useEffect(() => {
+    setMaxPriceInput(catalogFilters.maxPrice ?? '')
+  }, [catalogFilters.maxPrice])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setCatalogFilters((prev) => {
+        if ((prev.minPrice ?? '') === minPriceInput && (prev.maxPrice ?? '') === maxPriceInput) {
+          return prev
+        }
+        return { ...prev, minPrice: minPriceInput, maxPrice: maxPriceInput, page: 1 }
+      })
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [minPriceInput, maxPriceInput, setCatalogFilters])
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       const nextSearch = searchInput.trim()
-      setCatalogFilters((prev) => ({
-        ...prev,
-        search: nextSearch,
-        page: nextSearch === prev.search ? prev.page : 1,
-      }))
+      setCatalogFilters((prev) => {
+        if (!nextSearch) {
+          if (!prev.search && !prev.barcode) return prev
+          return { ...prev, search: '', barcode: '', page: 1 }
+        }
+        if (prev.barcode && nextSearch === prev.barcode) {
+          return prev
+        }
+        return {
+          ...prev,
+          search: nextSearch,
+          barcode: '',
+          page: nextSearch === prev.search ? prev.page : 1,
+        }
+      })
     }, 300)
     return () => window.clearTimeout(timer)
   }, [searchInput, setCatalogFilters])
@@ -377,13 +437,117 @@ function VentasCreateView() {
     invoiceDiscountUsd,
   ])
 
-  const products = catalogData?.catalog_products ?? []
+  const productsRaw = catalogData?.catalog_products ?? []
   const catalogMeta = catalogData?.meta
-  const services = servicesData?.catalog_products ?? []
+  const servicesRaw = servicesData?.catalog_products ?? []
   const servicesMeta = servicesData?.meta
-  const materials = materialsData?.materials ?? []
+  const materialsRaw = materialsData?.materials ?? []
   const materialsMeta = materialsData?.meta
-  const activeFilterCount = (category ? 1 : 0) + (sizeFilter.trim() ? 1 : 0)
+
+  const priceBounds = useMemo(() => {
+    const prices =
+      catalogSource === 'products'
+        ? productsRaw.map((item) => Number(item.sale_price_usd))
+        : catalogSource === 'services'
+          ? servicesRaw.map((item) => Number(item.sale_price_usd))
+          : materialsRaw.map((item) => Number(materialSaleUnitPriceUsd(item)))
+    const finite = prices.filter((value) => Number.isFinite(value) && value >= 0)
+    if (finite.length === 0) return { min: 0, max: 100 }
+    return { min: Math.min(...finite), max: Math.max(...finite) }
+  }, [catalogSource, productsRaw, servicesRaw, materialsRaw])
+
+  const products = useMemo(() => {
+    const min = Number(catalogFilters.minPrice)
+    const max = Number(catalogFilters.maxPrice)
+    return productsRaw.filter((item) => {
+      const price = Number(item.sale_price_usd)
+      if (Number.isFinite(min) && catalogFilters.minPrice.trim() && price < min) return false
+      if (Number.isFinite(max) && catalogFilters.maxPrice.trim() && price > max) return false
+      return true
+    })
+  }, [productsRaw, catalogFilters.minPrice, catalogFilters.maxPrice])
+
+  const services = useMemo(() => {
+    const min = Number(catalogFilters.minPrice)
+    const max = Number(catalogFilters.maxPrice)
+    return servicesRaw.filter((item) => {
+      const price = Number(item.sale_price_usd)
+      if (Number.isFinite(min) && catalogFilters.minPrice.trim() && price < min) return false
+      if (Number.isFinite(max) && catalogFilters.maxPrice.trim() && price > max) return false
+      return true
+    })
+  }, [servicesRaw, catalogFilters.minPrice, catalogFilters.maxPrice])
+
+  const materials = useMemo(() => {
+    const min = Number(catalogFilters.minPrice)
+    const max = Number(catalogFilters.maxPrice)
+    return materialsRaw.filter((item) => {
+      const price = materialSaleUnitPriceUsd(item)
+      if (Number.isFinite(min) && catalogFilters.minPrice.trim() && price < min) return false
+      if (Number.isFinite(max) && catalogFilters.maxPrice.trim() && price > max) return false
+      return true
+    })
+  }, [materialsRaw, catalogFilters.minPrice, catalogFilters.maxPrice])
+
+  const sizeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(productsRaw.flatMap((product) => (product.sizes ?? []).map((size) => size.size)))
+      ).sort((a, b) => a.localeCompare(b, 'es', { numeric: true })),
+    [productsRaw]
+  )
+
+  const defaultSort = defaultSortForSource(catalogSource)
+  const activeFilterCount =
+    (category ? 1 : 0) +
+    (sizeFilter.trim() ? 1 : 0) +
+    (sortBy !== defaultSort ? 1 : 0) +
+    (catalogFilters.minPrice.trim() || catalogFilters.maxPrice.trim() ? 1 : 0)
+
+  function clearCatalogFilters() {
+    setSearchInput('')
+    setSizeFilter('')
+    setMinPriceInput('')
+    setMaxPriceInput('')
+    setCatalogFilters((prev) => ({
+      ...prev,
+      search: '',
+      barcode: '',
+      category: '',
+      size: '',
+      sortBy: defaultSortForSource(prev.source),
+      minPrice: '',
+      maxPrice: '',
+      page: 1,
+    }))
+  }
+
+  function renderFiltersPanel() {
+    return (
+      <VentasCatalogFiltersPanel
+        catalogSource={catalogSource}
+        categories={categories}
+        category={category}
+        onCategoryChange={(value) => {
+          setCatalogFilters((prev) => ({ ...prev, category: value, page: 1 }))
+        }}
+        sortBy={sortBy}
+        onSortByChange={(value) => {
+          setCatalogFilters((prev) => ({ ...prev, sortBy: value, page: 1 }))
+        }}
+        sizeFilter={sizeFilter}
+        onSizeFilterChange={setSizeFilter}
+        sizeOptions={sizeOptions}
+        minPrice={minPriceInput}
+        maxPrice={maxPriceInput}
+        onMinPriceChange={setMinPriceInput}
+        onMaxPriceChange={setMaxPriceInput}
+        priceBounds={priceBounds}
+        onClearAll={clearCatalogFilters}
+        className="h-full min-h-0 border-0 shadow-none"
+      />
+    )
+  }
   const cartItemCount = useMemo(
     () => cart.reduce((sum, line) => sum + line.quantity, 0),
     [cart]
@@ -613,6 +777,69 @@ function VentasCreateView() {
         },
       ]
     })
+  }
+
+  async function filterCatalogByBarcode(rawCode: string) {
+    const code = normalizeBarcodeInput(rawCode)
+    if (!code) return
+
+    try {
+      if (catalogSource === 'products') {
+        const product = await lookupProductByBarcode(code)
+        if (!product) {
+          toast.error('Código no encontrado')
+          return
+        }
+        setSearchInput(code)
+        setCatalogFilters((prev) => ({
+          ...prev,
+          search: code,
+          barcode: code,
+          page: 1,
+        }))
+        return
+      }
+
+      if (catalogSource === 'materials') {
+        const material = await lookupMaterialByBarcode(code)
+        if (!material) {
+          toast.error('Código no encontrado')
+          return
+        }
+        setSearchInput(code)
+        setCatalogFilters((prev) => ({
+          ...prev,
+          search: code,
+          barcode: code,
+          page: 1,
+        }))
+        return
+      }
+
+      toast.error('Código no encontrado')
+    } catch (error) {
+      notifyApiError(error)
+    }
+  }
+
+  async function addToCartByBarcode(rawCode: string) {
+    const code = normalizeBarcodeInput(rawCode)
+    if (!code) return
+
+    try {
+      const hit = await lookupInventoryBarcode(code)
+      if (!hit) {
+        toast.error('Código no encontrado')
+        return
+      }
+      if (hit.kind === 'product') {
+        addToCart(hit.product)
+        return
+      }
+      addMaterialToCart(hit.material)
+    } catch (error) {
+      notifyApiError(error)
+    }
   }
 
   function openEditProduct(product: CatalogProduct) {
@@ -966,17 +1193,24 @@ function VentasCreateView() {
         onBillingMethodChange={setBillingMethod}
         onClose={options?.onClose}
         headerAction={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            title="Cargar factura"
-            aria-label="Cargar factura"
-            onClick={() => setLoadDraftOpen(true)}
-          >
-            <FolderOpen className="size-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <BarcodeScanButton
+              className="size-8"
+              title="Escanear para agregar al carrito"
+              onScan={(code) => void addToCartByBarcode(code)}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              title="Cargar factura"
+              aria-label="Cargar factura"
+              onClick={() => setLoadDraftOpen(true)}
+            >
+              <FolderOpen className="size-4" />
+            </Button>
+          </div>
         }
       >
         <div className="space-y-3 pt-1">
@@ -1138,24 +1372,6 @@ function VentasCreateView() {
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="relative shrink-0 md:hidden"
-                  title="Filtros"
-                  aria-label="Filtros"
-                  aria-expanded={filtersOpen}
-                  aria-controls="ventas-catalog-filters"
-                  onClick={() => setFiltersOpen((open) => !open)}
-                >
-                  <SlidersHorizontal className="size-4" />
-                  {activeFilterCount > 0 ? (
-                    <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-semibold text-white">
-                      {activeFilterCount}
-                    </span>
-                  ) : null}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
                   className="relative shrink-0 xl:hidden"
                   title="Abrir carrito"
                   aria-label="Abrir carrito"
@@ -1173,112 +1389,116 @@ function VentasCreateView() {
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-3 pt-0 sm:px-6">
             <div className="flex shrink-0 flex-col gap-3">
-              <div className="bg-muted inline-flex w-fit rounded-lg p-1">
-                <button
-                  type="button"
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs font-medium',
-                    catalogSource === 'products'
-                      ? 'bg-background shadow-sm'
-                      : 'text-muted-foreground'
-                  )}
-                  onClick={() => {
-                    setCatalogFilters((prev) => ({ ...prev, source: 'products', page: 1 }))
-                  }}
-                >
-                  Productos
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs font-medium',
-                    catalogSource === 'materials'
-                      ? 'bg-background shadow-sm'
-                      : 'text-muted-foreground'
-                  )}
-                  onClick={() => {
-                    setCatalogFilters((prev) => ({ ...prev, source: 'materials', page: 1 }))
-                  }}
-                >
-                  Materiales
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs font-medium',
-                    catalogSource === 'services'
-                      ? 'bg-background shadow-sm'
-                      : 'text-muted-foreground'
-                  )}
-                  onClick={() => {
-                    setCatalogFilters((prev) => ({ ...prev, source: 'services', page: 1 }))
-                  }}
-                >
-                  Servicios
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder={
-                    catalogSource === 'products'
-                      ? 'Buscar producto…'
-                      : catalogSource === 'services'
-                        ? 'Buscar servicio…'
-                        : 'Buscar material…'
-                  }
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className="min-w-0 flex-1 bg-white md:max-w-xs"
-                />
-              </div>
-              <div
-                id="ventas-catalog-filters"
-                className={cn('flex-wrap gap-3', filtersOpen ? 'flex' : 'hidden', 'md:flex')}
-              >
-              <select
-                className="border-input flex h-9 rounded-md border bg-white px-3 text-sm"
-                value={category}
-                onChange={(e) => {
-                  setCatalogFilters((prev) => ({
-                    ...prev,
-                    category: e.target.value,
-                    page: 1,
-                  }))
-                }}
-              >
-                <option value="">Todas las categorías</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              {catalogSource === 'products' ? (
-                <>
-                  <Input
-                    list="ventas-size-filter-options"
-                    placeholder="Filtrar talla…"
-                    value={sizeFilter}
-                    onChange={(e) => setSizeFilter(e.target.value)}
-                    className="h-9 w-36 bg-white"
-                  />
-                  <datalist id="ventas-size-filter-options">
-                    {Array.from(
-                      new Set(
-                        products.flatMap((product) =>
-                          (product.sizes ?? []).map((size) => size.size)
-                        )
-                      )
-                    )
-                      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
-                      .map((size) => (
-                        <option key={size} value={size} />
-                      ))}
-                  </datalist>
-                </>
-              ) : null}
+              <div className="flex flex-col gap-3">
+                <div className="bg-muted inline-flex w-fit rounded-lg p-1">
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-md px-3 py-1.5 text-xs font-medium',
+                      catalogSource === 'products'
+                        ? 'bg-background shadow-sm'
+                        : 'text-muted-foreground'
+                    )}
+                    onClick={() => {
+                      setCatalogFilters((prev) => ({
+                        ...prev,
+                        source: 'products',
+                        sortBy: defaultSortForSource('products'),
+                        page: 1,
+                      }))
+                    }}
+                  >
+                    Productos
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-md px-3 py-1.5 text-xs font-medium',
+                      catalogSource === 'materials'
+                        ? 'bg-background shadow-sm'
+                        : 'text-muted-foreground'
+                    )}
+                    onClick={() => {
+                      setCatalogFilters((prev) => ({
+                        ...prev,
+                        source: 'materials',
+                        sortBy: defaultSortForSource('materials'),
+                        page: 1,
+                      }))
+                    }}
+                  >
+                    Materiales
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-md px-3 py-1.5 text-xs font-medium',
+                      catalogSource === 'services'
+                        ? 'bg-background shadow-sm'
+                        : 'text-muted-foreground'
+                    )}
+                    onClick={() => {
+                      setCatalogFilters((prev) => ({
+                        ...prev,
+                        source: 'services',
+                        sortBy: defaultSortForSource('services'),
+                        page: 1,
+                      }))
+                    }}
+                  >
+                    Servicios
+                  </button>
+                </div>
+                <div className="flex min-w-0 w-full items-center gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" />
+                    <Input
+                      placeholder={
+                        catalogSource === 'products'
+                          ? 'Buscar producto…'
+                          : catalogSource === 'services'
+                            ? 'Buscar servicio…'
+                            : 'Buscar material…'
+                      }
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return
+                        e.preventDefault()
+                        if (catalogSource === 'services') return
+                        const code = searchInput.trim()
+                        if (code) void filterCatalogByBarcode(code)
+                      }}
+                      className="bg-white pl-9"
+                    />
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <FiltersIconButton
+                      count={activeFilterCount}
+                      expanded={filtersOpen}
+                      controls="ventas-catalog-filters"
+                      onClick={() => setFiltersOpen(true)}
+                    />
+                    {catalogSource !== 'services' ? (
+                      <BarcodeScanButton
+                        className="bg-white"
+                        onScan={(code) => void filterCatalogByBarcode(code)}
+                      />
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
+
+            <FiltersDrawer
+              open={filtersOpen}
+              onOpenChange={setFiltersOpen}
+              id="ventas-catalog-filters"
+              title="Filtros del catálogo"
+              description="Categoría, orden, talla y rango de precio del catálogo de ventas."
+            >
+              {renderFiltersPanel()}
+            </FiltersDrawer>
 
             <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto pr-1">
               {catalogSource === 'products' ? (
