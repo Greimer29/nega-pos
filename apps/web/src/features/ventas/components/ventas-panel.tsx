@@ -1393,7 +1393,7 @@ function VentasCreateView() {
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-3 pt-0 sm:px-6">
             <div className="flex shrink-0 flex-col gap-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3">
                 <div className="bg-muted inline-flex w-fit rounded-lg p-1">
                   <button
                     type="button"
@@ -1453,26 +1453,8 @@ function VentasCreateView() {
                     Servicios
                   </button>
                 </div>
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:max-w-xl sm:justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="relative shrink-0 bg-white"
-                    title="Filtros"
-                    aria-label="Filtros"
-                    aria-expanded={filtersOpen}
-                    aria-controls="ventas-catalog-filters"
-                    onClick={() => setFiltersOpen(true)}
-                  >
-                    <SlidersHorizontal className="size-4" />
-                    {activeFilterCount > 0 ? (
-                      <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-semibold text-white">
-                        {activeFilterCount}
-                      </span>
-                    ) : null}
-                  </Button>
-                  <div className="relative min-w-0 flex-1 basis-[12rem]">
+                <div className="flex min-w-0 w-full items-center gap-2">
+                  <div className="relative min-w-0 flex-1">
                     <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" />
                     <Input
                       placeholder={
@@ -1494,9 +1476,32 @@ function VentasCreateView() {
                       className="bg-white pl-9"
                     />
                   </div>
-                  {catalogSource !== 'services' ? (
-                    <BarcodeScanButton onScan={(code) => void filterCatalogByBarcode(code)} />
-                  ) : null}
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="relative shrink-0 bg-white"
+                      title="Filtros"
+                      aria-label="Filtros"
+                      aria-expanded={filtersOpen}
+                      aria-controls="ventas-catalog-filters"
+                      onClick={() => setFiltersOpen(true)}
+                    >
+                      <SlidersHorizontal className="size-4" />
+                      {activeFilterCount > 0 ? (
+                        <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-semibold text-white">
+                          {activeFilterCount}
+                        </span>
+                      ) : null}
+                    </Button>
+                    {catalogSource !== 'services' ? (
+                      <BarcodeScanButton
+                        className="bg-white"
+                        onScan={(code) => void filterCatalogByBarcode(code)}
+                      />
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>
