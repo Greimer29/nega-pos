@@ -35,14 +35,41 @@ function formatShiftRange(shift: SalesShift) {
   return `${opened} → ${closed}`
 }
 
-function formatDateLabel(date: string) {
-  const [year, month, day] = date.split('-').map(Number)
-  return new Date(year, month - 1, day).toLocaleDateString('es-VE', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
+function formatClosingDateTime(value: string | null | undefined) {
+  if (!value) {
+    return '—'
+  }
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    return '—'
+  }
+  return parsed.toLocaleString('es-VE', {
+    day: '2-digit',
+    month: 'short',
     year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   })
+}
+
+function invoiceReturnLabel(invoice: {
+  status: string
+  total_usd: string
+  original_total_usd?: string
+  returned_total_usd?: string
+}) {
+  const remaining = Number(invoice.total_usd)
+  const original = Number(invoice.original_total_usd ?? invoice.total_usd)
+  const returned = Number(invoice.returned_total_usd ?? 0)
+  const fullyReturned =
+    invoice.status === 'RETURNED' || (returned > 0.0001 && remaining <= 0.0001 && original > 0.0001)
+  if (fullyReturned) {
+    return 'Devuelta'
+  }
+  if (returned > 0.0001) {
+    return 'Devolución parcial'
+  }
+  return null
 }
 
 export function DashboardDailyClosingPage() {
@@ -68,9 +95,7 @@ export function DashboardDailyClosingPage() {
   const expensesTotalUsd = data?.summary.expenses_total_usd ?? '0.0000'
   const netCashUsd =
     data?.summary.net_cash_usd ??
-    (data
-      ? (Number(data.summary.cash_total_usd) - Number(expensesTotalUsd)).toFixed(4)
-      : '0.0000')
+    (data ? (Number(data.summary.cash_total_usd) - Number(expensesTotalUsd)).toFixed(4) : '0.0000')
   const expenseItems = data?.expenses?.items ?? []
   const expenseSummary = data?.expenses?.summary ?? {
     gastos_cantidad: 0,
@@ -135,8 +160,8 @@ export function DashboardDailyClosingPage() {
           {data.expenses == null ? (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               El servidor no devolvió gastos en el cierre. Reconstruí la API (
-              <code className="text-xs">docker compose up -d --build api</code>
-              ) o usá <code className="text-xs">pnpm dev:api</code> en el host.
+              <code className="text-xs">docker compose up -d --build api</code>) o usá{' '}
+              <code className="text-xs">pnpm dev:api</code> en el host.
             </p>
           ) : null}
 
@@ -203,7 +228,9 @@ export function DashboardDailyClosingPage() {
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {data.by_payment_method.length === 0 ? (
-                <p className="text-muted-foreground text-sm">Sin ventas de contado en este turno.</p>
+                <p className="text-muted-foreground text-sm">
+                  Sin ventas de contado en este turno.
+                </p>
               ) : (
                 <table className="w-full text-sm">
                   <thead>
@@ -224,9 +251,7 @@ export function DashboardDailyClosingPage() {
                         <td className="px-3 py-2 text-right">
                           <DisplayMoneyFromUsd amountUsd={item.total_usd} size="sm" />
                         </td>
-                        <td className="px-3 py-2 text-right">
-                          {item.total_in_currency ?? '—'}
-                        </td>
+                        <td className="px-3 py-2 text-right">{item.total_in_currency ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -257,6 +282,9 @@ export function DashboardDailyClosingPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Facturas del turno</CardTitle>
+              <CardDescription>
+                El total es el neto vigente. Si hubo devolución, se indica el monto original.
+              </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {data.invoices.length === 0 ? (
@@ -278,37 +306,65 @@ export function DashboardDailyClosingPage() {
                         invoice.total_usd,
                         invoice.discount_usd
                       )
+                      const returnLabel = invoiceReturnLabel(invoice)
+                      const originalUsd = Number(invoice.original_total_usd ?? invoice.total_usd)
+                      const remainingUsd = Number(invoice.total_usd)
+                      const showOriginal =
+                        returnLabel != null && originalUsd > remainingUsd + 0.0001
                       return (
-                      <tr key={invoice.id} className="border-b last:border-b-0">
-                        <td className="px-3 py-2">
-                          <Link className="text-primary hover:underline" to={`/ventas/${invoice.id}`}>
-                            {invoice.code ?? `#${invoice.id}`}
-                          </Link>
-                        </td>
-                        <td className="px-3 py-2">{invoice.customer_name}</td>
-                        <td className="px-3 py-2">
-                          {invoice.payment_type === 'CREDIT' ? 'Crédito' : 'Contado'}
-                        </td>
-                        <td className="px-3 py-2">
-                          {invoice.payment_type === 'CREDIT'
-                            ? '—'
-                            : paymentMethodLabel(
-                                invoice.payment_method_name
-                                  ? { name: invoice.payment_method_name }
-                                  : invoice.payment_method_code
-                              )}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <div className="flex flex-col items-end gap-0.5">
-                            <DisplayMoneyFromUsd amountUsd={invoice.total_usd} size="sm" />
-                            {discountLabel ? (
-                              <span className="text-xs font-medium text-violet-700">
-                                {discountLabel}
-                              </span>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
+                        <tr key={invoice.id} className="border-b last:border-b-0">
+                          <td className="px-3 py-2">
+                            <Link
+                              className="text-primary hover:underline"
+                              to={`/ventas/${invoice.id}`}
+                            >
+                              {invoice.code ?? `#${invoice.id}`}
+                            </Link>
+                          </td>
+                          <td className="px-3 py-2">{invoice.customer_name}</td>
+                          <td className="px-3 py-2">
+                            {invoice.payment_type === 'CREDIT' ? 'Crédito' : 'Contado'}
+                          </td>
+                          <td className="px-3 py-2">
+                            {invoice.payment_type === 'CREDIT'
+                              ? '—'
+                              : paymentMethodLabel(
+                                  invoice.payment_method_name
+                                    ? { name: invoice.payment_method_name }
+                                    : invoice.payment_method_code
+                                )}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <div className="flex flex-col items-end gap-0.5">
+                              <DisplayMoneyFromUsd amountUsd={invoice.total_usd} size="sm" />
+                              {returnLabel ? (
+                                <span
+                                  className={
+                                    returnLabel === 'Devuelta'
+                                      ? 'rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800'
+                                      : 'rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800'
+                                  }
+                                >
+                                  {returnLabel}
+                                </span>
+                              ) : null}
+                              {showOriginal ? (
+                                <span className="text-muted-foreground text-xs">
+                                  Original{' '}
+                                  <DisplayMoneyFromUsd
+                                    amountUsd={originalUsd}
+                                    className="inline text-xs font-medium"
+                                  />
+                                </span>
+                              ) : null}
+                              {discountLabel ? (
+                                <span className="text-xs font-medium text-violet-700">
+                                  {discountLabel}
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
                       )
                     })}
                   </tbody>
@@ -340,7 +396,9 @@ export function DashboardDailyClosingPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {data.products.length === 0 ? (
-                <p className="text-muted-foreground py-8 text-center text-sm">Sin productos vendidos.</p>
+                <p className="text-muted-foreground py-8 text-center text-sm">
+                  Sin productos vendidos.
+                </p>
               ) : (
                 data.products.map((product) => (
                   <DailySoldProductCard key={product.id} product={product} />
@@ -353,6 +411,9 @@ export function DashboardDailyClosingPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Devoluciones</CardTitle>
+                <CardDescription>
+                  Monto reembolsado (neto), no el saldo que queda en la factura.
+                </CardDescription>
               </CardHeader>
               <CardContent className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -367,11 +428,14 @@ export function DashboardDailyClosingPage() {
                     {data.returns.map((item) => (
                       <tr key={item.sale_id} className="border-b last:border-b-0">
                         <td className="px-3 py-2">
-                          <Link className="text-primary hover:underline" to={`/ventas/${item.sale_id}`}>
+                          <Link
+                            className="text-primary hover:underline"
+                            to={`/ventas/${item.sale_id}`}
+                          >
                             {item.sale_code ?? `#${item.sale_id}`}
                           </Link>
                         </td>
-                        <td className="px-3 py-2">{formatDateLabel(item.returned_at.slice(0, 10))}</td>
+                        <td className="px-3 py-2">{formatClosingDateTime(item.returned_at)}</td>
                         <td className="px-3 py-2 text-right">
                           <DisplayMoneyFromUsd amountUsd={item.total_returned_usd} size="sm" />
                         </td>

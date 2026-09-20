@@ -47,7 +47,7 @@ import type { Material } from '@/features/materials/types'
 import { catalogImageUrl } from '@/features/ventas/constants'
 import type { BillingMethod } from '@/features/ventas/constants'
 import { useCatalogProductsQuery } from '@/features/ventas/hooks/use-catalog'
-import type { CatalogProduct, CatalogProductSize } from '@/features/ventas/types'
+import type { CatalogProduct, CatalogProductSize, ConfirmSaleInput } from '@/features/ventas/types'
 import { cartHasStockIssues } from '@/features/ventas/utils/product-stock'
 import { productHasSizes, sizesWithStock } from '@/features/ventas/utils/product-sizes'
 import { SizePickDialog } from '@/features/ventas/components/size-pick-dialog'
@@ -79,7 +79,6 @@ import { useCurrentSalesShiftQuery } from '@/features/ventas/hooks/use-sales-shi
 import { SaleLineFormulaDialog } from '@/features/ventas/components/sale-line-formula-dialog'
 import { SaleLineKitchenNoteDialog } from '@/features/ventas/components/sale-line-kitchen-note-dialog'
 import { ServiceLineDialog } from '@/features/ventas/components/service-line-dialog'
-import type { PaymentMethod } from '@/features/payment-methods/types'
 import {
   createCartLineId,
   formulaMaterialsSignature,
@@ -1055,27 +1054,13 @@ function VentasCreateView() {
     }
   }
 
-  async function finalizeConfirm(
-    saleId: number,
-    paymentMethodCode?: string,
-    paymentOptions?: { currency_code?: string; usd_rate?: number }
-  ) {
+  async function finalizeConfirm(saleId: number, payload: ConfirmSaleInput = {}) {
     const sale = await confirmSaleMutation.mutateAsync({
       id: saleId,
       payload: {
         payment_type: paymentType,
         billing_mode: billingMethod,
-        ...(paymentType === 'CASH' && paymentMethodCode
-          ? {
-              payment_method_code: paymentMethodCode,
-              ...(paymentOptions?.currency_code
-                ? { currency_code: paymentOptions.currency_code }
-                : {}),
-              ...(paymentOptions?.usd_rate != null
-                ? { usd_rate: paymentOptions.usd_rate }
-                : {}),
-            }
-          : {}),
+        ...payload,
       },
     })
 
@@ -1141,16 +1126,13 @@ function VentasCreateView() {
     }
   }
 
-  async function handlePaymentMethodConfirm(
-    method: PaymentMethod,
-    options: { currency_code: string; usd_rate?: number }
-  ) {
+  async function handlePaymentMethodConfirm(payments: ConfirmSaleInput['payments']) {
     if (!pendingSaleId) return
 
     setIsSubmitting(true)
 
     try {
-      await finalizeConfirm(pendingSaleId, method.code, options)
+      await finalizeConfirm(pendingSaleId, { payments })
       setPaymentDialogOpen(false)
       setPendingSaleId(null)
     } catch (submitError) {
@@ -1746,7 +1728,7 @@ function VentasCreateView() {
         }}
         totalUsd={payableTotal}
         isSubmitting={isSubmitting}
-        onConfirm={(method, options) => void handlePaymentMethodConfirm(method, options)}
+        onConfirm={(payments) => void handlePaymentMethodConfirm(payments)}
       />
       <SaleLineFormulaDialog
         open={formulaDialogLineId != null}

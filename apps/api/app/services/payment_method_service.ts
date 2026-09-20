@@ -3,6 +3,7 @@ import MetodoPagoNoEncontradoException from '#exceptions/metodo_pago_no_encontra
 import UltimoMetodoPagoActivoException from '#exceptions/ultimo_metodo_pago_activo_exception'
 import PaymentMethod from '#models/payment_method'
 import Sale from '#models/sale'
+import SalePayment from '#models/sale_payment'
 import CurrencyService from '#services/currency_service'
 
 export type PaymentMethodInput = {
@@ -95,7 +96,9 @@ export default class PaymentMethodService {
 
   async eliminar(code: string): Promise<{ code: string; modo: 'soft' | 'hard' }> {
     const method = await this.obtener(code)
-    const inUse = await Sale.query().where('paymentMethodCode', method.code).first()
+    const inUse =
+      (await Sale.query().where('paymentMethodCode', method.code).first()) ||
+      (await SalePayment.query().where('paymentMethodCode', method.code).first())
 
     if (inUse) {
       await this.assertPuedeDesactivar(method.code)

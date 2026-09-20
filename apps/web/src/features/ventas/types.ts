@@ -9,6 +9,23 @@ export type PaymentMethodSummary = {
   currency_code: string
 }
 
+export type SalePayment = {
+  id: number
+  payment_method_code: string
+  amount_usd: string
+  currency_code: string
+  usd_rate: string | null
+  amount_native: string | null
+  payment_method: PaymentMethodSummary | null
+}
+
+export type ConfirmSalePaymentInput = {
+  payment_method_code: string
+  amount_usd: number
+  currency_code?: string
+  usd_rate?: number
+}
+
 export type CatalogProductSize = {
   id: number
   catalog_product_id?: number
@@ -205,6 +222,7 @@ export type Sale = {
   guest_name: string | null
   payment_method_code: string | null
   payment_method: PaymentMethodSummary | null
+  payments?: SalePayment[]
   payment_type: SalePaymentType
   billing_mode: SaleBillingMode
   order_status: SaleOrderStatus
@@ -272,6 +290,7 @@ export type ConfirmSaleInput = {
   billing_mode?: SaleBillingMode
   currency_code?: string
   usd_rate?: number
+  payments?: ConfirmSalePaymentInput[]
 }
 
 export type SaleReturnInput = {

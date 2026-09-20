@@ -32,4 +32,7 @@ export default class User extends compose(
     },
   })
   declare permissions: PermissionKey[] | null
+
+  @column()
+  declare isHidden: boolean
 }

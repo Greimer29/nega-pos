@@ -133,16 +133,24 @@ export type DailyClosingInvoice = {
   payment_type: string
   payment_method_code: string | null
   payment_method_name: string | null
+  payment_methods?: Array<{
+    code: string
+    name: string
+    amount_usd: string
+  }>
   discount_usd: string
   total_usd: string
+  original_total_usd?: string
+  returned_total_usd?: string
   total_bs: string | null
   status: string
+  returned_at?: string | null
 }
 
 export type DailyClosingReturn = {
   sale_id: number
   sale_code: string | null
-  returned_at: string
+  returned_at: string | null
   total_returned_usd: string
 }
 

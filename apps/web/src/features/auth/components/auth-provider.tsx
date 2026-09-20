@@ -189,8 +189,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, revalidateSession])
 
-  const login = useCallback(async (email: string, password: string) => {
-    const session = await authService.login({ email, password })
+  const login = useCallback(async (email: string, password: string, companySlug?: string) => {
+    const session = await authService.login({
+      email,
+      password,
+      ...(companySlug ? { company_slug: companySlug } : {}),
+    })
     // Tras login la sesión/cookies cambian: renovar CSRF una sola vez.
     await refreshCsrfToken()
     setSessionBootstrapError(false)

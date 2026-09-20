@@ -253,8 +253,7 @@ export default class ReportService {
           salesUsd += grossUsd
 
           const discountUsd = Number(sale.discountUsd ?? 0)
-          const discountNote =
-            discountUsd > 0.0001 ? ` · descuento −${discountUsd.toFixed(2)}` : ''
+          const discountNote = discountUsd > 0.0001 ? ` · descuento −${discountUsd.toFixed(2)}` : ''
 
           movements.push(
             this.buildMovement({

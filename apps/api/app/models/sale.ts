@@ -1,6 +1,7 @@
 import { SaleSchema } from '#database/schema'
 import Customer from '#models/customer'
 import SaleLine from '#models/sale_line'
+import SalePayment from '#models/sale_payment'
 import PaymentMethod from '#models/payment_method'
 import SalesShift from '#models/sales_shift'
 import User from '#models/user'
@@ -15,6 +16,9 @@ export default class Sale extends SaleSchema {
 
   @hasMany(() => SaleLine)
   declare saleLines: HasMany<typeof SaleLine>
+
+  @hasMany(() => SalePayment)
+  declare salePayments: HasMany<typeof SalePayment>
 
   @belongsTo(() => PaymentMethod, { foreignKey: 'paymentMethodCode', localKey: 'code' })
   declare paymentMethod: BelongsTo<typeof PaymentMethod>

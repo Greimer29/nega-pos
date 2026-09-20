@@ -56,12 +56,6 @@ export const ProfitMarginFiltersPanel = forwardRef<HTMLElement, ProfitMarginFilt
         ref={ref}
         className="flex w-full shrink-0 flex-col gap-4 lg:min-w-[240px] lg:max-w-xs"
       >
-        <h4 className="text-sm font-medium">Margen de ganancia</h4>
-        <p className="text-muted-foreground text-xs">
-          Aplicá un porcentaje sobre el precio costo de los productos del catálogo para calcular el
-          precio de venta.
-        </p>
-
         <div className="flex flex-col gap-2">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="space-y-2 sm:flex-1">

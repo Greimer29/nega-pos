@@ -7,6 +7,7 @@ import { isMultiTenantEnabled } from '#utils/multi_tenant'
 import Company from '#models/company'
 import DirectoryAuthService, {
   clearTenantClaims,
+  establishPlatformTenantSession,
   establishTenantSession,
   readTenantClaims,
 } from '#services/directory_auth_service'
@@ -61,12 +62,18 @@ function mapAuthError(error: unknown, response: HttpContext['response']) {
   }
 
   if (error && typeof error === 'object' && 'code' in error) {
-    const err = error as { code?: string; message?: string; status?: number }
+    const err = error as {
+      code?: string
+      message?: string
+      status?: number
+      companies?: Array<{ id: number; slug: string; name: string; status: string }>
+    }
     const status = err.status ?? 401
     return response.status(status).json({
       error: {
         code: err.code === 'E_INVALID_CREDENTIALS' ? 'INVALID_CREDENTIALS' : err.code,
         message: err.message ?? 'No se pudo autenticar',
+        ...(Array.isArray(err.companies) ? { companies: err.companies } : {}),
       },
     })
   }
@@ -96,18 +103,25 @@ export default class AuthControleler {
       throw error
     }
 
-    const { email, password } = await request.validateUsing(loginValidator)
+    const {
+      email,
+      password,
+      company_slug: companySlug,
+    } = await request.validateUsing(loginValidator)
 
     if (isMultiTenantEnabled()) {
       try {
         const directoryAuth = new DirectoryAuthService()
-        const { directoryUser, company } = await directoryAuth.loginWithPassword(email, password)
-        const { user, company: activeCompany } = await establishTenantSession(
-          auth,
-          ctx.session,
-          directoryUser,
-          company
-        )
+        const result = await directoryAuth.loginWithPassword(email, password, companySlug)
+        const { user, company: activeCompany } =
+          result.kind === 'platform'
+            ? await establishPlatformTenantSession(
+                auth,
+                ctx.session,
+                result.platformAdmin,
+                result.company
+              )
+            : await establishTenantSession(auth, ctx.session, result.directoryUser, result.company)
         clearLoginRateLimit(ip)
         return serialize({
           user: serializeUser(user),

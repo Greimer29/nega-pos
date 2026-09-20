@@ -28,7 +28,7 @@ export default class UserService {
   async listar(filters: ListUsersFilters = {}): Promise<ModelPaginatorContract<User>> {
     const page = filters.page ?? 1
     const perPage = filters.perPage ?? 20
-    const query = User.query().orderBy('name', 'asc')
+    const query = User.query().where('isHidden', false).orderBy('name', 'asc')
 
     if (filters.search) {
       query.where((builder) => {
@@ -47,7 +47,7 @@ export default class UserService {
 
   async obtener(id: number): Promise<User> {
     const user = await User.find(id)
-    if (!user) {
+    if (!user || user.isHidden) {
       throw new UsuarioNoEncontradoException()
     }
     return user
@@ -149,6 +149,7 @@ export default class UserService {
     const activeAdmins = await User.query()
       .where('role', 'ADMIN')
       .where('active', true)
+      .where('isHidden', false)
       .count('* as total')
 
     const total = Number(activeAdmins[0]?.$extras.total ?? 0)

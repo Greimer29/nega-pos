@@ -36,7 +36,14 @@ export class AppSettingSchema extends BaseModel {
 }
 
 export class CatalogProductSizeSchema extends BaseModel {
-  static $columns = ['catalogProductId', 'createdAt', 'id', 'size', 'stockQuantity', 'updatedAt'] as const
+  static $columns = [
+    'catalogProductId',
+    'createdAt',
+    'id',
+    'size',
+    'stockQuantity',
+    'updatedAt',
+  ] as const
   $columns = CatalogProductSizeSchema.$columns
   @column()
   declare catalogProductId: bigint | number
@@ -53,7 +60,25 @@ export class CatalogProductSizeSchema extends BaseModel {
 }
 
 export class CatalogProductSchema extends BaseModel {
-  static $columns = ['active', 'barcode', 'category', 'costUsd', 'createdAt', 'description', 'formulaId', 'id', 'imagePath', 'itemKind', 'minimumStock', 'name', 'previousSalePriceUsd', 'salePriceUsd', 'saleUnit', 'stockQuantity', 'updatedAt'] as const
+  static $columns = [
+    'active',
+    'barcode',
+    'category',
+    'costUsd',
+    'createdAt',
+    'description',
+    'formulaId',
+    'id',
+    'imagePath',
+    'itemKind',
+    'minimumStock',
+    'name',
+    'previousSalePriceUsd',
+    'salePriceUsd',
+    'saleUnit',
+    'stockQuantity',
+    'updatedAt',
+  ] as const
   $columns = CatalogProductSchema.$columns
   @column()
   declare active: boolean
@@ -137,7 +162,18 @@ export class CurrencySchema extends BaseModel {
 }
 
 export class CustomerPaymentSchema extends BaseModel {
-  static $columns = ['accountId', 'amountUsd', 'createdAt', 'customerId', 'date', 'id', 'note', 'orderId', 'saleId', 'updatedAt'] as const
+  static $columns = [
+    'accountId',
+    'amountUsd',
+    'createdAt',
+    'customerId',
+    'date',
+    'id',
+    'note',
+    'orderId',
+    'saleId',
+    'updatedAt',
+  ] as const
   $columns = CustomerPaymentSchema.$columns
   @column()
   declare accountId: bigint | number | null
@@ -162,7 +198,21 @@ export class CustomerPaymentSchema extends BaseModel {
 }
 
 export class CustomerSchema extends BaseModel {
-  static $columns = ['active', 'address', 'createdAt', 'creditDays', 'document', 'email', 'id', 'imagePath', 'name', 'notes', 'phone', 'type', 'updatedAt'] as const
+  static $columns = [
+    'active',
+    'address',
+    'createdAt',
+    'creditDays',
+    'document',
+    'email',
+    'id',
+    'imagePath',
+    'name',
+    'notes',
+    'phone',
+    'type',
+    'updatedAt',
+  ] as const
   $columns = CustomerSchema.$columns
   @column()
   declare active: boolean
@@ -193,7 +243,20 @@ export class CustomerSchema extends BaseModel {
 }
 
 export class ExpenseSchema extends BaseModel {
-  static $columns = ['accountId', 'amountUsd', 'createdAt', 'currencyCode', 'date', 'description', 'entryRate', 'id', 'invoiceNumber', 'machineId', 'supplierId', 'updatedAt'] as const
+  static $columns = [
+    'accountId',
+    'amountUsd',
+    'createdAt',
+    'currencyCode',
+    'date',
+    'description',
+    'entryRate',
+    'id',
+    'invoiceNumber',
+    'machineId',
+    'supplierId',
+    'updatedAt',
+  ] as const
   $columns = ExpenseSchema.$columns
   @column()
   declare accountId: bigint | number | null
@@ -256,7 +319,17 @@ export class FormulaSchema extends BaseModel {
 }
 
 export class IncomeSchema extends BaseModel {
-  static $columns = ['accountId', 'amountUsd', 'createdAt', 'currencyCode', 'date', 'description', 'entryRate', 'id', 'updatedAt'] as const
+  static $columns = [
+    'accountId',
+    'amountUsd',
+    'createdAt',
+    'currencyCode',
+    'date',
+    'description',
+    'entryRate',
+    'id',
+    'updatedAt',
+  ] as const
   $columns = IncomeSchema.$columns
   @column()
   declare accountId: bigint | number | null
@@ -279,7 +352,16 @@ export class IncomeSchema extends BaseModel {
 }
 
 export class InventoryMovementSchema extends BaseModel {
-  static $columns = ['createdAt', 'id', 'materialId', 'note', 'orderId', 'purchaseItemId', 'quantity', 'type'] as const
+  static $columns = [
+    'createdAt',
+    'id',
+    'materialId',
+    'note',
+    'orderId',
+    'purchaseItemId',
+    'quantity',
+    'type',
+  ] as const
   $columns = InventoryMovementSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -300,7 +382,21 @@ export class InventoryMovementSchema extends BaseModel {
 }
 
 export class MachineExpenseSchema extends BaseModel {
-  static $columns = ['accountId', 'amount', 'category', 'createdAt', 'currencyCode', 'date', 'description', 'id', 'machineId', 'notes', 'receiptFile', 'supplierId', 'updatedAt'] as const
+  static $columns = [
+    'accountId',
+    'amount',
+    'category',
+    'createdAt',
+    'currencyCode',
+    'date',
+    'description',
+    'id',
+    'machineId',
+    'notes',
+    'receiptFile',
+    'supplierId',
+    'updatedAt',
+  ] as const
   $columns = MachineExpenseSchema.$columns
   @column()
   declare accountId: bigint | number | null
@@ -331,7 +427,22 @@ export class MachineExpenseSchema extends BaseModel {
 }
 
 export class MachineSchema extends BaseModel {
-  static $columns = ['acquisitionCost', 'acquisitionDate', 'active', 'brand', 'createdAt', 'id', 'location', 'model', 'name', 'notes', 'serialNumber', 'status', 'type', 'updatedAt'] as const
+  static $columns = [
+    'acquisitionCost',
+    'acquisitionDate',
+    'active',
+    'brand',
+    'createdAt',
+    'id',
+    'location',
+    'model',
+    'name',
+    'notes',
+    'serialNumber',
+    'status',
+    'type',
+    'updatedAt',
+  ] as const
   $columns = MachineSchema.$columns
   @column()
   declare acquisitionCost: string | null
@@ -364,7 +475,32 @@ export class MachineSchema extends BaseModel {
 }
 
 export class MaterialSchema extends BaseModel {
-  static $columns = ['active', 'barcode', 'category', 'code', 'color', 'createdAt', 'defaultSupplierId', 'description', 'id', 'imagePath', 'lastPurchaseDate', 'lastPurchasePrice', 'lastPurchasePriceUsd', 'location', 'minimumStock', 'name', 'previousPurchasePriceUsd', 'previousSalePriceUsd', 'referenceCostUsd', 'referenceSalePriceUsd', 'salePriceUsd', 'supplierCode', 'unit', 'updatedAt'] as const
+  static $columns = [
+    'active',
+    'barcode',
+    'category',
+    'code',
+    'color',
+    'createdAt',
+    'defaultSupplierId',
+    'description',
+    'id',
+    'imagePath',
+    'lastPurchaseDate',
+    'lastPurchasePrice',
+    'lastPurchasePriceUsd',
+    'location',
+    'minimumStock',
+    'name',
+    'previousPurchasePriceUsd',
+    'previousSalePriceUsd',
+    'referenceCostUsd',
+    'referenceSalePriceUsd',
+    'salePriceUsd',
+    'supplierCode',
+    'unit',
+    'updatedAt',
+  ] as const
   $columns = MaterialSchema.$columns
   @column()
   declare active: boolean
@@ -417,7 +553,21 @@ export class MaterialSchema extends BaseModel {
 }
 
 export class OrderLineSchema extends BaseModel {
-  static $columns = ['catalogProductId', 'catalogProductSizeId', 'costUsd', 'createdAt', 'id', 'notes', 'orderId', 'quantity', 'returnedQuantity', 'size', 'subtotalUsd', 'unitPriceUsd', 'updatedAt'] as const
+  static $columns = [
+    'catalogProductId',
+    'catalogProductSizeId',
+    'costUsd',
+    'createdAt',
+    'id',
+    'notes',
+    'orderId',
+    'quantity',
+    'returnedQuantity',
+    'size',
+    'subtotalUsd',
+    'unitPriceUsd',
+    'updatedAt',
+  ] as const
   $columns = OrderLineSchema.$columns
   @column()
   declare catalogProductId: bigint | number
@@ -448,7 +598,15 @@ export class OrderLineSchema extends BaseModel {
 }
 
 export class OrderMaterialSchema extends BaseModel {
-  static $columns = ['createdAt', 'id', 'materialId', 'notes', 'orderId', 'quantityPerGarment', 'updatedAt'] as const
+  static $columns = [
+    'createdAt',
+    'id',
+    'materialId',
+    'notes',
+    'orderId',
+    'quantityPerGarment',
+    'updatedAt',
+  ] as const
   $columns = OrderMaterialSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -467,7 +625,29 @@ export class OrderMaterialSchema extends BaseModel {
 }
 
 export class OrderSchema extends BaseModel {
-  static $columns = ['amountPaidUsd', 'balanceUsd', 'code', 'confirmedAt', 'createdAt', 'creditDueDate', 'customerId', 'description', 'estimatedDeliveryDate', 'guestName', 'id', 'modality', 'notes', 'orderDate', 'paymentType', 'referenceFile', 'returnedAt', 'status', 'totalPrice', 'totalQuantity', 'updatedAt'] as const
+  static $columns = [
+    'amountPaidUsd',
+    'balanceUsd',
+    'code',
+    'confirmedAt',
+    'createdAt',
+    'creditDueDate',
+    'customerId',
+    'description',
+    'estimatedDeliveryDate',
+    'guestName',
+    'id',
+    'modality',
+    'notes',
+    'orderDate',
+    'paymentType',
+    'referenceFile',
+    'returnedAt',
+    'status',
+    'totalPrice',
+    'totalQuantity',
+    'updatedAt',
+  ] as const
   $columns = OrderSchema.$columns
   @column()
   declare amountPaidUsd: string
@@ -514,7 +694,16 @@ export class OrderSchema extends BaseModel {
 }
 
 export class PaymentMethodSchema extends BaseModel {
-  static $columns = ['code', 'createdAt', 'currencyCode', 'id', 'isActive', 'name', 'sortOrder', 'updatedAt'] as const
+  static $columns = [
+    'code',
+    'createdAt',
+    'currencyCode',
+    'id',
+    'isActive',
+    'name',
+    'sortOrder',
+    'updatedAt',
+  ] as const
   $columns = PaymentMethodSchema.$columns
   @column()
   declare code: string
@@ -535,7 +724,18 @@ export class PaymentMethodSchema extends BaseModel {
 }
 
 export class ProductInventoryMovementSchema extends BaseModel {
-  static $columns = ['catalogProductId', 'createdAt', 'createdByUserId', 'id', 'note', 'orderId', 'purchaseItemId', 'quantity', 'saleId', 'type'] as const
+  static $columns = [
+    'catalogProductId',
+    'createdAt',
+    'createdByUserId',
+    'id',
+    'note',
+    'orderId',
+    'purchaseItemId',
+    'quantity',
+    'saleId',
+    'type',
+  ] as const
   $columns = ProductInventoryMovementSchema.$columns
   @column()
   declare catalogProductId: bigint | number
@@ -560,7 +760,19 @@ export class ProductInventoryMovementSchema extends BaseModel {
 }
 
 export class PurchaseItemSchema extends BaseModel {
-  static $columns = ['catalogProductId', 'createdAt', 'id', 'materialId', 'purchaseId', 'quantity', 'subtotalBs', 'subtotalUsd', 'unitPriceBs', 'unitPriceUsd', 'updatedAt'] as const
+  static $columns = [
+    'catalogProductId',
+    'createdAt',
+    'id',
+    'materialId',
+    'purchaseId',
+    'quantity',
+    'subtotalBs',
+    'subtotalUsd',
+    'unitPriceBs',
+    'unitPriceUsd',
+    'updatedAt',
+  ] as const
   $columns = PurchaseItemSchema.$columns
   @column()
   declare catalogProductId: bigint | number | null
@@ -587,7 +799,29 @@ export class PurchaseItemSchema extends BaseModel {
 }
 
 export class PurchaseSchema extends BaseModel {
-  static $columns = ['accountId', 'affectsInventory', 'amountPaidUsd', 'balanceUsd', 'createdAt', 'creditDueDate', 'date', 'entryCurrencyCode', 'id', 'invoiceFile', 'invoiceNumber', 'isCredit', 'notes', 'receivedDate', 'status', 'supplierId', 'totalBs', 'totalUsd', 'updatedAt', 'usdRate', 'voidedAt'] as const
+  static $columns = [
+    'accountId',
+    'affectsInventory',
+    'amountPaidUsd',
+    'balanceUsd',
+    'createdAt',
+    'creditDueDate',
+    'date',
+    'entryCurrencyCode',
+    'id',
+    'invoiceFile',
+    'invoiceNumber',
+    'isCredit',
+    'notes',
+    'receivedDate',
+    'status',
+    'supplierId',
+    'totalBs',
+    'totalUsd',
+    'updatedAt',
+    'usdRate',
+    'voidedAt',
+  ] as const
   $columns = PurchaseSchema.$columns
   @column()
   declare accountId: bigint | number | null
@@ -634,7 +868,14 @@ export class PurchaseSchema extends BaseModel {
 }
 
 export class SaleLineMaterialSchema extends BaseModel {
-  static $columns = ['createdAt', 'id', 'materialId', 'quantityPerUnit', 'saleLineId', 'updatedAt'] as const
+  static $columns = [
+    'createdAt',
+    'id',
+    'materialId',
+    'quantityPerUnit',
+    'saleLineId',
+    'updatedAt',
+  ] as const
   $columns = SaleLineMaterialSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -651,7 +892,23 @@ export class SaleLineMaterialSchema extends BaseModel {
 }
 
 export class SaleLineSchema extends BaseModel {
-  static $columns = ['catalogProductId', 'catalogProductSizeId', 'costUsd', 'createdAt', 'description', 'id', 'kitchenNote', 'materialId', 'quantity', 'returnedQuantity', 'saleId', 'size', 'subtotalUsd', 'unitPriceUsd', 'updatedAt'] as const
+  static $columns = [
+    'catalogProductId',
+    'catalogProductSizeId',
+    'costUsd',
+    'createdAt',
+    'description',
+    'id',
+    'kitchenNote',
+    'materialId',
+    'quantity',
+    'returnedQuantity',
+    'saleId',
+    'size',
+    'subtotalUsd',
+    'unitPriceUsd',
+    'updatedAt',
+  ] as const
   $columns = SaleLineSchema.$columns
   @column()
   declare catalogProductId: bigint | number | null
@@ -686,7 +943,32 @@ export class SaleLineSchema extends BaseModel {
 }
 
 export class SaleSchema extends BaseModel {
-  static $columns = ['amountPaidUsd', 'balanceUsd', 'billingMode', 'code', 'confirmedAt', 'createdAt', 'creditDueDate', 'customerId', 'discountUsd', 'guestName', 'id', 'notes', 'orderStatus', 'paymentMethodCode', 'paymentType', 'returnedAt', 'salesShiftId', 'soldAt', 'soldByUserId', 'status', 'totalBs', 'totalUsd', 'updatedAt', 'usdRate'] as const
+  static $columns = [
+    'amountPaidUsd',
+    'balanceUsd',
+    'billingMode',
+    'code',
+    'confirmedAt',
+    'createdAt',
+    'creditDueDate',
+    'customerId',
+    'discountUsd',
+    'guestName',
+    'id',
+    'notes',
+    'orderStatus',
+    'paymentMethodCode',
+    'paymentType',
+    'returnedAt',
+    'salesShiftId',
+    'soldAt',
+    'soldByUserId',
+    'status',
+    'totalBs',
+    'totalUsd',
+    'updatedAt',
+    'usdRate',
+  ] as const
   $columns = SaleSchema.$columns
   @column()
   declare amountPaidUsd: string
@@ -739,7 +1021,17 @@ export class SaleSchema extends BaseModel {
 }
 
 export class SalesShiftSchema extends BaseModel {
-  static $columns = ['closedAt', 'closedByUserId', 'createdAt', 'id', 'notes', 'openedAt', 'openedByUserId', 'status', 'updatedAt'] as const
+  static $columns = [
+    'closedAt',
+    'closedByUserId',
+    'createdAt',
+    'id',
+    'notes',
+    'openedAt',
+    'openedByUserId',
+    'status',
+    'updatedAt',
+  ] as const
   $columns = SalesShiftSchema.$columns
   @column.dateTime()
   declare closedAt: DateTime | null
@@ -762,7 +1054,17 @@ export class SalesShiftSchema extends BaseModel {
 }
 
 export class SupplierPaymentSchema extends BaseModel {
-  static $columns = ['accountId', 'amountUsd', 'createdAt', 'date', 'id', 'note', 'purchaseId', 'supplierId', 'updatedAt'] as const
+  static $columns = [
+    'accountId',
+    'amountUsd',
+    'createdAt',
+    'date',
+    'id',
+    'note',
+    'purchaseId',
+    'supplierId',
+    'updatedAt',
+  ] as const
   $columns = SupplierPaymentSchema.$columns
   @column()
   declare accountId: bigint | number | null
@@ -785,7 +1087,19 @@ export class SupplierPaymentSchema extends BaseModel {
 }
 
 export class SupplierSchema extends BaseModel {
-  static $columns = ['active', 'createdAt', 'creditDays', 'email', 'id', 'imagePath', 'name', 'notes', 'phone', 'rif', 'updatedAt'] as const
+  static $columns = [
+    'active',
+    'createdAt',
+    'creditDays',
+    'email',
+    'id',
+    'imagePath',
+    'name',
+    'notes',
+    'phone',
+    'rif',
+    'updatedAt',
+  ] as const
   $columns = SupplierSchema.$columns
   @column()
   declare active: boolean
@@ -812,7 +1126,17 @@ export class SupplierSchema extends BaseModel {
 }
 
 export class UserSchema extends BaseModel {
-  static $columns = ['active', 'createdAt', 'email', 'id', 'name', 'password', 'permissions', 'role', 'updatedAt'] as const
+  static $columns = [
+    'active',
+    'createdAt',
+    'email',
+    'id',
+    'name',
+    'password',
+    'permissions',
+    'role',
+    'updatedAt',
+  ] as const
   $columns = UserSchema.$columns
   @column()
   declare active: boolean

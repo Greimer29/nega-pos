@@ -16,9 +16,7 @@ export function allocateInvoiceDiscountToGrossLines(
     return []
   }
 
-  const safeGross = grossAmounts.map((value) =>
-    Number.isFinite(value) && value > 0 ? value : 0
-  )
+  const safeGross = grossAmounts.map((value) => (Number.isFinite(value) && value > 0 ? value : 0))
   const grossTotal = safeGross.reduce((sum, value) => sum + value, 0)
   const discount = clampInvoiceDiscountUsd(grossTotal, discountUsd)
 
@@ -29,7 +27,9 @@ export function allocateInvoiceDiscountToGrossLines(
   const targetNet = roundMoney4(grossTotal - discount)
   const rawNets = safeGross.map((gross) => (gross / grossTotal) * targetNet)
   const floors = rawNets.map((net) => Math.floor(net * 10000) / 10000)
-  let leftoverUnits = Math.round((targetNet - floors.reduce((sum, value) => sum + value, 0)) * 10000)
+  let leftoverUnits = Math.round(
+    (targetNet - floors.reduce((sum, value) => sum + value, 0)) * 10000
+  )
 
   const order = rawNets
     .map((net, index) => ({ index, frac: net * 10000 - Math.floor(net * 10000) }))

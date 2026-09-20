@@ -4,6 +4,7 @@ import MetodoPagoRequeridoException from '#exceptions/metodo_pago_requerido_exce
 import TasaCambioInvalidaException from '#exceptions/tasa_cambio_invalida_exception'
 import Customer from '#models/customer'
 import Sale from '#models/sale'
+import SalePayment from '#models/sale_payment'
 import CurrencyService from '#services/currency_service'
 import PaymentMethodService from '#services/payment_method_service'
 import SaleCodigoService from '#services/sale_code_service'
@@ -88,7 +89,9 @@ export default class CustomerInvoiceService {
       const currencyCode = (input.currency_code?.trim() || method.currencyCode).toUpperCase()
       const currency = await this.currencyService.assertActiva(currencyCode)
       const overrideRate =
-        input.usd_rate !== undefined && input.usd_rate !== null ? Number(input.usd_rate) : Number.NaN
+        input.usd_rate !== undefined && input.usd_rate !== null
+          ? Number(input.usd_rate)
+          : Number.NaN
       const rate =
         overrideRate > 0
           ? overrideRate
@@ -102,12 +105,7 @@ export default class CustomerInvoiceService {
       }
 
       const effectiveRate = rate > 0 ? rate : 1
-      const totalBs = formatSaleNativeTotal(
-        Number(totalUsd),
-        currencyCode,
-        effectiveRate,
-        baseCode
-      )
+      const totalBs = formatSaleNativeTotal(Number(totalUsd), currencyCode, effectiveRate, baseCode)
 
       const sale = await Sale.create(
         {
@@ -136,9 +134,23 @@ export default class CustomerInvoiceService {
         { client: trx }
       )
 
+      await SalePayment.create(
+        {
+          saleId: Number(sale.id),
+          paymentMethodCode: method.code,
+          amountUsd: totalUsd,
+          currencyCode,
+          usdRate: effectiveRate.toFixed(4),
+          amountNative: totalBs,
+          sortOrder: 0,
+        },
+        { client: trx }
+      )
+
       await sale.load('paymentMethod')
       await sale.load('customer')
       await sale.load('saleLines')
+      await sale.load('salePayments', (q) => q.preload('paymentMethod'))
       return sale
     })
   }

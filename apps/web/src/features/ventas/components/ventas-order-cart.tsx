@@ -1,10 +1,11 @@
 import { PublicImage } from '@/components/public-image'
 import type { ProductSaleUnit } from '@/features/ventas/constants'
 import type { BillingMethod } from '@/features/ventas/constants'
-import { useState, type ReactNode } from 'react'
-import { DollarSign, LayoutGrid, MessageSquareText, Package, Percent, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { DollarSign, LayoutGrid, MessageSquareText, Minus, Package, Percent, Plus, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { DecimalInput, MoneyInput } from '@/components/decimal-input'
+import { MoneyInput } from '@/components/decimal-input'
+import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -20,9 +21,9 @@ import {
 } from '@/features/currencies/context/display-currency-context'
 import { VentasBillingMethodToggle } from '@/features/ventas/components/ventas-billing-method-toggle'
 import { clampInvoiceDiscountUsd } from '@/features/ventas/utils/invoice-discount'
-import { inventoryQuantityDecimals } from '@/lib/inventory-units'
+import { inventoryQuantityDecimals, inventoryQuantityStep, normalizeInventoryQuantity } from '@/lib/inventory-units'
 import { cn } from '@/lib/utils'
-import { parseDecimalInput } from '@/lib/numeric-input'
+import { parseDecimalInput, sanitizeDecimalInput } from '@/lib/numeric-input'
 
 export type VentasCartLine = {
   key: string
@@ -85,6 +86,248 @@ function lineHasPriceAdjustment(line: VentasCartLine) {
 function CartLineSubtotal({ line }: { line: VentasCartLine }) {
   const { formatFromUsd } = useFormatMoney()
   return <span className="text-sm font-bold">{formatFromUsd(lineSubtotal(line))}</span>
+}
+
+function CartLineItem({
+  line,
+  onRemoveLine,
+  onUpdateQuantity,
+  onUpdateUnitPrice,
+  onOpenPriceModal,
+  formatFromUsd,
+}: {
+  line: VentasCartLine
+  onRemoveLine: (key: string) => void
+  onUpdateQuantity?: (key: string, quantity: number) => void
+  onUpdateUnitPrice?: (key: string, unitPriceUsd: number) => void
+  onOpenPriceModal: (line: VentasCartLine) => void
+  formatFromUsd: (amountUsd: number) => string
+}) {
+  const unit = line.saleUnit ?? 'UND'
+  const decimals = inventoryQuantityDecimals(unit)
+  const step = inventoryQuantityStep(unit)
+  const isIntegerUnit = decimals === 0
+  const [qtyDraft, setQtyDraft] = useState(() => String(line.quantity))
+  const [qtyFocused, setQtyFocused] = useState(false)
+
+  useEffect(() => {
+    if (!qtyFocused) {
+      setQtyDraft(String(line.quantity))
+    }
+  }, [line.quantity, qtyFocused])
+
+  function commitQuantity(raw: string) {
+    const parsed = parseDecimalInput(raw, decimals)
+    setQtyFocused(false)
+    if (parsed == null) {
+      setQtyDraft(String(line.quantity))
+      return
+    }
+    setQtyDraft(String(parsed))
+    onUpdateQuantity?.(line.key, parsed)
+  }
+
+  function adjustQuantity(direction: 1 | -1) {
+    const live = parseDecimalInput(qtyDraft, decimals)
+    const base = live ?? line.quantity
+    const next = normalizeInventoryQuantity(base + direction * step, unit)
+    setQtyDraft(String(Math.max(next, 0)))
+    onUpdateQuantity?.(line.key, next)
+  }
+
+  return (
+    <div className="relative rounded-xl border bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="text-muted-foreground absolute top-2 right-2 size-7 rounded-full"
+        onClick={() => onRemoveLine(line.key)}
+        aria-label={`Quitar ${line.name}`}
+      >
+        <X className="size-3.5" />
+      </Button>
+
+      <div className="flex items-stretch gap-3 pr-8">
+        <div className="flex w-16 shrink-0 flex-col">
+          <div
+            className={cn(
+              'flex size-16 items-center justify-center overflow-hidden rounded-xl',
+              line.imageUrl ? 'bg-muted' : IMAGE_TONE_CLASS[line.imageTone ?? 'violet']
+            )}
+          >
+            {line.imageUrl ? (
+              <PublicImage
+                src={line.imageUrl}
+                alt={line.name}
+                className="size-full object-cover"
+                showFallbackIcon
+                fallbackClassName="size-full"
+              />
+            ) : (
+              <Package className="text-muted-foreground/70 size-7" />
+            )}
+          </div>
+          {onUpdateQuantity ? (
+            <div className="mt-auto flex items-center justify-between pt-2">
+              <Button
+                type="button"
+                variant="default"
+                size="icon"
+                className="size-7 bg-rose-500 hover:bg-rose-600"
+                aria-label="Disminuir cantidad"
+                onClick={() => adjustQuantity(-1)}
+              >
+                <Minus className="size-3.5" />
+              </Button>
+              <Button
+                type="button"
+                variant="default"
+                size="icon"
+                className="size-7 bg-emerald-500 hover:bg-emerald-600"
+                aria-label="Aumentar cantidad"
+                onClick={() => adjustQuantity(1)}
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex min-w-0 flex-1 flex-col space-y-1">
+          <p className="line-clamp-2 text-sm leading-snug font-semibold">{line.name}</p>
+          <p className="text-muted-foreground text-xs">Código: {line.code}</p>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            {line.metaLabel ? <span>{line.metaLabel}</span> : null}
+            {onUpdateQuantity ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <span>Cantidad:</span>
+                  <Input
+                    type="text"
+                    inputMode={isIntegerUnit ? 'numeric' : 'decimal'}
+                    aria-label={`Cantidad de ${line.name}`}
+                    className={cn('h-7 px-2 text-xs tabular-nums', isIntegerUnit ? 'w-12' : 'w-16')}
+                    value={qtyDraft}
+                    onFocus={(e) => {
+                      setQtyFocused(true)
+                      const current = String(line.quantity)
+                      setQtyDraft(current)
+                      e.target.select()
+                    }}
+                    onChange={(e) => {
+                      setQtyDraft(sanitizeDecimalInput(e.target.value, decimals))
+                    }}
+                    onBlur={(e) => commitQuantity(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        e.currentTarget.blur()
+                      }
+                    }}
+                  />
+                </div>
+                {line.hasFormula && line.onAdjustFormula ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'size-7',
+                      line.hasCustomFormula && 'text-violet-600 hover:text-violet-700'
+                    )}
+                    title="Ajustar materiales de esta venta"
+                    onClick={line.onAdjustFormula}
+                    aria-label="Ajustar materiales de esta venta"
+                  >
+                    <SlidersHorizontal className="size-3.5" />
+                  </Button>
+                ) : null}
+                {onUpdateUnitPrice ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'size-7',
+                      lineHasPriceAdjustment(line)
+                        ? 'text-violet-700 hover:text-violet-800'
+                        : 'text-muted-foreground'
+                    )}
+                    title="Precio, descuento o aumento"
+                    aria-label="Precio, descuento o aumento"
+                    onClick={() => onOpenPriceModal(line)}
+                  >
+                    <DollarSign className="size-3.5" />
+                  </Button>
+                ) : null}
+                {line.onEditKitchenNote ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'size-7',
+                      line.kitchenNote?.trim() && 'text-amber-700 hover:text-amber-800'
+                    )}
+                    title="Indicación para cocina"
+                    onClick={line.onEditKitchenNote}
+                    aria-label="Indicación para cocina"
+                  >
+                    <MessageSquareText className="size-3.5" />
+                  </Button>
+                ) : null}
+                {line.onEditDetail ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'size-7',
+                      line.detail?.trim() && 'text-sky-700 hover:text-sky-800'
+                    )}
+                    title="Editar servicio (cantidad, precio, detalle)"
+                    onClick={line.onEditDetail}
+                    aria-label="Editar servicio"
+                  >
+                    <MessageSquareText className="size-3.5" />
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              <span>Cantidad: {line.quantity}</span>
+            )}
+          </div>
+          {line.kitchenNote?.trim() ? (
+            <p className="line-clamp-2 text-xs text-amber-800/90 whitespace-pre-line">
+              {line.kitchenNote.trim()}
+            </p>
+          ) : null}
+          {line.detail?.trim() ? (
+            <p className="line-clamp-2 text-xs text-sky-800/90 whitespace-pre-line">
+              {line.detail.trim()}
+            </p>
+          ) : null}
+          <div className="mt-auto flex items-end justify-end gap-2 pt-1">
+            <div className="flex min-w-0 flex-col items-end gap-0.5">
+              {lineHasPriceAdjustment(line) && (line.listPriceUsd ?? 0) > line.unitPriceUsd ? (
+                <p className="text-muted-foreground text-[11px] leading-none line-through">
+                  {formatFromUsd(line.listPriceUsd ?? line.unitPriceUsd)} c/u
+                </p>
+              ) : lineHasPriceAdjustment(line) ? (
+                <p className="text-muted-foreground text-[11px] leading-none">
+                  Lista {formatFromUsd(line.listPriceUsd ?? line.unitPriceUsd)} c/u
+                </p>
+              ) : null}
+              <p className="tabular-nums leading-none">
+                <CartLineSubtotal line={line} />
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function VentasOrderCart({
@@ -212,174 +455,15 @@ export function VentasOrderCart({
           <p className="text-muted-foreground py-6 text-center text-sm">{emptyMessage}</p>
         ) : (
           lines.map((line) => (
-            <div
+            <CartLineItem
               key={line.key}
-              className="relative rounded-xl border bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-            >
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground absolute top-2 right-2 size-7 rounded-full"
-                onClick={() => onRemoveLine(line.key)}
-                aria-label={`Quitar ${line.name}`}
-              >
-                <X className="size-3.5" />
-              </Button>
-
-              <div className="flex gap-3 pr-8">
-                <div
-                  className={cn(
-                    'flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl',
-                    line.imageUrl ? 'bg-muted' : IMAGE_TONE_CLASS[line.imageTone ?? 'violet']
-                  )}
-                >
-                   {line.imageUrl ? (
-                    <PublicImage
-                      src={line.imageUrl}
-                      alt={line.name}
-                      className="size-full object-cover"
-                      showFallbackIcon
-                      fallbackClassName="size-full"
-                    />
-                  ) : (
-                    <Package className="text-muted-foreground/70 size-7" />
-                  )}
-                </div>
-
-                <div className="min-w-0 flex-1 space-y-1">
-                  <p className="line-clamp-2 text-sm leading-snug font-semibold">{line.name}</p>
-                  <p className="text-muted-foreground text-xs">Código: {line.code}</p>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    {line.metaLabel ? <span>{line.metaLabel}</span> : null}
-                    {onUpdateQuantity ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="flex items-center gap-1">
-                          <span>Cantidad:</span>
-                          {(() => {
-                            const unit = line.saleUnit ?? 'UND'
-                            const decimals = inventoryQuantityDecimals(unit)
-                            const isIntegerUnit = decimals === 0
-                            return (
-                              <DecimalInput
-                                min={isIntegerUnit ? 1 : 0.01}
-                                step={isIntegerUnit ? 1 : 0.01}
-                                decimals={decimals}
-                                className={cn(
-                                  'h-7 px-2 text-xs',
-                                  isIntegerUnit ? 'w-12' : 'w-16'
-                                )}
-                                value={line.quantity}
-                                onChange={(e) =>
-                                  onUpdateQuantity(
-                                    line.key,
-                                    parseDecimalInput(e.target.value, decimals) ?? 0
-                                  )
-                                }
-                              />
-                            )
-                          })()}
-                        </div>
-                        {line.hasFormula && line.onAdjustFormula ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              'size-7',
-                              line.hasCustomFormula && 'text-violet-600 hover:text-violet-700'
-                            )}
-                            title="Ajustar materiales de esta venta"
-                            onClick={line.onAdjustFormula}
-                            aria-label="Ajustar materiales de esta venta"
-                          >
-                            <SlidersHorizontal className="size-3.5" />
-                          </Button>
-                        ) : null}
-                        {onUpdateUnitPrice ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              'size-7',
-                              lineHasPriceAdjustment(line)
-                                ? 'text-violet-700 hover:text-violet-800'
-                                : 'text-muted-foreground'
-                            )}
-                            title="Precio, descuento o aumento"
-                            aria-label="Precio, descuento o aumento"
-                            onClick={() => openPriceModal(line)}
-                          >
-                            <DollarSign className="size-3.5" />
-                          </Button>
-                        ) : null}
-                        {line.onEditKitchenNote ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              'size-7',
-                              line.kitchenNote?.trim() && 'text-amber-700 hover:text-amber-800'
-                            )}
-                            title="Indicación para cocina"
-                            onClick={line.onEditKitchenNote}
-                            aria-label="Indicación para cocina"
-                          >
-                            <MessageSquareText className="size-3.5" />
-                          </Button>
-                        ) : null}
-                        {line.onEditDetail ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              'size-7',
-                              line.detail?.trim() && 'text-sky-700 hover:text-sky-800'
-                            )}
-                            title="Editar servicio (cantidad, precio, detalle)"
-                            onClick={line.onEditDetail}
-                            aria-label="Editar servicio"
-                          >
-                            <MessageSquareText className="size-3.5" />
-                          </Button>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <span>Cantidad: {line.quantity}</span>
-                    )}
-                  </div>
-                  {line.kitchenNote?.trim() ? (
-                    <p className="line-clamp-2 text-xs text-amber-800/90 whitespace-pre-line">
-                      {line.kitchenNote.trim()}
-                    </p>
-                  ) : null}
-                  {line.detail?.trim() ? (
-                    <p className="line-clamp-2 text-xs text-sky-800/90 whitespace-pre-line">
-                      {line.detail.trim()}
-                    </p>
-                  ) : null}
-                  <div className="flex items-end justify-between gap-2 pt-1">
-                    <div className="min-w-0">
-                      {lineHasPriceAdjustment(line) && (line.listPriceUsd ?? 0) > line.unitPriceUsd ? (
-                        <p className="text-muted-foreground text-[11px] line-through">
-                          {formatFromUsd(line.listPriceUsd ?? line.unitPriceUsd)} c/u
-                        </p>
-                      ) : lineHasPriceAdjustment(line) ? (
-                        <p className="text-muted-foreground text-[11px]">
-                          Lista {formatFromUsd(line.listPriceUsd ?? line.unitPriceUsd)} c/u
-                        </p>
-                      ) : null}
-                    </div>
-                    <p className="tabular-nums">
-                      <CartLineSubtotal line={line} />
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+              line={line}
+              onRemoveLine={onRemoveLine}
+              onUpdateQuantity={onUpdateQuantity}
+              onUpdateUnitPrice={onUpdateUnitPrice}
+              onOpenPriceModal={openPriceModal}
+              formatFromUsd={formatFromUsd}
+            />
           ))
         )}
       </div>

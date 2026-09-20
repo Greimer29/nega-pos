@@ -4,7 +4,7 @@ export type TenantStore = {
   companyId: number
   dbName: string
   connectionName: string
-  directoryUserId: number
+  directoryUserId: number | null
 }
 
 const tenantAls = new AsyncLocalStorage<TenantStore>()
