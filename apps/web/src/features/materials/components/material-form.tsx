@@ -34,6 +34,7 @@ import { inventoryQuantityDecimals, normalizeInventoryQuantity } from '@/lib/inv
 const materialSchema = z.object({
   code: z.string().trim().min(1, 'El código es obligatorio').max(30),
   barcode: z.string().trim().max(64).optional(),
+  supplier_code: z.string().trim().max(50).optional(),
   name: z.string().trim().min(1, 'El producto es obligatorio').max(150),
   description: z.string().trim().optional(),
   category: z.string().trim().min(1, 'Seleccioná una categoría'),
@@ -61,6 +62,7 @@ function emptyValues(defaultCategory = ''): MaterialFormInput {
   return {
     code: '',
     barcode: '',
+    supplier_code: '',
     name: '',
     description: '',
     category: defaultCategory,
@@ -77,6 +79,7 @@ function toFormValues(material: Material): MaterialFormInput {
   return {
     code: material.code,
     barcode: material.barcode ?? '',
+    supplier_code: material.supplierCode ?? '',
     name: material.name,
     description: material.description ?? '',
     category: material.category,
@@ -107,6 +110,7 @@ function toPayload(values: MaterialFormValues) {
       values.supplier_habitual_id === '' ? undefined : Number(values.supplier_habitual_id),
     last_purchase_price_usd: optionalNumber(values.last_purchase_price_usd),
     barcode: values.barcode?.trim() || null,
+    supplier_code: values.supplier_code?.trim() || null,
     ...(values.active !== undefined ? { active: values.active } : {}),
   }
 }
@@ -311,6 +315,18 @@ export function MaterialForm({
                 }}
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="supplier_code">Referencia</Label>
+            <Input
+              id="supplier_code"
+              placeholder="Código del proveedor"
+              maxLength={50}
+              {...register('supplier_code')}
+            />
+            <p className="text-muted-foreground text-xs">
+              Código del proveedor. También sirve para buscar el ítem.
+            </p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="name">Producto *</Label>

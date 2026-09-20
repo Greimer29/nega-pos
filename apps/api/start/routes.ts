@@ -223,6 +223,10 @@ router
         router.post('catalog-products/bulk-adjustment', [CatalogProductsController, 'ajusteMasivo'])
         router.post('catalog-products/import', [CatalogProductsController, 'importar'])
         router.get('catalog-products/:id', [CatalogProductsController, 'show'])
+        router.get('catalog-products/:id/purchase-history', [
+          CatalogProductsController,
+          'historialCompras',
+        ])
         router.post('catalog-products/:id/adjustment', [CatalogProductsController, 'ajuste'])
         router.post('catalog-products', [CatalogProductsController, 'store'])
         router.put('catalog-products/:id', [CatalogProductsController, 'update'])

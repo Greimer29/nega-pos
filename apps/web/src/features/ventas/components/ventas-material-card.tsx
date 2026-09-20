@@ -65,6 +65,7 @@ export function VentasMaterialCard({ material, onAddToCart }: VentasMaterialCard
         </h3>
         <div className="text-muted-foreground space-y-0.5 text-[11px] leading-tight">
           <p>Código: {material.code}</p>
+          {material.supplierCode ? <p>{material.supplierCode}</p> : null}
           <p>
             Disponible:{' '}
             <span className={cn(stockIsLow && 'font-medium text-destructive')}>

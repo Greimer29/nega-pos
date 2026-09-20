@@ -90,6 +90,7 @@ export async function importMaterials(
     location?: string
     last_purchase_price_usd?: number
     barcode?: string
+    supplier_code?: string
   }>
 ) {
   const { data } = await api.post<{

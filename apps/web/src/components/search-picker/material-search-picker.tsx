@@ -32,7 +32,12 @@ function materialToPickerItem(material: Material) {
     id: String(material.id),
     code: material.code,
     title: material.name,
-    subtitle: material.category ? material.category : undefined,
+    subtitle: [
+      material.supplierCode || null,
+      material.category ? material.category : null,
+    ]
+      .filter(Boolean)
+      .join(' · ') || undefined,
     meta: inventoryUnitAbrev(material.unit),
   }
 }
@@ -43,7 +48,7 @@ export function MaterialSearchPicker({
   onSelect,
   enabled = true,
   label = 'Buscar material',
-  placeholder = 'Código o nombre del material…',
+  placeholder = 'Código, referencia o nombre…',
   className,
   inputClassName,
   perPage = 25,

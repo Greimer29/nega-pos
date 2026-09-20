@@ -77,6 +77,7 @@ export class CatalogProductSchema extends BaseModel {
     'salePriceUsd',
     'saleUnit',
     'stockQuantity',
+    'supplierCode',
     'updatedAt',
   ] as const
   $columns = CatalogProductSchema.$columns
@@ -112,6 +113,8 @@ export class CatalogProductSchema extends BaseModel {
   declare saleUnit: string
   @column()
   declare stockQuantity: string
+  @column()
+  declare supplierCode: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
 }
@@ -942,6 +945,42 @@ export class SaleLineSchema extends BaseModel {
   declare updatedAt: DateTime
 }
 
+export class SalePaymentSchema extends BaseModel {
+  static $columns = [
+    'amountNative',
+    'amountUsd',
+    'createdAt',
+    'currencyCode',
+    'id',
+    'paymentMethodCode',
+    'saleId',
+    'sortOrder',
+    'updatedAt',
+    'usdRate',
+  ] as const
+  $columns = SalePaymentSchema.$columns
+  @column()
+  declare amountNative: string | null
+  @column()
+  declare amountUsd: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare currencyCode: string
+  @column({ isPrimary: true })
+  declare id: bigint | number
+  @column()
+  declare paymentMethodCode: string
+  @column()
+  declare saleId: bigint | number
+  @column()
+  declare sortOrder: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare usdRate: string | null
+}
+
 export class SaleSchema extends BaseModel {
   static $columns = [
     'amountPaidUsd',
@@ -1131,6 +1170,7 @@ export class UserSchema extends BaseModel {
     'createdAt',
     'email',
     'id',
+    'isHidden',
     'name',
     'password',
     'permissions',
@@ -1146,6 +1186,8 @@ export class UserSchema extends BaseModel {
   declare email: string
   @column({ isPrimary: true })
   declare id: bigint | number
+  @column()
+  declare isHidden: boolean
   @column()
   declare name: string
   @column({ serializeAs: null })

@@ -18,6 +18,7 @@ import ProductCodeService from '#services/product_code_service'
 import CategoryService from '#services/category_service'
 import type { CostWarning } from '#types/cost_warning'
 import { assertMaterialBarcodeAvailable, normalizeBarcode } from '#utils/barcode'
+import { normalizeSupplierCode } from '#utils/supplier_code'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
@@ -37,6 +38,7 @@ export type MaterialInput = {
   default_supplier_id?: number | null
   last_purchase_price_usd?: number | null
   barcode?: string | null
+  supplier_code?: string | null
   active?: boolean
 }
 
@@ -274,6 +276,7 @@ export default class MaterialService {
         builder
           .whereILike('code', `%${filters.search}%`)
           .orWhereILike('name', `%${filters.search}%`)
+          .orWhereILike('supplier_code', `%${filters.search}%`)
       })
     }
 
@@ -393,6 +396,7 @@ export default class MaterialService {
     material.merge({
       code: data.code,
       barcode: data.barcode,
+      supplierCode: data.supplierCode,
       name: data.name,
       description: data.description,
       category: data.category,
@@ -585,6 +589,7 @@ export default class MaterialService {
       location: input.location?.trim() || null,
       defaultSupplierId: input.default_supplier_id ?? null,
       barcode: normalizeBarcode(input.barcode),
+      supplierCode: normalizeSupplierCode(input.supplier_code),
       lastPurchasePriceUsd:
         input.last_purchase_price_usd === undefined
           ? undefined
@@ -651,6 +656,7 @@ export default class MaterialService {
               ? Number(row.last_purchase_price_usd)
               : undefined,
           barcode: row.barcode,
+          supplier_code: row.supplier_code,
         })
 
         if (stock > 0) {
@@ -688,6 +694,7 @@ export type MaterialImportRow = {
   location?: string
   last_purchase_price_usd?: number
   barcode?: string
+  supplier_code?: string
 }
 
 export type MaterialImportRowResult = {

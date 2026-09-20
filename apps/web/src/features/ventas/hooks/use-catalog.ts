@@ -10,10 +10,15 @@ import {
   ajustarStockProducto,
   ajustarStockProductoMasivo,
   importCatalogProducts,
+  getCatalogProductPurchaseHistory,
   type BulkAjusteStockProductoInput,
 } from '@/features/ventas/services/catalog-service'
 import { categoriesQueryKey } from '@/features/categories/hooks/use-categories'
-import type { CatalogListParams, CatalogProductInput } from '@/features/ventas/types'
+import type {
+  CatalogListParams,
+  CatalogProductInput,
+  CatalogProductPurchaseHistoryParams,
+} from '@/features/ventas/types'
 import { invalidateStockMovement } from '@/lib/query-invalidation'
 
 export function useCatalogProductsQuery(
@@ -32,6 +37,18 @@ export function useCatalogProductQuery(id: number | undefined) {
     queryKey: ['catalog-products', id],
     queryFn: () => getCatalogProduct(id!),
     enabled: id !== undefined && Number.isFinite(id) && id > 0,
+  })
+}
+
+export function useCatalogProductPurchaseHistoryQuery(
+  id: number | undefined,
+  params: CatalogProductPurchaseHistoryParams = {},
+  options?: { enabled?: boolean }
+) {
+  return useQuery({
+    queryKey: ['catalog-products', id, 'purchase-history', params],
+    queryFn: () => getCatalogProductPurchaseHistory(id!, params),
+    enabled: (options?.enabled ?? true) && id !== undefined && Number.isFinite(id) && id > 0,
   })
 }
 

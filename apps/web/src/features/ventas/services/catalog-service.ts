@@ -6,6 +6,8 @@ import type {
   CatalogProductInput,
   CatalogProductResponse,
   CatalogProductSizeInput,
+  CatalogProductPurchaseHistoryParams,
+  CatalogProductPurchaseHistoryResponse,
 } from '@/features/ventas/types'
 import type { CostWarning } from '@/lib/cost-warnings'
 
@@ -122,6 +124,7 @@ export async function importCatalogProducts(payload: {
     stock_quantity?: number
     minimum_stock?: number
     barcode?: string
+    supplier_code?: string
   }>
 }) {
   const { data } = await api.post<{
@@ -139,6 +142,23 @@ export async function replaceCatalogProductSizes(id: number, sizes: CatalogProdu
     sizes,
   })
   return data.data.catalog_product
+}
+
+export async function getCatalogProductPurchaseHistory(
+  id: number,
+  params: CatalogProductPurchaseHistoryParams = {}
+) {
+  const { data } = await api.get<CatalogProductPurchaseHistoryResponse>(
+    `/catalog-products/${id}/purchase-history`,
+    {
+      params: {
+        month: params.month || undefined,
+        from: params.from || undefined,
+        to: params.to || undefined,
+      },
+    }
+  )
+  return data.data.historial
 }
 
 export type { CatalogProduct }

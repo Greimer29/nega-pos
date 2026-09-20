@@ -23,11 +23,14 @@ import {
   useNextSaleCodeQuery,
   useUpdateSaleMutation,
 } from '@/features/ventas/hooks/use-sales'
+import { CatalogLayoutToggle } from '@/features/ventas/components/catalog-layout-toggle'
 import { CatalogFormDialog } from '@/features/ventas/components/catalog-form-dialog'
 import {
   CatalogProductCard,
   catalogProductGridClassName,
 } from '@/features/ventas/components/catalog-product-card'
+import { CatalogProductTable } from '@/features/ventas/components/catalog-product-table'
+import { MaterialCatalogTable } from '@/features/materials/components/material-catalog-table'
 import { VentasMaterialCard } from '@/features/ventas/components/ventas-material-card'
 import { VentasCustomerPickDialog } from '@/features/ventas/components/ventas-customer-pick-dialog'
 import {
@@ -47,6 +50,7 @@ import type { Material } from '@/features/materials/types'
 import { catalogImageUrl } from '@/features/ventas/constants'
 import type { BillingMethod } from '@/features/ventas/constants'
 import { useCatalogProductsQuery } from '@/features/ventas/hooks/use-catalog'
+import { useCatalogLayout } from '@/features/ventas/hooks/use-catalog-layout'
 import type { CatalogProduct, CatalogProductSize, ConfirmSaleInput } from '@/features/ventas/types'
 import { cartHasStockIssues } from '@/features/ventas/utils/product-stock'
 import { productHasSizes, sizesWithStock } from '@/features/ventas/utils/product-sizes'
@@ -200,6 +204,7 @@ function VentasCreateView() {
     DEFAULT_VENTAS_CATALOG_FILTERS
   )
   const [searchInput, setSearchInput] = useState(catalogFilters.search)
+  const { layout, toggleLayout } = useCatalogLayout()
   const [sizeFilter, setSizeFilter] = useState(catalogFilters.size)
   const [minPriceInput, setMinPriceInput] = useState(catalogFilters.minPrice)
   const [maxPriceInput, setMaxPriceInput] = useState(catalogFilters.maxPrice)
@@ -1437,10 +1442,10 @@ function VentasCreateView() {
                     <Input
                       placeholder={
                         catalogSource === 'products'
-                          ? 'Buscar producto…'
+                          ? 'Buscar producto o referencia…'
                           : catalogSource === 'services'
                             ? 'Buscar servicio…'
-                            : 'Buscar material…'
+                            : 'Buscar material, código o referencia…'
                       }
                       value={searchInput}
                       onChange={(e) => setSearchInput(e.target.value)}
@@ -1455,6 +1460,7 @@ function VentasCreateView() {
                     />
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    <CatalogLayoutToggle layout={layout} onToggle={toggleLayout} />
                     <FiltersIconButton
                       count={activeFilterCount}
                       expanded={filtersOpen}
@@ -1501,17 +1507,26 @@ function VentasCreateView() {
                     description="Es normal en una empresa nueva. Creá productos desde Productos o acá con Nuevo."
                   />
                 ) : (
-                  <div className={cn(catalogProductGridClassName, 'pb-1')}>
-                    {products.map((product) => (
-                      <CatalogProductCard
-                        key={product.id}
-                        product={product}
-                        showActions
-                        onEdit={openEditProduct}
-                        onAddToCart={addToCart}
-                      />
-                    ))}
-                  </div>
+                  layout === 'table' ? (
+                    <CatalogProductTable
+                      products={products}
+                      showActions
+                      onEdit={openEditProduct}
+                      onAddToCart={addToCart}
+                    />
+                  ) : (
+                    <div className={cn(catalogProductGridClassName, 'pb-1')}>
+                      {products.map((product) => (
+                        <CatalogProductCard
+                          key={product.id}
+                          product={product}
+                          showActions
+                          onEdit={openEditProduct}
+                          onAddToCart={addToCart}
+                        />
+                      ))}
+                    </div>
+                  )
                 )
               ) : catalogSource === 'services' ? (
                 loadingServices ? (
@@ -1531,15 +1546,19 @@ function VentasCreateView() {
                     description="Creá servicios en Productos → Servicios para venderlos acá sin descontar stock."
                   />
                 ) : (
-                  <div className={cn(catalogProductGridClassName, 'pb-1')}>
-                    {services.map((service) => (
-                      <CatalogProductCard
-                        key={service.id}
-                        product={service}
-                        onAddToCart={addToCart}
-                      />
-                    ))}
-                  </div>
+                  layout === 'table' ? (
+                    <CatalogProductTable products={services} onAddToCart={addToCart} />
+                  ) : (
+                    <div className={cn(catalogProductGridClassName, 'pb-1')}>
+                      {services.map((service) => (
+                        <CatalogProductCard
+                          key={service.id}
+                          product={service}
+                          onAddToCart={addToCart}
+                        />
+                      ))}
+                    </div>
+                  )
                 )
               ) : loadingMaterials ? (
                 <div className="flex justify-center py-8">
@@ -1556,15 +1575,22 @@ function VentasCreateView() {
                   No hay materiales activos.
                 </p>
               ) : (
-                <div className={cn(catalogProductGridClassName, 'pb-1')}>
-                  {materials.map((material) => (
-                    <VentasMaterialCard
-                      key={material.id}
-                      material={material}
-                      onAddToCart={addMaterialToCart}
-                    />
-                  ))}
-                </div>
+                layout === 'table' ? (
+                  <MaterialCatalogTable
+                    materials={materials}
+                    onAddToCart={addMaterialToCart}
+                  />
+                ) : (
+                  <div className={cn(catalogProductGridClassName, 'pb-1')}>
+                    {materials.map((material) => (
+                      <VentasMaterialCard
+                        key={material.id}
+                        material={material}
+                        onAddToCart={addMaterialToCart}
+                      />
+                    ))}
+                  </div>
+                )
               )}
             </div>
 

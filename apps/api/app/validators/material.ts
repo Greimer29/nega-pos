@@ -16,6 +16,7 @@ const materialFields = {
   default_supplier_id: vine.number().min(1).optional(),
   last_purchase_price_usd: vine.number().min(0).optional(),
   barcode: vine.string().trim().maxLength(64).nullable().optional(),
+  supplier_code: vine.string().trim().maxLength(50).nullable().optional(),
 }
 
 export const createMaterialValidator = vine.create({
@@ -61,6 +62,7 @@ export const importMaterialsValidator = vine.create({
         location: vine.string().trim().maxLength(100).optional(),
         last_purchase_price_usd: vine.number().min(0).optional(),
         barcode: vine.string().trim().maxLength(64).optional(),
+        supplier_code: vine.string().trim().maxLength(50).optional(),
       })
     )
     .minLength(1)

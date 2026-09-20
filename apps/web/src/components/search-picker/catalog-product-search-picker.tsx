@@ -32,7 +32,9 @@ function productToPickerItem(product: CatalogProduct) {
     id: String(product.id),
     code: catalogProductCode(product.id),
     title: product.name,
-    subtitle: product.category || undefined,
+    subtitle: [product.supplier_code || null, product.category || null]
+      .filter(Boolean)
+      .join(' · ') || undefined,
     meta: product.sale_unit,
   }
 }
@@ -43,7 +45,7 @@ export function CatalogProductSearchPicker({
   onSelect,
   enabled = true,
   label = 'Buscar producto',
-  placeholder = 'Código o nombre del producto…',
+  placeholder = 'Nombre, código o referencia…',
   className,
   inputClassName,
   perPage = 25,

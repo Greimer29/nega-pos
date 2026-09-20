@@ -45,6 +45,7 @@ export function serializeCatalogProduct(
     id: Number(product.id),
     name: product.name,
     barcode: product.barcode,
+    supplier_code: product.supplierCode,
     description: product.description,
     category: product.category,
     item_kind: product.itemKind ?? 'PRODUCT',

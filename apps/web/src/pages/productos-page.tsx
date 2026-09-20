@@ -11,10 +11,13 @@ import type { CatalogProductImportRow } from '@/features/catalog-import/types'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { CatalogFormDialog } from '@/features/ventas/components/catalog-form-dialog'
 import { CatalogAdminFiltersPanel } from '@/features/ventas/components/catalog-admin-filters-panel'
+import { CatalogLayoutToggle } from '@/features/ventas/components/catalog-layout-toggle'
 import {
   CatalogProductCard,
   catalogProductGridClassName,
 } from '@/features/ventas/components/catalog-product-card'
+import { CatalogProductTable } from '@/features/ventas/components/catalog-product-table'
+import { useCatalogLayout } from '@/features/ventas/hooks/use-catalog-layout'
 import { PermissionGate } from '@/features/permissions/components/permission-gate'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import {
@@ -60,6 +63,7 @@ export function ProductosPage() {
     DEFAULT_PRODUCTOS_FILTERS
   )
   const [searchInput, setSearchInput] = useState(filters.search)
+  const { layout, toggleLayout } = useCatalogLayout()
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -189,13 +193,14 @@ export function ProductosPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4 px-3 sm:px-6">
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
-              placeholder="Buscar producto…"
+              placeholder="Nombre, referencia o descripción…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="max-w-xs"
             />
+            <CatalogLayoutToggle layout={layout} onToggle={toggleLayout} />
           </div>
 
           <FiltersDrawer
@@ -237,18 +242,28 @@ export function ProductosPage() {
               description="Es normal en una empresa nueva. Creá el catálogo cuando quieras vender."
             />
           ) : (
-            <div className={catalogProductGridClassName}>
-              {products.map((product) => (
-                <CatalogProductCard
-                  key={product.id}
-                  product={product}
-                  showActions={canEditCatalog}
-                  onEdit={openEditProduct}
-                  onDelete={handleDeleteProduct}
-                  onOpen={() => void navigate(`/productos/${product.id}`)}
-                />
-              ))}
-            </div>
+            layout === 'table' ? (
+              <CatalogProductTable
+                products={products}
+                showActions={canEditCatalog}
+                onEdit={openEditProduct}
+                onDelete={handleDeleteProduct}
+                onOpen={(product) => void navigate(`/productos/${product.id}`)}
+              />
+            ) : (
+              <div className={catalogProductGridClassName}>
+                {products.map((product) => (
+                  <CatalogProductCard
+                    key={product.id}
+                    product={product}
+                    showActions={canEditCatalog}
+                    onEdit={openEditProduct}
+                    onDelete={handleDeleteProduct}
+                    onOpen={() => void navigate(`/productos/${product.id}`)}
+                  />
+                ))}
+              </div>
+            )
           )}
 
           {meta && meta.lastPage > 1 ? (

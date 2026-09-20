@@ -78,7 +78,10 @@ export function MaterialProductCard({
           onClick={() => onOpen?.(material)}
         >
           <p className="truncate font-semibold hover:underline">{material.name}</p>
-          <p className="text-muted-foreground truncate font-mono text-xs">{material.code}</p>
+          <p className="text-muted-foreground truncate font-mono text-xs">
+            {material.code}
+            {material.supplierCode ? ` · ${material.supplierCode}` : ''}
+          </p>
         </button>
 
         <div className="flex flex-wrap items-center gap-1.5">

@@ -401,7 +401,7 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda b
 | `categories` | `name`, `active`, `sort_order` |
 | `formulas` | `name`, `active` |
 | `formula_materials` | `formula_id`, `material_id`, `quantity` |
-| `catalog_products` | `name`, `category`, `item_kind` (`PRODUCT`\|`SERVICE`, default `PRODUCT`), `sale_unit`, `formula_id?`, `sale_price_usd`, `cost_usd`, `stock_quantity`, `minimum_stock`, `barcode?` (string ≤64, unique por tabla cuando no es null; solo aplica a `PRODUCT`), `active`. Los `SERVICE` no usan inventario/fórmula/tallas (`stock`/`minimum` en 0, `formula_id` null) ni barcode. |
+| `catalog_products` | `name`, `category`, `item_kind` (`PRODUCT`\|`SERVICE`, default `PRODUCT`), `sale_unit`, `formula_id?`, `sale_price_usd`, `cost_usd`, `stock_quantity`, `minimum_stock`, `barcode?` (string ≤64, unique por tabla cuando no es null; solo aplica a `PRODUCT`), `supplier_code?` (string ≤50, nullable, no unique; UI **Referencia** / código del proveedor; solo `PRODUCT`), `active`. Los `SERVICE` no usan inventario/fórmula/tallas (`stock`/`minimum` en 0, `formula_id` null) ni barcode ni referencia. |
 | `catalog_product_sizes` | Tallas opcionales por producto: `catalog_product_id`, `size` (texto libre ≤20), `stock_quantity`; UNIQUE `(catalog_product_id, size)`. Si hay filas, el stock del producto es la suma de tallas. Incompatible con `formula_id`. |
 
 Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
@@ -410,7 +410,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 
 | Tabla | Campos clave |
 |-------|--------------|
-| `materials` | `code`, `name`, `category` (FABRIC/THREAD/…), `unit`, `minimum_stock`, `default_supplier_id`, precios, `barcode?` (string ≤64, unique por tabla cuando no es null; no reemplaza `code`), `active` |
+| `materials` | `code`, `name`, `category` (FABRIC/THREAD/…), `unit`, `minimum_stock`, `default_supplier_id`, precios, `barcode?` (string ≤64, unique por tabla cuando no es null; no reemplaza `code`), `supplier_code?` (string ≤50, indexed, nullable; UI **Referencia** / código del proveedor; no unique), `active` |
 | `inventory_movements` | `material_id`, `type`, `quantity`, refs a compra/pedido/venta |
 | `product_inventory_movements` | `catalog_product_id`, `type`, `quantity`, refs, `created_by_user_id` |
 
@@ -509,9 +509,11 @@ catalog_products ──< product_inventory_movements
 - Producto **sin** fórmula: stock en `catalog_products.stock_quantity` vía `product_inventory_movements`.
 - Producto **con tallas** (`catalog_product_sizes`): stock por talla; `stock_quantity` del producto = suma. Ventas/pedidos exigen `catalog_product_size_id` o `size`; al confirmar se descuenta la talla y el total global (movimiento `SALE_OUT` con nota `… talla {size}`). Compras v1 no desglosan por talla. No aplica a `SERVICE`.
 - **Código de barras (`barcode`):** campo opcional adicional en productos físicos y materiales (no reemplaza el id interno del producto ni el `code` del material). Normalización: trim; vacío → `null`; máx. 64. Unique **por tabla** cuando no es null (varios NULL permitidos). Unicidad no se comparte entre `catalog_products` y `materials`. Los `SERVICE` ignoran/rechazan barcode en create/update. Filtro de listado exacto: `GET /catalog-products?barcode=` y `GET /materials?barcode=` (no LIKE; no se mezcla con `search` de nombre). Duplicado → `BARCODE_DUPLICADO` (422).
-- API: create/update aceptan `sizes[]` y `item_kind`; `PUT /catalog-products/:id/sizes` reemplaza el set (`[]` limpia). Listado `?size=` filtra productos con esa talla y stock > 0. Serialización siempre incluye `has_sizes` + `sizes[]` y `barcode` (nullable).
+- **Referencia (`supplier_code`):** código del proveedor, opcional, en productos físicos y materiales (no unique). Normalización: trim; vacío → `null`; máx. 50. Los `SERVICE` lo ignoran en create/update. Formularios de alta/edición (label **Referencia**) e importador Excel (columna `referencia`, alias `supplier_code` / `codigo_proveedor`). `GET /catalog-products?search=` y `GET /materials?search=` también hacen LIKE sobre `supplier_code` (junto a nombre/descripción o código).
+- API: create/update aceptan `sizes[]`, `item_kind` y `minimum_stock` (umbral de alerta; 0 = sin alerta). El formulario de producto en `/productos` y `/productos/:id` permite cargar el stock mínimo. `PUT /catalog-products/:id/sizes` reemplaza el set (`[]` limpia). Listado `?size=` filtra productos con esa talla y stock > 0. Serialización siempre incluye `has_sizes` + `sizes[]`, `barcode` y `supplier_code` (nullable). En materiales la serialización incluye `supplierCode`.
 - Ajustes manuales: `POST catalog-products/:id/adjustment`, `POST catalog-products/bulk-adjustment` (varios productos en una transacción) y `POST materials/:id/adjustment`. Los productos con tallas requieren `catalog_product_size_id`. Los productos con fórmula y los **servicios** no admiten ajuste manual de stock. Las ediciones de producto que cambian **stock** o **precio/costo** generan movimientos en `product_inventory_movements` (`MANUAL_ADJUSTMENT` / `PRICE_CHANGE`) con `created_by_user_id`; cambios de nombre/descripción no se registran.
-- **Importación masiva (Excel):** en Productos, Servicios y Materiales hay «Importar Excel». La app descarga una plantilla `.xls` (SpreadsheetML) con columnas de alta: las obligatorias llevan `*`. El usuario completa hasta **200 filas** y sube el archivo (plantilla `.xls` o CSV UTF-8; el `.xlsx` nativo de Excel no se parsea sin librería). `POST /catalog-products/import` (`item_kind` + `rows`, `catalog.edit`) y `POST /materials/import` (`rows`, `materials.edit`) crean ítem por ítem con éxito parcial. Si la categoría no existe, se crea activa. En productos y materiales, `stock` opcional carga cantidad inicial (en materiales, un `MANUAL_CARGO` con nota «Stock inicial (importación)»). Columna opcional `codigo_barras` / `barcode` solo en PRODUCT y MATERIAL (servicios la ignoran). No importa imágenes, tallas ni fórmulas.
+- **Historial de compras en ficha de producto:** `GET /catalog-products/:id/purchase-history` (`catalog.view`) lista ítems de compras `CONFIRMED` de ese producto. Query `month=YYYY-MM` (gana sobre el rango) o `from`/`to` ISO; sin filtro devuelve todo. En `/productos/:id` hay una tabla (código RIF del proveedor, nombre, cantidad, costo, subtotal, fecha) con el drawer de filtros unificado (mes, rango o todas). No aplica a `SERVICE`.
+- **Importación masiva (Excel):** en Productos, Servicios y Materiales hay «Importar Excel». La app descarga una plantilla `.xls` (SpreadsheetML) con columnas de alta: las obligatorias llevan `*`. El usuario completa hasta **200 filas** y sube el archivo (plantilla `.xls` o CSV UTF-8; el `.xlsx` nativo de Excel no se parsea sin librería). `POST /catalog-products/import` (`item_kind` + `rows`, `catalog.edit`) y `POST /materials/import` (`rows`, `materials.edit`) crean ítem por ítem con éxito parcial. Si la categoría no existe, se crea activa. En productos y materiales, `stock` opcional carga cantidad inicial (en materiales, un `MANUAL_CARGO` con nota «Stock inicial (importación)»). Columnas opcionales `codigo_barras` / `barcode` y `referencia` / `supplier_code` / `codigo_proveedor` solo en PRODUCT y MATERIAL (servicios las ignoran). No importa imágenes, tallas ni fórmulas.
 
 ### Pedidos (`order_service.ts` + `order_state_machine.ts`)
 
@@ -564,7 +566,7 @@ catalog_products ──< product_inventory_movements
 ## 9. API REST — referencia
 
 **Prefijo:** `/api/v1`  
-**Total de rutas definidas:** 149 (incluye `/health` fuera del prefijo).
+**Total de rutas definidas:** 150 (incluye `/health` fuera del prefijo).
 
 **Leyenda auth:**
 
@@ -680,6 +682,7 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 |--------|------|---------|-------------|
 | GET | `/api/v1/catalog-products` | `catalog.view` | `CatalogProductsController.index` |
 | GET | `/api/v1/catalog-products/:id` | `catalog.view` | `CatalogProductsController.show` |
+| GET | `/api/v1/catalog-products/:id/purchase-history` | `catalog.view` | `CatalogProductsController.historialCompras` |
 | POST | `/api/v1/catalog-products` | `catalog.edit` | `CatalogProductsController.store` |
 | PUT | `/api/v1/catalog-products/:id` | `catalog.edit` | `CatalogProductsController.update` |
 | PUT | `/api/v1/catalog-products/:id/sizes` | `catalog.edit` | `CatalogProductsController.replaceSizes` |
@@ -930,11 +933,11 @@ pwsh scripts/publish-github-release.ps1
 | `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), botón de registrar gasto de empresa (sin salir del POS; permiso `expenses.edit`), cliente walk-in por defecto «Generico», tabs Productos/Materiales/**Servicios**, búsqueda/barcode en la barra superior, panel de filtros (categorías, orden, talla, precio) en drawer (desktop desde la derecha; móvil sheet desde abajo ~80% altura) al pulsar **Filtros**, escaneo barcode (filtro en catálogo / sumar en carrito; tallas con diálogo), cantidad por línea con botones +/− e input, precio por línea (atajos −5/−10/−20 %), detalle opcional en líneas de servicio, fórmula por línea si el producto tiene, descuento de factura aparte; cobro contado con uno o varios métodos (no confirma si el monto indicado es menor al total hasta completar); en desktop carrito anclado; en tablet el carrito ocupa el área de contenido (sidebar visible); en móvil carrito a pantalla completa |
 | `/ventas/:id` | Detalle factura |
 | `/orders/:id` | Detalle pedido |
-| `/productos` | Catálogo de productos físicos (`item_kind=PRODUCT`). Botón de filtros (icono) abre drawer (desktop derecha / móvil sheet abajo) con categorías y orden; la búsqueda queda visible. Botón «Movimientos» → cargo/descargo/ajuste masivo. «Importar Excel» descarga plantilla y carga masiva (`catalog.edit`) |
+| `/productos` | Catálogo de productos físicos (`item_kind=PRODUCT`). Botón de filtros (icono) abre drawer (desktop derecha / móvil sheet abajo) con categorías y orden; la búsqueda queda visible. Un botón de vista alterna **tarjetas** (grilla) y **tabla** (imagen/código/ref, descripción+costo+stock mínimo, existencia, precio). La preferencia se guarda en `sessionStorage` (`catalog-layout`) y se comparte con servicios, materiales y POS. Botón «Movimientos» → cargo/descargo/ajuste masivo. «Importar Excel» descarga plantilla y carga masiva (`catalog.edit`) |
 | `/productos/movimientos` | Cargo, descargo o ajuste de stock sobre varios productos (y tallas) en un solo registro |
-| `/productos/:id` | Detalle producto |
-| `/productos/servicios` | Catálogo de servicios (`item_kind=SERVICE`): nombre, precio, activo/categoría; sin stock/fórmula/tallas. Permisos `catalog.view` / `catalog.edit`. Filtros en el mismo drawer de icono (categorías y orden). «Importar Excel» |
-| `/productos/materiales` | Materiales. «Importar Excel» (`materials.edit`) descarga plantilla y carga masiva |
+| `/productos/:id` | Detalle producto. Incluye stock mínimo, historial de compras a proveedores (filtro por mes o rango de fechas) |
+| `/productos/servicios` | Catálogo de servicios (`item_kind=SERVICE`): nombre, precio, activo/categoría; sin stock/fórmula/tallas. Misma vista tarjetas/tabla que productos. Permisos `catalog.view` / `catalog.edit`. Filtros en el mismo drawer de icono (categorías y orden). «Importar Excel» |
+| `/productos/materiales` | Materiales. Vista tarjetas o tabla (mismo botón que el resto del catálogo). «Importar Excel» (`materials.edit`) descarga plantilla y carga masiva |
 | `/productos/materiales/:id` | Detalle material |
 | `/purchases` | Hub Compras (`?tab=compras\|gastos\|ingresos`) |
 | `/purchases/:id` | Detalle compra (en borrador: escaneo barcode para sumar línea de material/producto del tab activo) |
@@ -977,6 +980,7 @@ Cada feature encapsula servicios API (axios), hooks TanStack Query, componentes 
 - **TanStack Query**: caché servidor, invalidación tras mutaciones.
 - **Carrito de ventas**: `sessionStorage` vía `ventas-cart-draft.ts` — persiste borrador del POS entre recargas de pestaña.
 - **Filtros de listado**: `sessionStorage` vía `session-persisted-state.ts` (`nega-pos:filters:…`, scoped por empresa). El disparador UI es un **botón de icono** (`SlidersHorizontal`) con badge de filtros activos; el panel abre en drawer (desktop desde la derecha; móvil sheet ~80% desde abajo), con «Limpiar todo» y secciones plegables. El contenido del panel varía por módulo (catálogo vs período/cuenta vs estado). Se mantienen al navegar entre módulos en la misma pestaña hasta que el usuario los cambie; se limpian al logout y al cerrar la pestaña. No incluye diálogos abiertos ni UI efímera (acordeones, filas expandidas).
+- **Vista del catálogo**: `sessionStorage` key `catalog-layout` (`grid` \| `table`) compartida entre Productos, Servicios, Materiales y el POS de `/ventas`. El botón de lista (tabla) / grilla 2×2 (tarjetas) está junto a la búsqueda.
 - **Formatos de impresión**: leídos/escritos vía API (`app_settings.print_config`). El PUT acepta `scope: devices | formats | full` para que Ventas y Formatos no se pisen. En Desktop, si la BD está vacía, se importa una vez el JSON legacy de userData.
 
 ---

@@ -146,4 +146,53 @@ test.group('Catalog and materials bulk import', (group) => {
     assert.equal(detail.body().data.material.movimientos[0].type, 'MANUAL_CARGO')
     assert.equal(detail.body().data.material.movimientos[0].note, 'Stock inicial (importación)')
   })
+
+  test('import product and material with supplier_code / referencia', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+
+    const productImport = await client
+      .post('/api/v1/catalog-products/import')
+      .loginAs(user)
+      .json({
+        item_kind: 'PRODUCT',
+        rows: [
+          {
+            row: 4,
+            name: 'Camisa con ref',
+            category: TEST_MATERIAL_CATEGORY,
+            sale_price_usd: 12,
+            supplier_code: 'PROV-CAM-1',
+          },
+        ],
+      })
+
+    productImport.assertStatus(200)
+    assert.equal(productImport.body().data.created, 1)
+    const product = await CatalogProduct.findByOrFail('name', 'Camisa con ref')
+    assert.equal(product.supplierCode, 'PROV-CAM-1')
+
+    const materialImport = await client
+      .post('/api/v1/materials/import')
+      .loginAs(user)
+      .json({
+        rows: [
+          {
+            row: 4,
+            code: 'IMP-REF-M',
+            name: 'Tela con ref',
+            category: TEST_MATERIAL_CATEGORY,
+            unit: 'ROL',
+            supplier_code: 'TEL-PROV-9',
+          },
+        ],
+      })
+
+    materialImport.assertStatus(200)
+    assert.equal(materialImport.body().data.created, 1)
+    const material = await Material.findByOrFail('code', 'IMP-REF-M')
+    assert.equal(material.supplierCode, 'TEL-PROV-9')
+  })
 })

@@ -20,6 +20,7 @@ const catalogProductFields = {
   stock_quantity: vine.number().min(0).optional(),
   minimum_stock: vine.number().min(0).optional(),
   barcode: vine.string().trim().maxLength(64).nullable().optional(),
+  supplier_code: vine.string().trim().maxLength(50).nullable().optional(),
   sizes: vine.array(sizeRowSchema).optional(),
 }
 
@@ -39,6 +40,7 @@ export const updateCatalogProductValidator = vine.create({
   stock_quantity: vine.number().min(0).optional(),
   minimum_stock: vine.number().min(0).optional(),
   barcode: vine.string().trim().maxLength(64).nullable().optional(),
+  supplier_code: vine.string().trim().maxLength(50).nullable().optional(),
   active: vine.boolean().optional(),
   sizes: vine.array(sizeRowSchema).optional(),
 })
@@ -102,8 +104,18 @@ export const importCatalogProductsValidator = vine.create({
         stock_quantity: vine.number().min(0).optional(),
         minimum_stock: vine.number().min(0).optional(),
         barcode: vine.string().trim().maxLength(64).optional(),
+        supplier_code: vine.string().trim().maxLength(50).optional(),
       })
     )
     .minLength(1)
     .maxLength(200),
+})
+
+const isoDate = vine.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const month = vine.string().regex(/^\d{4}-\d{2}$/)
+
+export const catalogProductPurchaseHistoryValidator = vine.create({
+  month: month.optional(),
+  from: isoDate.optional(),
+  to: isoDate.optional(),
 })

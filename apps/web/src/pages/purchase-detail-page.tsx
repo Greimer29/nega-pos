@@ -1092,14 +1092,14 @@ export function PurchaseDetallePage() {
                         <MaterialSearchPicker
                           variant="dropdown"
                           label=""
-                          placeholder="Buscar material por código o nombre…"
+                          placeholder="Buscar material por código, referencia o nombre…"
                           onSelect={(material) => void addMaterialToItems(material)}
                         />
                       ) : (
                         <CatalogProductSearchPicker
                           variant="dropdown"
                           label=""
-                          placeholder="Buscar producto por código o nombre…"
+                          placeholder="Buscar producto por nombre o referencia…"
                           onSelect={(product) => void addProductToItems(product)}
                         />
                       )}

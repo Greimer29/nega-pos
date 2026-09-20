@@ -68,6 +68,11 @@ describe('parseImportText', () => {
     expect(xml).toContain('nombre*')
     expect(xml).toContain('precio_venta*')
     expect(() => parseImportText(xml, 'SERVICE')).toThrow(/no tiene filas con datos/)
+
+    const productXml = buildImportTemplateXml('PRODUCT')
+    expect(productXml).toContain('referencia')
+    const materialXml = buildImportTemplateXml('MATERIAL')
+    expect(materialXml).toContain('referencia')
   })
 
   it('parses services and defaults missing category later on the API', () => {
@@ -102,6 +107,20 @@ describe('parseImportText', () => {
       'codigo*;nombre*;categoria*;unidad*;codigo_barras\nT-02;Hilo;Uniforme;UND;MATQR001'
     expect(parseImportText(materialCsv, 'MATERIAL').rows[0]).toMatchObject({
       barcode: 'MATQR001',
+    })
+  })
+
+  it('parses optional referencia column for products and materials', () => {
+    const productCsv =
+      'nombre*;categoria*;precio_venta*;referencia\nCamisa;Uniforme;15;PROV-88'
+    expect(parseImportText(productCsv, 'PRODUCT').rows[0]).toMatchObject({
+      supplier_code: 'PROV-88',
+    })
+
+    const materialCsv =
+      'codigo*;nombre*;categoria*;unidad*;codigo_proveedor\nT-03;Hilo;Uniforme;UND;H-PROV-1'
+    expect(parseImportText(materialCsv, 'MATERIAL').rows[0]).toMatchObject({
+      supplier_code: 'H-PROV-1',
     })
   })
 

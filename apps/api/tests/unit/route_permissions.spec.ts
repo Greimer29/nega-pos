@@ -128,6 +128,7 @@ const PROTECTED_API_ROUTES: Array<[string, string]> = [
   ['POST', '/catalog-products/apply-profit-margin'],
   ['POST', '/catalog-products/import'],
   ['GET', '/catalog-products/42'],
+  ['GET', '/catalog-products/42/purchase-history'],
   ['POST', '/catalog-products/42/adjustment'],
   ['POST', '/catalog-products'],
   ['PUT', '/catalog-products/42'],

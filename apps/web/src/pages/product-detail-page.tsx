@@ -14,6 +14,7 @@ import { PublicImage } from '@/components/public-image'
 import { PRODUCT_MOVIMIENTO_LABELS } from '@/features/ventas/product-inventory-constants'
 import { productSaleUnitAbrev } from '@/features/ventas/constants'
 import { useCatalogProductQuery, useDeleteCatalogProductMutation } from '@/features/ventas/hooks/use-catalog'
+import { ProductPurchaseHistoryCard } from '@/features/ventas/components/product-purchase-history-card'
 import { notifyApiError } from '@/features/notifications/query-error-state'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
@@ -190,6 +191,12 @@ export function ProductDetailPage() {
               />
             ) : null}
             <dl className="space-y-2 text-sm">
+              {product.supplier_code ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Referencia</dt>
+                  <dd className="font-mono">{product.supplier_code}</dd>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Unidad de venta</dt>
                 <dd>{productSaleUnitLabel(product.sale_unit ?? 'UND')}</dd>
@@ -206,6 +213,13 @@ export function ProductDetailPage() {
                   Calculado según los materiales de la fórmula.
                 </p>
               ) : null}
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Stock mínimo</dt>
+                <dd className="tabular-nums">
+                  {Number(product.minimum_stock ?? 0).toLocaleString('es-VE')}{' '}
+                  {productSaleUnitLabel(product.sale_unit ?? 'UND').toLowerCase()}
+                </dd>
+              </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Costo</dt>
                 <dd>
@@ -308,6 +322,8 @@ export function ProductDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {product.is_service ? null : <ProductPurchaseHistoryCard product={product} />}
 
       {isFormulaStock ? null : (
         <ProductStockAdjustmentDialog

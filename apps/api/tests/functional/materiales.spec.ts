@@ -244,7 +244,10 @@ test.group('Materials API', (group) => {
     })
   })
 
-  test('GET /api/v1/materials search matches code and name', async ({ client, assert }) => {
+  test('GET /api/v1/materials search matches code, name and supplier_code', async ({
+    client,
+    assert,
+  }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
 
     await createMaterial({
@@ -256,6 +259,7 @@ test.group('Materials API', (group) => {
       name: 'Hilo negro',
       category: TEST_MATERIAL_CATEGORY,
       unit: 'UND',
+      supplierCode: 'H-PROV-1',
     })
 
     const byCodigo = await client.get('/api/v1/materials?search=AAA-001').loginAs(user)
@@ -265,6 +269,12 @@ test.group('Materials API', (group) => {
     const byNombre = await client.get('/api/v1/materials?search=Hilo').loginAs(user)
     byNombre.assertStatus(200)
     assert.equal(byNombre.body().data.meta.total, 1)
+
+    const byReferencia = await client.get('/api/v1/materials?search=H-PROV-1').loginAs(user)
+    byReferencia.assertStatus(200)
+    assert.equal(byReferencia.body().data.meta.total, 1)
+    assert.equal(byReferencia.body().data.materials[0].code, 'BBB-002')
+    assert.equal(byReferencia.body().data.materials[0].supplierCode, 'H-PROV-1')
   })
 
   test('GET /api/v1/materials?low_stock=true filters materials below minimum', async ({

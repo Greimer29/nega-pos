@@ -13,6 +13,7 @@ import type { MaterialImportRow } from '@/features/catalog-import/types'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { MaterialDeleteDialog } from '@/features/materials/components/material-delete-dialog'
 import { MaterialFormDialog } from '@/features/materials/components/material-form-dialog'
+import { MaterialCatalogTable } from '@/features/materials/components/material-catalog-table'
 import { MaterialProductCard } from '@/features/materials/components/material-product-card'
 import { MaterialsFormulasPanel } from '@/features/materials/components/materials-formulas-panel'
 import type { MaterialSortBy } from '@/features/materials/constants'
@@ -27,6 +28,8 @@ import { notifyApiError, QueryErrorState } from '@/features/notifications/query-
 import { toast } from '@/features/notifications/toast'
 import { PermissionGate } from '@/features/permissions/components/permission-gate'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
+import { useCatalogLayout } from '@/features/ventas/hooks/use-catalog-layout'
+import { CatalogLayoutToggle } from '@/features/ventas/components/catalog-layout-toggle'
 import { cn } from '@/lib/utils'
 import {
   pageHeaderClass,
@@ -68,6 +71,7 @@ export function MaterialsPage() {
     DEFAULT_MATERIALS_FILTERS
   )
   const [searchInput, setSearchInput] = useState(filters.search)
+  const { layout, toggleLayout } = useCatalogLayout()
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -232,14 +236,17 @@ export function MaterialsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className={cn('space-y-4')}>
-            <div className="relative max-w-sm">
-              <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-              <Input
-                className="pl-9"
-                placeholder="Código, código prov. o nombre…"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-              />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative max-w-sm min-w-0 flex-1">
+                <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                <Input
+                  className="pl-9"
+                  placeholder="Código, código prov. o nombre…"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                />
+              </div>
+              <CatalogLayoutToggle layout={layout} onToggle={toggleLayout} />
             </div>
 
             <FiltersDrawer
@@ -342,6 +349,14 @@ export function MaterialsPage() {
                 <p className="text-muted-foreground text-sm">No hay materiales que coincidan.</p>
               </div>
             ) : (
+            layout === 'table' ? (
+              <MaterialCatalogTable
+                materials={materials}
+                onEdit={openEditPage}
+                onDelete={openDeleteDialog}
+                onOpen={(material) => void navigate(`/productos/materiales/${material.id}`)}
+              />
+            ) : (
               <div className="space-y-3">
                 {materials.map((material) => (
                   <MaterialProductCard
@@ -353,6 +368,7 @@ export function MaterialsPage() {
                   />
                 ))}
               </div>
+            )
             )}
 
             {meta && meta.lastPage > 1 ? (

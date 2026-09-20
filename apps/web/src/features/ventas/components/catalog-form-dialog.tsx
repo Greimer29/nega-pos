@@ -85,12 +85,14 @@ export function CatalogFormDialog({
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
   const [barcode, setBarcode] = useState('')
+  const [supplierCode, setSupplierCode] = useState('')
   const [saleUnit, setSaleUnit] = useState<ProductSaleUnit>('UND')
   const [salePrice, setSalePrice] = useState('')
   const [costPrice, setCostPrice] = useState('0')
   const [marginPercent, setMarginPercent] = useState('')
   const [formulaId, setFormulaId] = useState<number | ''>('')
   const [stockQuantity, setStockQuantity] = useState('0')
+  const [minimumStock, setMinimumStock] = useState('0')
   const [useFormula, setUseFormula] = useState(false)
   const [useSizes, setUseSizes] = useState(false)
   const [sizeRows, setSizeRows] = useState<SizeRow[]>([newSizeRow()])
@@ -208,6 +210,7 @@ export function CatalogFormDialog({
       setDescription(product.description ?? '')
       setCategory(product.category)
       setBarcode(product.barcode ?? '')
+      setSupplierCode(product.supplier_code ?? '')
       setSaleUnit(product.sale_unit ?? 'UND')
       setSalePrice(product.sale_price_usd)
       setCostPrice(product.cost_usd)
@@ -215,6 +218,7 @@ export function CatalogFormDialog({
       setFormulaId(product.formula_id ?? '')
       setUseFormula(Boolean(product.formula_id))
       setStockQuantity(product.stock_quantity)
+      setMinimumStock(product.minimum_stock ?? '0')
       const productSizes = product.sizes ?? []
       if (productSizes.length > 0) {
         setUseSizes(true)
@@ -234,6 +238,7 @@ export function CatalogFormDialog({
       setDescription('')
       setCategory(categories[0]?.name ?? '')
       setBarcode('')
+      setSupplierCode('')
       setSaleUnit('UND')
       setSalePrice('')
       setCostPrice('0')
@@ -241,6 +246,7 @@ export function CatalogFormDialog({
       setFormulaId('')
       setUseFormula(false)
       setStockQuantity('0')
+      setMinimumStock('0')
       setUseSizes(false)
       setSizeRows([newSizeRow()])
     }
@@ -392,6 +398,11 @@ export function CatalogFormDialog({
       return
     }
 
+    if (Number(minimumStock) < 0) {
+      setError('El stock mínimo no puede ser negativo.')
+      return
+    }
+
     if (useSizes) {
       const sizeError = validateSizeRows()
       if (sizeError) {
@@ -421,8 +432,10 @@ export function CatalogFormDialog({
       description: description.trim() || undefined,
       category,
       barcode: barcode.trim() || null,
+      supplier_code: supplierCode.trim() || null,
       sale_unit: saleUnit,
       sale_price_usd: Number(salePrice),
+      minimum_stock: normalizeInventoryQuantity(Number(minimumStock) || 0, saleUnit),
       ...(hasFormula
         ? { formula_id: selectedFormulaId }
         : {
@@ -493,7 +506,7 @@ export function CatalogFormDialog({
                 onRemove={() => void handleRemoveImage()}
               />
             </div>
-            <div className="flex h-[150px] w-2/3 flex-col justify-start py-0.5">
+            <div className="flex w-2/3 flex-col justify-start py-0.5">
               <div className="space-y-0.5">
                 <Label htmlFor="catalog-name" className="text-xs">
                   Nombre
@@ -522,6 +535,19 @@ export function CatalogFormDialog({
                     onScan={(code) => setBarcode(code)}
                   />
                 </div>
+              </div>
+              <div className="space-y-0.5">
+                <Label htmlFor="catalog-supplier-code" className="text-xs">
+                  Referencia
+                </Label>
+                <Input
+                  id="catalog-supplier-code"
+                  className="h-8"
+                  value={supplierCode}
+                  onChange={(e) => setSupplierCode(e.target.value)}
+                  placeholder="Código del proveedor"
+                  maxLength={50}
+                />
               </div>
               <div className="grid grid-cols-[7fr_3fr] gap-2">
                 <div className="space-y-0.5">
@@ -563,12 +589,7 @@ export function CatalogFormDialog({
           </div>
 
           <div className="space-y-4 border-t pt-4">
-            <div
-              className={cn(
-                'grid gap-4',
-                purchaseFlow && !isEditing ? 'grid-cols-1' : 'sm:grid-cols-2'
-              )}
-            >
+            <div className="grid gap-4 sm:grid-cols-2">
               {purchaseFlow && !isEditing ? null : hasFormula ? (
                 isEditing ? (
                   <div className="space-y-2">
@@ -608,6 +629,19 @@ export function CatalogFormDialog({
                   </p>
                 </div>
               )}
+              <div className="space-y-2">
+                <Label htmlFor="catalog-minimum-stock">Stock mínimo</Label>
+                <DecimalInput
+                  id="catalog-minimum-stock"
+                  min={0}
+                  decimals={stockDecimals}
+                  value={minimumStock}
+                  onChange={(e) => setMinimumStock(e.target.value)}
+                />
+                <p className="text-muted-foreground text-xs">
+                  Alerta cuando el stock disponible quede por debajo de este valor.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-3">

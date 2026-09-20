@@ -19,6 +19,7 @@ export default class MaterialTransformer extends BaseTransformer<Material> {
         'id',
         'code',
         'barcode',
+        'supplierCode',
         'name',
         'description',
         'category',

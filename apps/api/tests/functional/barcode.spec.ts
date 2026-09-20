@@ -210,4 +210,31 @@ test.group('Barcode on catalog products and materials', (group) => {
     const material = await Material.findByOrFail('code', 'IMP-BC-M')
     assert.equal(material.barcode, 'IMP-MAT-BC')
   })
+
+  test('POST product with supplier_code and GET list search matches it', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+
+    const create = await client.post('/api/v1/catalog-products').loginAs(user).json({
+      name: 'Producto con referencia',
+      category: TEST_MATERIAL_CATEGORY,
+      sale_price_usd: 10,
+      cost_usd: 4,
+      supplier_code: '  PROV-88  ',
+    })
+
+    create.assertStatus(200)
+    assert.equal(create.body().data.catalog_product.supplier_code, 'PROV-88')
+
+    const found = await client
+      .get('/api/v1/catalog-products')
+      .qs({ search: 'PROV-88' })
+      .loginAs(user)
+
+    found.assertStatus(200)
+    assert.equal(found.body().data.meta.total, 1)
+    assert.equal(found.body().data.catalog_products[0].name, 'Producto con referencia')
+  })
 })

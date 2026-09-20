@@ -44,6 +44,12 @@ export function getImportColumns(kind: CatalogImportKind): CatalogImportColumn[]
         required: false,
         hint: 'Código de barras o QR (único)',
       },
+      {
+        key: 'supplier_code',
+        header: 'referencia',
+        required: false,
+        hint: 'Código del proveedor',
+      },
     ]
   }
 
@@ -61,6 +67,12 @@ export function getImportColumns(kind: CatalogImportKind): CatalogImportColumn[]
       header: 'codigo_barras',
       required: false,
       hint: 'Código de barras o QR (único)',
+    },
+    {
+      key: 'supplier_code',
+      header: 'referencia',
+      required: false,
+      hint: 'Código del proveedor',
     },
   ]
 }

@@ -44,6 +44,7 @@ export type CatalogProduct = {
   id: number
   name: string
   barcode?: string | null
+  supplier_code?: string | null
   description: string | null
   category: string
   item_kind?: CatalogItemKind
@@ -121,7 +122,9 @@ export type CatalogProductInput = {
   cost_usd?: number
   formula_id?: number | null
   stock_quantity?: number
+  minimum_stock?: number
   barcode?: string | null
+  supplier_code?: string | null
   sizes?: CatalogProductSizeInput[]
 }
 
@@ -148,6 +151,32 @@ export type CatalogListResponse = {
 export type CatalogProductResponse = {
   data: {
     catalog_product: CatalogProduct
+  }
+}
+
+export type CatalogProductPurchaseHistoryItem = {
+  purchaseItemId: number
+  purchaseId: number
+  date: string
+  supplier: {
+    id: number
+    code: string | null
+    name: string
+  }
+  quantity: string
+  unitPriceUsd: string | null
+  subtotalUsd: string | null
+}
+
+export type CatalogProductPurchaseHistoryParams = {
+  month?: string
+  from?: string
+  to?: string
+}
+
+export type CatalogProductPurchaseHistoryResponse = {
+  data: {
+    historial: CatalogProductPurchaseHistoryItem[]
   }
 }
 

@@ -16,6 +16,7 @@ import {
   bulkAjusteCatalogProductValidator,
   replaceCatalogProductSizesValidator,
   importCatalogProductsValidator,
+  catalogProductPurchaseHistoryValidator,
 } from '#validators/catalog_product'
 import { serializeCostWarning } from '#types/cost_warning'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -76,6 +77,19 @@ export default class CatalogProductsController {
 
     return serialize({
       catalog_product: serializeCatalogProductDetail(product, { movimientos, stock, costUsd }),
+    })
+  }
+
+  async historialCompras({ params, request, serialize }: HttpContext) {
+    const filters = await request.validateUsing(catalogProductPurchaseHistoryValidator)
+    const historial = await this.service.historialCompras(Number(params.id), {
+      month: filters.month,
+      from: filters.from,
+      to: filters.to,
+    })
+
+    return serialize({
+      historial,
     })
   }
 

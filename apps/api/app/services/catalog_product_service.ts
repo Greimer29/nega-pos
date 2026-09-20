@@ -6,6 +6,7 @@ import ServicioCatalogoOperacionInvalidaException from '#exceptions/servicio_cat
 import CatalogProduct from '#models/catalog_product'
 import Formula from '#models/formula'
 import OrderLine from '#models/order_line'
+import PurchaseItem from '#models/purchase_item'
 import CategoryService from '#services/category_service'
 import FormulaService from '#services/formula_service'
 import CatalogProductSizeService from '#services/catalog_product_size_service'
@@ -24,7 +25,9 @@ import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
 import { assertProductBarcodeAvailable, normalizeBarcode } from '#utils/barcode'
+import { normalizeSupplierCode } from '#utils/supplier_code'
 import db from '@adonisjs/lucid/services/db'
+import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 
@@ -40,6 +43,7 @@ export type CatalogProductInput = {
   stock_quantity?: number
   minimum_stock?: number
   barcode?: string | null
+  supplier_code?: string | null
   active?: boolean
   sizes?: Array<{ size: string; stock_quantity: number }>
 }
@@ -92,6 +96,26 @@ export type CatalogProductUpdateOptions = {
   userId?: number | null
 }
 
+export type CatalogProductPurchaseHistoryFilters = {
+  month?: string
+  from?: string
+  to?: string
+}
+
+export type CatalogProductPurchaseHistoryItem = {
+  purchaseItemId: number
+  purchaseId: number
+  date: string
+  supplier: {
+    id: number
+    code: string | null
+    name: string
+  }
+  quantity: string
+  unitPriceUsd: string | null
+  subtotalUsd: string | null
+}
+
 function formatUsdNote(value: string | number) {
   return Number(value).toFixed(2)
 }
@@ -138,7 +162,10 @@ export default class CatalogProductService {
     } else if (filters.search) {
       const term = `%${filters.search.trim()}%`
       query.where((builder) => {
-        builder.whereILike('name', term).orWhereILike('description', term)
+        builder
+          .whereILike('name', term)
+          .orWhereILike('description', term)
+          .orWhereILike('supplier_code', term)
       })
     }
 
@@ -196,6 +223,46 @@ export default class CatalogProductService {
     }
 
     return product
+  }
+
+  async historialCompras(
+    productId: number,
+    filters: CatalogProductPurchaseHistoryFilters = {}
+  ): Promise<CatalogProductPurchaseHistoryItem[]> {
+    await this.obtener(productId)
+
+    const query = PurchaseItem.query()
+      .select('purchase_items.*')
+      .join('purchases', 'purchases.id', 'purchase_items.purchase_id')
+      .where('purchase_items.catalog_product_id', productId)
+      .where('purchases.status', 'CONFIRMED')
+      .orderBy('purchases.date', 'desc')
+      .orderBy('purchase_items.id', 'desc')
+      .preload('purchase', (purchaseQuery) => {
+        purchaseQuery.preload('supplier')
+      })
+
+    const period = resolvePurchaseHistoryPeriod(filters)
+    if (period) {
+      query.where('purchases.date', '>=', period.from)
+      query.where('purchases.date', '<=', period.to)
+    }
+
+    const items = await query
+
+    return items.map((item) => ({
+      purchaseItemId: Number(item.id),
+      purchaseId: Number(item.purchaseId),
+      date: item.purchase.date.toISODate()!,
+      supplier: {
+        id: Number(item.purchase.supplier.id),
+        code: item.purchase.supplier.rif?.trim() || null,
+        name: item.purchase.supplier.name,
+      },
+      quantity: item.quantity,
+      unitPriceUsd: item.unitPriceUsd,
+      subtotalUsd: item.subtotalUsd,
+    }))
   }
 
   async crear(input: CatalogProductInput): Promise<CatalogProduct> {
@@ -260,6 +327,7 @@ export default class CatalogProductService {
             saleUnit
           ),
           barcode,
+          supplierCode: isService ? null : normalizeSupplierCode(input.supplier_code),
           active: input.active ?? true,
         },
         { client: trx }
@@ -382,6 +450,10 @@ export default class CatalogProductService {
         const barcode = normalizeBarcode(input.barcode)
         await assertProductBarcodeAvailable(barcode, Number(product.id))
         product.barcode = barcode
+      }
+
+      if (!isService && input.supplier_code !== undefined) {
+        product.supplierCode = normalizeSupplierCode(input.supplier_code)
       }
 
       if (input.cost_usd !== undefined) {
@@ -853,6 +925,7 @@ export default class CatalogProductService {
           stock_quantity: isService ? 0 : Number(row.stock_quantity ?? 0),
           minimum_stock: isService ? 0 : Number(row.minimum_stock ?? 0),
           barcode: isService ? null : row.barcode,
+          supplier_code: isService ? null : row.supplier_code,
         })
 
         created += 1
@@ -881,6 +954,7 @@ export type CatalogImportRow = {
   stock_quantity?: number
   minimum_stock?: number
   barcode?: string
+  supplier_code?: string
 }
 
 export type CatalogImportRowResult = {
@@ -902,4 +976,20 @@ function resolveImportUnit(value?: string): InventoryUnit | null {
   return INVENTORY_UNITS.includes(normalized as InventoryUnit)
     ? (normalized as InventoryUnit)
     : null
+}
+
+function resolvePurchaseHistoryPeriod(filters: CatalogProductPurchaseHistoryFilters) {
+  if (filters.month) {
+    const start = DateTime.fromISO(`${filters.month}-01`).startOf('month')
+    return {
+      from: start.toISODate()!,
+      to: start.endOf('month').toISODate()!,
+    }
+  }
+
+  if (filters.from) {
+    return { from: filters.from, to: filters.to || filters.from }
+  }
+
+  return null
 }

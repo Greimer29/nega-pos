@@ -14,6 +14,7 @@ export type Material = {
   id: number
   code: string
   barcode?: string | null
+  supplierCode?: string | null
   name: string
   description: string | null
   category: MaterialCategoria
@@ -87,6 +88,7 @@ export type MaterialInput = {
   supplier_habitual_id?: number
   last_purchase_price_usd?: number
   barcode?: string | null
+  supplier_code?: string | null
   active?: boolean
 }
 

@@ -12,10 +12,13 @@ import { useAuth } from '@/features/auth/hooks/use-auth'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { CatalogAdminFiltersPanel } from '@/features/ventas/components/catalog-admin-filters-panel'
 import { ServiceFormDialog } from '@/features/ventas/components/service-form-dialog'
+import { CatalogLayoutToggle } from '@/features/ventas/components/catalog-layout-toggle'
 import {
   CatalogProductCard,
   catalogProductGridClassName,
 } from '@/features/ventas/components/catalog-product-card'
+import { CatalogProductTable } from '@/features/ventas/components/catalog-product-table'
+import { useCatalogLayout } from '@/features/ventas/hooks/use-catalog-layout'
 import {
   useCatalogProductsQuery,
   useDeleteCatalogProductMutation,
@@ -62,6 +65,7 @@ export function ServiciosPage() {
     DEFAULT_SERVICIOS_FILTERS
   )
   const [searchInput, setSearchInput] = useState(filters.search)
+  const { layout, toggleLayout } = useCatalogLayout()
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -176,13 +180,14 @@ export function ServiciosPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4 px-3 sm:px-6">
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
               placeholder="Buscar servicio…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="max-w-xs"
             />
+            <CatalogLayoutToggle layout={layout} onToggle={toggleLayout} />
           </div>
 
           <FiltersDrawer
@@ -224,17 +229,26 @@ export function ServiciosPage() {
               description="Creá servicios con precio de lista para venderlos en el POS sin descontar stock."
             />
           ) : (
-            <div className={catalogProductGridClassName}>
-              {services.map((service) => (
-                <CatalogProductCard
-                  key={service.id}
-                  product={service}
-                  showActions={canEditCatalog}
-                  onEdit={openEditService}
-                  onDelete={canEditCatalog ? handleDeleteService : undefined}
-                />
-              ))}
-            </div>
+            layout === 'table' ? (
+              <CatalogProductTable
+                products={services}
+                showActions={canEditCatalog}
+                onEdit={openEditService}
+                onDelete={canEditCatalog ? handleDeleteService : undefined}
+              />
+            ) : (
+              <div className={catalogProductGridClassName}>
+                {services.map((service) => (
+                  <CatalogProductCard
+                    key={service.id}
+                    product={service}
+                    showActions={canEditCatalog}
+                    onEdit={openEditService}
+                    onDelete={canEditCatalog ? handleDeleteService : undefined}
+                  />
+                ))}
+              </div>
+            )
           )}
 
           {meta && meta.lastPage > 1 ? (

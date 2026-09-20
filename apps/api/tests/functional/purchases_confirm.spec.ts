@@ -1,5 +1,6 @@
 import Purchase from '#models/purchase'
 import PurchaseItem from '#models/purchase_item'
+import CatalogProduct from '#models/catalog_product'
 import Material from '#models/material'
 import InventoryMovement from '#models/inventory_movement'
 import Supplier from '#models/supplier'
@@ -358,5 +359,83 @@ test.group('Purchases confirmar API', (group) => {
     assert.equal(body.data.historial[0].unitPriceBs, '808.30')
     assert.equal(body.data.historial[0].unitPriceUsd, '22.1452')
     assert.equal(body.data.historial[0].supplier.name, 'El Castillo')
+  })
+
+  test('GET /api/v1/catalog-products/:id/purchase-history returns confirmed product purchases', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const supplier = await seedSupplier()
+    const product = await CatalogProduct.create({
+      name: 'Camisa polo',
+      category: 'UNIFORM',
+      salePriceUsd: '20.0000',
+      costUsd: '10.0000',
+      stockQuantity: '0.000',
+      active: true,
+    })
+    const purchase = await Purchase.create({
+      supplierId: supplier.id,
+      date: DateTime.fromISO('2026-05-20'),
+      invoiceNumber: 'F-PROD-1',
+      usdRate: '36.5000',
+      totalBs: '0.00',
+      status: 'DRAFT',
+    })
+    await PurchaseItem.create({
+      purchaseId: purchase.id,
+      catalogProductId: product.id,
+      quantity: '3.00',
+      unitPriceUsd: '10.0000',
+      unitPriceBs: '365.00',
+      subtotalUsd: '30.0000',
+      subtotalBs: '1095.00',
+    })
+    purchase.totalUsd = '30.0000'
+    purchase.totalBs = '1095.00'
+    await purchase.save()
+
+    const confirmResponse = await client
+      .post(`/api/v1/purchases/${purchase.id}/confirm`)
+      .loginAs(user)
+    confirmResponse.assertStatus(200)
+
+    const monthResponse = await client
+      .get(`/api/v1/catalog-products/${product.id}/purchase-history`)
+      .qs({ month: '2026-05' })
+      .loginAs(user)
+
+    monthResponse.assertStatus(200)
+    const monthBody = monthResponse.body()
+    assert.lengthOf(monthBody.data.historial, 1)
+    assert.equal(monthBody.data.historial[0].supplier.code, 'J123456789')
+    assert.equal(monthBody.data.historial[0].supplier.name, 'El Castillo')
+    assert.equal(Number(monthBody.data.historial[0].quantity), 3)
+    assert.equal(monthBody.data.historial[0].unitPriceUsd, '10.0000')
+    assert.equal(monthBody.data.historial[0].subtotalUsd, '30.0000')
+    assert.equal(monthBody.data.historial[0].date, '2026-05-20')
+
+    const otherMonth = await client
+      .get(`/api/v1/catalog-products/${product.id}/purchase-history`)
+      .qs({ month: '2026-06' })
+      .loginAs(user)
+
+    otherMonth.assertStatus(200)
+    assert.lengthOf(otherMonth.body().data.historial, 0)
+
+    const rangeResponse = await client
+      .get(`/api/v1/catalog-products/${product.id}/purchase-history`)
+      .qs({ from: '2026-05-01', to: '2026-05-31' })
+      .loginAs(user)
+
+    rangeResponse.assertStatus(200)
+    assert.lengthOf(rangeResponse.body().data.historial, 1)
+
+    const missing = await client
+      .get('/api/v1/catalog-products/999999/purchase-history')
+      .loginAs(user)
+
+    missing.assertStatus(404)
   })
 })

@@ -159,7 +159,10 @@ export function CatalogProductCard({
         <h3 className="line-clamp-2 min-h-[2.5em] text-xs leading-snug font-semibold text-slate-800">
           {product.name}
         </h3>
-        <p className="text-muted-foreground text-[11px] leading-tight">{catalogProductCode(product.id)}</p>
+        <p className="text-muted-foreground text-[11px] leading-tight">
+          {catalogProductCode(product.id)}
+          {product.supplier_code ? ` · ${product.supplier_code}` : ''}
+        </p>
       </div>
 
       <div className="mt-auto border-t border-slate-100 px-0.5 pt-1.5">
