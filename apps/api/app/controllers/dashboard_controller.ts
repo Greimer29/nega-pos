@@ -124,8 +124,11 @@ export default class DashboardControleler {
         payment_method_name: invoice.paymentMethodName,
         discount_usd: invoice.discountUsd,
         total_usd: invoice.totalUsd,
+        original_total_usd: invoice.originalTotalUsd,
+        returned_total_usd: invoice.returnedTotalUsd,
         total_bs: invoice.totalBs,
         status: invoice.status,
+        returned_at: invoice.returnedAt,
       })),
       returns: data.returns.map((item) => ({
         sale_id: item.saleId,

@@ -1171,4 +1171,54 @@ test.group('Dashboard API', (group) => {
     assert.equal(body.summary.net_cash_usd, '35.0000')
     assert.lengthOf(body.expenses.items, 2)
   })
+
+  test('GET /api/v1/dashboard/daily-closing marks fully returned invoices with original amount', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const returnedAt = DateTime.fromISO('2026-09-20T15:30:00', { zone: 'America/Caracas' })
+
+    await seedDashboardSale({
+      totalUsd: '0.0000',
+      status: 'RETURNED',
+      returnedAt,
+      paymentMethodCode: 'cash_usd',
+      salesShiftId: openShiftId,
+      lines: [
+        {
+          quantity: '1',
+          unitPriceUsd: '20.0000',
+          subtotalUsd: '20.0000',
+          returnedQuantity: '1',
+        },
+      ],
+    })
+
+    const response = await client
+      .get('/api/v1/dashboard/daily-closing')
+      .qs({ sales_shift_id: openShiftId })
+      .loginAs(user)
+
+    response.assertStatus(200)
+
+    const body = response.body().data
+    assert.equal(body.summary.invoices_count, 1)
+    assert.equal(body.summary.returns_count, 1)
+    assert.equal(body.summary.cash_total_usd, '0.0000')
+    assert.lengthOf(body.by_payment_method, 0)
+
+    const invoice = body.invoices[0]
+    assert.equal(invoice.status, 'RETURNED')
+    assert.equal(invoice.total_usd, '0.0000')
+    assert.equal(invoice.original_total_usd, '20.0000')
+    assert.equal(invoice.returned_total_usd, '20.0000')
+    assert.isString(invoice.returned_at)
+    assert.isFalse(Number.isNaN(Date.parse(String(invoice.returned_at))))
+
+    assert.lengthOf(body.returns, 1)
+    assert.equal(body.returns[0].total_returned_usd, '20.0000')
+    assert.isString(body.returns[0].returned_at)
+    assert.isFalse(Number.isNaN(Date.parse(String(body.returns[0].returned_at))))
+  })
 })

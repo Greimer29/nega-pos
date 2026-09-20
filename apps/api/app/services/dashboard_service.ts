@@ -21,6 +21,7 @@ import {
   buildWeeklyVentasBuckets,
 } from '#utils/dashboard_chart_periods'
 import { allocateInvoiceDiscountToSaleLines } from '#utils/allocate_invoice_discount'
+import { computeSaleOriginalReturnedNet } from '#utils/sale_original_returned_net'
 
 export type BajoStockItem = {
   id: number
@@ -148,15 +149,50 @@ export type DailyClosingInvoiceItem = {
   }>
   discountUsd: string
   totalUsd: string
+  originalTotalUsd: string
+  returnedTotalUsd: string
   totalBs: string | null
   status: string
+  returnedAt: string | null
 }
 
 export type DailyClosingReturnItem = {
   saleId: number
   saleCode: string | null
-  returnedAt: string
+  returnedAt: string | null
   totalReturnedUsd: string
+}
+
+function toIsoDateTime(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+
+  if (DateTime.isDateTime(value) && value.isValid) {
+    return value.toISO()
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return DateTime.fromJSDate(value).toISO()
+  }
+
+  const text = String(value)
+  const iso = DateTime.fromISO(text)
+  if (iso.isValid) {
+    return iso.toISO()
+  }
+
+  const sql = DateTime.fromSQL(text)
+  if (sql.isValid) {
+    return sql.toISO()
+  }
+
+  const parsed = new Date(text)
+  if (!Number.isNaN(parsed.getTime())) {
+    return DateTime.fromJSDate(parsed).toISO()
+  }
+
+  return null
 }
 
 export type DailyClosingResult = {
@@ -1087,10 +1123,32 @@ export default class DashboardService {
       paymentsBySale.set(saleId, current)
     }
 
+    const lineRows =
+      saleIds.length === 0
+        ? []
+        : await db
+            .from('sale_lines')
+            .whereIn('sale_id', saleIds)
+            .select(
+              'sale_id as saleId',
+              'quantity',
+              'returned_quantity as returnedQuantity',
+              'unit_price_usd as unitPriceUsd'
+            )
+
+    const linesBySale = new Map<number, typeof lineRows>()
+    for (const row of lineRows) {
+      const saleId = Number(row.saleId)
+      const current = linesBySale.get(saleId) ?? []
+      current.push(row)
+      linesBySale.set(saleId, current)
+    }
+
     for (const sale of sales) {
       const totalUsd = Number(sale.totalUsd ?? 0)
       const discountUsd = Number(sale.discountUsd ?? 0)
       const paymentType = String(sale.paymentType)
+      const status = String(sale.status)
 
       discountsTotalUsd += discountUsd
 
@@ -1102,9 +1160,27 @@ export default class DashboardService {
 
       const saleId = Number(sale.id)
       const salePayments = paymentsBySale.get(saleId) ?? []
+      const saleLines = linesBySale.get(saleId) ?? []
       const paymentMethodNames = salePayments
         .map((row) => (row.paymentMethodName ? String(row.paymentMethodName) : null))
         .filter((name): name is string => Boolean(name))
+      const originalPaymentsUsd = salePayments.reduce(
+        (sum, row) => sum + Number(row.amountUsd ?? 0),
+        0
+      )
+      const nets = computeSaleOriginalReturnedNet({
+        lines: saleLines.map((row) => ({
+          quantity: Number(row.quantity ?? 0),
+          returnedQuantity: Number(row.returnedQuantity ?? 0),
+          unitPriceUsd: Number(row.unitPriceUsd ?? 0),
+        })),
+        remainingTotalUsd: totalUsd,
+        remainingDiscountUsd: discountUsd,
+        originalPaymentsUsd,
+      })
+      const returnedAt = toIsoDateTime(sale.returnedAt)
+      const isFullyReturned =
+        status === 'RETURNED' || (nets.returnedNetUsd > 0.0001 && totalUsd <= 0.0001)
 
       invoices.push({
         id: saleId,
@@ -1127,11 +1203,14 @@ export default class DashboardService {
         })),
         discountUsd: discountUsd.toFixed(4),
         totalUsd: totalUsd.toFixed(4),
+        originalTotalUsd: nets.originalNetUsd.toFixed(4),
+        returnedTotalUsd: nets.returnedNetUsd.toFixed(4),
         totalBs: sale.totalBs ? String(sale.totalBs) : null,
-        status: String(sale.status),
+        status,
+        returnedAt,
       })
 
-      if (paymentType === 'CASH') {
+      if (paymentType === 'CASH' && !isFullyReturned) {
         const methodLines =
           salePayments.length > 0
             ? salePayments.map((row) => ({
@@ -1177,27 +1256,14 @@ export default class DashboardService {
     // Net billed amount (after invoice discounts), not gross line subtotals.
     const productsAmountUsd = cashTotalUsd + creditTotalUsd
 
-    const returnsQuery = db.from('sales').where('status', 'RETURNED')
-
-    if (salesShiftId) {
-      returnsQuery.where('sales_shift_id', salesShiftId)
-    } else {
-      returnsQuery.whereRaw('DATE(sales.returned_at) = ?', [date])
-    }
-
-    const returnsRows = await returnsQuery.select(
-      'id',
-      'code',
-      'returned_at as returnedAt',
-      'total_usd as totalUsd'
-    )
-
-    const returns: DailyClosingReturnItem[] = returnsRows.map((row) => ({
-      saleId: Number(row.id),
-      saleCode: row.code ? String(row.code) : null,
-      returnedAt: row.returnedAt ? String(row.returnedAt) : date,
-      totalReturnedUsd: Number(row.totalUsd ?? 0).toFixed(4),
-    }))
+    const returns: DailyClosingReturnItem[] = invoices
+      .filter((invoice) => Number(invoice.returnedTotalUsd) > 0.0001)
+      .map((invoice) => ({
+        saleId: invoice.id,
+        saleCode: invoice.code,
+        returnedAt: invoice.returnedAt,
+        totalReturnedUsd: invoice.returnedTotalUsd,
+      }))
 
     const byPaymentMethod: DailyClosingPaymentMethodItem[] = [...methodTotals.values()]
       .sort((a, b) => a.name.localeCompare(b.name))

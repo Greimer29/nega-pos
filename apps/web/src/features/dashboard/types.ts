@@ -140,14 +140,17 @@ export type DailyClosingInvoice = {
   }>
   discount_usd: string
   total_usd: string
+  original_total_usd?: string
+  returned_total_usd?: string
   total_bs: string | null
   status: string
+  returned_at?: string | null
 }
 
 export type DailyClosingReturn = {
   sale_id: number
   sale_code: string | null
-  returned_at: string
+  returned_at: string | null
   total_returned_usd: string
 }
 

@@ -21,6 +21,7 @@ export type SeedTestSaleInput = {
   guestName?: string | null
   soldAt?: DateTime
   confirmedAt?: DateTime
+  returnedAt?: DateTime | null
   status?: 'DRAFT' | 'COMPLETED' | 'RETURNED'
   billingMode?: 'FAST' | 'ORDER'
   orderStatus?: 'PENDING' | 'IN_PROCESS' | 'DELIVERED'
@@ -83,6 +84,7 @@ export async function seedTestSale(input: SeedTestSaleInput) {
     creditDueDate: input.creditDueDate ?? null,
     soldAt,
     confirmedAt: input.confirmedAt ?? soldAt,
+    returnedAt: input.returnedAt ?? (input.status === 'RETURNED' ? soldAt : null),
     salesShiftId: input.salesShiftId ?? null,
   })
 
