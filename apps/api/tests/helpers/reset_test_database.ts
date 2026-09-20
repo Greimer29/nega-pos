@@ -9,6 +9,7 @@ import { DateTime } from 'luxon'
  */
 export async function resetTestDatabase() {
   await db.from('sale_lines').delete()
+  await db.from('sale_payments').delete()
   await db.from('sales').delete()
   await db.from('sales_shifts').delete()
   await db.from('customer_payments').delete()

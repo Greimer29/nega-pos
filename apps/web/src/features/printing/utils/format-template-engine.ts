@@ -83,7 +83,13 @@ function buildPlaceholderMap(
     'sale.seller_name': escapeHtml(saleSellerLabel(sale)),
     'sale.user_code': escapeHtml(saleUserCode(sale)),
     'sale.payment_type': escapeHtml(paymentTypeLabel(sale.payment_type)),
-    'sale.payment_method': escapeHtml(paymentMethodLabel(sale.payment_method)),
+    'sale.payment_method': escapeHtml(
+      sale.payments && sale.payments.length > 0
+        ? sale.payments
+            .map((payment) => paymentMethodLabel(payment.payment_method) || payment.payment_method_code)
+            .join(' + ')
+        : paymentMethodLabel(sale.payment_method)
+    ),
     'sale.payment_details': renderSalePaymentDetails(sale),
     'sale.order_status': escapeHtml(sale.order_status),
     'sale.lines': renderSaleLines(sale, lines),

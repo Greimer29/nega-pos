@@ -246,7 +246,14 @@ export function SaleDetailPage() {
             <p className="text-sm">
               {sale.payment_type === 'CREDIT'
                 ? `Crédito · Saldo ${sale.balance_usd} USD`
-                : paymentMethodLabel(sale.payment_method) || 'Contado'}
+                : sale.payments && sale.payments.length > 1
+                  ? sale.payments
+                      .map(
+                        (payment) =>
+                          `${paymentMethodLabel(payment.payment_method) || payment.payment_method_code} ${payment.amount_usd}`
+                      )
+                      .join(' · ')
+                  : paymentMethodLabel(sale.payment_method) || 'Contado'}
             </p>
           </div>
           <div>

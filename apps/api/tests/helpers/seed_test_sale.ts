@@ -1,5 +1,6 @@
 import Sale from '#models/sale'
 import SaleLine from '#models/sale_line'
+import SalePayment from '#models/sale_payment'
 import SalesShift from '#models/sales_shift'
 import { DateTime } from 'luxon'
 
@@ -99,6 +100,18 @@ export async function seedTestSale(input: SeedTestSaleInput) {
       subtotalUsd: subtotal,
       costUsd: line.costUsd ?? null,
       returnedQuantity: line.returnedQuantity ?? '0',
+    })
+  }
+
+  if (!isCredit && sale.paymentMethodCode) {
+    await SalePayment.create({
+      saleId: Number(sale.id),
+      paymentMethodCode: sale.paymentMethodCode,
+      amountUsd: total,
+      currencyCode: 'USD',
+      usdRate: null,
+      amountNative: null,
+      sortOrder: 0,
     })
   }
 

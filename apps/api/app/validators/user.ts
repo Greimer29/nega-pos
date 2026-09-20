@@ -10,6 +10,7 @@ const permissions = () => vine.array(vine.enum(PERMISSION_ENUM)).optional()
 export const loginValidator = vine.create({
   email: email(),
   password: vine.string(),
+  company_slug: vine.string().trim().maxLength(80).optional(),
 })
 
 export const googleLoginValidator = vine.create({

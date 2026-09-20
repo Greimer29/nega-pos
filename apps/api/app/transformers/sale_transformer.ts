@@ -17,6 +17,24 @@ function serializePaymentMethodSummary(sale: Sale) {
   }
 }
 
+function serializeSalePayments(sale: Sale) {
+  return (sale.salePayments ?? []).map((payment) => ({
+    id: Number(payment.id),
+    payment_method_code: payment.paymentMethodCode,
+    amount_usd: payment.amountUsd,
+    currency_code: payment.currencyCode,
+    usd_rate: payment.usdRate,
+    amount_native: payment.amountNative,
+    payment_method: payment.paymentMethod
+      ? {
+          code: payment.paymentMethod.code,
+          name: payment.paymentMethod.name,
+          currency_code: payment.paymentMethod.currencyCode,
+        }
+      : null,
+  }))
+}
+
 function serializeSoldBySummary(sale: Sale) {
   const seller = sale.soldBy
   if (!seller || !sale.soldByUserId) {
@@ -37,6 +55,7 @@ export function serializeSale(sale: Sale) {
     guest_name: sale.guestName,
     payment_method_code: sale.paymentMethodCode,
     payment_method: serializePaymentMethodSummary(sale),
+    payments: serializeSalePayments(sale),
     payment_type: sale.paymentType,
     billing_mode: sale.billingMode,
     order_status: sale.orderStatus,

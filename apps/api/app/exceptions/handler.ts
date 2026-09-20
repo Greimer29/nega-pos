@@ -69,6 +69,7 @@ import LineaVentaInvalidaException from '#exceptions/linea_venta_invalida_except
 import PagoClienteExcedeSaldoException from '#exceptions/pago_cliente_excede_saldo_exception'
 import PagoProveedorExcedeSaldoException from '#exceptions/pago_proveedor_excede_saldo_exception'
 import MetodoPagoRequeridoException from '#exceptions/metodo_pago_requerido_exception'
+import PagosVentaInvalidosException from '#exceptions/pagos_venta_invalidos_exception'
 import ClienteSinCreditoException from '#exceptions/cliente_sin_credito_exception'
 import MetodoPagoNoEncontradoException from '#exceptions/metodo_pago_no_encontrado_exception'
 import CodigoMetodoPagoDuplicadoException from '#exceptions/codigo_metodo_pago_duplicado_exception'
@@ -712,6 +713,15 @@ export default class HttpExceptionHandler extends ExceptionHandler {
         error: {
           code: MetodoPagoRequeridoException.code,
           message: error.message || MetodoPagoRequeridoException.message,
+        },
+      })
+    }
+
+    if (error instanceof PagosVentaInvalidosException) {
+      return ctx.response.status(PagosVentaInvalidosException.status).json({
+        error: {
+          code: PagosVentaInvalidosException.code,
+          message: error.message || PagosVentaInvalidosException.message,
         },
       })
     }

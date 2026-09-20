@@ -209,4 +209,29 @@ test.group('Users API', (group) => {
     assert.equal(listed!.name, 'Operador Lista')
     assert.equal(listed!.email, 'lista@negapos.local')
   })
+
+  test('GET /api/v1/users hides platform users', async ({ client, assert }) => {
+    const admin = await User.findByOrFail('email', TEST_EMAIL)
+
+    await User.create({
+      name: 'Admin plataforma',
+      email: 'platform-hidden@negapos.local',
+      password: TEST_PASSWORD,
+      role: 'ADMIN',
+      permissions: null,
+      active: true,
+      isHidden: true,
+    })
+
+    const response = await client.get('/api/v1/users').loginAs(admin)
+
+    response.assertStatus(200)
+
+    const body = response.body() as {
+      data: { users: Array<{ email: string }> }
+    }
+    assert.isUndefined(
+      body.data.users.find((item) => item.email === 'platform-hidden@negapos.local')
+    )
+  })
 })

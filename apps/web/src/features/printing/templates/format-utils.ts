@@ -201,6 +201,15 @@ export function renderSalePaymentDetails(sale: Sale): string {
     return lines.join('')
   }
 
+  const payments = sale.payments ?? []
+  if (payments.length > 0) {
+    const lines = payments.map((payment) => {
+      const name = paymentMethodLabel(payment.payment_method) || payment.payment_method_code
+      return `<div class="ph-payment-line">${escapeHtml(name)}: ${escapeHtml(formatMoneyUsd(payment.amount_usd))}</div>`
+    })
+    return lines.join('')
+  }
+
   const methodName = paymentMethodLabel(sale.payment_method)
   const lines = [`<div class="ph-payment-line">Método de pago: ${escapeHtml(methodName)}</div>`]
 
@@ -235,7 +244,12 @@ export function renderSaleTotalsSummary(sale: Sale): string {
   const totalLabel = formatReceiptAmountLabel(sale, sale.total_usd)
   const paidLabel = formatReceiptAmountLabel(sale, sale.amount_paid_usd)
   const balanceLabel = formatReceiptAmountLabel(sale, sale.balance_usd)
-  const methodName = paymentMethodLabel(sale.payment_method)
+  const methodName =
+    sale.payments && sale.payments.length > 0
+      ? sale.payments
+          .map((payment) => paymentMethodLabel(payment.payment_method) || payment.payment_method_code)
+          .join(' + ')
+      : paymentMethodLabel(sale.payment_method)
   const discountUsd = Number(sale.discount_usd ?? 0)
   const discountLabel = formatReceiptAmountLabel(sale, sale.discount_usd ?? '0')
 

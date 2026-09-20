@@ -14,7 +14,7 @@ export type AuthContextValue = {
   dismissBootstrapError: () => void
   can: (permission: PermissionKey) => boolean
   canAny: (...permissions: PermissionKey[]) => boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string, companySlug?: string) => Promise<void>
   loginWithGoogle: (idToken: string) => Promise<void>
   logout: () => Promise<void>
 }

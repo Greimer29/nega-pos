@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Percent } from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { ProfitMarginFiltersPanel } from '@/features/purchases/components/profit-margin-filters-panel'
 import { ProfitMarginProductList } from '@/features/purchases/components/profit-margin-product-list'
@@ -213,7 +214,17 @@ export function ProfitMarginConfigCard({
 
   return (
     <Card id={PROFIT_MARGIN_PANEL_ID} className="scroll-mt-24">
-      <CardContent className="p-6">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Percent className="size-4" />
+          Margen de ganancia
+        </CardTitle>
+        <CardDescription>
+          Aplicá un porcentaje sobre el precio costo de los productos del catálogo para calcular el
+          precio de venta.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
           <ProfitMarginFiltersPanel
             ref={filtersPanelRef}

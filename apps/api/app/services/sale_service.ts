@@ -4,6 +4,7 @@ import DevolucionCantidadInvalidaException from '#exceptions/devolucion_cantidad
 import LineaVentaInvalidaException from '#exceptions/linea_venta_invalida_exception'
 import MaterialNoEncontradoException from '#exceptions/material_no_encontrado_exception'
 import MetodoPagoRequeridoException from '#exceptions/metodo_pago_requerido_exception'
+import PagosVentaInvalidosException from '#exceptions/pagos_venta_invalidos_exception'
 import OrderNoDevolvableException from '#exceptions/pedido_no_devolvable_exception'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
 import StockInsuficienteException from '#exceptions/stock_insuficiente_exception'
@@ -21,6 +22,7 @@ import ProductInventoryMovement from '#models/product_inventory_movement'
 import Sale from '#models/sale'
 import SaleLine from '#models/sale_line'
 import SaleLineMaterial from '#models/sale_line_material'
+import SalePayment from '#models/sale_payment'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
 import CatalogProductSizeService from '#services/catalog_product_size_service'
 import CurrencyService from '#services/currency_service'
@@ -91,6 +93,13 @@ export type UpdateSaleInput = {
   lines?: SaleLineInput[]
 }
 
+export type ConfirmSalePaymentInput = {
+  payment_method_code: string
+  amount_usd: number
+  currency_code?: string | null
+  usd_rate?: number | null
+}
+
 export type ConfirmSaleInput = {
   payment_type?: SalePaymentType
   payment_method_code?: string | null
@@ -98,6 +107,7 @@ export type ConfirmSaleInput = {
   currency_code?: string | null
   usd_rate?: number | null
   sold_by_user_id?: number | null
+  payments?: ConfirmSalePaymentInput[]
 }
 
 export type SaleReturnLineInput = {
@@ -209,6 +219,9 @@ export default class SaleService {
       .preload('customer')
       .preload('paymentMethod')
       .preload('soldBy')
+      .preload('salePayments', (q) => {
+        q.preload('paymentMethod').orderBy('sortOrder', 'asc').orderBy('id', 'asc')
+      })
       .preload('saleLines', (q) => {
         q.preload('catalogProduct', (cp) =>
           cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
@@ -418,10 +431,7 @@ export default class SaleService {
       sale.billingMode = billingMode
       sale.paymentType = paymentType
 
-      await this.aplicarMetodoPagoAlConfirmar(sale, paymentType, input.payment_method_code, {
-        currency_code: input.currency_code,
-        usd_rate: input.usd_rate,
-      })
+      await this.aplicarPagosAlConfirmar(sale, paymentType, input, trx)
 
       sale.code = await this.codeService.generar(trx)
       sale.status = 'COMPLETED'
@@ -445,6 +455,9 @@ export default class SaleService {
       await sale.load('paymentMethod')
       await sale.load('customer')
       await sale.load('soldBy')
+      await sale.load('salePayments', (q) => {
+        q.preload('paymentMethod').orderBy('sortOrder', 'asc').orderBy('id', 'asc')
+      })
       await sale.load('saleLines', (q) => {
         q.preload('catalogProduct', (cp) =>
           cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
@@ -948,11 +961,11 @@ export default class SaleService {
     }
   }
 
-  private async aplicarMetodoPagoAlConfirmar(
+  private async aplicarPagosAlConfirmar(
     sale: Sale,
     paymentType: SalePaymentType,
-    paymentMethodCode?: string | null,
-    options: { currency_code?: string | null; usd_rate?: number | null } = {}
+    input: ConfirmSaleInput,
+    trx: TransactionClientContract
   ) {
     const totalUsd = Number(sale.totalUsd)
 
@@ -960,31 +973,106 @@ export default class SaleService {
       sale.paymentMethodCode = null
       sale.usdRate = null
       sale.totalBs = null
+      await SalePayment.query({ client: trx }).where('saleId', Number(sale.id)).delete()
       return
     }
 
-    const code = paymentMethodCode?.trim()
-    if (!code) {
+    const paymentLines: ConfirmSalePaymentInput[] =
+      input.payments && input.payments.length > 0
+        ? input.payments
+        : input.payment_method_code
+          ? [
+              {
+                payment_method_code: input.payment_method_code,
+                amount_usd: totalUsd,
+                currency_code: input.currency_code,
+                usd_rate: input.usd_rate,
+              },
+            ]
+          : []
+
+    if (paymentLines.length === 0) {
       throw new MetodoPagoRequeridoException()
     }
 
-    const method = await this.paymentMethodService.assertActivo(code)
-    const currencyCode = (options.currency_code?.trim() || method.currencyCode).toUpperCase()
-    const currency = await this.currencyService.assertActiva(currencyCode)
-    const overrideRate =
-      options.usd_rate !== undefined && options.usd_rate !== null
-        ? Number(options.usd_rate)
-        : Number.NaN
-    const rate = overrideRate > 0 ? overrideRate : Number(currency.ratePerUsd)
-    const baseCode = await this.currencyService.getBaseCurrencyCode()
-
-    if (!(rate > 0)) {
-      throw new TasaCambioInvalidaException(`La tasa de cambio de ${currencyCode} no es válida`)
+    const allocated = paymentLines.reduce((sum, line) => sum + Number(line.amount_usd), 0)
+    if (!Number.isFinite(allocated) || Math.abs(allocated - totalUsd) > 0.00015) {
+      throw new PagosVentaInvalidosException(
+        `La suma de los pagos (${allocated.toFixed(4)}) no coincide con el total (${totalUsd.toFixed(4)})`
+      )
     }
 
-    sale.paymentMethodCode = method.code
-    sale.usdRate = rate.toFixed(4)
-    sale.totalBs = formatSaleNativeTotal(totalUsd, currencyCode, rate, baseCode)
+    const seen = new Set<string>()
+    const baseCode = await this.currencyService.getBaseCurrencyCode()
+    const resolved: Array<{
+      paymentMethodCode: string
+      amountUsd: string
+      currencyCode: string
+      usdRate: string
+      amountNative: string | null
+    }> = []
+
+    for (const line of paymentLines) {
+      const code = line.payment_method_code.trim()
+      if (!code) {
+        throw new MetodoPagoRequeridoException()
+      }
+      if (seen.has(code)) {
+        throw new PagosVentaInvalidosException('No se puede repetir el mismo método de pago')
+      }
+      seen.add(code)
+
+      const amountUsd = Number(line.amount_usd)
+      if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+        throw new PagosVentaInvalidosException('Cada método de pago debe tener un monto mayor a 0')
+      }
+
+      const method = await this.paymentMethodService.assertActivo(code)
+      const currencyCode = (line.currency_code?.trim() || method.currencyCode).toUpperCase()
+      const currency = await this.currencyService.assertActiva(currencyCode)
+      const overrideRate =
+        line.usd_rate !== undefined && line.usd_rate !== null ? Number(line.usd_rate) : Number.NaN
+      const rate = overrideRate > 0 ? overrideRate : Number(currency.ratePerUsd)
+
+      if (!(rate > 0)) {
+        throw new TasaCambioInvalidaException(`La tasa de cambio de ${currencyCode} no es válida`)
+      }
+
+      resolved.push({
+        paymentMethodCode: method.code,
+        amountUsd: amountUsd.toFixed(4),
+        currencyCode,
+        usdRate: rate.toFixed(4),
+        amountNative: formatSaleNativeTotal(amountUsd, currencyCode, rate, baseCode),
+      })
+    }
+
+    const first = resolved[0]!
+    sale.paymentMethodCode = first.paymentMethodCode
+    sale.usdRate = first.usdRate
+    sale.totalBs = formatSaleNativeTotal(
+      totalUsd,
+      first.currencyCode,
+      Number(first.usdRate),
+      baseCode
+    )
+
+    await SalePayment.query({ client: trx }).where('saleId', Number(sale.id)).delete()
+
+    for (const [index, payment] of resolved.entries()) {
+      await SalePayment.create(
+        {
+          saleId: Number(sale.id),
+          paymentMethodCode: payment.paymentMethodCode,
+          amountUsd: payment.amountUsd,
+          currencyCode: payment.currencyCode,
+          usdRate: payment.usdRate,
+          amountNative: payment.amountNative,
+          sortOrder: index,
+        },
+        { client: trx }
+      )
+    }
   }
 
   private async aplicarPagoAlConfirmar(
@@ -1139,10 +1227,7 @@ export default class SaleService {
     const discountUsd =
       remainingGross <= 0 || previousRemainingGross <= 0
         ? 0
-        : Math.min(
-            remainingGross,
-            (previousDiscount * remainingGross) / previousRemainingGross
-          )
+        : Math.min(remainingGross, (previousDiscount * remainingGross) / previousRemainingGross)
     const totalUsd = Math.max(0, remainingGross - discountUsd)
 
     sale.discountUsd = discountUsd.toFixed(4)

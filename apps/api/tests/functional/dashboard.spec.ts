@@ -11,6 +11,7 @@ import CatalogProduct from '#models/catalog_product'
 import Formula from '#models/formula'
 import FormulaMaterial from '#models/formula_material'
 import Currency from '#models/currency'
+import SalePayment from '#models/sale_payment'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
 import {
@@ -975,6 +976,61 @@ test.group('Dashboard API', (group) => {
     assert.equal(cashUsd.total_usd, '25.0000')
   })
 
+  test('GET /api/v1/dashboard/daily-closing splits one invoice across payment methods', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const shiftId = openShiftId
+
+    const sale = await seedDashboardSale({
+      totalUsd: '40.0000',
+      paymentMethodCode: 'cash_usd',
+      salesShiftId: shiftId,
+      lines: [{ quantity: '1', unitPriceUsd: '40.0000' }],
+    })
+
+    await SalePayment.query().where('saleId', Number(sale.id)).delete()
+    await SalePayment.create({
+      saleId: Number(sale.id),
+      paymentMethodCode: 'cash_usd',
+      amountUsd: '25.0000',
+      currencyCode: 'USD',
+      usdRate: null,
+      amountNative: null,
+      sortOrder: 0,
+    })
+    await SalePayment.create({
+      saleId: Number(sale.id),
+      paymentMethodCode: 'zelle',
+      amountUsd: '15.0000',
+      currencyCode: 'USD',
+      usdRate: null,
+      amountNative: null,
+      sortOrder: 1,
+    })
+
+    const response = await client
+      .get('/api/v1/dashboard/daily-closing')
+      .qs({ sales_shift_id: shiftId })
+      .loginAs(user)
+
+    response.assertStatus(200)
+
+    const body = response.body().data
+    assert.equal(body.summary.invoices_count, 1)
+    assert.equal(body.summary.cash_total_usd, '40.0000')
+
+    const cashUsd = body.by_payment_method.find(
+      (item: { code: string }) => item.code === 'cash_usd'
+    )
+    const zelle = body.by_payment_method.find((item: { code: string }) => item.code === 'zelle')
+    assert.equal(cashUsd.sales_count, 1)
+    assert.equal(cashUsd.total_usd, '25.0000')
+    assert.equal(zelle.sales_count, 1)
+    assert.equal(zelle.total_usd, '15.0000')
+  })
+
   test('dashboard overview and daily-closing use invoice total after discount', async ({
     client,
     assert,
@@ -1047,10 +1103,7 @@ test.group('Dashboard API', (group) => {
       summary: { monto_productos_usd: string }
     }
     assert.equal(productsBody.summary.monto_productos_usd, '24.0000')
-    const productsNet = productsBody.products.reduce(
-      (sum, product) => sum + Number(product.total_usd),
-      0
-    )
+    const productsNet = productsBody.products.reduce((sum, item) => sum + Number(item.total_usd), 0)
     assert.equal(Number(productsNet.toFixed(4)), 24)
   })
 

@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NegaPosIdentity } from '@/features/auth/components/nega-pos-identity'
 import { useAuth } from '@/features/auth/hooks/use-auth'
+import { CompanySelectionRequiredError } from '@/features/auth/services/auth-service'
 import { notifyApiError } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
+import type { AuthCompany } from '@/types/auth'
 
 const loginSchema = z.object({
   email: z.string().email('Ingresá un email válido'),
@@ -42,6 +44,12 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
   const { login, loginWithGoogle } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [companies, setCompanies] = useState<AuthCompany[] | null>(null)
+  const [enteringSlug, setEnteringSlug] = useState<string | null>(null)
+  const [platformCredentials, setPlatformCredentials] = useState<{
+    email: string
+    password: string
+  } | null>(null)
   const googleButtonRef = useRef<HTMLDivElement>(null)
 
   const {
@@ -117,9 +125,30 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
       )
       navigate(redirectTo, { replace: true })
     } catch (error) {
+      if (error instanceof CompanySelectionRequiredError) {
+        setPlatformCredentials({ email: values.email, password: values.password })
+        setCompanies(error.companies)
+        return
+      }
       notifyApiError(error, 'No se pudo iniciar sesión')
     }
   })
+
+  async function enterCompany(company: AuthCompany) {
+    if (!platformCredentials) return
+    setEnteringSlug(company.slug)
+    try {
+      await login(platformCredentials.email, platformCredentials.password, company.slug)
+      const redirectTo = safeRedirectPath(
+        (location.state as { from?: string } | null)?.from?.replace(/\/login\/?$/, '')
+      )
+      navigate(redirectTo, { replace: true })
+    } catch (error) {
+      notifyApiError(error, 'No se pudo iniciar sesión')
+    } finally {
+      setEnteringSlug(null)
+    }
+  }
 
   return (
     <div>
@@ -131,93 +160,131 @@ export function LoginForm({ showBrandOnMobile = false }: LoginFormProps) {
         <div className="mb-8 hidden lg:block">
           <h1 className="text-xl font-semibold tracking-tight text-white">Iniciar sesión</h1>
           <p className="mt-1 text-sm text-neutral-300">
-            Ingresá con tu cuenta para continuar
+            {companies
+              ? 'Elegí la empresa a la que querés entrar'
+              : 'Ingresá con tu cuenta para continuar'}
           </p>
         </div>
       )}
 
-      <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
-        <div className="space-y-2">
-          <label htmlFor="email" className="text-sm font-medium text-white">
-            Email
-          </label>
-          <div className="relative">
-            <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" />
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="tu@email.com"
-              disabled={isSubmitting || googleLoading}
-              className="login-input h-11 pl-10 shadow-none"
-              {...register('email')}
-            />
-          </div>
-          {errors.email ? (
-            <p className="text-sm text-red-300">{errors.email.message}</p>
-          ) : null}
-        </div>
-
-        <div className="space-y-2">
-          <label htmlFor="password" className="text-sm font-medium text-white">
-            Contraseña
-          </label>
-          <div className="relative">
-            <Lock className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" />
-            <Input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              placeholder="••••••••"
-              disabled={isSubmitting || googleLoading}
-              className="login-input h-11 pr-10 pl-10 shadow-none"
-              {...register('password')}
-            />
-            <button
-              type="button"
-              className="absolute top-1/2 right-3 -translate-y-1/2 text-neutral-400 transition-colors hover:text-white"
-              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-              onClick={() => setShowPassword((prev) => !prev)}
-            >
-              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </button>
-          </div>
-          {errors.password ? (
-            <p className="text-sm text-red-300">{errors.password.message}</p>
-          ) : null}
-        </div>
-
-        <Button
-          type="submit"
-          disabled={isSubmitting || googleLoading}
-          className={cn(
-            'h-11 w-full bg-white text-sm font-semibold text-neutral-900 hover:bg-neutral-100'
-          )}
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="animate-spin" />
-              Ingresando…
-            </>
+      {companies ? (
+        <div className="flex flex-col gap-3">
+          {companies.length === 0 ? (
+            <p className="text-sm text-neutral-300">
+              No hay empresas activas para ingresar.
+            </p>
           ) : (
-            'Ingresar'
+            companies.map((company) => (
+              <Button
+                key={company.slug}
+                type="button"
+                disabled={enteringSlug != null}
+                onClick={() => void enterCompany(company)}
+                className="h-11 w-full justify-between bg-white text-sm font-semibold text-neutral-900 hover:bg-neutral-100"
+              >
+                <span>{company.name}</span>
+                {enteringSlug === company.slug ? <Loader2 className="animate-spin" /> : null}
+              </Button>
+            ))
           )}
-        </Button>
-      </form>
-
-      {GOOGLE_CLIENT_ID ? (
-        <div className="mt-4 space-y-3">
-          <div className="flex items-center gap-3 text-xs text-neutral-500">
-            <div className="h-px flex-1 bg-neutral-700" />
-            o
-            <div className="h-px flex-1 bg-neutral-700" />
-          </div>
-          <div ref={googleButtonRef} className="flex min-h-11 justify-center" />
-          {googleLoading ? (
-            <p className="text-center text-xs text-neutral-400">Conectando con Google…</p>
-          ) : null}
+          <button
+            type="button"
+            className="mt-2 text-center text-xs text-neutral-400 underline hover:text-neutral-200"
+            onClick={() => {
+              setCompanies(null)
+              setPlatformCredentials(null)
+            }}
+            disabled={enteringSlug != null}
+          >
+            Volver al inicio de sesión
+          </button>
         </div>
-      ) : null}
+      ) : (
+        <>
+          <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium text-white">
+                Email
+              </label>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" />
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="tu@email.com"
+                  disabled={isSubmitting || googleLoading}
+                  className="login-input h-11 pl-10 shadow-none"
+                  {...register('email')}
+                />
+              </div>
+              {errors.email ? (
+                <p className="text-sm text-red-300">{errors.email.message}</p>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-medium text-white">
+                Contraseña
+              </label>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" />
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  disabled={isSubmitting || googleLoading}
+                  className="login-input h-11 pr-10 pl-10 shadow-none"
+                  {...register('password')}
+                />
+                <button
+                  type="button"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-neutral-400 transition-colors hover:text-white"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  onClick={() => setShowPassword((prev) => !prev)}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+              {errors.password ? (
+                <p className="text-sm text-red-300">{errors.password.message}</p>
+              ) : null}
+            </div>
+
+            <Button
+              type="submit"
+              disabled={isSubmitting || googleLoading}
+              className={cn(
+                'h-11 w-full bg-white text-sm font-semibold text-neutral-900 hover:bg-neutral-100'
+              )}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  Ingresando…
+                </>
+              ) : (
+                'Ingresar'
+              )}
+            </Button>
+          </form>
+
+          {GOOGLE_CLIENT_ID ? (
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center gap-3 text-xs text-neutral-500">
+                <div className="h-px flex-1 bg-neutral-700" />
+                o
+                <div className="h-px flex-1 bg-neutral-700" />
+              </div>
+              <div ref={googleButtonRef} className="flex min-h-11 justify-center" />
+              {googleLoading ? (
+                <p className="text-center text-xs text-neutral-400">Conectando con Google…</p>
+              ) : null}
+            </div>
+          ) : null}
+        </>
+      )}
 
       <p className="mt-6 text-center text-xs text-neutral-500">
         <Link to="/platform/login" className="underline hover:text-neutral-300">

@@ -48,6 +48,7 @@ export type ApiErrorBody = {
   code: string
   message: string
   details?: ApiErrorDetails
+  companies?: AuthCompany[]
 }
 
 export type ApiErrorResponse = {

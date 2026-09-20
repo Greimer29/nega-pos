@@ -316,6 +316,7 @@ Guía operativa histórica: `docs/RAILWAY_DEPLOY.md` (carpeta `docs/` descontinu
 
 - Guard `web` de Adonis Auth con **cookies** (`SESSION_DRIVER=cookie`).
 - Login: `POST /api/v1/auth/login` → con multi-tenant: directorio central → sesión con `tenantId`/`tenantDb` → user en BD empresa. **No** se consulta el directorio en cada request.
+- Si el email/contraseña coinciden con un `platform_admins` activo, el mismo `POST /auth/login` responde `422 COMPANY_SELECTION_REQUIRED` con `{ companies: [{ id, slug, name, status }] }`. Un segundo POST con `company_slug` abre sesión de esa empresa creando (o reutilizando) un `users` `ADMIN` con `is_hidden=true`. Ese usuario no aparece en `GET /users` y no se sincroniza a `directory_users`. La contraseña validada es la de plataforma.
 - Google: `POST /api/v1/auth/google` `{ id_token }` (emails ya en `directory_users`).
 - Logout: `POST /api/v1/auth/logout` (requiere sesión).
 - Perfil: `GET /api/v1/auth/me`.
@@ -367,7 +368,7 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda b
 
 | Tabla | Campos clave |
 |-------|--------------|
-| `users` | `email`, `password`, `name`, `role` (OPERATOR/ADMIN), `permissions` (JSON), `active` |
+| `users` | `email`, `password`, `name`, `role` (OPERATOR/ADMIN), `permissions` (JSON), `active`, `is_hidden` (usuario interno de platform; no se lista en Usuarios ni se sincroniza al directorio) |
 
 #### Partners
 
@@ -440,7 +441,8 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 | Tabla | Campos clave |
 |-------|--------------|
 | `sales_shifts` | `opened_at`, `closed_at`, `opened_by_user_id`, `closed_by_user_id`, `status` (OPEN/CLOSED), `notes` |
-| `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), `discount_usd` (descuento de factura, default 0), `total_usd` (subtotal de líneas − descuento), `notes?` (nota de factura financiera / carga manual) |
+| `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), `discount_usd` (descuento de factura, default 0), `total_usd` (subtotal de líneas − descuento), `notes?` (nota de factura financiera / carga manual). `payment_method_code` queda como método principal (primer pago). |
+| `sale_payments` | `sale_id`, `payment_method_code`, `amount_usd` (monto en moneda base), `currency_code`, `usd_rate`, `amount_native`, `sort_order`. Una factura de contado puede tener varios métodos; la suma de `amount_usd` = `sales.total_usd`. |
 | `sale_lines` | `catalog_product_id?`, `catalog_product_size_id?`, `size?` (snapshot), `material_id?`, `description`, `kitchen_note?` (indicaciones de cocina para comanda), cantidades y precios |
 
 **Turnos de venta:** solo puede haber un turno `OPEN`. Confirmar venta (`POST /sales/:id/confirm` o `POST /sales` con `confirm: true`) exige turno abierto; sin turno → `TURNO_NO_ABIERTO` (409). La venta confirmada guarda `sales.sales_shift_id`.
@@ -458,6 +460,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 customers ──< orders ──< order_lines ──> catalog_products
                 └──< order_materials ──> materials
 customers ──< sales ──< sale_lines ──> catalog_products | materials
+                └──< sale_payments ──> payment_methods
 sales_shifts ──< sales
 suppliers ──< purchases ──< purchase_items ──> materials | catalog_products
 formulas ──< formula_materials ──> materials
@@ -550,7 +553,7 @@ catalog_products ──< product_inventory_movements
 
 - Resumen del día: productos vendidos, montos, crédito, gastos, ganancia estimada (KPIs del turno abierto cuando existe).
 - Endpoints adicionales: overview, ventas diarias por producto, gastos del día, cierre diario.
-- **Cierre diario** (`GET /dashboard/daily-closing?sales_shift_id=`): agrega ventas del turno (`sales.sales_shift_id`), métodos de pago, facturas, productos vendidos, devoluciones y **gastos** en las fechas calendario que cubre el turno (`opened_at` → `closed_at` / ahora, TZ `America/Caracas`). Montos de ventas/caja usan `sales.total_usd` (**neto de `discount_usd`**); el resumen incluye `discounts_total_usd`, `expenses_count`, `expenses_total_usd` y `net_cash_usd` (contado − gastos). Parámetro legacy `date` sigue disponible si no se envía `sales_shift_id`.
+- **Cierre diario** (`GET /dashboard/daily-closing?sales_shift_id=`): agrega ventas del turno (`sales.sales_shift_id`), métodos de pago desde `sale_payments` (una factura partida suma su monto a cada método), facturas, productos vendidos, devoluciones y **gastos** en las fechas calendario que cubre el turno (`opened_at` → `closed_at` / ahora, TZ `America/Caracas`). Montos de ventas/caja usan `sales.total_usd` (**neto de `discount_usd`**); el resumen incluye `discounts_total_usd`, `expenses_count`, `expenses_total_usd` y `net_cash_usd` (contado − gastos). Parámetro legacy `date` sigue disponible si no se envía `sales_shift_id`.
 - **Dashboard / entradas del día:** `ventasDelDia.montoProductosUsd` y series del gráfico suman `sales.total_usd` (lo cobrado/facturado), no el bruto de líneas. La ganancia del día resta los descuentos de factura de contado.
 - **Descuentos de venta:** (1) por línea = precio unitario editado en el POS; (2) general de factura = `sales.discount_usd` (`total_usd = subtotal líneas − descuento`). Reportes financieros (`account-statement`) usan `total_usd`. El detalle «productos vendidos» / cierre reparte el descuento general **proporcional** a cada producto para que la suma de totales de producto coincida con lo facturado/neto. En **devoluciones**, el monto a devolver y el recálculo de `total_usd`/`discount_usd` usan la misma proporción (no se devuelve el bruto de líneas).
 - **Gastos del día** aceptan fecha opcional en servicio; el endpoint público sigue usando hoy salvo extensión futura.
@@ -648,7 +651,7 @@ catalog_products ──< product_inventory_movements
 
 ### Ventas / facturación (`ventas.*`)
 
-Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descuento de factura, independiente del `unit_price_usd` de cada línea). El precio unitario lo envía el cliente; una fórmula personalizada no lo recalcula en el servidor. Al confirmar **contado**, `POST .../confirm` acepta `payment_method_code`, y opcionalmente `currency_code` + `usd_rate` (override solo del documento; default = moneda/tasa del método). Crédito no usa tasa. Persiste `sales.usd_rate` y `sales.total_bs`.
+Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descuento de factura, independiente del `unit_price_usd` de cada línea). El precio unitario lo envía el cliente; una fórmula personalizada no lo recalcula en el servidor. Al confirmar **contado**, `POST .../confirm` acepta `payments[]` (`payment_method_code`, `amount_usd`, opcionalmente `currency_code` + `usd_rate` por línea). En el POS la moneda/tasa no se eligen en el diálogo: se toman del método activo y del catálogo. La suma de `amount_usd` debe coincidir con `sales.total_usd`; un cobro parcial no confirma la venta hasta completar con más métodos. Compatibilidad: un solo `payment_method_code` (más `currency_code`/`usd_rate` de cabecera) cubre el 100% del total. Crédito no usa métodos ni tasa. Persiste `sale_payments`, y en cabecera `sales.payment_method_code` / `sales.usd_rate` / `sales.total_bs` del primer pago.
 
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
@@ -924,7 +927,7 @@ pwsh scripts/publish-github-release.ps1
 | `/customers` | Listado clientes |
 | `/customers/:id` | Detalle cliente |
 | `/customers/:id/cuenta` | Estado de cuenta cliente |
-| `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), botón de registrar gasto de empresa (sin salir del POS; permiso `expenses.edit`), cliente walk-in por defecto «Generico», tabs Productos/Materiales/**Servicios**, búsqueda/barcode en la barra superior, panel de filtros (categorías, orden, talla, precio) en drawer (desktop desde la derecha; móvil sheet desde abajo ~80% altura) al pulsar **Filtros**, escaneo barcode (filtro en catálogo / sumar en carrito; tallas con diálogo), precio por línea (atajos −5/−10/−20 %), detalle opcional en líneas de servicio, fórmula por línea si el producto tiene, descuento de factura aparte; en desktop carrito anclado; en tablet el carrito ocupa el área de contenido (sidebar visible); en móvil carrito a pantalla completa |
+| `/ventas` | Hub ventas (POS + historial). Facturar: controles de turno (abrir/cerrar), botón de registrar gasto de empresa (sin salir del POS; permiso `expenses.edit`), cliente walk-in por defecto «Generico», tabs Productos/Materiales/**Servicios**, búsqueda/barcode en la barra superior, panel de filtros (categorías, orden, talla, precio) en drawer (desktop desde la derecha; móvil sheet desde abajo ~80% altura) al pulsar **Filtros**, escaneo barcode (filtro en catálogo / sumar en carrito; tallas con diálogo), cantidad por línea con botones +/− e input, precio por línea (atajos −5/−10/−20 %), detalle opcional en líneas de servicio, fórmula por línea si el producto tiene, descuento de factura aparte; cobro contado con uno o varios métodos (no confirma si el monto indicado es menor al total hasta completar); en desktop carrito anclado; en tablet el carrito ocupa el área de contenido (sidebar visible); en móvil carrito a pantalla completa |
 | `/ventas/:id` | Detalle factura |
 | `/orders/:id` | Detalle pedido |
 | `/productos` | Catálogo de productos físicos (`item_kind=PRODUCT`). Botón de filtros (icono) abre drawer (desktop derecha / móvil sheet abajo) con categorías y orden; la búsqueda queda visible. Botón «Movimientos» → cargo/descargo/ajuste masivo. «Importar Excel» descarga plantilla y carga masiva (`catalog.edit`) |
