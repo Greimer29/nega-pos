@@ -19,7 +19,7 @@ La carpeta **`docs/` está descontinuada** — no la uses como referencia, no la
 - Nunca hagas force push a `main`.
 - Nunca mergees PRs solo; el merge lo hace el humano.
 - Cualquier cambio de schema → **migración nueva**; nunca edites migraciones ya commitadas.
-- **Gate CI local:** antes de `git push` / crear o actualizar un PR con código, corrê `pnpm lint` **y** `pnpm typecheck` (ambos exit 0). Si tocaste tests API, corré esos specs con MySQL de test; si no hay Docker, no pushees. Al assertar HTTP status, mirá el controller y tests hermanos (POST suele ser 200, no 201). No subir sabiendo que CI va a romper.
+- **Gate CI local:** antes de `git push` / crear o actualizar un PR con código, corrê `pnpm lint` **y** `pnpm typecheck` (ambos exit 0). El lint de GitHub **siempre** incluye Prettier (`prettier/prettier`); si falla, `pnpm --filter api exec eslint . --fix` y re-lint. No abras/actualices un PR con lint rojo. Si tocaste tests API, corré esos specs con MySQL de test; si no hay Docker, no pushees. Al assertar HTTP status, mirá el controller y tests hermanos (POST suele ser 200, no 201). No subir sabiendo que CI va a romper.
 
 ## Antes de empezar una tarea, confirma:
 

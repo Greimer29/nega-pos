@@ -7,9 +7,13 @@ alwaysApply: true
 
 **Nunca** hagas `git push` ni abras/actualices un PR con cambios de código sin haber corrido y pasado los checks que CI ejecuta.
 
+GitHub Actions corre **el mismo** `pnpm lint` en Linux. El fallo #1 histórico de los PRs es `prettier/prettier` en `apps/api` (`database/schema.ts` tras codegen Lucid, wrapping de `printWidth`, tests). **No subas un PR sin `pnpm lint` en verde.** No asumas que “en Windows ya está bien” ni que Prettier es opcional.
+
 ## Obligatorio (en este orden)
 
-1. `pnpm lint` en la raíz (exit 0).
+1. `pnpm lint` en la raíz (**exit 0**). Si hay `prettier/prettier`:  
+   `pnpm --filter api exec eslint . --fix`  
+   (y/o `pnpm --filter web exec eslint . --fix`) → volvé a correr `pnpm lint` hasta que salga 0.
 2. `pnpm typecheck` en la raíz (exit 0).
 3. Si tocaste o agregaste tests en `apps/api/tests/**`:
    - Arrancá MySQL de test (`docker compose up -d mysql` o el stack de test).

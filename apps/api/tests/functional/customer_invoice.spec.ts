@@ -206,14 +206,11 @@ test.group('Customer invoices API', (group) => {
       active: true,
     })
 
-    await client
-      .post(`/api/v1/customers/${customer.id}/invoices`)
-      .loginAs(user)
-      .json({
-        date: '2026-09-12',
-        amount: 75,
-        is_credit: true,
-      })
+    await client.post(`/api/v1/customers/${customer.id}/invoices`).loginAs(user).json({
+      date: '2026-09-12',
+      amount: 75,
+      is_credit: true,
+    })
 
     const response = await client
       .get(`/api/v1/customers/${customer.id}/account-statement`)
