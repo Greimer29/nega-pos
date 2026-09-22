@@ -113,10 +113,12 @@ export async function downloadAndLaunchDesktopUpdater(
     throw new Error(openError || 'No se pudo abrir el instalador.')
   }
 
-  // NSIS necesita que la app suelte los archivos empaquetados.
+  // NSIS reemplaza archivos; hay que soltar el lock y salir de verdad
+  // para que el Setup no reabra la instancia vieja (misma sesión, UI cacheada).
+  app.releaseSingleInstanceLock()
   setTimeout(() => {
-    app.quit()
-  }, 1800)
+    app.exit(0)
+  }, 400)
 
   return { path: destPath, fileName: finalName }
 }

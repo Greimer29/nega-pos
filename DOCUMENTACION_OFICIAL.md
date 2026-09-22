@@ -228,7 +228,7 @@ Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca produc
 - Build: `pnpm build:desktop` o desarrollo: `pnpm dev:desktop`
 - Configuración de impresión: **fuente de verdad en MySQL** (`app_settings` key `print_config` vía `GET/PUT /api/v1/settings/printing`). El JSON local en userData solo sirve para **importación one-shot** al primer arranque si la BD está vacía.
 - API de **release**: `apps/desktop/api-url.json` (URL de Railway). No usar ese JSON como fuente para `dev:web`.
-- Actualizaciones: Configuración → General → **Aplicación**. En Electron: descarga el Setup vía API, lo abre y cierra la app para que NSIS reemplace archivos (**auto-update**).
+- Actualizaciones: Configuración → General → **Aplicación**. En Electron: descarga el Setup vía API, lo abre, suelta el single-instance lock y `app.exit` para que NSIS reemplace archivos (**auto-update**). Al relanzar, si cambió `app.getVersion()`, se limpia la caché HTTP de Chromium (el `index.html` de `:51740` no debe quedar cacheado; Ctrl+R ya no debería ser necesario). La sesión de login se conserva.
 
 ### Mobile APK (Capacitor)
 
@@ -989,7 +989,7 @@ Cada feature encapsula servicios API (axios), hooks TanStack Query, componentes 
 
 ### Electron (`apps/desktop/electron/`)
 
-- **main.ts**: servidor HTTP local en `127.0.0.1:51740` sirve `web/dist`; proxy de API configurable.
+- **main.ts**: servidor HTTP local en `127.0.0.1:51740` sirve `web/dist` con `Cache-Control: no-store`; proxy de API configurable. Tras un update, limpia la caché HTTP de Chromium si cambió la versión.
 - **preload.ts**: expone `window.negaPos.printing` al renderer.
 - **print-service.ts**: lista impresoras, lee JSON local (solo migración), imprime HTML con dimensiones térmicas (ancho ~78 mm, altura dinámica, DPI ajustado). La config operativa vive en la API.
 

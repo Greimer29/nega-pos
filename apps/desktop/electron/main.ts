@@ -28,7 +28,9 @@ const APP_NAME = 'Nega POS'
 const PORT = 51740
 const HOST = '127.0.0.1'
 const APP_URL = `http://${HOST}:${PORT}`
+const LOADED_VERSION_FILE = 'loaded-app-version.txt'
 
+app.commandLine.appendSwitch('disable-http-cache')
 app.setName(APP_NAME)
 if (process.platform === 'win32') {
   app.setAppUserModelId('com.negapos.app')
@@ -189,7 +191,10 @@ function startStaticServer(): Promise<void> {
 
   server = createServer((req: IncomingMessage, res: ServerResponse) => {
     if (req.url === '/runtime-config.json') {
-      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, max-age=0',
+      })
       res.end(JSON.stringify({ apiUrl: runtimeApiUrl, useLocalApiProxy: true }))
       return
     }
@@ -202,6 +207,12 @@ function startStaticServer(): Promise<void> {
     return serveHandler(req, res, {
       public: webDist,
       rewrites: [{ source: '**', destination: '/index.html' }],
+      headers: [
+        {
+          source: '**',
+          headers: [{ key: 'Cache-Control', value: 'no-store, max-age=0' }],
+        },
+      ],
     })
   })
 
@@ -257,7 +268,26 @@ function registerUpdateHandlers(): void {
   })
 }
 
-function createWindow(): void {
+function getLoadedVersionPath(): string {
+  return path.join(app.getPath('userData'), LOADED_VERSION_FILE)
+}
+
+function shouldResetWebCache(): boolean {
+  const current = app.getVersion()
+  const markerPath = getLoadedVersionPath()
+  try {
+    const previous = fs.existsSync(markerPath) ? fs.readFileSync(markerPath, 'utf8').trim() : ''
+    if (previous === current) {
+      return false
+    }
+    fs.writeFileSync(markerPath, current, 'utf8')
+    return true
+  } catch {
+    return true
+  }
+}
+
+async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
     width: 1670,
     height: 940,
@@ -273,7 +303,15 @@ function createWindow(): void {
     },
   })
 
-  void mainWindow.loadURL(APP_URL)
+  const session = mainWindow.webContents.session
+  if (shouldResetWebCache()) {
+    await session.clearCache()
+  }
+
+  const version = app.getVersion()
+  await mainWindow.loadURL(`${APP_URL}/?v=${encodeURIComponent(version)}`, {
+    extraHeaders: 'Cache-Control: no-cache\nPragma: no-cache\n',
+  })
 }
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
@@ -296,7 +334,7 @@ if (!gotSingleInstanceLock) {
       registerUpdateHandlers()
       await startStaticServer()
       warmupApiConnection(runtimeApiUrl)
-      createWindow()
+      await createWindow()
     } catch (err) {
       dialog.showErrorBox(
         APP_NAME,
@@ -315,7 +353,7 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow()
+    void createWindow()
   }
 })
 
