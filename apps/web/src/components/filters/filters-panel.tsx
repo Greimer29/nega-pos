@@ -51,7 +51,7 @@ export function FiltersPanel({ onClearAll, children, className }: FiltersPanelPr
   return (
     <aside
       className={cn(
-        'flex h-full min-h-0 flex-col gap-5 rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm',
+        'flex h-full min-h-0 flex-col gap-5 bg-transparent p-4',
         className
       )}
     >

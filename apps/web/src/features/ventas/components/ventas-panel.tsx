@@ -548,7 +548,6 @@ function VentasCreateView() {
         onMaxPriceChange={setMaxPriceInput}
         priceBounds={priceBounds}
         onClearAll={clearCatalogFilters}
-        className="h-full min-h-0 border-0 shadow-none"
       />
     )
   }
