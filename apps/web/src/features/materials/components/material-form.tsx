@@ -43,6 +43,10 @@ const materialSchema = z.object({
   location: z.string().trim().max(100).optional(),
   supplier_habitual_id: z.union([z.literal(''), z.coerce.number().min(1)]).optional(),
   last_purchase_price_usd: z.union([z.literal(''), z.coerce.number().min(0)]).optional(),
+  wholesale_enabled: z.boolean().optional(),
+  wholesale_units_per_pack: z.union([z.literal(''), z.coerce.number().min(2)]).optional(),
+  wholesale_cost_usd: z.union([z.literal(''), z.coerce.number().min(0)]).optional(),
+  wholesale_sale_price_usd: z.union([z.literal(''), z.coerce.number().min(0)]).optional(),
   active: z.boolean().optional(),
 })
 
@@ -71,6 +75,10 @@ function emptyValues(defaultCategory = ''): MaterialFormInput {
     location: '',
     supplier_habitual_id: '',
     last_purchase_price_usd: '',
+    wholesale_enabled: false,
+    wholesale_units_per_pack: 30,
+    wholesale_cost_usd: '',
+    wholesale_sale_price_usd: '',
     active: true,
   }
 }
@@ -89,6 +97,14 @@ function toFormValues(material: Material): MaterialFormInput {
     supplier_habitual_id: material.defaultSupplierId ?? '',
     last_purchase_price_usd: material.lastPurchasePriceUsd
       ? Number(material.lastPurchasePriceUsd)
+      : '',
+    wholesale_enabled: Boolean(material.wholesaleEnabled),
+    wholesale_units_per_pack: material.wholesaleUnitsPerPack
+      ? Number(material.wholesaleUnitsPerPack)
+      : 30,
+    wholesale_cost_usd: material.wholesaleCostUsd ? Number(material.wholesaleCostUsd) : '',
+    wholesale_sale_price_usd: material.wholesaleSalePriceUsd
+      ? Number(material.wholesaleSalePriceUsd)
       : '',
     active: material.active,
   }
@@ -111,6 +127,16 @@ function toPayload(values: MaterialFormValues) {
     last_purchase_price_usd: optionalNumber(values.last_purchase_price_usd),
     barcode: values.barcode?.trim() || null,
     supplier_code: values.supplier_code?.trim() || null,
+    wholesale_enabled: Boolean(values.wholesale_enabled),
+    wholesale_units_per_pack: values.wholesale_enabled
+      ? optionalNumber(values.wholesale_units_per_pack)
+      : null,
+    wholesale_cost_usd: values.wholesale_enabled
+      ? optionalNumber(values.wholesale_cost_usd)
+      : null,
+    wholesale_sale_price_usd: values.wholesale_enabled
+      ? optionalNumber(values.wholesale_sale_price_usd)
+      : null,
     ...(values.active !== undefined ? { active: values.active } : {}),
   }
 }
@@ -431,12 +457,45 @@ export function MaterialForm({
             id="last_purchase_price_usd"
             min="0"
             placeholder="0.00"
+            readOnly={Boolean(watch('wholesale_enabled'))}
+            className={watch('wholesale_enabled') ? 'bg-muted/40' : undefined}
             {...register('last_purchase_price_usd')}
           />
           <p className="text-muted-foreground text-xs">
-            También se actualiza al confirmar una compra. Si cambia, se recalcula el costo de los
-            productos con fórmula.
+            {watch('wholesale_enabled')
+              ? 'Se calcula desde el costo del paquete mayorista.'
+              : 'También se actualiza al confirmar una compra. Si cambia, se recalcula el costo de los productos con fórmula.'}
           </p>
+        </div>
+      ) : null}
+
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" className="size-4 rounded border" {...register('wholesale_enabled')} />
+        Mayorista
+      </label>
+      {watch('wholesale_enabled') ? (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="space-y-2">
+            <Label htmlFor="wholesale_units_per_pack">Unidades por paquete</Label>
+            <DecimalInput
+              id="wholesale_units_per_pack"
+              min="2"
+              decimals={0}
+              {...register('wholesale_units_per_pack')}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="wholesale_cost_usd">Costo paquete</Label>
+            <MoneyInput id="wholesale_cost_usd" min="0" {...register('wholesale_cost_usd')} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="wholesale_sale_price_usd">Venta paquete</Label>
+            <MoneyInput
+              id="wholesale_sale_price_usd"
+              min="0"
+              {...register('wholesale_sale_price_usd')}
+            />
+          </div>
         </div>
       ) : null}
 

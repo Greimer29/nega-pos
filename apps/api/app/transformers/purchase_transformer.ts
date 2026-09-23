@@ -16,6 +16,10 @@ function serializeMaterialResumen(material: Material) {
     name: material.name,
     category: material.category,
     unit: material.unit,
+    wholesaleEnabled: Boolean(material.wholesaleEnabled),
+    wholesaleUnitsPerPack: material.wholesaleUnitsPerPack,
+    wholesaleCostUsd: material.wholesaleCostUsd,
+    wholesaleSalePriceUsd: material.wholesaleSalePriceUsd,
   }
 }
 
@@ -25,6 +29,10 @@ function serializeCatalogProductResumen(product: CatalogProduct) {
     name: product.name,
     category: product.category,
     saleUnit: product.saleUnit,
+    wholesaleEnabled: Boolean(product.wholesaleEnabled),
+    wholesaleUnitsPerPack: product.wholesaleUnitsPerPack,
+    wholesaleCostUsd: product.wholesaleCostUsd,
+    wholesaleSalePriceUsd: product.wholesaleSalePriceUsd,
   }
 }
 
@@ -35,6 +43,8 @@ function serializePurchaseItem(item: PurchaseItem) {
     materialId: item.materialId ? Number(item.materialId) : null,
     catalogProductId: item.catalogProductId ? Number(item.catalogProductId) : null,
     itemType: item.catalogProductId ? 'product' : 'material',
+    isWholesale: Boolean(item.isWholesale),
+    unitsPerPack: item.unitsPerPack,
     quantity: item.quantity,
     unitPriceUsd: item.unitPriceUsd,
     unitPriceBs: item.unitPriceBs,

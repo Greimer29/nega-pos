@@ -1,4 +1,5 @@
 import { materialStockDisponible } from '@/features/materials/constants'
+import { lineInventoryQuantity } from '@/lib/wholesale'
 import type { Material } from '@/features/materials/types'
 import type { CatalogProduct } from '@/features/ventas/types'
 
@@ -24,8 +25,9 @@ export type CartStockLine =
       quantity: number
       catalogProductSizeId?: number | null
       size?: string | null
+      isWholesale?: boolean
     }
-  | { kind: 'material'; material: Material; quantity: number }
+  | { kind: 'material'; material: Material; quantity: number; isWholesale?: boolean }
 
 export function cartLineHasStockIssue(line: CartStockLine): boolean {
   if (line.kind === 'material') {
@@ -33,7 +35,12 @@ export function cartLineHasStockIssue(line: CartStockLine): boolean {
       return true
     }
     const { disponible } = materialStockDisponible(line.material)
-    return line.quantity > disponible
+    const needed = lineInventoryQuantity(
+      line.quantity,
+      Boolean(line.isWholesale),
+      line.material.wholesaleUnitsPerPack
+    )
+    return needed > disponible
   }
 
   if (line.product.item_kind === 'SERVICE' || line.product.is_service) {
@@ -51,7 +58,12 @@ export function cartLineHasStockIssue(line: CartStockLine): boolean {
     return true
   }
   const stock = Number(line.product.stock_quantity)
-  return line.quantity > stock
+  const needed = lineInventoryQuantity(
+    line.quantity,
+    Boolean(line.isWholesale),
+    line.product.wholesale_units_per_pack
+  )
+  return needed > stock
 }
 
 export function cartHasStockIssues(lines: CartStockLine[]): boolean {

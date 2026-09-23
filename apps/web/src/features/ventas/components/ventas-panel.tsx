@@ -113,6 +113,7 @@ type CartLine =
       detail?: string | null
       catalogProductSizeId?: number | null
       size?: string | null
+      isWholesale?: boolean
     }
   | {
       id: string
@@ -120,6 +121,7 @@ type CartLine =
       material: Material
       quantity: number
       unitPriceUsd?: number
+      isWholesale?: boolean
     }
 
 type CatalogSource = 'products' | 'materials' | 'services'
@@ -153,10 +155,22 @@ function defaultSortForSource(source: CatalogSource): VentasCatalogSortOption {
 }
 
 function cartLineUnitPrice(line: CartLine): number {
-  if (line.kind === 'material') {
-    return line.unitPriceUsd ?? materialSaleUnitPriceUsd(line.material)
+  if (line.unitPriceUsd != null) {
+    return line.unitPriceUsd
   }
-  return line.unitPriceUsd ?? Number(line.product.sale_price_usd)
+  if (line.isWholesale) {
+    if (line.kind === 'material') {
+      const pack = Number(line.material.wholesaleSalePriceUsd)
+      if (Number.isFinite(pack) && pack > 0) return pack
+      return materialSaleUnitPriceUsd(line.material)
+    }
+    const pack = Number(line.product.wholesale_sale_price_usd)
+    if (Number.isFinite(pack) && pack > 0) return pack
+  }
+  if (line.kind === 'material') {
+    return materialSaleUnitPriceUsd(line.material)
+  }
+  return Number(line.product.sale_price_usd)
 }
 
 function normalizeDraftCartLine(
@@ -169,6 +183,7 @@ function normalizeDraftCartLine(
       material: line.material,
       quantity: line.quantity,
       unitPriceUsd: line.unitPriceUsd,
+      isWholesale: line.isWholesale,
     }
   }
   if (line.product) {
@@ -183,6 +198,7 @@ function normalizeDraftCartLine(
       detail: line.detail ?? null,
       catalogProductSizeId: line.catalogProductSizeId ?? null,
       size: line.size ?? null,
+      isWholesale: line.isWholesale,
     }
   }
   return null
@@ -582,6 +598,14 @@ function VentasCreateView() {
             imageUrl: line.material.imagePath ? materialImageUrl(line.material.id) : null,
             imageTone: catalogImageTone(line.material.id),
             metaLabel: UNIT_ABREV[line.material.unit] ?? line.material.unit,
+            canWholesale: Boolean(line.material.wholesaleEnabled),
+            isWholesale: Boolean(line.isWholesale),
+            wholesaleHint: line.isWholesale
+              ? `× ${Number(line.material.wholesaleUnitsPerPack ?? 0)} und`
+              : null,
+            onToggleWholesale: line.material.wholesaleEnabled
+              ? (checked) => toggleCartWholesale(line.id, checked)
+              : undefined,
           }
         }
 
@@ -591,7 +615,9 @@ function VentasCreateView() {
           code: catalogProductCode(line.product.id),
           quantity: line.quantity,
           unitPriceUsd: cartLineUnitPrice(line),
-          listPriceUsd: Number(line.product.sale_price_usd),
+          listPriceUsd: line.isWholesale
+            ? Number(line.product.wholesale_sale_price_usd ?? line.product.sale_price_usd)
+            : Number(line.product.sale_price_usd),
           saleUnit: line.product.sale_unit ?? 'UND',
           imageUrl: line.product.image_path ? catalogImageUrl(line.product.id) : null,
           imageTone: catalogImageTone(line.product.id),
@@ -615,6 +641,15 @@ function VentasCreateView() {
           onEditDetail:
             line.product.item_kind === 'SERVICE' || line.product.is_service
               ? () => setServiceEditLineId(line.id)
+              : undefined,
+          canWholesale: Boolean(line.product.wholesale_enabled) && !line.product.formula_id,
+          isWholesale: Boolean(line.isWholesale),
+          wholesaleHint: line.isWholesale
+            ? `× ${Number(line.product.wholesale_units_per_pack ?? 0)} und`
+            : null,
+          onToggleWholesale:
+            line.product.wholesale_enabled && !line.product.formula_id
+              ? (checked) => toggleCartWholesale(line.id, checked)
               : undefined,
         }
       }),
@@ -697,6 +732,7 @@ function VentasCreateView() {
           line.kind === 'catalog' &&
           line.product.id === product.id &&
           !line.catalogProductSizeId &&
+          !line.isWholesale &&
           formulaMaterialsSignature(line.formulaMaterials) === formulaMaterialsSignature(null)
       )
       if (existing) {
@@ -767,7 +803,8 @@ function VentasCreateView() {
     setSuccessMessage(null)
     setCart((prev) => {
       const existing = prev.find(
-        (line) => line.kind === 'material' && line.material.id === material.id
+        (line) =>
+          line.kind === 'material' && line.material.id === material.id && !line.isWholesale
       )
       if (existing) {
         return prev.map((line) =>
@@ -911,6 +948,31 @@ function VentasCreateView() {
     )
   }
 
+  function toggleCartWholesale(lineId: string, checked: boolean) {
+    setSuccessMessage(null)
+    setCart((prev) =>
+      prev.map((line) => {
+        if (line.id !== lineId) return line
+        if (line.kind === 'material') {
+          const packSale = Number(line.material.wholesaleSalePriceUsd)
+          const retail = materialSaleUnitPriceUsd(line.material)
+          return {
+            ...line,
+            isWholesale: checked,
+            unitPriceUsd: checked && Number.isFinite(packSale) && packSale > 0 ? packSale : retail,
+          }
+        }
+        const packSale = Number(line.product.wholesale_sale_price_usd)
+        const retail = Number(line.product.sale_price_usd)
+        return {
+          ...line,
+          isWholesale: checked,
+          unitPriceUsd: checked && Number.isFinite(packSale) && packSale > 0 ? packSale : retail,
+        }
+      })
+    )
+  }
+
   function updateCartUnitPrice(lineId: string, unitPriceUsd: number) {
     setSuccessMessage(null)
     setCart((prev) =>
@@ -999,6 +1061,7 @@ function VentasCreateView() {
           material_id: item.material.id,
           quantity: item.quantity,
           unit_price_usd: cartLineUnitPrice(item),
+          ...(item.isWholesale ? { is_wholesale: true } : {}),
         }
       }
 
@@ -1006,6 +1069,7 @@ function VentasCreateView() {
         catalog_product_id: item.product.id,
         quantity: item.quantity,
         unit_price_usd: cartLineUnitPrice(item),
+        ...(item.isWholesale ? { is_wholesale: true } : {}),
         ...(item.detail?.trim() ? { description: item.detail.trim() } : {}),
         ...(item.catalogProductSizeId
           ? {

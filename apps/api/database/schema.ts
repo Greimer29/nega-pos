@@ -79,6 +79,10 @@ export class CatalogProductSchema extends BaseModel {
     'stockQuantity',
     'supplierCode',
     'updatedAt',
+    'wholesaleCostUsd',
+    'wholesaleEnabled',
+    'wholesaleSalePriceUsd',
+    'wholesaleUnitsPerPack',
   ] as const
   $columns = CatalogProductSchema.$columns
   @column()
@@ -117,6 +121,14 @@ export class CatalogProductSchema extends BaseModel {
   declare supplierCode: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
+  @column()
+  declare wholesaleCostUsd: string | null
+  @column()
+  declare wholesaleEnabled: boolean
+  @column()
+  declare wholesaleSalePriceUsd: string | null
+  @column()
+  declare wholesaleUnitsPerPack: string | null
 }
 
 export class CategorySchema extends BaseModel {
@@ -503,6 +515,10 @@ export class MaterialSchema extends BaseModel {
     'supplierCode',
     'unit',
     'updatedAt',
+    'wholesaleCostUsd',
+    'wholesaleEnabled',
+    'wholesaleSalePriceUsd',
+    'wholesaleUnitsPerPack',
   ] as const
   $columns = MaterialSchema.$columns
   @column()
@@ -553,6 +569,14 @@ export class MaterialSchema extends BaseModel {
   declare unit: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
+  @column()
+  declare wholesaleCostUsd: string | null
+  @column()
+  declare wholesaleEnabled: boolean
+  @column()
+  declare wholesaleSalePriceUsd: string | null
+  @column()
+  declare wholesaleUnitsPerPack: string | null
 }
 
 export class OrderLineSchema extends BaseModel {
@@ -767,6 +791,7 @@ export class PurchaseItemSchema extends BaseModel {
     'catalogProductId',
     'createdAt',
     'id',
+    'isWholesale',
     'materialId',
     'purchaseId',
     'quantity',
@@ -774,6 +799,7 @@ export class PurchaseItemSchema extends BaseModel {
     'subtotalUsd',
     'unitPriceBs',
     'unitPriceUsd',
+    'unitsPerPack',
     'updatedAt',
   ] as const
   $columns = PurchaseItemSchema.$columns
@@ -783,6 +809,8 @@ export class PurchaseItemSchema extends BaseModel {
   declare createdAt: DateTime
   @column({ isPrimary: true })
   declare id: bigint | number
+  @column()
+  declare isWholesale: boolean
   @column()
   declare materialId: bigint | number | null
   @column()
@@ -797,6 +825,8 @@ export class PurchaseItemSchema extends BaseModel {
   declare unitPriceBs: string
   @column()
   declare unitPriceUsd: string | null
+  @column()
+  declare unitsPerPack: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
 }
@@ -902,6 +932,7 @@ export class SaleLineSchema extends BaseModel {
     'createdAt',
     'description',
     'id',
+    'isWholesale',
     'kitchenNote',
     'materialId',
     'quantity',
@@ -910,6 +941,7 @@ export class SaleLineSchema extends BaseModel {
     'size',
     'subtotalUsd',
     'unitPriceUsd',
+    'unitsPerPack',
     'updatedAt',
   ] as const
   $columns = SaleLineSchema.$columns
@@ -926,6 +958,8 @@ export class SaleLineSchema extends BaseModel {
   @column({ isPrimary: true })
   declare id: bigint | number
   @column()
+  declare isWholesale: boolean
+  @column()
   declare kitchenNote: string | null
   @column()
   declare materialId: bigint | number | null
@@ -941,6 +975,8 @@ export class SaleLineSchema extends BaseModel {
   declare subtotalUsd: string
   @column()
   declare unitPriceUsd: string
+  @column()
+  declare unitsPerPack: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
 }

@@ -9,6 +9,10 @@ export type PurchaseItemMaterial = {
   name: string
   category: string
   unit: MaterialUnidad
+  wholesaleEnabled?: boolean
+  wholesaleUnitsPerPack?: string | null
+  wholesaleCostUsd?: string | null
+  wholesaleSalePriceUsd?: string | null
 }
 
 export type PurchaseItemProduct = {
@@ -16,6 +20,10 @@ export type PurchaseItemProduct = {
   name: string
   category: string
   saleUnit?: string
+  wholesaleEnabled?: boolean
+  wholesaleUnitsPerPack?: string | null
+  wholesaleCostUsd?: string | null
+  wholesaleSalePriceUsd?: string | null
 }
 
 export type PurchaseItem = {
@@ -29,6 +37,8 @@ export type PurchaseItem = {
   unitPriceBs: string
   subtotalUsd: string | null
   subtotalBs: string
+  isWholesale?: boolean
+  unitsPerPack?: string | null
   material?: PurchaseItemMaterial
   catalogProduct?: PurchaseItemProduct
 }
@@ -75,6 +85,7 @@ export type LocalPurchaseItem = {
   catalogProduct?: PurchaseItemProduct
   quantity: number
   unitPriceUsd: number
+  isWholesale?: boolean
 }
 
 export type PurchaseListResponse = {
@@ -122,6 +133,7 @@ export type PurchaseItemInput = {
   quantity: number
   unit_price_usd: number
   unit_price_bs?: number
+  is_wholesale?: boolean
 }
 
 export type ConfirmPurchaseInput = Partial<PurchaseInput> & {

@@ -37,6 +37,7 @@ export type LoadedDraftCartLine =
       detail?: string | null
       catalogProductSizeId?: number | null
       size?: string | null
+      isWholesale?: boolean
     }
   | {
       id: string
@@ -44,6 +45,7 @@ export type LoadedDraftCartLine =
       material: Material
       quantity: number
       unitPriceUsd?: number
+      isWholesale?: boolean
     }
 
 export type LoadedDraft = {
@@ -115,6 +117,7 @@ export function VentasLoadDraftDialog({
             material,
             quantity: Number(line.quantity),
             unitPriceUsd: Number(line.unit_price_usd),
+            isWholesale: Boolean(line.is_wholesale),
           })
           continue
         }
@@ -140,6 +143,7 @@ export function VentasLoadDraftDialog({
           unitPriceUsd: Number(line.unit_price_usd),
           catalogProductSizeId: line.catalog_product_size_id ?? null,
           size: line.size ?? null,
+          isWholesale: Boolean(line.is_wholesale),
         })
       }
 

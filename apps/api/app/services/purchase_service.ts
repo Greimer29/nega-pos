@@ -38,6 +38,7 @@ import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
 
 export type PurchaseInput = {
   supplier_id?: number
@@ -58,6 +59,7 @@ export type PurchaseItemInput = {
   quantity: number
   unit_price_usd: number
   unit_price_bs?: number
+  is_wholesale?: boolean
 }
 
 export type ConfirmPurchaseInput = Partial<PurchaseInput> & {
@@ -321,12 +323,22 @@ export default class PurchaseService {
       const quantity = input.quantity ?? Number(item.quantity)
       const unitPriceUsd = input.unit_price_usd ?? Number(item.unitPriceUsd ?? 0)
       const priced = this.calcularPreciosItem(purchase, quantity, unitPriceUsd, input.unit_price_bs)
+      const wholesale = await this.resolveItemWholesale(
+        {
+          material_id: item.materialId ? Number(item.materialId) : undefined,
+          catalog_product_id: item.catalogProductId ? Number(item.catalogProductId) : undefined,
+          is_wholesale: input.is_wholesale ?? Boolean(item.isWholesale),
+        },
+        trx
+      )
 
       item.quantity = this.formatCantidad(quantity)
       item.unitPriceUsd = priced.unitPriceUsd
       item.unitPriceBs = priced.unitPriceBs
       item.subtotalUsd = priced.subtotalUsd
       item.subtotalBs = priced.subtotalBs
+      item.isWholesale = wholesale.isWholesale
+      item.unitsPerPack = wholesale.unitsPerPack
       item.useTransaction(trx)
       await item.save()
 
@@ -439,12 +451,18 @@ export default class PurchaseService {
           continue
         }
 
+        const inventoryQty = lineInventoryQuantity(
+          Number(item.quantity),
+          Boolean(item.isWholesale),
+          item.unitsPerPack
+        )
+
         if (item.materialId) {
           await InventoryMovement.create(
             {
               materialId: Number(item.materialId),
               type: 'PURCHASE_IN',
-              quantity: item.quantity,
+              quantity: this.formatCantidad(inventoryQty),
               purchaseItemId: Number(item.id),
             },
             { client: trx }
@@ -462,15 +480,7 @@ export default class PurchaseService {
           material.lastPurchasePrice = item.unitPriceBs
           material.lastPurchaseDate = purchase.date
 
-          const newCostUsd = unitPriceUsd
-          if (
-            material.lastPurchasePriceUsd !== null &&
-            material.lastPurchasePriceUsd !== newCostUsd
-          ) {
-            material.previousPurchasePriceUsd = material.lastPurchasePriceUsd
-          }
-
-          material.lastPurchasePriceUsd = newCostUsd
+          this.applyConfirmedPurchaseCost(material, item, unitPriceUsd)
 
           material.useTransaction(trx)
           await material.save()
@@ -495,15 +505,14 @@ export default class PurchaseService {
             {
               catalogProductId: Number(item.catalogProductId),
               type: 'PURCHASE_IN',
-              quantity: Number(item.quantity),
+              quantity: inventoryQty,
               purchaseItemId: Number(item.id),
               note: `Compra #${purchase.id}`,
             },
             trx
           )
 
-          const newCostUsd = unitPriceUsd
-          product.costUsd = newCostUsd
+          this.applyConfirmedPurchaseCost(product, item, unitPriceUsd)
           product.useTransaction(trx)
           await product.save()
         }
@@ -605,7 +614,11 @@ export default class PurchaseService {
             .first()
 
           const stock = await this.materialService.calcularStock(Number(item.materialId), trx)
-          const required = Number(item.quantity)
+          const required = lineInventoryQuantity(
+            Number(item.quantity),
+            Boolean(item.isWholesale),
+            item.unitsPerPack
+          )
 
           if (stock < required) {
             faltantes.push({
@@ -625,7 +638,11 @@ export default class PurchaseService {
             .first()
 
           const stock = product ? Number(product.stockQuantity) : 0
-          const required = Number(item.quantity)
+          const required = lineInventoryQuantity(
+            Number(item.quantity),
+            Boolean(item.isWholesale),
+            item.unitsPerPack
+          )
 
           if (stock < required) {
             faltantes.push({
@@ -643,7 +660,11 @@ export default class PurchaseService {
       }
 
       for (const item of items) {
-        const qty = Number(item.quantity)
+        const qty = lineInventoryQuantity(
+          Number(item.quantity),
+          Boolean(item.isWholesale),
+          item.unitsPerPack
+        )
 
         if (item.materialId) {
           await InventoryMovement.create(
@@ -737,6 +758,7 @@ export default class PurchaseService {
       input.unit_price_usd,
       input.unit_price_bs
     )
+    const wholesale = await this.resolveItemWholesale(input, trx)
 
     return PurchaseItem.create(
       {
@@ -748,9 +770,63 @@ export default class PurchaseService {
         unitPriceBs: priced.unitPriceBs,
         subtotalUsd: priced.subtotalUsd,
         subtotalBs: priced.subtotalBs,
+        isWholesale: wholesale.isWholesale,
+        unitsPerPack: wholesale.unitsPerPack,
       },
       { client: trx }
     )
+  }
+
+  private async resolveItemWholesale(
+    input: Pick<PurchaseItemInput, 'material_id' | 'catalog_product_id' | 'is_wholesale'>,
+    _trx: TransactionClientContract
+  ) {
+    const isWholesale = Boolean(input.is_wholesale)
+    if (input.catalog_product_id) {
+      const product = await CatalogProduct.find(input.catalog_product_id)
+      if (!product) {
+        throw new ProductoCatalogoNoEncontradoException()
+      }
+      return resolveWholesaleLineSnapshot(isWholesale, product)
+    }
+
+    const material = await Material.find(input.material_id!)
+    if (!material) {
+      throw new MaterialNoEncontradoException()
+    }
+    return resolveWholesaleLineSnapshot(isWholesale, material)
+  }
+
+  private applyConfirmedPurchaseCost(
+    item: CatalogProduct | Material,
+    line: PurchaseItem,
+    unitPriceUsd: string
+  ) {
+    if (line.isWholesale) {
+      const packCost = Number(unitPriceUsd)
+      const unitsPerPack = Number(line.unitsPerPack)
+      const unitCost = (packCost / unitsPerPack).toFixed(4)
+      item.wholesaleCostUsd = packCost.toFixed(4)
+      if ('costUsd' in item) {
+        item.costUsd = unitCost
+      } else {
+        if (item.lastPurchasePriceUsd !== null && item.lastPurchasePriceUsd !== unitCost) {
+          item.previousPurchasePriceUsd = item.lastPurchasePriceUsd
+        }
+        item.lastPurchasePriceUsd = unitCost
+      }
+      return
+    }
+
+    if ('costUsd' in item) {
+      item.costUsd = unitPriceUsd
+      return
+    }
+
+    if (item.lastPurchasePriceUsd !== null && item.lastPurchasePriceUsd !== unitPriceUsd) {
+      item.previousPurchasePriceUsd = item.lastPurchasePriceUsd
+    }
+    item.lastPurchasePriceUsd = unitPriceUsd
   }
 
   private calcularPreciosItem(

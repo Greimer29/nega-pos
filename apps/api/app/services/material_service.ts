@@ -19,6 +19,7 @@ import CategoryService from '#services/category_service'
 import type { CostWarning } from '#types/cost_warning'
 import { assertMaterialBarcodeAvailable, normalizeBarcode } from '#utils/barcode'
 import { normalizeSupplierCode } from '#utils/supplier_code'
+import { normalizeWholesaleConfig } from '#utils/wholesale'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
@@ -39,6 +40,10 @@ export type MaterialInput = {
   last_purchase_price_usd?: number | null
   barcode?: string | null
   supplier_code?: string | null
+  wholesale_enabled?: boolean
+  wholesale_units_per_pack?: number | null
+  wholesale_cost_usd?: number | null
+  wholesale_sale_price_usd?: number | null
   active?: boolean
 }
 
@@ -405,6 +410,14 @@ export default class MaterialService {
       location: data.location,
       defaultSupplierId: data.defaultSupplierId,
       ...(nextCost !== undefined ? { lastPurchasePriceUsd: nextCost } : {}),
+      ...(data.wholesaleEnabled !== undefined
+        ? {
+            wholesaleEnabled: data.wholesaleEnabled,
+            wholesaleUnitsPerPack: data.wholesaleUnitsPerPack,
+            wholesaleCostUsd: data.wholesaleCostUsd,
+            wholesaleSalePriceUsd: data.wholesaleSalePriceUsd,
+          }
+        : {}),
       ...(input.active !== undefined ? { active: input.active } : {}),
     })
 
@@ -579,6 +592,7 @@ export default class MaterialService {
 
   private prepareInput(input: MaterialInput) {
     const unit = input.unit
+    const wholesale = this.prepareWholesale(input)
     return {
       code: input.code.trim(),
       name: input.name.trim(),
@@ -591,10 +605,50 @@ export default class MaterialService {
       barcode: normalizeBarcode(input.barcode),
       supplierCode: normalizeSupplierCode(input.supplier_code),
       lastPurchasePriceUsd:
-        input.last_purchase_price_usd === undefined
+        wholesale.lastPurchasePriceUsd ??
+        (input.last_purchase_price_usd === undefined
           ? undefined
-          : formatOptionalPrice(input.last_purchase_price_usd),
+          : formatOptionalPrice(input.last_purchase_price_usd)),
+      wholesaleEnabled: wholesale.wholesaleEnabled,
+      wholesaleUnitsPerPack: wholesale.wholesaleUnitsPerPack,
+      wholesaleCostUsd: wholesale.wholesaleCostUsd,
+      wholesaleSalePriceUsd: wholesale.wholesaleSalePriceUsd,
       active: input.active ?? true,
+    }
+  }
+
+  private prepareWholesale(input: MaterialInput): {
+    wholesaleEnabled?: boolean
+    wholesaleUnitsPerPack?: string | null
+    wholesaleCostUsd?: string | null
+    wholesaleSalePriceUsd?: string | null
+    lastPurchasePriceUsd?: string
+  } {
+    const wholesaleTouched =
+      input.wholesale_enabled !== undefined ||
+      input.wholesale_units_per_pack !== undefined ||
+      input.wholesale_cost_usd !== undefined ||
+      input.wholesale_sale_price_usd !== undefined
+
+    if (!wholesaleTouched) {
+      return {}
+    }
+
+    const wholesale = normalizeWholesaleConfig({
+      wholesale_enabled: input.wholesale_enabled,
+      wholesale_units_per_pack: input.wholesale_units_per_pack,
+      wholesale_cost_usd: input.wholesale_cost_usd,
+      wholesale_sale_price_usd: input.wholesale_sale_price_usd,
+    })
+
+    return {
+      wholesaleEnabled: wholesale.wholesaleEnabled,
+      wholesaleUnitsPerPack: wholesale.wholesaleUnitsPerPack,
+      wholesaleCostUsd: wholesale.wholesaleCostUsd,
+      wholesaleSalePriceUsd: wholesale.wholesaleSalePriceUsd,
+      ...(wholesale.derivedUnitCost !== null
+        ? { lastPurchasePriceUsd: wholesale.derivedUnitCost.toFixed(4) }
+        : {}),
     }
   }
 

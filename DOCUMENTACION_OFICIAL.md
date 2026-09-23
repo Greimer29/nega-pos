@@ -401,7 +401,7 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda b
 | `categories` | `name`, `active`, `sort_order` |
 | `formulas` | `name`, `active` |
 | `formula_materials` | `formula_id`, `material_id`, `quantity` |
-| `catalog_products` | `name`, `category`, `item_kind` (`PRODUCT`\|`SERVICE`, default `PRODUCT`), `sale_unit`, `formula_id?`, `sale_price_usd`, `cost_usd`, `stock_quantity`, `minimum_stock`, `barcode?` (string ≤64, unique por tabla cuando no es null; solo aplica a `PRODUCT`), `supplier_code?` (string ≤50, nullable, no unique; UI **Referencia** / código del proveedor; solo `PRODUCT`), `active`. Los `SERVICE` no usan inventario/fórmula/tallas (`stock`/`minimum` en 0, `formula_id` null) ni barcode ni referencia. |
+| `catalog_products` | `name`, `category`, `item_kind` (`PRODUCT`\|`SERVICE`, default `PRODUCT`), `sale_unit`, `formula_id?`, `sale_price_usd`, `cost_usd`, `stock_quantity`, `minimum_stock`, `barcode?` (string ≤64, unique por tabla cuando no es null; solo aplica a `PRODUCT`), `supplier_code?` (string ≤50, nullable, no unique; UI **Referencia** / código del proveedor; solo `PRODUCT`), `wholesale_enabled` (default false), `wholesale_units_per_pack?`, `wholesale_cost_usd?`, `wholesale_sale_price_usd?`, `active`. Si `wholesale_enabled`, el costo unitario se deriva (`wholesale_cost_usd / wholesale_units_per_pack`). Incompatible con `SERVICE`, fórmula y tallas. Los `SERVICE` no usan inventario/fórmula/tallas (`stock`/`minimum` en 0, `formula_id` null) ni barcode ni referencia. |
 | `catalog_product_sizes` | Tallas opcionales por producto: `catalog_product_id`, `size` (texto libre ≤20), `stock_quantity`; UNIQUE `(catalog_product_id, size)`. Si hay filas, el stock del producto es la suma de tallas. Incompatible con `formula_id`. |
 
 Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
@@ -410,7 +410,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 
 | Tabla | Campos clave |
 |-------|--------------|
-| `materials` | `code`, `name`, `category` (FABRIC/THREAD/…), `unit`, `minimum_stock`, `default_supplier_id`, precios, `barcode?` (string ≤64, unique por tabla cuando no es null; no reemplaza `code`), `supplier_code?` (string ≤50, indexed, nullable; UI **Referencia** / código del proveedor; no unique), `active` |
+| `materials` | `code`, `name`, `category` (FABRIC/THREAD/…), `unit`, `minimum_stock`, `default_supplier_id`, precios, `barcode?` (string ≤64, unique por tabla cuando no es null; no reemplaza `code`), `supplier_code?` (string ≤50, indexed, nullable; UI **Referencia** / código del proveedor; no unique), `wholesale_enabled` (default false), `wholesale_units_per_pack?`, `wholesale_cost_usd?`, `wholesale_sale_price_usd?`, `active` |
 | `inventory_movements` | `material_id`, `type`, `quantity`, refs a compra/pedido/venta |
 | `product_inventory_movements` | `catalog_product_id`, `type`, `quantity`, refs, `created_by_user_id` |
 
@@ -423,7 +423,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 | Tabla | Campos clave |
 |-------|--------------|
 | `purchases` | `supplier_id`, `account_id`, fechas, `invoice_number`, `status` (DRAFT/CONFIRMED/VOIDED), `is_credit`, `affects_inventory` (default true; false = factura financiera sin stock), totales USD/BS, saldos |
-| `purchase_items` | `material_id?`, `catalog_product_id?`, cantidades y precios |
+| `purchase_items` | `material_id?`, `catalog_product_id?`, cantidades y precios, `is_wholesale` (default false), `units_per_pack?` (snapshot). Si `is_wholesale`, la cantidad de la línea es en paquetes y el inventario registra `cantidad × units_per_pack`. |
 
 #### Pedidos
 
@@ -443,7 +443,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
 | `sales_shifts` | `opened_at`, `closed_at`, `opened_by_user_id`, `closed_by_user_id`, `status` (OPEN/CLOSED), `notes` |
 | `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), `discount_usd` (descuento de factura, default 0), `total_usd` (subtotal de líneas − descuento), `notes?` (nota de factura financiera / carga manual). `payment_method_code` queda como método principal (primer pago). |
 | `sale_payments` | `sale_id`, `payment_method_code`, `amount_usd` (monto en moneda base), `currency_code`, `usd_rate`, `amount_native`, `sort_order`. Una factura de contado puede tener varios métodos; la suma de `amount_usd` = `sales.total_usd`. |
-| `sale_lines` | `catalog_product_id?`, `catalog_product_size_id?`, `size?` (snapshot), `material_id?`, `description`, `kitchen_note?` (indicaciones de cocina para comanda), cantidades y precios |
+| `sale_lines` | `catalog_product_id?`, `catalog_product_size_id?`, `size?` (snapshot), `material_id?`, `description`, `kitchen_note?` (indicaciones de cocina para comanda), cantidades y precios, `is_wholesale` (default false), `units_per_pack?` (snapshot). Si `is_wholesale`, la cantidad de la línea es en paquetes; al confirmar se descuenta `cantidad × units_per_pack` y el precio de línea es el de venta mayorista. |
 
 **Turnos de venta:** solo puede haber un turno `OPEN`. Confirmar venta (`POST /sales/:id/confirm` o `POST /sales` con `confirm: true`) exige turno abierto; sin turno → `TURNO_NO_ABIERTO` (409). La venta confirmada guarda `sales.sales_shift_id`.
 
@@ -477,10 +477,10 @@ catalog_products ──< product_inventory_movements
 ### Compras (`purchase_service.ts`)
 
 1. **Crear borrador** (`status: DRAFT`) con proveedor y cuenta opcional.
-2. **Agregar ítems** — material y/o producto de catálogo (`PRODUCT`; productos con fórmula y servicios no admiten compra directa de stock). En borrador, el botón **Escanear** (Android) o un código ya conocido busca por `barcode` exacto del tab activo (materiales o productos); si no hay match → toast «Código no encontrado»; si el ítem ya está en la lista → suma 1. Compras v1 no desglosan por talla.
+2. **Agregar ítems** — material y/o producto de catálogo (`PRODUCT`; productos con fórmula y servicios no admiten compra directa de stock). En borrador, el botón **Escanear** (Android) o un código ya conocido busca por `barcode` exacto del tab activo (materiales o productos); si no hay match → toast «Código no encontrado»; si el ítem ya está en la lista → suma 1. Compras v1 no desglosan por talla. Si el ítem tiene `wholesale_enabled`, la línea muestra un check **Mayorista** (sin diálogo). Con el check activo la cantidad es en paquetes y `is_wholesale` + `units_per_pack` quedan snapshot en la línea.
 3. **Confirmar** (`POST .../confirm`):
    - Requiere `invoice_number` y al menos un ítem (salvo `affects_inventory = false`).
-   - Si `affects_inventory` es true (default): por cada ítem material → movimiento `PURCHASE_IN` + actualización de `last_purchase_price_usd`; por cada ítem producto sin fórmula → `PURCHASE_IN` en `product_inventory_movements` + `cost_usd`.
+   - Si `affects_inventory` es true (default): por cada ítem material → movimiento `PURCHASE_IN` + actualización de `last_purchase_price_usd`; por cada ítem producto sin fórmula → `PURCHASE_IN` en `product_inventory_movements` + `cost_usd`. Si la línea es mayorista, el movimiento usa `cantidad × units_per_pack` y el costo unitario queda `precio_paquete / units_per_pack` (también actualiza `wholesale_cost_usd`).
    - Si `affects_inventory` es false: no mueve stock (factura financiera / deuda sin mercadería).
    - `status → CONFIRMED`; si es crédito, registra saldo en proveedor.
    - Tras confirmar compra con stock, pedidos en `DRAFT` pendientes de material pueden pasar automáticamente a `IN_PRODUCTION` si hay stock suficiente.
@@ -536,7 +536,7 @@ catalog_products ──< product_inventory_movements
 
 ### Ventas (`sale_service.ts`)
 
-1. **Borrador** (`DRAFT`): líneas de catálogo (producto o **servicio**) o material, cliente opcional. En el POS de facturar hay tabs **Productos / Materiales / Servicios**; al confirmar, productos y materiales descuentan stock (`SALE_OUT`), los **servicios no mueven inventario**. Línea de servicio: `catalog_product_id` de un `SERVICE`, `quantity`, `unit_price_usd` editable y `description` opcional (detalle en factura; si falta, se usa el nombre del servicio). El precio unitario de cada línea es el enviado por el cliente (se puede cambiar en el carrito; atajos −5/−10/−20 % vs precio de lista). Si el producto tiene fórmula, se pueden ajustar materiales de esa venta. El descuento de factura (`discount_usd`) es independiente del precio por línea: `total_usd = suma(líneas) − discount_usd` (nunca negativo). **Escaneo de barcode:** en catálogo (tabs producto/material), Escanear o Enter tras un código USB filtra al ítem del tab (`?barcode=` exacto); en el carrito, Escanear agrega qty 1 o suma 1 (productos con tallas abren `SizePickDialog`). Código inexistente → toast «Código no encontrado». Los servicios no se agregan por barcode.
+1. **Borrador** (`DRAFT`): líneas de catálogo (producto o **servicio**) o material, cliente opcional. En el POS de facturar hay tabs **Productos / Materiales / Servicios**; al confirmar, productos y materiales descuentan stock (`SALE_OUT`), los **servicios no mueven inventario**. Línea de servicio: `catalog_product_id` de un `SERVICE`, `quantity`, `unit_price_usd` editable y `description` opcional (detalle en factura; si falta, se usa el nombre del servicio). El precio unitario de cada línea es el enviado por el cliente (se puede cambiar en el carrito; atajos −5/−10/−20 % vs precio de lista). Si el producto/material tiene `wholesale_enabled`, la línea del carrito muestra un check **Mayorista** (sin diálogo): la cantidad pasa a ser paquetes, el precio es el de venta mayorista y al confirmar se descuenta `cantidad × units_per_pack`. Si el producto tiene fórmula, se pueden ajustar materiales de esa venta. El descuento de factura (`discount_usd`) es independiente del precio por línea: `total_usd = suma(líneas) − discount_usd` (nunca negativo). **Escaneo de barcode:** en catálogo (tabs producto/material), Escanear o Enter tras un código USB filtra al ítem del tab (`?barcode=` exacto); en el carrito, Escanear agrega qty 1 o suma 1 (productos con tallas abren `SizePickDialog`). Código inexistente → toast «Código no encontrado». Los servicios no se agregan por barcode.
 2. **Confirmar** (`POST .../confirm`):
    - Genera `code`, `status → COMPLETED`, `sold_at` / `confirmed_at`.
    - `billing_mode FAST` → `order_status DELIVERED`; `ORDER` → `order_status PENDING`.
