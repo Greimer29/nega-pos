@@ -5,7 +5,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import {
   DollarSign,
   LayoutGrid,
-  Loader2,
   MessageSquareText,
   Minus,
   Package,
@@ -21,7 +20,6 @@ import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -71,9 +69,6 @@ type VentasOrderCartProps = {
   discountUsd?: number
   totalBs?: number | null
   onClear: () => void
-  savedDraftId?: number | null
-  onDeleteDraft?: () => void | Promise<void>
-  isDeletingDraft?: boolean
   onRemoveLine: (key: string) => void
   onUpdateQuantity?: (key: string, quantity: number) => void
   onUpdateUnitPrice?: (key: string, unitPriceUsd: number) => void
@@ -358,9 +353,6 @@ export function VentasOrderCart({
   discountUsd = 0,
   totalBs,
   onClear,
-  savedDraftId = null,
-  onDeleteDraft,
-  isDeletingDraft = false,
   onRemoveLine,
   onUpdateQuantity,
   onUpdateUnitPrice,
@@ -379,8 +371,6 @@ export function VentasOrderCart({
   const [draftPrice, setDraftPrice] = useState('')
   const [discountOpen, setDiscountOpen] = useState(false)
   const [draftDiscount, setDraftDiscount] = useState('')
-  const [deleteDraftOpen, setDeleteDraftOpen] = useState(false)
-  const canDeleteSavedDraft = Boolean(savedDraftId && onDeleteDraft)
   const priceDecimals = displayCurrency === 'USD' ? 4 : 6
   const priceLine = lines.find((line) => line.key === priceLineKey) ?? null
   const appliedDiscount = clampInvoiceDiscountUsd(subtotalUsd, discountUsd)
@@ -453,22 +443,12 @@ export function VentasOrderCart({
             variant="ghost"
             size="icon"
             className="text-destructive hover:text-destructive size-8"
-            disabled={isDeletingDraft || (canDeleteSavedDraft ? false : lines.length === 0)}
-            onClick={() => {
-              if (canDeleteSavedDraft) {
-                setDeleteDraftOpen(true)
-                return
-              }
-              onClear()
-            }}
-            title={canDeleteSavedDraft ? 'Eliminar borrador' : 'Vaciar carrito'}
-            aria-label={canDeleteSavedDraft ? 'Eliminar borrador' : 'Vaciar carrito'}
+            disabled={lines.length === 0}
+            onClick={onClear}
+            title="Vaciar carrito"
+            aria-label="Vaciar carrito"
           >
-            {isDeletingDraft ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Trash2 className="size-4" />
-            )}
+            <Trash2 className="size-4" />
           </Button>
           {onClose ? (
             <Button
@@ -665,51 +645,6 @@ export function VentasOrderCart({
             </Button>
             <Button type="button" onClick={applyInvoiceDiscountAmount}>
               Aplicar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={deleteDraftOpen} onOpenChange={setDeleteDraftOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Eliminar borrador</DialogTitle>
-            <DialogDescription>
-              ¿Borrar el documento en espera{' '}
-              <span className="text-foreground font-medium">
-                {savedDraftId ? `#${savedDraftId}` : ''}
-              </span>
-              ? Se elimina la factura borrador y sus líneas. No se descontó stock. Esto no es vaciar
-              el carrito: el documento deja de existir.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setDeleteDraftOpen(false)}
-              disabled={isDeletingDraft}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={isDeletingDraft}
-              onClick={() => {
-                void Promise.resolve(onDeleteDraft?.())
-                  .then(() => setDeleteDraftOpen(false))
-                  .catch(() => undefined)
-              }}
-            >
-              {isDeletingDraft ? (
-                <>
-                  <Loader2 className="animate-spin" />
-                  Eliminando…
-                </>
-              ) : (
-                'Sí, eliminar documento'
-              )}
             </Button>
           </DialogFooter>
         </DialogContent>

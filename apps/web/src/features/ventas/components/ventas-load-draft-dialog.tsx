@@ -199,7 +199,7 @@ export function VentasLoadDraftDialog({
           <DialogHeader>
             <DialogTitle>Cargar factura</DialogTitle>
             <DialogDescription>
-              Tocá un borrador para cargarlo al carrito, o <strong>Eliminar</strong> para borrarlo.
+              Tocá un borrador para cargarlo al carrito, o la papelera para borrarlo.
             </DialogDescription>
           </DialogHeader>
 
@@ -251,9 +251,9 @@ export function VentasLoadDraftDialog({
                   </button>
                   <Button
                     type="button"
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive hover:text-destructive shrink-0"
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive size-8 shrink-0"
                     title="Eliminar borrador"
                     aria-label={`Eliminar ${sale.code ?? `borrador #${sale.id}`}`}
                     disabled={busy}
@@ -264,7 +264,6 @@ export function VentasLoadDraftDialog({
                     ) : (
                       <Trash2 className="size-4" />
                     )}
-                    Eliminar
                   </Button>
                 </div>
               ))

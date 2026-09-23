@@ -20,7 +20,6 @@ import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persis
 import {
   useConfirmSaleMutation,
   useCreateSaleMutation,
-  useDeleteSaleMutation,
   useNextSaleCodeQuery,
   useUpdateSaleMutation,
 } from '@/features/ventas/hooks/use-sales'
@@ -268,7 +267,6 @@ function VentasCreateView() {
 
   const createSaleMutation = useCreateSaleMutation()
   const updateSaleMutation = useUpdateSaleMutation()
-  const deleteSaleMutation = useDeleteSaleMutation()
   const confirmSaleMutation = useConfirmSaleMutation()
   const { data: nextCode } = useNextSaleCodeQuery()
   const { data: categories = [] } = useActiveCategoriesQuery()
@@ -994,23 +992,6 @@ function VentasCreateView() {
     clearVentasCartDraft()
   }
 
-  async function deleteSavedDraft() {
-    if (!sourceSaleId) {
-      clearLocalCart()
-      return
-    }
-
-    try {
-      const draftId = sourceSaleId
-      await deleteSaleMutation.mutateAsync(draftId)
-      clearLocalCart()
-      toast.success(`Se eliminó el borrador #${draftId}.`)
-    } catch (error) {
-      notifyApiError(error)
-      throw error
-    }
-  }
-
   function buildSaleLines() {
     return cart.map((item) => {
       if (item.kind === 'material') {
@@ -1194,9 +1175,6 @@ function VentasCreateView() {
         discountUsd={invoiceDiscount}
         totalUsd={payableTotal}
         onClear={clearLocalCart}
-        savedDraftId={sourceSaleId}
-        onDeleteDraft={() => deleteSavedDraft()}
-        isDeletingDraft={deleteSaleMutation.isPending}
         onRemoveLine={removeFromCart}
         onUpdateQuantity={updateCartQty}
         onUpdateUnitPrice={updateCartUnitPrice}

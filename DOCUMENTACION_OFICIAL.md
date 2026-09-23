@@ -544,7 +544,7 @@ catalog_products ──< product_inventory_movements
    - Aplica método de pago y saldo si es crédito.
 3. **Transición de pedido de venta** (`billing_mode ORDER`): `PENDING → IN_PROCESS → DELIVERED` (solo ventas completadas).
 4. **Devolución** (`POST .../return`): parcial o total; revierte stock de productos/materiales (no de servicios) y actualiza `RETURNED`.
-5. **Eliminar borrador** (`DELETE /sales/:id`): solo `DRAFT`. Borra el documento en espera y sus líneas (no hay stock que revertir). En el POS: si el carrito está vinculado a un borrador guardado, la papelera del carrito **elimina ese documento** (no solo vacía líneas); en **Cargar factura** cada ítem también tiene **Eliminar**. Una factura confirmada no se elimina por esta vía.
+5. **Eliminar borrador** (`DELETE /sales/:id`): solo `DRAFT`. Borra el documento en espera y sus líneas (no hay stock que revertir). En el POS: **Cargar factura** → papelera en cada ítem (icono). La papelera del carrito **vacía líneas locales** y no borra el documento guardado. Una factura confirmada no se elimina por esta vía.
 
 ### Reportes (`report_service.ts` / `inventory_report_service.ts`)
 
