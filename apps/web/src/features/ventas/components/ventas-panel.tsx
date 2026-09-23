@@ -67,7 +67,11 @@ import {
   printSaleDocumentsOnConfirm,
 } from '@/features/printing/services/printing-service'
 import { getSale } from '@/features/ventas/services/sales-service'
-import { notifyApiError, QueryErrorState, EmptyListState } from '@/features/notifications/query-error-state'
+import {
+  notifyApiError,
+  QueryErrorState,
+  EmptyListState,
+} from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { isValidEntityId } from '@/lib/route-id'
@@ -92,7 +96,10 @@ import {
   type SaleLineFormulaMaterial,
   type SaleLineFormulaMaterialRef,
 } from '@/features/ventas/utils/sale-line-formula'
-import { clampInvoiceDiscountUsd, invoiceTotalAfterDiscount } from '@/features/ventas/utils/invoice-discount'
+import {
+  clampInvoiceDiscountUsd,
+  invoiceTotalAfterDiscount,
+} from '@/features/ventas/utils/invoice-discount'
 
 type CartLine =
   | {
@@ -551,10 +558,7 @@ function VentasCreateView() {
       />
     )
   }
-  const cartItemCount = useMemo(
-    () => cart.reduce((sum, line) => sum + line.quantity, 0),
-    [cart]
-  )
+  const cartItemCount = useMemo(() => cart.reduce((sum, line) => sum + line.quantity, 0), [cart])
   const cartTotal = useMemo(
     () => cart.reduce((sum, line) => sum + line.quantity * cartLineUnitPrice(line), 0),
     [cart]
@@ -860,8 +864,7 @@ function VentasCreateView() {
     const line = cart.find((item) => item.id === lineId)
     if (!line) return
 
-    const unit =
-      line.kind === 'material' ? line.material.unit : (line.product.sale_unit ?? 'UND')
+    const unit = line.kind === 'material' ? line.material.unit : (line.product.sale_unit ?? 'UND')
 
     if (quantity <= 0) {
       removeFromCart(lineId)
@@ -1256,9 +1259,7 @@ function VentasCreateView() {
                   disabled={!customerId || !canCreditSale}
                   className={cn(
                     'rounded-md px-3 py-1.5 text-xs font-medium',
-                    paymentType === 'CREDIT'
-                      ? 'bg-background shadow-sm'
-                      : 'text-muted-foreground',
+                    paymentType === 'CREDIT' ? 'bg-background shadow-sm' : 'text-muted-foreground',
                     (!customerId || !canCreditSale) && 'cursor-not-allowed opacity-50'
                   )}
                   onClick={() => setPaymentType('CREDIT')}
@@ -1296,9 +1297,7 @@ function VentasCreateView() {
             </p>
           ) : null}
 
-          {successMessage ? (
-            <p className="text-emerald-700 text-sm">{successMessage}</p>
-          ) : null}
+          {successMessage ? <p className="text-emerald-700 text-sm">{successMessage}</p> : null}
 
           {canConfirmSale ? (
             <Button
@@ -1309,9 +1308,7 @@ function VentasCreateView() {
               onClick={() => void confirmOrder()}
             >
               {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
-              {!shiftLoading && !shiftOpen
-                ? 'Abrí un turno para vender'
-                : confirmButtonLabel}
+              {!shiftLoading && !shiftOpen ? 'Abrí un turno para vender' : confirmButtonLabel}
             </Button>
           ) : (
             <p className="text-muted-foreground text-center text-sm">
@@ -1505,27 +1502,25 @@ function VentasCreateView() {
                     title="Todavía no hay productos en el catálogo"
                     description="Es normal en una empresa nueva. Creá productos desde Productos o acá con Nuevo."
                   />
+                ) : layout === 'table' ? (
+                  <CatalogProductTable
+                    products={products}
+                    showActions
+                    onEdit={openEditProduct}
+                    onAddToCart={addToCart}
+                  />
                 ) : (
-                  layout === 'table' ? (
-                    <CatalogProductTable
-                      products={products}
-                      showActions
-                      onEdit={openEditProduct}
-                      onAddToCart={addToCart}
-                    />
-                  ) : (
-                    <div className={cn(catalogProductGridClassName, 'pb-1')}>
-                      {products.map((product) => (
-                        <CatalogProductCard
-                          key={product.id}
-                          product={product}
-                          showActions
-                          onEdit={openEditProduct}
-                          onAddToCart={addToCart}
-                        />
-                      ))}
-                    </div>
-                  )
+                  <div className={cn(catalogProductGridClassName, 'pb-1')}>
+                    {products.map((product) => (
+                      <CatalogProductCard
+                        key={product.id}
+                        product={product}
+                        showActions
+                        onEdit={openEditProduct}
+                        onAddToCart={addToCart}
+                      />
+                    ))}
+                  </div>
                 )
               ) : catalogSource === 'services' ? (
                 loadingServices ? (
@@ -1544,20 +1539,18 @@ function VentasCreateView() {
                     title="Todavía no hay servicios"
                     description="Creá servicios en Productos → Servicios para venderlos acá sin descontar stock."
                   />
+                ) : layout === 'table' ? (
+                  <CatalogProductTable products={services} onAddToCart={addToCart} />
                 ) : (
-                  layout === 'table' ? (
-                    <CatalogProductTable products={services} onAddToCart={addToCart} />
-                  ) : (
-                    <div className={cn(catalogProductGridClassName, 'pb-1')}>
-                      {services.map((service) => (
-                        <CatalogProductCard
-                          key={service.id}
-                          product={service}
-                          onAddToCart={addToCart}
-                        />
-                      ))}
-                    </div>
-                  )
+                  <div className={cn(catalogProductGridClassName, 'pb-1')}>
+                    {services.map((service) => (
+                      <CatalogProductCard
+                        key={service.id}
+                        product={service}
+                        onAddToCart={addToCart}
+                      />
+                    ))}
+                  </div>
                 )
               ) : loadingMaterials ? (
                 <div className="flex justify-center py-8">
@@ -1573,23 +1566,18 @@ function VentasCreateView() {
                 <p className="text-muted-foreground py-8 text-center text-sm">
                   No hay materiales activos.
                 </p>
+              ) : layout === 'table' ? (
+                <MaterialCatalogTable materials={materials} onAddToCart={addMaterialToCart} />
               ) : (
-                layout === 'table' ? (
-                  <MaterialCatalogTable
-                    materials={materials}
-                    onAddToCart={addMaterialToCart}
-                  />
-                ) : (
-                  <div className={cn(catalogProductGridClassName, 'pb-1')}>
-                    {materials.map((material) => (
-                      <VentasMaterialCard
-                        key={material.id}
-                        material={material}
-                        onAddToCart={addMaterialToCart}
-                      />
-                    ))}
-                  </div>
-                )
+                <div className={cn(catalogProductGridClassName, 'pb-1')}>
+                  {materials.map((material) => (
+                    <VentasMaterialCard
+                      key={material.id}
+                      material={material}
+                      onAddToCart={addMaterialToCart}
+                    />
+                  ))}
+                </div>
               )}
             </div>
 
@@ -1618,9 +1606,7 @@ function VentasCreateView() {
                     variant="outline"
                     size="sm"
                     disabled={catalogMeta.currentPage >= catalogMeta.lastPage || loadingCatalog}
-                    onClick={() =>
-                      setCatalogFilters((prev) => ({ ...prev, page: prev.page + 1 }))
-                    }
+                    onClick={() => setCatalogFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                   >
                     Siguiente
                   </Button>
@@ -1652,12 +1638,8 @@ function VentasCreateView() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={
-                      servicesMeta.currentPage >= servicesMeta.lastPage || loadingServices
-                    }
-                    onClick={() =>
-                      setCatalogFilters((prev) => ({ ...prev, page: prev.page + 1 }))
-                    }
+                    disabled={servicesMeta.currentPage >= servicesMeta.lastPage || loadingServices}
+                    onClick={() => setCatalogFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                   >
                     Siguiente
                   </Button>
@@ -1692,9 +1674,7 @@ function VentasCreateView() {
                     disabled={
                       materialsMeta.currentPage >= materialsMeta.lastPage || loadingMaterials
                     }
-                    onClick={() =>
-                      setCatalogFilters((prev) => ({ ...prev, page: prev.page + 1 }))
-                    }
+                    onClick={() => setCatalogFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
                   >
                     Siguiente
                   </Button>
@@ -1742,6 +1722,11 @@ function VentasCreateView() {
         open={loadDraftOpen}
         onOpenChange={setLoadDraftOpen}
         onLoaded={handleLoadedDraft}
+        onDeleted={(saleId) => {
+          if (sourceSaleId === saleId) {
+            resetLoadedDraft()
+          }
+        }}
       />
       <VentasPaymentMethodDialog
         open={paymentDialogOpen}
@@ -1766,11 +1751,7 @@ function VentasCreateView() {
         initialMaterials={formulaDialogLine?.formulaMaterials}
         onSave={(result) => {
           if (formulaDialogLineId) {
-            saveLineFormulaMaterials(
-              formulaDialogLineId,
-              result.materials,
-              result.materialRefs
-            )
+            saveLineFormulaMaterials(formulaDialogLineId, result.materials, result.materialRefs)
           }
           setFormulaDialogLineId(null)
         }}
@@ -1814,9 +1795,7 @@ function VentasCreateView() {
         service={serviceEditLine?.product ?? null}
         mode="edit"
         initialQuantity={serviceEditLine?.quantity ?? 1}
-        initialUnitPriceUsd={
-          serviceEditLine ? cartLineUnitPrice(serviceEditLine) : undefined
-        }
+        initialUnitPriceUsd={serviceEditLine ? cartLineUnitPrice(serviceEditLine) : undefined}
         initialDetail={serviceEditLine?.detail ?? ''}
         onConfirm={saveServiceLineEdit}
       />

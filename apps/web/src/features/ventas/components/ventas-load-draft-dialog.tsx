@@ -1,4 +1,4 @@
-import { Loader2, Search } from 'lucide-react'
+import { Loader2, Search, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,7 +13,8 @@ import { Input } from '@/components/ui/input'
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { getMaterial } from '@/features/materials/services/material-service'
 import type { Material } from '@/features/materials/types'
-import { useSalesQuery } from '@/features/ventas/hooks/use-sales'
+import { PermissionGate } from '@/features/permissions/components/permission-gate'
+import { useDeleteSaleMutation, useSalesQuery } from '@/features/ventas/hooks/use-sales'
 import { getCatalogProduct } from '@/features/ventas/services/catalog-service'
 import { getSale } from '@/features/ventas/services/sales-service'
 import type { CatalogProduct, Sale } from '@/features/ventas/types'
@@ -63,12 +64,20 @@ type VentasLoadDraftDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onLoaded: (draft: LoadedDraft) => void
+  onDeleted?: (saleId: number) => void
 }
 
-export function VentasLoadDraftDialog({ open, onOpenChange, onLoaded }: VentasLoadDraftDialogProps) {
+export function VentasLoadDraftDialog({
+  open,
+  onOpenChange,
+  onLoaded,
+  onDeleted,
+}: VentasLoadDraftDialogProps) {
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [loadingId, setLoadingId] = useState<number | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<Sale | null>(null)
+  const deleteDraftMutation = useDeleteSaleMutation()
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 300)
@@ -160,69 +169,158 @@ export function VentasLoadDraftDialog({ open, onOpenChange, onLoaded }: VentasLo
     }
   }
 
+  async function handleDeleteConfirmed() {
+    if (!confirmDelete) return
+    try {
+      await deleteDraftMutation.mutateAsync(confirmDelete.id)
+      onDeleted?.(confirmDelete.id)
+      toast.success(
+        confirmDelete.code
+          ? `Se eliminó el borrador ${confirmDelete.code}.`
+          : `Se eliminó el borrador #${confirmDelete.id}.`
+      )
+      setConfirmDelete(null)
+    } catch (deleteErr) {
+      notifyApiError(deleteErr)
+    }
+  }
+
+  const busy = loadingId !== null || deleteDraftMutation.isPending
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Cargar factura</DialogTitle>
-          <DialogDescription>
-            Elegí un borrador para editarlo en el carrito.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setConfirmDelete(null)
+          onOpenChange(nextOpen)
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Cargar factura</DialogTitle>
+            <DialogDescription>
+              Elegí un documento en espera para editarlo, o eliminalo si ya no lo necesitás.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="relative">
-          <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-          <Input
-            className="pl-9"
-            placeholder="Buscar por cliente…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-          />
-        </div>
+          <div className="relative">
+            <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+            <Input
+              className="pl-9"
+              placeholder="Buscar por cliente…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+          </div>
 
-        <div className="scrollbar-subtle max-h-72 space-y-2 overflow-y-auto">
-          {!open ? null : isLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="text-muted-foreground size-5 animate-spin" />
-            </div>
-          ) : isError ? (
-            <QueryErrorState isError error={error} title="No se pudieron cargar los borradores" />
-          ) : drafts.length === 0 ? (
-            <p className="text-muted-foreground py-8 text-center text-sm">
-              No hay borradores disponibles.
-            </p>
-          ) : (
-            drafts.map((sale) => (
-              <button
-                key={sale.id}
-                type="button"
-                disabled={loadingId !== null}
-                className="hover:bg-muted flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors"
-                onClick={() => void handleSelect(sale)}
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">
-                    {sale.code ?? `Borrador #${sale.id}`}
-                  </p>
-                  <p className="text-muted-foreground truncate text-xs">
-                    {sale.customer?.name ?? sale.guest_name ?? 'Sin cliente'}
-                  </p>
+          <div className="scrollbar-subtle max-h-72 space-y-2 overflow-y-auto">
+            {!open ? null : isLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="text-muted-foreground size-5 animate-spin" />
+              </div>
+            ) : isError ? (
+              <QueryErrorState isError error={error} title="No se pudieron cargar los borradores" />
+            ) : drafts.length === 0 ? (
+              <p className="text-muted-foreground py-8 text-center text-sm">
+                No hay borradores disponibles.
+              </p>
+            ) : (
+              drafts.map((sale) => (
+                <div key={sale.id} className="flex items-stretch gap-1 rounded-lg border pr-1">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="hover:bg-muted flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors"
+                    onClick={() => void handleSelect(sale)}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {sale.code ?? `Borrador #${sale.id}`}
+                      </p>
+                      <p className="text-muted-foreground truncate text-xs">
+                        {sale.customer?.name ?? sale.guest_name ?? 'Sin cliente'}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <DisplayMoneyFromUsd amountUsd={sale.total_usd} size="sm" />
+                      {loadingId === sale.id ? <Loader2 className="size-4 animate-spin" /> : null}
+                    </div>
+                  </button>
+                  <PermissionGate permission="ventas.confirm">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive my-auto size-8 shrink-0"
+                      title="Eliminar borrador"
+                      aria-label={`Eliminar ${sale.code ?? `borrador #${sale.id}`}`}
+                      disabled={busy}
+                      onClick={() => setConfirmDelete(sale)}
+                    >
+                      {deleteDraftMutation.isPending && confirmDelete?.id === sale.id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-4" />
+                      )}
+                    </Button>
+                  </PermissionGate>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <DisplayMoneyFromUsd amountUsd={sale.total_usd} size="sm" />
-                  {loadingId === sale.id ? <Loader2 className="size-4 animate-spin" /> : null}
-                </div>
-              </button>
-            ))
-          )}
-        </div>
+              ))
+            )}
+          </div>
 
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmDelete !== null}
+        onOpenChange={(next) => !next && setConfirmDelete(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar documento en espera</DialogTitle>
+            <DialogDescription>
+              ¿Eliminar{' '}
+              <span className="text-foreground font-medium">
+                {confirmDelete?.code ??
+                  (confirmDelete ? `Borrador #${confirmDelete.id}` : 'este borrador')}
+              </span>
+              ? Se borra el documento. No se descontó stock.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmDelete(null)}
+              disabled={deleteDraftMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleDeleteConfirmed()}
+              disabled={deleteDraftMutation.isPending}
+            >
+              {deleteDraftMutation.isPending ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  Eliminando…
+                </>
+              ) : (
+                'Sí, eliminar'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

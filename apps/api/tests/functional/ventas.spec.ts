@@ -1846,4 +1846,74 @@ test.group('Ventas API — catálogo y ventas', (group) => {
       error: { code: 'PAGOS_VENTA_INVALIDOS' },
     })
   })
+
+  test('DELETE /sales/:id removes a draft and rejects a confirmed sale', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const catalog = await CatalogProduct.create({
+      name: 'Producto borrador a borrar',
+      category: 'Uniforme',
+      salePriceUsd: '10.0000',
+      costUsd: '4.0000',
+      stockQuantity: '5.000',
+      active: true,
+    })
+
+    const draftResponse = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        guest_name: 'Borrador a eliminar',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 1,
+            unit_price_usd: 10,
+          },
+        ],
+      })
+
+    draftResponse.assertStatus(200)
+    const draftId = draftResponse.body().data.sale.id
+
+    const deleteDraft = await client.delete(`/api/v1/sales/${draftId}`).loginAs(user)
+    deleteDraft.assertStatus(200)
+    assert.equal(deleteDraft.body().data.eliminado, true)
+
+    const missing = await client.get(`/api/v1/sales/${draftId}`).loginAs(user)
+    missing.assertStatus(404)
+
+    const confirmedDraft = await client
+      .post('/api/v1/sales')
+      .loginAs(user)
+      .json({
+        guest_name: 'Confirmada',
+        billing_mode: 'FAST',
+        payment_type: 'CASH',
+        lines: [
+          {
+            catalog_product_id: Number(catalog.id),
+            quantity: 1,
+            unit_price_usd: 10,
+          },
+        ],
+      })
+    confirmedDraft.assertStatus(200)
+
+    const confirmResponse = await client
+      .post(`/api/v1/sales/${confirmedDraft.body().data.sale.id}/confirm`)
+      .loginAs(user)
+      .json({ payment_method_code: 'cash_usd' })
+    confirmResponse.assertStatus(200)
+
+    const deleteCompleted = await client
+      .delete(`/api/v1/sales/${confirmedDraft.body().data.sale.id}`)
+      .loginAs(user)
+    deleteCompleted.assertStatus(409)
+    assert.equal(deleteCompleted.body().error.code, 'VENTA_NO_EDITABLE')
+  })
 })
