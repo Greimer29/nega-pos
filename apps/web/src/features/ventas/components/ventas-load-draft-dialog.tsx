@@ -13,7 +13,6 @@ import { Input } from '@/components/ui/input'
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { getMaterial } from '@/features/materials/services/material-service'
 import type { Material } from '@/features/materials/types'
-import { PermissionGate } from '@/features/permissions/components/permission-gate'
 import { useDeleteSaleMutation, useSalesQuery } from '@/features/ventas/hooks/use-sales'
 import { getCatalogProduct } from '@/features/ventas/services/catalog-service'
 import { getSale } from '@/features/ventas/services/sales-service'
@@ -200,7 +199,7 @@ export function VentasLoadDraftDialog({
           <DialogHeader>
             <DialogTitle>Cargar factura</DialogTitle>
             <DialogDescription>
-              Elegí un documento en espera para editarlo, o eliminalo si ya no lo necesitás.
+              Tocá un borrador para cargarlo al carrito, o <strong>Eliminar</strong> para borrarlo.
             </DialogDescription>
           </DialogHeader>
 
@@ -227,11 +226,14 @@ export function VentasLoadDraftDialog({
               </p>
             ) : (
               drafts.map((sale) => (
-                <div key={sale.id} className="flex items-stretch gap-1 rounded-lg border pr-1">
+                <div
+                  key={sale.id}
+                  className="flex items-center gap-2 rounded-lg border px-2 py-1.5"
+                >
                   <button
                     type="button"
                     disabled={busy}
-                    className="hover:bg-muted flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors"
+                    className="hover:bg-muted flex min-w-0 flex-1 items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors"
                     onClick={() => void handleSelect(sale)}
                   >
                     <div className="min-w-0">
@@ -247,24 +249,23 @@ export function VentasLoadDraftDialog({
                       {loadingId === sale.id ? <Loader2 className="size-4 animate-spin" /> : null}
                     </div>
                   </button>
-                  <PermissionGate permission="ventas.confirm">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive hover:text-destructive my-auto size-8 shrink-0"
-                      title="Eliminar borrador"
-                      aria-label={`Eliminar ${sale.code ?? `borrador #${sale.id}`}`}
-                      disabled={busy}
-                      onClick={() => setConfirmDelete(sale)}
-                    >
-                      {deleteDraftMutation.isPending && confirmDelete?.id === sale.id ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="size-4" />
-                      )}
-                    </Button>
-                  </PermissionGate>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive shrink-0"
+                    title="Eliminar borrador"
+                    aria-label={`Eliminar ${sale.code ?? `borrador #${sale.id}`}`}
+                    disabled={busy}
+                    onClick={() => setConfirmDelete(sale)}
+                  >
+                    {deleteDraftMutation.isPending && confirmDelete?.id === sale.id ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-4" />
+                    )}
+                    Eliminar
+                  </Button>
                 </div>
               ))
             )}
