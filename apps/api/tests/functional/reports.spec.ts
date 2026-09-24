@@ -604,11 +604,12 @@ test.group('Reports API', (group) => {
           isCreditSale?: boolean
           amountUsd: string
         }>
-        summary: { sales: string }
+        summary: { sales: string; pendingReceivablesUsd: string }
       }
     }
 
     assert.equal(body.data.summary.sales, '0.00')
+    assert.equal(body.data.summary.pendingReceivablesUsd, '100.0000')
     assert.lengthOf(body.data.movements, 1)
     assert.equal(body.data.movements[0].type, 'sale')
     assert.equal(body.data.movements[0].isIncome, false)

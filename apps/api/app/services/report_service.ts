@@ -111,6 +111,11 @@ export type AccountStatementSummary = {
   /** Subconjunto vencido de pendingPayablesUsd. */
   overduePayablesUsd: string
 
+  /** CxC abierta (informativo; no suma al flujo hasta el cobro). */
+  pendingReceivablesUsd: string
+
+  overdueReceivablesUsd: string
+
   netUsd: string
 
   sales: string
@@ -126,6 +131,10 @@ export type AccountStatementSummary = {
   pendingPayables: string
 
   overduePayables: string
+
+  pendingReceivables: string
+
+  overdueReceivables: string
 
   net: string
 
@@ -719,6 +728,7 @@ export default class ReportService {
     })
 
     const netUsd = salesUsd + incomesUsd - purchasesUsd - expensesUsd - machineExpensesUsd
+    const { pendingReceivablesUsd, overdueReceivablesUsd } = await this.computeOpenReceivables()
 
     return {
       period,
@@ -739,6 +749,10 @@ export default class ReportService {
         pendingPayablesUsd: pendingPayablesUsd.toFixed(4),
 
         overduePayablesUsd: overduePayablesUsd.toFixed(4),
+
+        pendingReceivablesUsd: pendingReceivablesUsd.toFixed(4),
+
+        overdueReceivablesUsd: overdueReceivablesUsd.toFixed(4),
 
         netUsd: netUsd.toFixed(4),
 
@@ -781,6 +795,16 @@ export default class ReportService {
           displayCurrency
         ),
 
+        pendingReceivables: this.formatDisplay(
+          this.currencyService.fromUsd(pendingReceivablesUsd, displayCurrency, rates),
+          displayCurrency
+        ),
+
+        overdueReceivables: this.formatDisplay(
+          this.currencyService.fromUsd(overdueReceivablesUsd, displayCurrency, rates),
+          displayCurrency
+        ),
+
         net: this.formatDisplay(
           this.currencyService.fromUsd(netUsd, displayCurrency, rates),
 
@@ -792,6 +816,32 @@ export default class ReportService {
 
       movements,
     }
+  }
+
+  private async computeOpenReceivables() {
+    const sales = await Sale.query()
+      .whereIn('status', [...SALE_STATUSES])
+      .where('paymentType', 'CREDIT')
+      .where('balanceUsd', '>', 0)
+
+    const asOfDate = DateTime.now().toISODate()!
+    let pendingReceivablesUsd = 0
+    let overdueReceivablesUsd = 0
+
+    for (const sale of sales) {
+      const balanceUsd = Number(sale.balanceUsd ?? 0)
+      if (balanceUsd <= 0) {
+        continue
+      }
+
+      pendingReceivablesUsd += balanceUsd
+      const dueDate = sale.creditDueDate?.toISODate() ?? null
+      if (creditSaleReportStatus(balanceUsd, dueDate, asOfDate) === 'overdue') {
+        overdueReceivablesUsd += balanceUsd
+      }
+    }
+
+    return { pendingReceivablesUsd, overdueReceivablesUsd }
   }
 
   private resolveSaleAmount(

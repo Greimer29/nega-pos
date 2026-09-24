@@ -20,15 +20,30 @@ export function ReportBreakdownChart({ summary }: ReportBreakdownChartProps) {
   const currency = summary.displayCurrency
 
   const rawSegments: Array<Omit<Segment, 'color'>> = [
-    { key: 'sales', label: 'Ventas', value: Number(summary.sales), isIncome: true },
+    {
+      key: 'sales',
+      label: 'Cobros por ventas',
+      value: Number(summary.sales),
+      isIncome: true,
+    },
     {
       key: 'incomes',
-      label: 'Ingresos',
+      label: 'Aportes de capital',
       value: Number(summary.incomes ?? 0),
       isIncome: true,
     },
-    { key: 'purchases', label: 'Compras', value: Number(summary.purchases), isIncome: false },
-    { key: 'expenses', label: 'Gastos', value: Number(summary.expenses), isIncome: false },
+    {
+      key: 'purchases',
+      label: 'Pagos a proveedores',
+      value: Number(summary.purchases),
+      isIncome: false,
+    },
+    {
+      key: 'expenses',
+      label: 'Gastos operativos',
+      value: Number(summary.expenses),
+      isIncome: false,
+    },
     {
       key: 'machine',
       label: 'Gastos máquina (histórico)',
