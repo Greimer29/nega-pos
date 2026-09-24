@@ -33,7 +33,7 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
   const pendingPayablesDetail =
     overduePayablesUsd > 0
       ? `${formatUsd(summary.overduePayablesUsd)} vencidas`
-      : 'No resta del balance neto'
+      : 'No se descuenta del flujo de caja hasta el pago'
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -48,6 +48,7 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
         icon={ArrowUpRight}
         label="Ingresos (ventas)"
         value={formatUsd(summary.salesUsd)}
+        detail="Cobros de ventas del período. No representa el saldo de la empresa."
         tone="income"
         href={reportCategoryHref('ventas', filterSearch)}
       />
@@ -55,6 +56,7 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
         icon={ArrowDownToLine}
         label="Ingresos (aportes)"
         value={formatUsd(summary.incomesUsd ?? '0')}
+        detail="Aportes u otras entradas que no provienen de una venta."
         tone="income"
         href={reportCategoryHref('ingresos', filterSearch)}
       />
@@ -62,6 +64,7 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
         icon={ShoppingCart}
         label="Egresos compras"
         value={formatUsd(summary.purchasesUsd)}
+        detail="Pagos a proveedores y compras de mercadería en este período."
         tone="purchase"
         href={reportCategoryHref('compras', filterSearch)}
       />
@@ -77,6 +80,7 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
         icon={Receipt}
         label="Gastos"
         value={formatUsd(summary.expensesUsd)}
+        detail="Egresos operativos registrados en este período."
         tone="expense"
         href={reportCategoryHref('gastos', filterSearch)}
       />
@@ -157,7 +161,7 @@ function HeroKpiCard({
 
           >
 
-            {isPositive ? 'Superávit' : 'Déficit'}
+            {isPositive ? 'Entró más' : 'Salió más'}
 
           </span>
 
@@ -169,7 +173,7 @@ function HeroKpiCard({
 
           <p className="text-sm font-medium tracking-wide text-neutral-400 uppercase">
 
-            Balance neto
+            Flujo de caja
 
           </p>
 
@@ -190,8 +194,9 @@ function HeroKpiCard({
           </p>
 
           <p className="mt-3 max-w-md text-xs leading-relaxed text-neutral-400">
-            Flujo de caja en {baseCurrencyCode} (visualización {currency}). La deuda a crédito de
-            proveedores se muestra aparte y no resta este balance hasta el abono.
+            Entradas menos salidas en este período ({baseCurrencyCode}, vista {currency}). No
+            representa el saldo total de la empresa ni la utilidad. Las deudas a crédito no se
+            descuentan hasta el pago.
           </p>
 
         </div>
