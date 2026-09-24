@@ -12,7 +12,7 @@ export function formatCostWarningsMessage(warnings: CostWarning[]): string | nul
 
   const lines = warnings.map(
     (warning) =>
-      `«${warning.product_name}»: precio venta $${Number(warning.sale_price_usd).toFixed(2)} < costo $${Number(warning.cost_usd).toFixed(2)}`
+      `«${warning.product_name}»: precio venta $${Number(warning.sale_price_usd).toFixed(4)} < costo $${Number(warning.cost_usd).toFixed(4)}`
   )
 
   if (warnings.length === 1) {

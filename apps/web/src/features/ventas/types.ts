@@ -61,6 +61,10 @@ export type CatalogProduct = {
   active: boolean
   sold_qty?: number
   has_sizes?: boolean
+  wholesale_enabled?: boolean
+  wholesale_units_per_pack?: string | null
+  wholesale_cost_usd?: string | null
+  wholesale_sale_price_usd?: string | null
   sizes?: CatalogProductSize[]
   created_at: string
   updated_at: string
@@ -125,6 +129,10 @@ export type CatalogProductInput = {
   minimum_stock?: number
   barcode?: string | null
   supplier_code?: string | null
+  wholesale_enabled?: boolean
+  wholesale_units_per_pack?: number | null
+  wholesale_cost_usd?: number | null
+  wholesale_sale_price_usd?: number | null
   sizes?: CatalogProductSizeInput[]
 }
 
@@ -216,6 +224,8 @@ export type SaleLine = {
   subtotal_usd: string
   cost_usd?: string | null
   kitchen_note?: string | null
+  is_wholesale?: boolean
+  units_per_pack?: string | null
   formula_materials?: SaleLineFormulaMaterial[]
   has_custom_formula?: boolean
   effective_formula_materials?: SaleLineFormulaMaterial[]
@@ -298,6 +308,7 @@ export type CreateSaleInput = {
     kitchen_note?: string | null
     catalog_product_size_id?: number | null
     size?: string | null
+    is_wholesale?: boolean
     formula_materials?: SaleLineFormulaMaterialInput[]
   }[]
 }

@@ -26,6 +26,8 @@ import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
 import { assertProductBarcodeAvailable, normalizeBarcode } from '#utils/barcode'
 import { normalizeSupplierCode } from '#utils/supplier_code'
+import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
+import { normalizeWholesaleConfig, type WholesaleConfigInput } from '#utils/wholesale'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
@@ -44,6 +46,10 @@ export type CatalogProductInput = {
   minimum_stock?: number
   barcode?: string | null
   supplier_code?: string | null
+  wholesale_enabled?: boolean
+  wholesale_units_per_pack?: number | null
+  wholesale_cost_usd?: number | null
+  wholesale_sale_price_usd?: number | null
   active?: boolean
   sizes?: Array<{ size: string; stock_quantity: number }>
 }
@@ -117,7 +123,7 @@ export type CatalogProductPurchaseHistoryItem = {
 }
 
 function formatUsdNote(value: string | number) {
-  return Number(value).toFixed(2)
+  return Number(value).toFixed(4)
 }
 
 const IMAGE_MIME: Record<string, string> = {
@@ -299,6 +305,15 @@ export default class CatalogProductService {
       throw new ProductoConFormulaNoPermiteTallasException()
     }
 
+    const wholesale = this.normalizeProductWholesale(input, {
+      isService,
+      hasFormula: Boolean(input.formula_id),
+      hasSizes: Boolean(input.sizes && input.sizes.length > 0),
+    })
+    if (wholesale.derivedUnitCost !== null) {
+      costUsd = wholesale.derivedUnitCost
+    }
+
     const barcode = isService ? null : normalizeBarcode(input.barcode)
     if (!isService) {
       await assertProductBarcodeAvailable(barcode)
@@ -328,6 +343,10 @@ export default class CatalogProductService {
           ),
           barcode,
           supplierCode: isService ? null : normalizeSupplierCode(input.supplier_code),
+          wholesaleEnabled: wholesale.wholesaleEnabled,
+          wholesaleUnitsPerPack: wholesale.wholesaleUnitsPerPack,
+          wholesaleCostUsd: wholesale.wholesaleCostUsd,
+          wholesaleSalePriceUsd: wholesale.wholesaleSalePriceUsd,
           active: input.active ?? true,
         },
         { client: trx }
@@ -477,6 +496,13 @@ export default class CatalogProductService {
           product.stockQuantity = formatInventoryQuantityForStorage(input.stock_quantity, saleUnit)
         }
       }
+
+      const sizesAfterUpdate = await this.sizeService.loadSizes(Number(product.id), trx)
+      this.applyWholesaleToProduct(product, input, {
+        isService,
+        hasFormula: Boolean(product.formulaId),
+        hasSizes: sizesAfterUpdate.length > 0,
+      })
 
       const effectiveCostUsd = Number(product.costUsd)
       const warning = this.buildCostWarningIfNeeded(product, effectiveCostUsd)
@@ -758,6 +784,77 @@ export default class CatalogProductService {
   private async calcularCostoFormulaPersistible(product: CatalogProduct): Promise<string> {
     const costUsd = await this.formulaService.calcularCosto(Number(product.formulaId))
     return costUsd.toFixed(4)
+  }
+
+  private normalizeProductWholesale(
+    input: WholesaleConfigInput,
+    options: { isService: boolean; hasFormula: boolean; hasSizes: boolean }
+  ) {
+    let rejectReason = 'Este ítem no admite configuración mayorista'
+    if (options.isService) {
+      rejectReason = 'Un servicio no admite configuración mayorista'
+    } else if (options.hasFormula) {
+      rejectReason = 'Un producto con fórmula no admite configuración mayorista'
+    } else if (options.hasSizes) {
+      rejectReason = 'Un producto con tallas no admite configuración mayorista'
+    }
+
+    return normalizeWholesaleConfig(input, {
+      allowEnabled: !options.isService && !options.hasFormula && !options.hasSizes,
+      rejectReason,
+    })
+  }
+
+  private applyWholesaleToProduct(
+    product: CatalogProduct,
+    input: CatalogProductUpdateInput,
+    options: { isService: boolean; hasFormula: boolean; hasSizes: boolean }
+  ) {
+    const wholesaleTouched =
+      input.wholesale_enabled !== undefined ||
+      input.wholesale_units_per_pack !== undefined ||
+      input.wholesale_cost_usd !== undefined ||
+      input.wholesale_sale_price_usd !== undefined
+
+    if (!wholesaleTouched) {
+      if (
+        product.wholesaleEnabled &&
+        (options.hasFormula || options.hasSizes || options.isService)
+      ) {
+        throw new ConfiguracionMayoristaInvalidaException(
+          options.hasFormula
+            ? 'Un producto con fórmula no admite configuración mayorista'
+            : options.hasSizes
+              ? 'Un producto con tallas no admite configuración mayorista'
+              : 'Un servicio no admite configuración mayorista'
+        )
+      }
+      return
+    }
+
+    const wholesale = this.normalizeProductWholesale(
+      {
+        wholesale_enabled: input.wholesale_enabled ?? Boolean(product.wholesaleEnabled),
+        wholesale_units_per_pack:
+          input.wholesale_units_per_pack ??
+          (product.wholesaleUnitsPerPack !== null ? Number(product.wholesaleUnitsPerPack) : null),
+        wholesale_cost_usd:
+          input.wholesale_cost_usd ??
+          (product.wholesaleCostUsd !== null ? Number(product.wholesaleCostUsd) : null),
+        wholesale_sale_price_usd:
+          input.wholesale_sale_price_usd ??
+          (product.wholesaleSalePriceUsd !== null ? Number(product.wholesaleSalePriceUsd) : null),
+      },
+      options
+    )
+
+    product.wholesaleEnabled = wholesale.wholesaleEnabled
+    product.wholesaleUnitsPerPack = wholesale.wholesaleUnitsPerPack
+    product.wholesaleCostUsd = wholesale.wholesaleCostUsd
+    product.wholesaleSalePriceUsd = wholesale.wholesaleSalePriceUsd
+    if (wholesale.derivedUnitCost !== null) {
+      product.costUsd = wholesale.derivedUnitCost.toFixed(4)
+    }
   }
 
   private normalizeCostUsd(value: string | null | undefined): string {

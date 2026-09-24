@@ -7,7 +7,7 @@ import {
 } from '@/features/ventas/utils/sale-line-formula'
 
 const STORAGE_KEY = 'nega-pos:ventas-cart-draft'
-const DRAFT_VERSION = 7
+const DRAFT_VERSION = 8
 
 export type VentasCartDraftLine = {
   id: string
@@ -21,6 +21,7 @@ export type VentasCartDraftLine = {
   detail?: string | null
   catalogProductSizeId?: number | null
   size?: string | null
+  isWholesale?: boolean
 }
 
 export type VentasCartDraft = {
@@ -94,6 +95,7 @@ function normalizeCartLine(line: unknown): VentasCartDraftLine | null {
         : null,
     detail:
       typeof line.detail === 'string' && line.detail.trim() ? line.detail.trim() : null,
+    isWholesale: line.isWholesale === true,
   }
 
   if (kind === 'material') {
@@ -143,7 +145,8 @@ export function loadVentasCartDraft(): VentasCartDraft | null {
       parsed.version !== 3 &&
       parsed.version !== 4 &&
       parsed.version !== 5 &&
-      parsed.version !== 6
+      parsed.version !== 6 &&
+      parsed.version !== 7
     ) {
       return null
     }

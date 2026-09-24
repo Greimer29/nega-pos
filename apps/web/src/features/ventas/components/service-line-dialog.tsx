@@ -96,7 +96,7 @@ export function ServiceLineDialog({
             />
             {service ? (
               <p className="text-muted-foreground text-xs">
-                Precio de lista: {Number(service.sale_price_usd).toFixed(2)} USD
+                Precio de lista: {Number(service.sale_price_usd).toFixed(4)} USD
               </p>
             ) : null}
           </div>

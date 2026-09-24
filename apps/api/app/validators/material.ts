@@ -17,6 +17,10 @@ const materialFields = {
   last_purchase_price_usd: vine.number().min(0).optional(),
   barcode: vine.string().trim().maxLength(64).nullable().optional(),
   supplier_code: vine.string().trim().maxLength(50).nullable().optional(),
+  wholesale_enabled: vine.boolean().optional(),
+  wholesale_units_per_pack: vine.number().min(2).nullable().optional(),
+  wholesale_cost_usd: vine.number().min(0).nullable().optional(),
+  wholesale_sale_price_usd: vine.number().min(0).nullable().optional(),
 }
 
 export const createMaterialValidator = vine.create({

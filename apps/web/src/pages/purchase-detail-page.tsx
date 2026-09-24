@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { BarcodeScanButton } from '@/components/barcode-scan-button'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useFormatMoney } from '@/features/currencies/context/display-currency-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DecimalInput, MoneyInput } from '@/components/decimal-input'
@@ -83,6 +84,7 @@ import {
   normalizeInventoryQuantity,
 } from '@/lib/inventory-units'
 import { cn } from '@/lib/utils'
+import { wholesalePackCostUsd, wholesaleUnitsPerPack } from '@/lib/wholesale'
 import { pageHeaderClass, toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 
 function materialToSummary(material: Material): PurchaseItemMaterial {
@@ -109,6 +111,7 @@ function purchaseItemToLocal(item: PurchaseItem): LocalPurchaseItem {
       },
       quantity: Number(item.quantity),
       unitPriceUsd: Number(item.unitPriceUsd ?? 0),
+      isWholesale: Boolean(item.isWholesale),
     }
   }
 
@@ -125,6 +128,7 @@ function purchaseItemToLocal(item: PurchaseItem): LocalPurchaseItem {
     },
     quantity: Number(item.quantity),
     unitPriceUsd: Number(item.unitPriceUsd ?? 0),
+    isWholesale: Boolean(item.isWholesale),
   }
 }
 
@@ -139,7 +143,17 @@ function localItemName(item: LocalPurchaseItem) {
   return item.itemType === 'product' ? item.catalogProduct?.name ?? 'Producto' : item.material?.name ?? 'Material'
 }
 
+function localItemCanWholesale(item: LocalPurchaseItem) {
+  if (item.itemType === 'product') {
+    return Boolean(item.catalogProduct?.wholesaleEnabled)
+  }
+  return Boolean(item.material?.wholesaleEnabled)
+}
+
 function localItemUnit(item: LocalPurchaseItem) {
+  if (item.isWholesale) {
+    return 'Paq.'
+  }
   if (item.itemType === 'product') {
     return productSaleUnitAbrev(item.catalogProduct?.saleUnit ?? 'UND')
   }
@@ -431,7 +445,7 @@ export function PurchaseDetallePage() {
 
   async function addMaterialToItems(material: Material) {
     const existing = localItems.find(
-      (i) => i.itemType === 'material' && i.materialId === material.id
+      (i) => i.itemType === 'material' && i.materialId === material.id && !i.isWholesale
     )
     const price = material.lastPurchasePriceUsd ? Number(material.lastPurchasePriceUsd) : 0
 
@@ -461,8 +475,10 @@ export function PurchaseDetallePage() {
           localId: 'pending',
           itemType: 'material',
           materialId: material.id,
+          material,
           quantity: 1,
           unitPriceUsd: price,
+          isWholesale: false,
         }
         const created = await createItemMutation.mutateAsync({
           purchaseId,
@@ -478,7 +494,7 @@ export function PurchaseDetallePage() {
 
   async function addProductToItems(product: CatalogProduct) {
     const existing = localItems.find(
-      (i) => i.itemType === 'product' && i.catalogProductId === product.id
+      (i) => i.itemType === 'product' && i.catalogProductId === product.id && !i.isWholesale
     )
     const price = product.cost_usd ? Number(product.cost_usd) : 0
 
@@ -508,8 +524,19 @@ export function PurchaseDetallePage() {
           localId: 'pending',
           itemType: 'product',
           catalogProductId: product.id,
+          catalogProduct: {
+            id: product.id,
+            name: product.name,
+            category: product.category,
+            saleUnit: product.sale_unit,
+            wholesaleEnabled: product.wholesale_enabled,
+            wholesaleUnitsPerPack: product.wholesale_units_per_pack,
+            wholesaleCostUsd: product.wholesale_cost_usd,
+            wholesaleSalePriceUsd: product.wholesale_sale_price_usd,
+          },
           quantity: 1,
           unitPriceUsd: price,
+          isWholesale: false,
         }
         const created = await createItemMutation.mutateAsync({
           purchaseId,
@@ -551,7 +578,7 @@ export function PurchaseDetallePage() {
 
   function updateLocalItem(
     localId: string,
-    patch: Partial<Pick<LocalPurchaseItem, 'quantity' | 'unitPriceUsd'>>
+    patch: Partial<Pick<LocalPurchaseItem, 'quantity' | 'unitPriceUsd' | 'isWholesale'>>
   ) {
     let persistedItem: LocalPurchaseItem | null = null
 
@@ -565,6 +592,23 @@ export function PurchaseDetallePage() {
 
     if (persistedItem) scheduleItemPersist(localId, persistedItem)
     markDirty()
+  }
+
+  function toggleLocalItemWholesale(localId: string, checked: boolean) {
+    const current = localItems.find((item) => item.localId === localId)
+    if (!current || !localItemCanWholesale(current)) return
+
+    const source = current.itemType === 'product' ? current.catalogProduct : current.material
+    const packCost = wholesalePackCostUsd(source)
+    const units = wholesaleUnitsPerPack(source)
+    const derivedUnit = packCost != null && units ? packCost / units : null
+
+    updateLocalItem(localId, {
+      isWholesale: checked,
+      unitPriceUsd: checked
+        ? (packCost ?? current.unitPriceUsd)
+        : (derivedUnit ?? current.unitPriceUsd),
+    })
   }
 
   function updateLocalItemPriceUsd(localId: string, unitPriceUsd: number) {
@@ -1145,6 +1189,7 @@ export function PurchaseDetallePage() {
                     <tr className="bg-muted/50 border-b text-left">
                       <th className="px-3 py-2 font-medium">Código</th>
                       <th className="px-3 py-2 font-medium">Descripción</th>
+                      <th className="px-3 py-2 font-medium">Mayorista</th>
                       <th className="px-3 py-2 font-medium">Cantidad</th>
                       <th className="px-3 py-2 font-medium">Unidad</th>
                       <th className="px-3 py-2 font-medium">
@@ -1164,6 +1209,21 @@ export function PurchaseDetallePage() {
                           <tr key={item.localId} className="border-b last:border-b-0">
                             <td className="px-3 py-2">{localItemCode(item)}</td>
                             <td className="px-3 py-2">{localItemName(item)}</td>
+                            <td className="px-3 py-2">
+                              {localItemCanWholesale(item) ? (
+                                <label className="flex items-center gap-2 text-xs">
+                                  <Checkbox
+                                    checked={Boolean(item.isWholesale)}
+                                    onChange={(e) =>
+                                      toggleLocalItemWholesale(item.localId, e.target.checked)
+                                    }
+                                  />
+                                  Paq.
+                                </label>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
                             <td className="px-3 py-2">
                               {(() => {
                                 const unit = localItemUnitCode(item)
@@ -1278,13 +1338,16 @@ export function PurchaseDetallePage() {
                                 ? item.catalogProduct?.name ?? '—'
                                 : (item.material?.name ?? '—')}
                             </td>
+                            <td className="px-3 py-2">{item.isWholesale ? 'Paq.' : '—'}</td>
                             <td className="px-3 py-2 tabular-nums">{item.quantity}</td>
                             <td className="px-3 py-2">
-                              {item.itemType === 'product'
-                                ? productSaleUnitAbrev(item.catalogProduct?.saleUnit ?? 'UND')
-                                : item.material
-                                  ? UNIT_ABREV[item.material.unit]
-                                  : '—'}
+                              {item.isWholesale
+                                ? 'Paq.'
+                                : item.itemType === 'product'
+                                  ? productSaleUnitAbrev(item.catalogProduct?.saleUnit ?? 'UND')
+                                  : item.material
+                                    ? UNIT_ABREV[item.material.unit]
+                                    : '—'}
                             </td>
                             <td className="px-3 py-2">
                               <PrecioEnMonedaIngreso

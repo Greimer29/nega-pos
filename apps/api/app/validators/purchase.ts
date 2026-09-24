@@ -41,6 +41,7 @@ const purchaseItemFields = {
   catalog_product_id: vine.number().min(1).optional(),
   quantity: vine.number().positive(),
   unit_price_usd: vine.number().min(0),
+  is_wholesale: vine.boolean().optional(),
 }
 
 export const createPurchaseItemValidator = vine.create({
@@ -54,6 +55,7 @@ export const updatePurchaseItemValidator = vine.create({
   quantity: vine.number().positive().optional(),
   unit_price_usd: vine.number().min(0).optional(),
   unit_price_bs: vine.number().min(0).optional(),
+  is_wholesale: vine.boolean().optional(),
 })
 
 export const confirmPurchaseValidator = vine.create({

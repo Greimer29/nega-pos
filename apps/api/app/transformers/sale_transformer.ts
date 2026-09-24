@@ -110,6 +110,8 @@ export function serializeSaleLine(line: SaleLine) {
     material_id: line.materialId ? Number(line.materialId) : null,
     description: line.description,
     kitchen_note: line.kitchenNote ?? null,
+    is_wholesale: Boolean(line.isWholesale),
+    units_per_pack: line.unitsPerPack,
     quantity: line.quantity,
     returned_quantity: line.returnedQuantity ?? '0.000',
     unit_price_usd: line.unitPriceUsd,

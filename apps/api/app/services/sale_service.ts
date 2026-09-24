@@ -46,6 +46,8 @@ import {
 } from '#constants/inventory_units'
 import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
+import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
+import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
@@ -66,6 +68,7 @@ export type SaleLineInput = {
   kitchen_note?: string | null
   catalog_product_size_id?: number | null
   size?: string | null
+  is_wholesale?: boolean
   formula_materials?: SaleLineFormulaMaterialInput[]
 }
 
@@ -137,6 +140,8 @@ type ResolvedLine = {
   subtotalUsd: string
   costUsd: string | null
   kitchenNote: string | null
+  isWholesale: boolean
+  unitsPerPack: string | null
   formulaMaterials: ResolvedSaleLineFormulaMaterial[] | null
 }
 
@@ -569,29 +574,31 @@ export default class SaleService {
             continue
           }
 
+          const inventoryReturnQty = this.inventoryQuantityForLine(line, returnQty)
           await this.revertirStockProductoParcial(
             Number(sale.id),
             Number(line.catalogProductId),
-            returnQty,
+            inventoryReturnQty,
             trx,
             note
           )
           if (line.catalogProductSizeId) {
             await this.sizeService.restoreSizeStock(
               Number(line.catalogProductSizeId),
-              returnQty,
+              inventoryReturnQty,
               trx
             )
           }
-          await this.revertirMaterialesLineaParcial(sale, line, returnQty, trx, note)
+          await this.revertirMaterialesLineaParcial(sale, line, inventoryReturnQty, trx, note)
         }
 
         if (line.materialId) {
+          const inventoryReturnQty = this.inventoryQuantityForLine(line, returnQty)
           await InventoryMovement.create(
             {
               materialId: Number(line.materialId),
               type: 'REVERSAL_ADJUSTMENT',
-              quantity: formatInventoryQuantityForStorage(returnQty, unit),
+              quantity: formatInventoryQuantityForStorage(inventoryReturnQty, unit),
               note,
             },
             { client: trx }
@@ -687,6 +694,19 @@ export default class SaleService {
               trx
             )
 
+        if (line.is_wholesale && resolvedSize.sizeId) {
+          throw new ConfiguracionMayoristaInvalidaException(
+            'Un producto con tallas no admite modo mayorista'
+          )
+        }
+
+        const wholesale = resolveWholesaleLineSnapshot(Boolean(line.is_wholesale), product)
+        const packUnits = wholesale.unitsPerPack ? Number(wholesale.unitsPerPack) : 0
+        const lineCost = wholesale.isWholesale
+          ? (product.wholesaleCostUsd ??
+            (packUnits > 0 ? (Number(product.costUsd) * packUnits).toFixed(4) : product.costUsd))
+          : product.costUsd
+
         const subtotal = quantity * unitPrice
         totalUsd += subtotal
 
@@ -700,8 +720,10 @@ export default class SaleService {
           quantity: formatInventoryQuantityForStorage(quantity, unit),
           unitPriceUsd: unitPrice.toFixed(4),
           subtotalUsd: subtotal.toFixed(4),
-          costUsd: product.costUsd,
+          costUsd: lineCost,
           kitchenNote: normalizeKitchenNote(line.kitchen_note),
+          isWholesale: wholesale.isWholesale,
+          unitsPerPack: wholesale.unitsPerPack,
           formulaMaterials,
         })
       } else if (hasMaterial) {
@@ -721,6 +743,15 @@ export default class SaleService {
         const subtotal = quantity * unitPrice
         totalUsd += subtotal
 
+        const wholesale = resolveWholesaleLineSnapshot(Boolean(line.is_wholesale), material)
+        const packUnits = wholesale.unitsPerPack ? Number(wholesale.unitsPerPack) : 0
+        const lineCost = wholesale.isWholesale
+          ? (material.wholesaleCostUsd ??
+            (packUnits > 0 && material.lastPurchasePriceUsd
+              ? (Number(material.lastPurchasePriceUsd) * packUnits).toFixed(4)
+              : material.lastPurchasePriceUsd))
+          : material.lastPurchasePriceUsd
+
         resolvedLines.push({
           catalogProductId: null,
           materialId: line.material_id!,
@@ -730,8 +761,10 @@ export default class SaleService {
           quantity: formatInventoryQuantityForStorage(quantity, unit),
           unitPriceUsd: unitPrice.toFixed(4),
           subtotalUsd: subtotal.toFixed(4),
-          costUsd: material.lastPurchasePriceUsd,
+          costUsd: lineCost,
           kitchenNote: normalizeKitchenNote(line.kitchen_note),
+          isWholesale: wholesale.isWholesale,
+          unitsPerPack: wholesale.unitsPerPack,
           formulaMaterials: null,
         })
       }
@@ -759,6 +792,8 @@ export default class SaleService {
           subtotalUsd: line.subtotalUsd,
           costUsd: line.costUsd,
           kitchenNote: line.kitchenNote,
+          isWholesale: line.isWholesale,
+          unitsPerPack: line.unitsPerPack,
           returnedQuantity: '0.000',
         },
         { client: trx }
@@ -819,11 +854,18 @@ export default class SaleService {
     }
   }
 
+  private inventoryQuantityForLine(
+    line: Pick<SaleLine, 'quantity' | 'isWholesale' | 'unitsPerPack'>,
+    quantity = Number(line.quantity)
+  ) {
+    return lineInventoryQuantity(quantity, Boolean(line.isWholesale), line.unitsPerPack)
+  }
+
   private async descontarStock(sale: Sale, trx: TransactionClientContract) {
     const saleId = Number(sale.id)
 
     for (const line of sale.saleLines) {
-      const quantity = Number(line.quantity)
+      const quantity = this.inventoryQuantityForLine(line)
 
       if (line.catalogProductId) {
         const product =

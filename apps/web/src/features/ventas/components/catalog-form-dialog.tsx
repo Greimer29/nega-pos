@@ -4,7 +4,7 @@ import { CircularImageField } from '@/components/circular-image-field'
 import { BarcodeScanButton } from '@/components/barcode-scan-button'
 import { DecimalInput, MoneyInput } from '@/components/decimal-input'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import { OptionSwitch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -43,6 +43,7 @@ import {
   profitMarginIsNegative,
 } from '@/lib/profit-margin'
 import { cn } from '@/lib/utils'
+import { deriveUnitCostFromPack, MIN_WHOLESALE_UNITS_PER_PACK } from '@/lib/wholesale'
 
 type CatalogFormDialogProps = {
   open: boolean
@@ -103,6 +104,12 @@ export function CatalogFormDialog({
   const [imageError, setImageError] = useState<string | null>(null)
   const [formulaDialogOpen, setFormulaDialogOpen] = useState(false)
   const [editingFormula, setEditingFormula] = useState<Formula | null>(null)
+  const [wholesaleEnabled, setWholesaleEnabled] = useState(false)
+  const [pricePanel, setPricePanel] = useState<'retail' | 'wholesale'>('retail')
+  const [wholesaleUnits, setWholesaleUnits] = useState('30')
+  const [wholesaleCost, setWholesaleCost] = useState('')
+  const [wholesaleSale, setWholesaleSale] = useState('')
+  const [wholesaleMargin, setWholesaleMargin] = useState('')
 
   const { data: categories = [] } = useActiveCategoriesQuery()
   const { data: liveProduct } = useCatalogProductQuery(isEditing ? product?.id : undefined)
@@ -233,6 +240,18 @@ export function CatalogFormDialog({
         setUseSizes(false)
         setSizeRows([newSizeRow()])
       }
+      const enabled = Boolean(product.wholesale_enabled)
+      setWholesaleEnabled(enabled)
+      setPricePanel(enabled ? 'wholesale' : 'retail')
+      setWholesaleUnits(product.wholesale_units_per_pack ?? '30')
+      setWholesaleCost(product.wholesale_cost_usd ?? '')
+      setWholesaleSale(product.wholesale_sale_price_usd ?? '')
+      setWholesaleMargin(
+        formatMarginValue(
+          Number(product.wholesale_cost_usd ?? 0),
+          product.wholesale_sale_price_usd ?? ''
+        )
+      )
     } else {
       setName('')
       setDescription('')
@@ -249,6 +268,12 @@ export function CatalogFormDialog({
       setMinimumStock('0')
       setUseSizes(false)
       setSizeRows([newSizeRow()])
+      setWholesaleEnabled(false)
+      setPricePanel('retail')
+      setWholesaleUnits('30')
+      setWholesaleCost('')
+      setWholesaleSale('')
+      setWholesaleMargin('')
     }
   }, [open, product, categories])
 
@@ -258,7 +283,7 @@ export function CatalogFormDialog({
     }
 
     const cost = formulaCost
-    setCostPrice(cost.toFixed(2))
+    setCostPrice(cost.toFixed(4))
 
     // Costo de fórmula cambió: conservar venta y actualizar margen.
     // Solo si aún no hay venta, proyectar venta desde el margen.
@@ -267,12 +292,17 @@ export function CatalogFormDialog({
     } else if (marginPercent.trim()) {
       const sale = calcSalePriceFromMargin(cost, Number(marginPercent))
       if (sale !== null) {
-        setSalePrice(sale.toFixed(2))
+        setSalePrice(sale.toFixed(4))
       }
     }
   }, [hasFormula, formulaCost, formulaMaterials])
 
-  const effectiveCostUsd = hasFormula ? formulaCost : Number(costPrice)
+  const packUnitsNum = Number(wholesaleUnits)
+  const derivedRetailCost =
+    wholesaleEnabled && Number.isFinite(packUnitsNum) && packUnitsNum >= MIN_WHOLESALE_UNITS_PER_PACK
+      ? deriveUnitCostFromPack(Number(wholesaleCost) || 0, packUnitsNum)
+      : Number(costPrice)
+  const effectiveCostUsd = hasFormula ? formulaCost : derivedRetailCost
   const saleBelowCost = isBelowCost(salePrice, effectiveCostUsd)
   const marginValue = Number(marginPercent)
   const marginIsNegative = profitMarginIsNegative(
@@ -282,7 +312,7 @@ export function CatalogFormDialog({
   function applySaleFromMargin(cost: number, margin: string) {
     const sale = calcSalePriceFromMargin(cost, Number(margin))
     if (sale !== null) {
-      setSalePrice(sale.toFixed(2))
+      setSalePrice(sale.toFixed(4))
     }
   }
 
@@ -345,9 +375,82 @@ export function CatalogFormDialog({
     setUseFormula(checked)
     if (checked) {
       setUseSizes(false)
+      setWholesaleEnabled(false)
+      setPricePanel('retail')
       return
     }
     clearFormula()
+  }
+
+  function handleUseSizesChange(checked: boolean) {
+    setUseSizes(checked)
+    if (checked) {
+      setUseFormula(false)
+      clearFormula()
+      setWholesaleEnabled(false)
+      setPricePanel('retail')
+      if (sizeRows.length === 0) {
+        setSizeRows([newSizeRow()])
+      }
+    }
+  }
+
+  function handleWholesaleChange(checked: boolean) {
+    setWholesaleEnabled(checked)
+    if (checked) {
+      setUseFormula(false)
+      clearFormula()
+      setUseSizes(false)
+      setPricePanel('wholesale')
+      const units = Number(wholesaleUnits)
+      if (Number.isFinite(units) && units >= MIN_WHOLESALE_UNITS_PER_PACK && wholesaleCost.trim()) {
+        setCostPrice(deriveUnitCostFromPack(Number(wholesaleCost) || 0, units).toFixed(4))
+      }
+      return
+    }
+    setPricePanel('retail')
+  }
+
+  function handleWholesaleCostChange(value: string) {
+    setWholesaleCost(value)
+    const units = Number(wholesaleUnits)
+    const cost = Number(value)
+    if (Number.isFinite(units) && units >= MIN_WHOLESALE_UNITS_PER_PACK && Number.isFinite(cost)) {
+      const unitCost = deriveUnitCostFromPack(cost, units)
+      setCostPrice(unitCost.toFixed(4))
+      if (salePrice.trim()) {
+        applyMarginFromSale(unitCost, salePrice)
+      }
+    }
+    if (wholesaleSale.trim()) {
+      setWholesaleMargin(formatMarginValue(Number(value) || 0, wholesaleSale))
+    }
+  }
+
+  function handleWholesaleUnitsChange(value: string) {
+    setWholesaleUnits(value)
+    const units = Number(value)
+    const cost = Number(wholesaleCost)
+    if (Number.isFinite(units) && units >= MIN_WHOLESALE_UNITS_PER_PACK && Number.isFinite(cost)) {
+      const unitCost = deriveUnitCostFromPack(cost, units)
+      setCostPrice(unitCost.toFixed(4))
+      if (salePrice.trim()) {
+        applyMarginFromSale(unitCost, salePrice)
+      }
+    }
+  }
+
+  function handleWholesaleSaleChange(value: string) {
+    setWholesaleSale(value)
+    setWholesaleMargin(formatMarginValue(Number(wholesaleCost) || 0, value))
+  }
+
+  function handleWholesaleMarginChange(value: string) {
+    setWholesaleMargin(value)
+    const sale = calcSalePriceFromMargin(Number(wholesaleCost) || 0, Number(value))
+    if (sale !== null) {
+      setWholesaleSale(sale.toFixed(4))
+    }
   }
 
   function handleSelectExistingFormula(idValue: string) {
@@ -393,6 +496,27 @@ export function CatalogFormDialog({
       return
     }
 
+    if (wholesaleEnabled && (useFormula || useSizes)) {
+      setError('La configuración mayorista no aplica a productos con fórmula o tallas.')
+      return
+    }
+
+    if (wholesaleEnabled) {
+      const units = Number(wholesaleUnits)
+      if (!Number.isFinite(units) || units < MIN_WHOLESALE_UNITS_PER_PACK) {
+        setError(`El paquete mayorista debe traer al menos ${MIN_WHOLESALE_UNITS_PER_PACK} unidades.`)
+        return
+      }
+      if (!Number.isFinite(Number(wholesaleCost)) || Number(wholesaleCost) < 0) {
+        setError('Indicá el precio costo del paquete mayorista.')
+        return
+      }
+      if (!Number.isFinite(Number(wholesaleSale)) || Number(wholesaleSale) < 0) {
+        setError('Indicá el precio de venta del paquete mayorista.')
+        return
+      }
+    }
+
     if (useFormula && !hasFormula) {
       setError('Elegí o creá una fórmula, o desactivá «Usar fórmula».')
       return
@@ -436,10 +560,14 @@ export function CatalogFormDialog({
       sale_unit: saleUnit,
       sale_price_usd: Number(salePrice),
       minimum_stock: normalizeInventoryQuantity(Number(minimumStock) || 0, saleUnit),
+      wholesale_enabled: wholesaleEnabled,
+      wholesale_units_per_pack: wholesaleEnabled ? Number(wholesaleUnits) : null,
+      wholesale_cost_usd: wholesaleEnabled ? Number(wholesaleCost) : null,
+      wholesale_sale_price_usd: wholesaleEnabled ? Number(wholesaleSale) : null,
       ...(hasFormula
         ? { formula_id: selectedFormulaId }
         : {
-            cost_usd: Number(costPrice),
+            cost_usd: wholesaleEnabled ? derivedRetailCost : Number(costPrice),
             formula_id: null,
             stock_quantity: useSizes
               ? sizesStockTotal
@@ -486,7 +614,7 @@ export function CatalogFormDialog({
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar producto' : 'Nuevo producto'}</DialogTitle>
         </DialogHeader>
@@ -645,22 +773,29 @@ export function CatalogFormDialog({
             </div>
 
             <div className="space-y-3">
-              <label
-                className={cn(
-                  'flex items-center gap-2 text-sm',
-                  useSizes && 'text-muted-foreground'
-                )}
-              >
-                <Checkbox
+              <div className="flex gap-2">
+                <OptionSwitch
+                  label="Usar fórmula"
                   checked={useFormula}
-                  disabled={useSizes}
-                  onChange={(e) => handleUseFormulaChange(e.target.checked)}
+                  disabled={useSizes || wholesaleEnabled}
+                  onCheckedChange={handleUseFormulaChange}
                 />
-                Usar fórmula
-              </label>
-              {useSizes ? (
+                <OptionSwitch
+                  label="Usar tallas"
+                  checked={useSizes}
+                  disabled={useFormula || wholesaleEnabled}
+                  onCheckedChange={handleUseSizesChange}
+                />
+                <OptionSwitch
+                  label="Mayorista"
+                  checked={wholesaleEnabled}
+                  disabled={useFormula || useSizes}
+                  onCheckedChange={handleWholesaleChange}
+                />
+              </div>
+              {useFormula || useSizes || wholesaleEnabled ? (
                 <p className="text-muted-foreground text-xs">
-                  Desactivá las tallas para poder usar fórmula.
+                  Solo se puede activar una de estas opciones a la vez.
                 </p>
               ) : null}
               {useFormula && !useSizes ? (
@@ -738,34 +873,6 @@ export function CatalogFormDialog({
             </div>
 
             <div className="space-y-3">
-              <label
-                className={cn(
-                  'flex items-center gap-2 text-sm',
-                  useFormula && 'text-muted-foreground'
-                )}
-              >
-                <Checkbox
-                  checked={useSizes}
-                  disabled={useFormula}
-                  onChange={(e) => {
-                    const checked = e.target.checked
-                    setUseSizes(checked)
-                    if (checked) {
-                      setUseFormula(false)
-                      clearFormula()
-                      if (sizeRows.length === 0) {
-                        setSizeRows([newSizeRow()])
-                      }
-                    }
-                  }}
-                />
-                Usar tallas
-              </label>
-              {useFormula ? (
-                <p className="text-muted-foreground text-xs">
-                  Los productos con fórmula no admiten tallas.
-                </p>
-              ) : null}
               {useSizes && !useFormula ? (
                 <div className="space-y-2">
                   {sizeRows.map((row) => (
@@ -827,54 +934,130 @@ export function CatalogFormDialog({
               ) : null}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="catalog-cost">Precio costo</Label>
-                <MoneyInput
-                  id="catalog-cost"
-                  min={0}
-                  value={costPrice}
-                  readOnly={hasFormula}
-                  className={hasFormula ? 'bg-muted/40' : undefined}
-                  onChange={(e) => handleCostChange(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label
-                  htmlFor="catalog-margin"
-                  className={cn(marginIsNegative && 'text-destructive')}
-                >
-                  Margen %
-                </Label>
-                <DecimalInput
-                  id="catalog-margin"
-                  min={0}
-                  decimals={1}
-                  value={marginPercent}
-                  onChange={(e) => handleMarginChange(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="catalog-price" className={cn(saleBelowCost && 'text-destructive')}>
-                  Precio venta
-                </Label>
-                <MoneyInput
-                  id="catalog-price"
-                  min={0}
-                  value={salePrice}
-                  className={cn(
-                    saleBelowCost &&
-                      'border-destructive text-destructive focus-visible:ring-destructive/30'
-                  )}
-                  onChange={(e) => handleSaleChange(e.target.value)}
-                />
-                {saleBelowCost ? (
-                  <p className="text-destructive text-xs">
-                    Por debajo del costo ({formatFromUsd(effectiveCostUsd)}).
-                  </p>
-                ) : null}
-              </div>
+            <div className="space-y-3">
+              {wholesaleEnabled ? (
+                <div className="flex gap-1 rounded-md border p-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={pricePanel === 'retail' ? 'default' : 'ghost'}
+                    className="flex-1"
+                    onClick={() => setPricePanel('retail')}
+                  >
+                    Detal
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={pricePanel === 'wholesale' ? 'default' : 'ghost'}
+                    className="flex-1"
+                    onClick={() => setPricePanel('wholesale')}
+                  >
+                    Mayorista
+                  </Button>
+                </div>
+              ) : null}
             </div>
+
+            {wholesaleEnabled && pricePanel === 'wholesale' ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="catalog-pack-units">Unidades por paquete</Label>
+                  <DecimalInput
+                    id="catalog-pack-units"
+                    min={MIN_WHOLESALE_UNITS_PER_PACK}
+                    decimals={0}
+                    value={wholesaleUnits}
+                    onChange={(e) => handleWholesaleUnitsChange(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="catalog-pack-cost">Precio costo paquete</Label>
+                  <MoneyInput
+                    id="catalog-pack-cost"
+                    min={0}
+                    value={wholesaleCost}
+                    onChange={(e) => handleWholesaleCostChange(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="catalog-pack-margin">Margen paquete %</Label>
+                  <DecimalInput
+                    id="catalog-pack-margin"
+                    min={0}
+                    decimals={1}
+                    value={wholesaleMargin}
+                    onChange={(e) => handleWholesaleMarginChange(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="catalog-pack-sale">Precio venta paquete</Label>
+                  <MoneyInput
+                    id="catalog-pack-sale"
+                    min={0}
+                    value={wholesaleSale}
+                    onChange={(e) => handleWholesaleSaleChange(e.target.value)}
+                  />
+                </div>
+                <p className="text-muted-foreground sm:col-span-2 text-xs">
+                  Costo unitario detal: {formatFromUsd(derivedRetailCost)} (costo paquete ÷ unidades).
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="catalog-cost">Precio costo</Label>
+                  <MoneyInput
+                    id="catalog-cost"
+                    min={0}
+                    value={wholesaleEnabled ? derivedRetailCost.toFixed(4) : costPrice}
+                    readOnly={hasFormula || wholesaleEnabled}
+                    className={hasFormula || wholesaleEnabled ? 'bg-muted/40' : undefined}
+                    onChange={(e) => handleCostChange(e.target.value)}
+                  />
+                  {wholesaleEnabled ? (
+                    <p className="text-muted-foreground text-xs">
+                      Se calcula desde el costo del paquete.
+                    </p>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="catalog-margin"
+                    className={cn(marginIsNegative && 'text-destructive')}
+                  >
+                    Margen %
+                  </Label>
+                  <DecimalInput
+                    id="catalog-margin"
+                    min={0}
+                    decimals={1}
+                    value={marginPercent}
+                    onChange={(e) => handleMarginChange(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="catalog-price" className={cn(saleBelowCost && 'text-destructive')}>
+                    Precio venta
+                  </Label>
+                  <MoneyInput
+                    id="catalog-price"
+                    min={0}
+                    value={salePrice}
+                    className={cn(
+                      saleBelowCost &&
+                        'border-destructive text-destructive focus-visible:ring-destructive/30'
+                    )}
+                    onChange={(e) => handleSaleChange(e.target.value)}
+                  />
+                  {saleBelowCost ? (
+                    <p className="text-destructive text-xs">
+                      Por debajo del costo ({formatFromUsd(effectiveCostUsd)}).
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="catalog-desc">Descripción (opcional)</Label>

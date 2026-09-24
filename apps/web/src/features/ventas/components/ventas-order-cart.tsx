@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { MoneyInput } from '@/components/decimal-input'
 import { Input } from '@/components/ui/input'
 import {
@@ -56,6 +57,10 @@ export type VentasCartLine = {
   hasFormula?: boolean
   hasCustomFormula?: boolean
   kitchenNote?: string | null
+  canWholesale?: boolean
+  isWholesale?: boolean
+  wholesaleHint?: string | null
+  onToggleWholesale?: (checked: boolean) => void
   onAdjustFormula?: () => void
   onEditKitchenNote?: () => void
   onEditDetail?: () => void
@@ -212,6 +217,18 @@ function CartLineItem({
         <div className="flex min-w-0 flex-1 flex-col space-y-1">
           <p className="line-clamp-2 text-sm leading-snug font-semibold">{line.name}</p>
           <p className="text-muted-foreground text-xs">Código: {line.code}</p>
+          {line.canWholesale && line.onToggleWholesale ? (
+            <label className="flex items-center gap-2 text-xs">
+              <Checkbox
+                checked={Boolean(line.isWholesale)}
+                onChange={(e) => line.onToggleWholesale?.(e.target.checked)}
+              />
+              Mayorista
+              {line.isWholesale && line.wholesaleHint ? (
+                <span className="text-muted-foreground">{line.wholesaleHint}</span>
+              ) : null}
+            </label>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
             {line.metaLabel ? <span>{line.metaLabel}</span> : null}
             {onUpdateQuantity ? (

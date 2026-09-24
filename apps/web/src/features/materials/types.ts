@@ -29,6 +29,10 @@ export type Material = {
   previousPurchasePriceUsd?: string | null
   salePriceUsd?: string | null
   previousSalePriceUsd?: string | null
+  wholesaleEnabled?: boolean
+  wholesaleUnitsPerPack?: string | null
+  wholesaleCostUsd?: string | null
+  wholesaleSalePriceUsd?: string | null
   lastPurchaseDate: string | null
   imagePath: string | null
   active: boolean
@@ -89,6 +93,10 @@ export type MaterialInput = {
   last_purchase_price_usd?: number
   barcode?: string | null
   supplier_code?: string | null
+  wholesale_enabled?: boolean
+  wholesale_units_per_pack?: number | null
+  wholesale_cost_usd?: number | null
+  wholesale_sale_price_usd?: number | null
   active?: boolean
 }
 

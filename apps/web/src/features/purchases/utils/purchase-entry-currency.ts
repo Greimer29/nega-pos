@@ -104,6 +104,7 @@ type PurchaseItemPersistFields = {
   catalogProductId?: number
   quantity: number
   unitPriceUsd: number
+  isWholesale?: boolean
 }
 
 export function buildPurchaseItemPayload(
@@ -119,11 +120,13 @@ export function buildPurchaseItemPayload(
           catalog_product_id: item.catalogProductId,
           quantity: item.quantity,
           unit_price_usd: item.unitPriceUsd,
+          is_wholesale: Boolean(item.isWholesale),
         }
       : {
           material_id: item.materialId,
           quantity: item.quantity,
           unit_price_usd: item.unitPriceUsd,
+          is_wholesale: Boolean(item.isWholesale),
         }
 
   if (
