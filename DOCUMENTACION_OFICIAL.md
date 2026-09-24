@@ -770,7 +770,7 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 
 ### Gastos (`expenses.*`)
 
-Alta/edición: `amount` (nativo), `currency_code` (cualquier activa), `entry_rate?` (default catálogo). `machine_id` se asigna solo al registrar desde la ficha de máquina (`POST /machines/:id/expenses`); el hub de Gastos no expone ese vínculo en UI. Si `description` viene vacío y hay máquina, se usa `Gasto máquina — {nombre}`. Persistencia: `amount_usd = amount / entry_rate` (o `amount` si moneda = base). Listados y estado de cuenta consolidan con `amount_usd`.
+Alta/edición: `amount` (nativo), `currency_code` (cualquier activa), `entry_rate?` (default catálogo). `machine_id` se asigna solo al registrar desde la ficha de máquina (`POST /machines/:id/expenses`); el hub de Gastos no expone ese vínculo en UI. Si `description` viene vacío y hay máquina, se usa `Gasto máquina — {nombre}`. Persistencia: `amount_usd = amount / entry_rate` (o `amount` si moneda = base). Listados y estado de cuenta consolidan con `amount_usd`. En `/purchases?tab=gastos` cada fila se edita o se elimina (papelera, `expenses.edit`); el borrado es definitivo.
 
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
@@ -782,7 +782,7 @@ Alta/edición: `amount` (nativo), `currency_code` (cualquier activa), `entry_rat
 
 ### Ingresos (`incomes.*`)
 
-Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuenta. Misma semántica multi-moneda que gastos (`entry_rate`). Suman al balance del estado de cuenta.
+Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuenta. Misma semántica multi-moneda que gastos (`entry_rate`). Suman al balance del estado de cuenta. En `/purchases?tab=ingresos` cada fila se edita o se elimina (papelera, `incomes.edit`); el borrado es definitivo.
 
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
@@ -940,7 +940,7 @@ pwsh scripts/publish-github-release.ps1
 | `/productos/servicios` | Catálogo de servicios (`item_kind=SERVICE`): nombre, precio, activo/categoría; sin stock/fórmula/tallas. Misma vista tarjetas/tabla que productos. Permisos `catalog.view` / `catalog.edit`. Filtros en el mismo drawer de icono (categorías y orden). «Importar Excel» |
 | `/productos/materiales` | Materiales. Vista tarjetas o tabla (mismo botón que el resto del catálogo). «Importar Excel» (`materials.edit`) descarga plantilla y carga masiva |
 | `/productos/materiales/:id` | Detalle material |
-| `/purchases` | Hub Compras (`?tab=compras\|gastos\|ingresos`) |
+| `/purchases` | Hub Compras (`?tab=compras\|gastos\|ingresos`). En Gastos e Ingresos, papelera elimina el registro (`expenses.edit` / `incomes.edit`) |
 | `/purchases/:id` | Detalle compra (en borrador: escaneo barcode para sumar línea de material/producto del tab activo) |
 | `/suppliers` | Proveedores |
 | `/suppliers/:id/cuenta` | Estado de cuenta proveedor |
