@@ -68,7 +68,7 @@ export function ReportsPage() {
     if (activeTab === 'inventario') {
       return 'Stock actual de productos de catálogo y materiales, con filtros y exportación.'
     }
-    return 'Ingresos, egresos y balance consolidado a partir de ventas, compras y gastos.'
+    return 'Qué dejó el producto, qué costó la tienda y qué plata se movió — sin mezclarlos.'
   }, [activeTab])
 
   return (
@@ -105,7 +105,7 @@ export function ReportsPage() {
             })}
           </div>
           <h1 className={`${reportUi.title} mt-3`}>
-            {activeTab === 'inventario' ? 'Inventario' : 'Estado de cuenta'}
+            {activeTab === 'inventario' ? 'Inventario' : 'Reporte del negocio'}
           </h1>
           <p className={`${reportUi.subtitle} mt-2 max-w-xl`}>{subtitle}</p>
         </div>

@@ -30,7 +30,7 @@ export function ReportFlowChart({ movements }: ReportFlowChartProps) {
     <div className={cn(reportUi.panel, 'p-5 md:p-6')}>
       <div className="mb-5 flex items-start justify-between gap-3">
         <div>
-          <h3 className={reportUi.sectionTitle}>Flujo por categoría</h3>
+          <h3 className={reportUi.sectionTitle}>Movimientos de caja</h3>
           <p className={reportUi.muted}>Montos en {displayCurrency}</p>
         </div>
         <span className={reportUi.badge}>Período actual</span>
@@ -59,11 +59,11 @@ export function ReportFlowChart({ movements }: ReportFlowChartProps) {
                   <span
                     className={cn(
                       'font-semibold tabular-nums',
-                      row.type === 'sale' ||
-                        row.type === 'customer_payment' ||
-                        row.type === 'income'
+                      row.type === 'sale' || row.type === 'customer_payment'
                         ? reportUi.income
-                        : reportUi.expense
+                        : row.type === 'income'
+                          ? 'font-semibold text-amber-800'
+                          : reportUi.expense
                     )}
                   >
                     {formatMoney(row.value, displayCurrency)}

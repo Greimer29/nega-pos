@@ -43,6 +43,15 @@ export type AccountStatementSummary = {
   pendingPayablesUsd: string
   overduePayablesUsd: string
   netUsd: string
+  soldUsd: string
+  soldOnCreditUsd: string
+  productLeftUsd: string
+  storeCostUsd: string
+  businessLeftUsd: string
+  cashWithoutOwnerUsd: string
+  openReceivablesUsd: string
+  salesWithoutLinesCount: number
+  salesWithoutCostCount: number
   sales: string
   purchases: string
   expenses: string
@@ -51,6 +60,13 @@ export type AccountStatementSummary = {
   pendingPayables: string
   overduePayables: string
   net: string
+  sold: string
+  soldOnCredit: string
+  productLeft: string
+  storeCost: string
+  businessLeft: string
+  cashWithoutOwner: string
+  openReceivables: string
   rates: Record<string, string>
 }
 

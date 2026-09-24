@@ -42,10 +42,10 @@ export const movementTheme: Record<
     label: 'Gasto máq.',
   },
   income: {
-    bar: '#059669',
-    chart: '#10b981',
-    badge: 'bg-emerald-50 text-emerald-900 border border-emerald-200',
-    label: 'Ingreso',
+    bar: '#d97706',
+    chart: '#f59e0b',
+    badge: 'bg-amber-50 text-amber-900 border border-amber-200',
+    label: 'Tu plata',
   },
 }
 
@@ -99,15 +99,21 @@ export const reportUi = {
     'report-hero-kpi relative overflow-hidden rounded-2xl border border-white/10 bg-neutral-950 p-6 text-white shadow-[0_2px_8px_-2px_rgb(0_0_0_/_0.12)]',
 } as const
 
-export type MetricTone = 'income' | 'purchase' | 'expense' | 'machine' | 'payable'
+export type MetricTone = 'income' | 'purchase' | 'expense' | 'machine' | 'payable' | 'owner'
 
 export function metricToneStyles(tone: MetricTone) {
   switch (tone) {
+    case 'owner':
+      return {
+        icon: 'flex size-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-800',
+        tag: 'bg-amber-50 text-amber-800',
+        tagLabel: 'Tu plata',
+      }
     case 'income':
       return {
         icon: reportUi.iconBoxIncome,
         tag: 'bg-emerald-50 text-emerald-700',
-        tagLabel: 'Ingreso',
+        tagLabel: 'Cobrado',
       }
     case 'purchase':
       return {

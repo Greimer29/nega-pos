@@ -3,6 +3,7 @@ import Account from '#models/account'
 import AppSetting from '#models/app_setting'
 import CatalogProduct from '#models/catalog_product'
 import Customer from '#models/customer'
+import Expense from '#models/expense'
 import CustomerPayment from '#models/customer_payment'
 import InventoryMovement from '#models/inventory_movement'
 import Material from '#models/material'
@@ -29,6 +30,7 @@ async function resetDatabase() {
   await db.from('machine_expenses').delete()
   await db.from('customer_payments').delete()
   await db.from('supplier_payments').delete()
+  await db.from('sale_payments').delete()
   await db.from('sale_lines').delete()
   await db.from('sales').delete()
   await db.from('order_lines').delete()
@@ -932,17 +934,131 @@ test.group('Reports API', (group) => {
     const body = response.body() as {
       data: {
         movements: Array<{ type: string; amountUsd: string; isIncome: boolean; label: string }>
-        summary: { incomesUsd: string; netUsd: string; incomes: string }
+        summary: {
+          incomesUsd: string
+          netUsd: string
+          incomes: string
+          cashWithoutOwnerUsd: string
+          productLeftUsd: string
+        }
       }
     }
 
     assert.equal(body.data.summary.incomesUsd, '500.0000')
     assert.equal(body.data.summary.netUsd, '500.0000')
+    assert.equal(body.data.summary.cashWithoutOwnerUsd, '0.0000')
+    assert.equal(body.data.summary.productLeftUsd, '0.0000')
     const incomeMovement = body.data.movements.find((m) => m.type === 'income')
     assert.exists(incomeMovement)
     assert.equal(incomeMovement!.label, 'Capital inicial')
     assert.equal(incomeMovement!.isIncome, true)
     assert.equal(incomeMovement!.amountUsd, '500.0000')
+  })
+
+  test('GET account-statement separates product left, store cost and owner cash', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const customer = await Customer.create({
+      name: 'Cliente fiado capas',
+      type: 'CORPORATE',
+      creditDays: 15,
+      active: true,
+    })
+    const product = await CatalogProduct.create({
+      name: 'Camisa capas',
+      category: 'Camisas',
+      salePriceUsd: '100.0000',
+      costUsd: '40.0000',
+      active: true,
+    })
+
+    await seedTestSale({
+      soldAt: DateTime.fromISO('2026-06-10'),
+      confirmedAt: DateTime.fromISO('2026-06-10'),
+      totalUsd: '100.0000',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '1',
+          unitPriceUsd: '100.0000',
+          subtotalUsd: '100.0000',
+          costUsd: '40.0000',
+        },
+      ],
+    })
+    await seedTestSale({
+      customerId: Number(customer.id),
+      soldAt: DateTime.fromISO('2026-06-11'),
+      confirmedAt: DateTime.fromISO('2026-06-11'),
+      paymentType: 'CREDIT',
+      amountPaidUsd: '0.0000',
+      balanceUsd: '50.0000',
+      totalUsd: '50.0000',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '1',
+          unitPriceUsd: '50.0000',
+          subtotalUsd: '50.0000',
+          costUsd: '20.0000',
+        },
+      ],
+    })
+    await Expense.create({
+      date: DateTime.fromISO('2026-06-12'),
+      description: 'Alquiler',
+      amountUsd: '200.0000',
+      currencyCode: 'XAU',
+    })
+    await client.post('/api/v1/incomes').loginAs(user).json({
+      date: '2026-06-15',
+      description: 'Aporte dueño',
+      amount: 500,
+    })
+
+    const response = await client
+      .get('/api/v1/reports/account-statement')
+      .qs({ month: '2026-06', display_currency: 'USD' })
+      .loginAs(user)
+
+    response.assertStatus(200)
+    const summary = (
+      response.body() as {
+        data: {
+          summary: {
+            salesUsd: string
+            soldUsd: string
+            soldOnCreditUsd: string
+            productLeftUsd: string
+            storeCostUsd: string
+            businessLeftUsd: string
+            incomesUsd: string
+            netUsd: string
+            cashWithoutOwnerUsd: string
+            openReceivablesUsd: string
+            salesWithoutCostCount: number
+            salesWithoutLinesCount: number
+          }
+        }
+      }
+    ).data.summary
+
+    assert.equal(summary.salesUsd, '100.0000')
+    assert.equal(summary.soldUsd, '150.0000')
+    assert.equal(summary.soldOnCreditUsd, '50.0000')
+    assert.equal(summary.productLeftUsd, '90.0000')
+    assert.equal(summary.storeCostUsd, '200.0000')
+    assert.equal(summary.businessLeftUsd, '-110.0000')
+    assert.equal(summary.incomesUsd, '500.0000')
+    assert.equal(summary.netUsd, '400.0000')
+    assert.equal(summary.cashWithoutOwnerUsd, '-100.0000')
+    assert.equal(summary.openReceivablesUsd, '50.0000')
+    assert.equal(summary.salesWithoutCostCount, 0)
+    assert.equal(summary.salesWithoutLinesCount, 0)
   })
 
   test('GET /reports/inventory returns products and materials snapshot', async ({

@@ -9,6 +9,7 @@ import {
 } from '#utils/credit_purchase_report'
 import { creditSaleReportAmountUsd, creditSaleReportStatus } from '#utils/credit_sale_report'
 import { nativeAmountFromBase } from '#utils/monetary_entry'
+import { accumulatePeriodGross } from '#utils/sale_period_gross'
 import CustomerPayment from '#models/customer_payment'
 import Expense from '#models/expense'
 import Income from '#models/income'
@@ -113,6 +114,30 @@ export type AccountStatementSummary = {
 
   netUsd: string
 
+  /** Ventas facturadas del período (contado + crédito), no lo cobrado. */
+  soldUsd: string
+
+  soldOnCreditUsd: string
+
+  /** (precio − costo) × unidades netas − descuento. No resta gastos ni compras. */
+  productLeftUsd: string
+
+  /** Gastos operativos + máquina legacy del período (sin filtro de cuenta). */
+  storeCostUsd: string
+
+  /** productLeft − storeCost. No incluye aportes ni compras de stock. */
+  businessLeftUsd: string
+
+  /** netUsd − incomesUsd: caja del período sin plata que metió el dueño. */
+  cashWithoutOwnerUsd: string
+
+  /** CxC abierta (saldo de ventas a crédito), foto actual. */
+  openReceivablesUsd: string
+
+  salesWithoutLinesCount: number
+
+  salesWithoutCostCount: number
+
   sales: string
 
   purchases: string
@@ -128,6 +153,20 @@ export type AccountStatementSummary = {
   overduePayables: string
 
   net: string
+
+  sold: string
+
+  soldOnCredit: string
+
+  productLeft: string
+
+  storeCost: string
+
+  businessLeft: string
+
+  cashWithoutOwner: string
+
+  openReceivables: string
 
   rates: Record<string, string>
 }
@@ -719,6 +758,18 @@ export default class ReportService {
     })
 
     const netUsd = salesUsd + incomesUsd - purchasesUsd - expensesUsd - machineExpensesUsd
+    const cashWithoutOwnerUsd = netUsd - incomesUsd
+
+    const [gross, storeCostUsd, openReceivablesUsd] = await Promise.all([
+      this.computePeriodGross(period),
+      this.computeStoreCostUsd(period, rates),
+      this.computeOpenReceivablesUsd(),
+    ])
+
+    const businessLeftUsd = gross.productLeftUsd - storeCostUsd
+
+    const money = (usd: number) =>
+      this.formatDisplay(this.currencyService.fromUsd(usd, displayCurrency, rates), displayCurrency)
 
     return {
       period,
@@ -742,56 +793,122 @@ export default class ReportService {
 
         netUsd: netUsd.toFixed(4),
 
-        sales: this.formatDisplay(
-          this.currencyService.fromUsd(salesUsd, displayCurrency, rates),
-          displayCurrency
-        ),
+        soldUsd: gross.soldUsd.toFixed(4),
 
-        purchases: this.formatDisplay(
-          this.currencyService.fromUsd(purchasesUsd, displayCurrency, rates),
+        soldOnCreditUsd: gross.soldOnCreditUsd.toFixed(4),
 
-          displayCurrency
-        ),
+        productLeftUsd: gross.productLeftUsd.toFixed(4),
 
-        expenses: this.formatDisplay(
-          this.currencyService.fromUsd(expensesUsd, displayCurrency, rates),
+        storeCostUsd: storeCostUsd.toFixed(4),
 
-          displayCurrency
-        ),
+        businessLeftUsd: businessLeftUsd.toFixed(4),
 
-        machineExpenses: this.formatDisplay(
-          this.currencyService.fromUsd(machineExpensesUsd, displayCurrency, rates),
+        cashWithoutOwnerUsd: cashWithoutOwnerUsd.toFixed(4),
 
-          displayCurrency
-        ),
+        openReceivablesUsd: openReceivablesUsd.toFixed(4),
 
-        incomes: this.formatDisplay(
-          this.currencyService.fromUsd(incomesUsd, displayCurrency, rates),
+        salesWithoutLinesCount: gross.salesWithoutLinesCount,
 
-          displayCurrency
-        ),
+        salesWithoutCostCount: gross.salesWithoutCostCount,
 
-        pendingPayables: this.formatDisplay(
-          this.currencyService.fromUsd(pendingPayablesUsd, displayCurrency, rates),
-          displayCurrency
-        ),
+        sales: money(salesUsd),
 
-        overduePayables: this.formatDisplay(
-          this.currencyService.fromUsd(overduePayablesUsd, displayCurrency, rates),
-          displayCurrency
-        ),
+        purchases: money(purchasesUsd),
 
-        net: this.formatDisplay(
-          this.currencyService.fromUsd(netUsd, displayCurrency, rates),
+        expenses: money(expensesUsd),
 
-          displayCurrency
-        ),
+        machineExpenses: money(machineExpensesUsd),
+
+        incomes: money(incomesUsd),
+
+        pendingPayables: money(pendingPayablesUsd),
+
+        overduePayables: money(overduePayablesUsd),
+
+        net: money(netUsd),
+
+        sold: money(gross.soldUsd),
+
+        soldOnCredit: money(gross.soldOnCreditUsd),
+
+        productLeft: money(gross.productLeftUsd),
+
+        storeCost: money(storeCostUsd),
+
+        businessLeft: money(businessLeftUsd),
+
+        cashWithoutOwner: money(cashWithoutOwnerUsd),
+
+        openReceivables: money(openReceivablesUsd),
 
         rates: this.currencyService.formatRates(rates),
       },
 
       movements,
     }
+  }
+
+  private async computePeriodGross(period: { from: string; to: string }) {
+    const sales = await Sale.query()
+      .whereIn('status', [...SALE_STATUSES])
+      .where('soldAt', '>=', `${period.from} 00:00:00`)
+      .where('soldAt', '<=', `${period.to} 23:59:59`)
+      .preload('saleLines')
+
+    return accumulatePeriodGross(
+      sales.map((sale) => ({
+        lines: sale.saleLines.map((line) => ({
+          unitPriceUsd: Number(line.unitPriceUsd),
+          costUsd:
+            line.costUsd === null || line.costUsd === undefined ? null : Number(line.costUsd),
+          quantity: Number(line.quantity),
+          returnedQuantity: Number(line.returnedQuantity ?? 0),
+        })),
+        discountUsd: Number(sale.discountUsd ?? 0),
+        totalUsd: Number(sale.totalUsd ?? 0),
+        isCredit: sale.paymentType === 'CREDIT',
+      }))
+    )
+  }
+
+  private async computeStoreCostUsd(
+    period: { from: string; to: string },
+    rates: Record<string, number>
+  ) {
+    const expenses = await Expense.query()
+      .where('date', '>=', period.from)
+      .where('date', '<=', period.to)
+
+    let storeCostUsd = 0
+    for (const expense of expenses) {
+      storeCostUsd += Number(expense.amountUsd ?? 0)
+    }
+
+    const machineExpenses = await MachineExpense.query()
+      .where('date', '>=', period.from)
+      .where('date', '<=', period.to)
+
+    for (const expense of machineExpenses) {
+      const currencyCode = expense.currencyCode ?? 'USD'
+      const native = Number(expense.amount ?? 0)
+      storeCostUsd += this.currencyService.toUsd(native, currencyCode, rates)
+    }
+
+    return storeCostUsd
+  }
+
+  private async computeOpenReceivablesUsd() {
+    const sales = await Sale.query()
+      .whereIn('status', [...SALE_STATUSES])
+      .where('paymentType', 'CREDIT')
+      .where('balanceUsd', '>', 0)
+
+    let openReceivablesUsd = 0
+    for (const sale of sales) {
+      openReceivablesUsd += Number(sale.balanceUsd ?? 0)
+    }
+
+    return openReceivablesUsd
   }
 
   private resolveSaleAmount(
