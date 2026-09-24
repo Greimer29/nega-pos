@@ -38,7 +38,7 @@ Referencia técnica **única y vigente** para desarrolladores. Derivada exclusiv
 | **Partners** | Clientes y proveedores con abonos de crédito y estado de cuenta |
 | **Financiero** | Cuentas, monedas, métodos de pago, gastos e ingresos operativos |
 | **Máquinas** | Activos y gastos asociados (reparación, insumos, mantenimiento) |
-| **Reportes** | Reporte del negocio: producto dejó / tienda / caja, más inventario |
+| **Reportes** | Estado de cuenta consolidado por período |
 | **Dashboard** | KPIs diarios, cierre, productos vendidos, gastos |
 | **Impresión** | Tickets térmicos (factura, nota de despacho, comanda) vía Electron IPC |
 | **Configuración** | Tasa de cambio, margen, datos generales del negocio, usuarios y permisos |
@@ -548,7 +548,7 @@ catalog_products ──< product_inventory_movements
 
 ### Reportes (`report_service.ts` / `inventory_report_service.ts`)
 
-- **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **ingresos** (aportes), compras de contado, abonos a proveedores, **gastos** (`expenses`, incluidos los vinculados a máquina), **gastos máquina legacy** (`machine_expenses`) y abonos de clientes en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). La UI parte tres lecturas que **no se mezclan**: (1) **el producto dejó** = `(precio − costo) × unidades netas − descuento` de ventas **con líneas** del período (contado **y** crédito); (2) **la tienda costó** = gastos + máquina legacy del período (sin filtro de cuenta); **del negocio quedó** = (1) − (2); (3) **plata que se movió** = flujo de caja `ventas cobradas + aportes − compras_contado/abonos − gastos − gastos_máquina_legacy` (`netUsd`, se mantiene). `cashWithoutOwnerUsd` = `netUsd − incomesUsd`. `soldUsd` es lo facturado (incluye fiado); `salesUsd` sigue siendo solo cobros. `openReceivablesUsd` es CxC abierta (foto). Facturas sin ítems o con costo 0/null se cuentan en `salesWithoutLinesCount` / `salesWithoutCostCount` y no inventan COGS. Las **cuentas por pagar** (`pendingPayablesUsd` / `overduePayablesUsd`) se listan como informativas y **no restan** del neto hasta el abono. KPI de egresos operativos de caja: card **Pagaste la tienda** (= `expenses`). La card de gastos máquina solo aplica a legacy.
+- **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **ingresos** (aportes), compras de contado, abonos a proveedores, **gastos** (`expenses`, incluidos los vinculados a máquina), **gastos máquina legacy** (`machine_expenses`) y abonos de clientes en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). Balance neto (flujo de caja): `ventas + ingresos − compras_contado/abonos − gastos − gastos_máquina_legacy`. KPI principal de egresos operativos: card **Gastos** (= suma de `expenses`). La card de gastos máquina solo muestra el total **legacy** si es > 0. Las **cuentas por pagar** (compras/facturas a crédito con saldo) se listan como informativas (`pendingPayablesUsd` / `overduePayablesUsd`) y **no restan** del neto hasta el abono.
 - **Inventario** (`GET /reports/inventory`): snapshot de stock de productos de catálogo (`item_kind=PRODUCT`) y materiales en una sola lista (paginada). Los servicios no aparecen. Filtros: `search`, `category`, `sort_by`/`sort_dir` (`id`|`name`|`sale_price`|`quantity`), `active`, `low_stock`, `hide_zero`, `page`, `per_page`, `export=true` (set completo para Excel). Cada ítem incluye `kind` (`product`|`material`), precios/costos, unidad, `stock_source`, `low_stock`, `has_sizes` y `lines[]` (por talla si aplica; si no, una línea con `size: null`). Con `hide_zero`, se omiten tallas con cantidad ≤ 0 y productos/materiales con total 0. UI: `/reportes?vista=inventario` (query `inv_*`).
 - **Movimientos de producto** (`GET /reports/inventory/:productId/movements`): historial de `product_inventory_movements` de un producto de catálogo (no materiales). Filtros de período (`month`|`from`/`to`) y `types` (PURCHASE_IN, SALE_OUT, ajustes manuales, REVERSAL_ADJUSTMENT). UI: `/reportes/inventario/:productId`.
 
@@ -946,7 +946,7 @@ pwsh scripts/publish-github-release.ps1
 | `/suppliers/:id/cuenta` | Estado de cuenta proveedor |
 | `/machines` | Máquinas |
 | `/machines/:id` | Detalle máquina |
-| `/reportes` | Reporte del negocio: producto dejó / tienda / caja (sin mezclar); período visible; filtros (cuenta y tipos) aplican a la caja y al listado. `?vista=inventario` → snapshot de inventario |
+| `/reportes` | Reportes financieros: período visible; botón de filtros (icono) abre drawer de cuenta y tipos. `?vista=inventario` → snapshot de inventario con el mismo botón/drawer (categoría, orden, visibilidad) |
 | `/reportes/inventario/:productId` | Movimientos de inventario de un producto |
 | `/reportes/movimientos/:category` | Movimientos por categoría (estado de cuenta) |
 | `/users` | Usuarios |

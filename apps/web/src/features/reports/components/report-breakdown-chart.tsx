@@ -20,15 +20,15 @@ export function ReportBreakdownChart({ summary }: ReportBreakdownChartProps) {
   const currency = summary.displayCurrency
 
   const rawSegments: Array<Omit<Segment, 'color'>> = [
-    { key: 'sales', label: 'Cobraste', value: Number(summary.sales), isIncome: true },
+    { key: 'sales', label: 'Ventas', value: Number(summary.sales), isIncome: true },
     {
       key: 'incomes',
-      label: 'Vos metiste',
+      label: 'Ingresos',
       value: Number(summary.incomes ?? 0),
       isIncome: true,
     },
-    { key: 'purchases', label: 'Mercadería', value: Number(summary.purchases), isIncome: false },
-    { key: 'expenses', label: 'Tienda', value: Number(summary.expenses), isIncome: false },
+    { key: 'purchases', label: 'Compras', value: Number(summary.purchases), isIncome: false },
+    { key: 'expenses', label: 'Gastos', value: Number(summary.expenses), isIncome: false },
     {
       key: 'machine',
       label: 'Gastos máquina (histórico)',
@@ -48,7 +48,7 @@ export function ReportBreakdownChart({ summary }: ReportBreakdownChartProps) {
 
   if (total === 0) {
     return (
-      <ChartShell title="Composición de la caja" subtitle={`Distribución en ${currency}`}>
+      <ChartShell title="Composición del flujo" subtitle={`Distribución en ${currency}`}>
         <p className={`${reportUi.body} flex flex-1 items-center justify-center py-12`}>
           Sin movimientos en el período.
         </p>
@@ -67,7 +67,7 @@ export function ReportBreakdownChart({ summary }: ReportBreakdownChartProps) {
     .join(', ')
 
   return (
-    <ChartShell title="Composición de la caja" subtitle={`Distribución en ${currency}`}>
+    <ChartShell title="Composición del flujo" subtitle={`Distribución en ${currency}`}>
       <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
         <div className="relative mx-auto size-44 shrink-0">
           <div

@@ -39,8 +39,8 @@ const DEFAULT_TYPES: ReportTypeFilters = {
 
 const TYPE_OPTIONS: Array<{ key: keyof ReportTypeFilters; label: string }> = [
   { key: 'sales', label: 'Ventas' },
-  { key: 'incomes', label: 'Plata que metí' },
-  { key: 'purchases', label: 'Mercadería' },
+  { key: 'incomes', label: 'Ingresos' },
+  { key: 'purchases', label: 'Compras' },
   { key: 'expenses', label: 'Gastos' },
 ]
 

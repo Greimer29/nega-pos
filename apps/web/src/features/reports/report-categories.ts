@@ -20,7 +20,7 @@ export const REPORT_CATEGORIES: Record<ReportMovementCategorySlug, ReportCategor
   ventas: {
     slug: 'ventas',
     title: 'Historial de ventas',
-    subtitle: 'Cobros por ventas (contado + abonos). El fiado aparece aparte hasta que pagan.',
+    subtitle: 'Cobros por ventas (contado + abonos) en el período seleccionado',
     movementType: 'sale',
     apiType: 'sales',
     tone: 'income',
@@ -29,7 +29,7 @@ export const REPORT_CATEGORIES: Record<ReportMovementCategorySlug, ReportCategor
   compras: {
     slug: 'compras',
     title: 'Historial de compras',
-    subtitle: 'Pagos de mercadería (reposición de stock), no gasto de la tienda.',
+    subtitle: 'Egresos por compras en el período seleccionado',
     movementType: 'purchase',
     apiType: 'purchases',
     tone: 'purchase',
@@ -56,7 +56,7 @@ export const REPORT_CATEGORIES: Record<ReportMovementCategorySlug, ReportCategor
   ingresos: {
     slug: 'ingresos',
     title: 'Historial de ingresos',
-    subtitle: 'Plata que metiste vos u otras entradas que no son venta.',
+    subtitle: 'Aportes de capital y otras entradas de dinero en el período seleccionado',
     movementType: 'income',
     apiType: 'incomes',
     tone: 'income',

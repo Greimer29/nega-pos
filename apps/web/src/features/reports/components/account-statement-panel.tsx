@@ -10,7 +10,7 @@ import {
   type ReportTypeFilters,
 } from '@/features/reports/components/report-filters-toolbar'
 import { ReportFlowChart } from '@/features/reports/components/report-flow-chart'
-import { ReportFinanceBlocks } from '@/features/reports/components/report-finance-blocks'
+import { ReportKpiGrid } from '@/features/reports/components/report-kpi-grid'
 import { formatFecha } from '@/features/reports/constants'
 import {
   defaultReportPeriodState,
@@ -175,11 +175,7 @@ export function AccountStatementPanel() {
             </p>
           </div>
 
-          <ReportFinanceBlocks
-            summary={data.summary}
-            filterSearch={filterSearch}
-            accountFilterActive={accountId !== null || unassignedOnly}
-          />
+          <ReportKpiGrid summary={data.summary} filterSearch={filterSearch} />
 
           <div className="grid gap-5 xl:grid-cols-5">
             <div className="xl:col-span-3">
