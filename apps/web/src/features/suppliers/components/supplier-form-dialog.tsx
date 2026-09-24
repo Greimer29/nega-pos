@@ -23,6 +23,7 @@ import {
   useUploadSupplierImageMutation,
 } from '@/features/suppliers/hooks/use-suppliers'
 import type { Supplier } from '@/features/suppliers/types'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { normalizeRif } from '@/lib/rif'
 
@@ -107,7 +108,6 @@ export function SupplierFormDialog({ open, onOpenChange, supplier, onCreated }: 
     register,
     handleSubmit,
     reset,
-    setError,
     setValue,
     watch,
     formState: { errors, isSubmitting },
@@ -193,7 +193,7 @@ export function SupplierFormDialog({ open, onOpenChange, supplier, onCreated }: 
 
       onOpenChange(false)
     } catch (error) {
-      setError('root', { message: getApiErrorMessage(error) })
+      notifyApiError(error, 'No se pudo guardar')
     }
   })
 
@@ -294,8 +294,6 @@ export function SupplierFormDialog({ open, onOpenChange, supplier, onCreated }: 
               </label>
             ) : null}
           </section>
-
-          {errors.root ? <p className="text-destructive text-sm whitespace-pre-line">{errors.root.message}</p> : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

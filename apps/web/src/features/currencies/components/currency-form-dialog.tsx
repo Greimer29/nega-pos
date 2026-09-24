@@ -17,7 +17,7 @@ import {
   useUpdateCurrencyMutation,
 } from '@/features/currencies/hooks/use-currencies'
 import type { Currency } from '@/features/currencies/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 
 type CurrencyFormDialogProps = {
   open: boolean
@@ -39,12 +39,10 @@ export function CurrencyFormDialog({
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [rate, setRate] = useState('')
-  const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     if (open) {
-      setError(null)
       if (isEditing) {
         setCode(currency.code)
         setName(currency.name)
@@ -59,15 +57,14 @@ export function CurrencyFormDialog({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    setError(null)
 
     const parsedRate = Number(rate)
     if (!name.trim()) {
-      setError('El nombre es obligatorio')
+      notifyFormError('El nombre es obligatorio')
       return
     }
     if (!Number.isFinite(parsedRate) || parsedRate <= 0) {
-      setError('La tasa debe ser mayor a 0')
+      notifyFormError('La tasa debe ser mayor a 0')
       return
     }
 
@@ -81,7 +78,7 @@ export function CurrencyFormDialog({
       } else {
         const normalizedCode = code.trim().toUpperCase()
         if (!/^[A-Z]{3}$/.test(normalizedCode)) {
-          setError('El código debe tener 3 letras')
+          notifyFormError('El código debe tener 3 letras')
           return
         }
         await createMutation.mutateAsync({
@@ -92,7 +89,7 @@ export function CurrencyFormDialog({
       }
       onOpenChange(false)
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      notifyApiError(err, 'No se pudo guardar')
     } finally {
       setIsSubmitting(false)
     }
@@ -143,8 +140,6 @@ export function CurrencyFormDialog({
               onChange={(e) => setRate(e.target.value)}
             />
           </div>
-
-          {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

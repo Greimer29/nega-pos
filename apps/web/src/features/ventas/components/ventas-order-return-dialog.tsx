@@ -15,7 +15,6 @@ import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-mo
 import { useReturnSaleMutation } from '@/features/ventas/hooks/use-sales'
 import { getSale } from '@/features/ventas/services/sales-service'
 import type { SaleLine } from '@/features/ventas/types'
-import { getApiErrorMessage } from '@/lib/api-error'
 import {
   formatInventoryQuantity,
   inventoryQuantityDecimals,
@@ -25,6 +24,7 @@ import {
 } from '@/lib/inventory-units'
 import { parseDecimalInput } from '@/lib/numeric-input'
 import { invoiceDiscountLabel, invoiceReturnNetUsd } from '@/features/ventas/utils/invoice-discount'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 type ReturnSelection = {
@@ -60,7 +60,6 @@ export function VentasOrderReturnDialog({
   const [lines, setLines] = useState<SaleLine[]>([])
   const [invoiceDiscountUsd, setInvoiceDiscountUsd] = useState(0)
   const [selection, setSelection] = useState<ReturnSelection[]>([])
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || !saleId) {
@@ -69,7 +68,6 @@ export function VentasOrderReturnDialog({
 
     let cancelled = false
     setLoading(true)
-    setError(null)
 
     void getSale(saleId)
       .then((sale) => {
@@ -90,7 +88,7 @@ export function VentasOrderReturnDialog({
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(getApiErrorMessage(err))
+          notifyApiError(err, 'No se pudo cargar')
         }
       })
       .finally(() => {
@@ -151,7 +149,7 @@ export function VentasOrderReturnDialog({
       .map((item) => ({ line_id: item.lineId, quantity: item.quantity }))
 
     if (payload.length === 0) {
-      setError('Seleccioná al menos un producto para devolver.')
+      notifyFormError('Seleccioná al menos un producto para devolver.')
       return
     }
 
@@ -159,18 +157,17 @@ export function VentasOrderReturnDialog({
       const line = lines.find((l) => l.id === item.line_id)
       if (!line) continue
       if (item.quantity > remainingQty(line) + 0.0005) {
-        setError('Alguna cantidad supera lo disponible para devolver.')
+        notifyFormError('Alguna cantidad supera lo disponible para devolver.')
         return
       }
     }
 
-    setError(null)
     try {
       await returnMutation.mutateAsync({ id: saleId, payload: { lines: payload } })
       onOpenChange(false)
       onSuccess?.()
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      notifyApiError(err, 'No se pudo guardar')
     }
   }
 
@@ -280,8 +277,6 @@ export function VentasOrderReturnDialog({
             </p>
           ) : null}
         </div>
-
-        {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

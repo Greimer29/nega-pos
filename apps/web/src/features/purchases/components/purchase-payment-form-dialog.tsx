@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { AccountSelect } from '@/features/accounts/components/account-select'
 import { useBaseCurrencyQuery } from '@/features/currencies/hooks/use-currencies'
 import { useCreateSupplierPaymentMutation } from '@/features/suppliers/hooks/use-suppliers'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 
 type PurchasePaymentFormDialogProps = {
   open: boolean
@@ -40,23 +40,21 @@ export function PurchasePaymentFormDialog({
   const [date, setDate] = useState(today)
   const [accountId, setAccountId] = useState<number | null>(null)
   const [note, setNote] = useState('')
-  const [error, setError] = useState<string | null>(null)
 
   const paymentMutation = useCreateSupplierPaymentMutation()
   const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    setError(null)
 
     const amountNum = Number(amount)
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
-      setError('Ingresá un monto válido.')
+      notifyFormError('Ingresá un monto válido.')
       return
     }
 
     if (maxAmountUsd !== undefined && amountNum > maxAmountUsd + 0.0001) {
-      setError(
+      notifyFormError(
         `El monto no puede superar el saldo pendiente (${maxAmountUsd.toFixed(4)} ${baseCurrencyCode}).`
       )
       return
@@ -78,7 +76,7 @@ export function PurchasePaymentFormDialog({
       onOpenChange(false)
       onSuccess?.()
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      notifyApiError(err, 'No se pudo guardar')
     }
   }
 
@@ -127,8 +125,6 @@ export function PurchasePaymentFormDialog({
             <Label htmlFor="payment-note">Nota</Label>
             <Textarea id="payment-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
-
-          {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

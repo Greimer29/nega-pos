@@ -11,6 +11,12 @@ export function notifyApiError(error: unknown, title = 'No se pudo completar la 
   toast.error(message, title)
 }
 
+/** Validación de formulario: toast, sin texto en el body del diálogo. */
+export function notifyFormError(message: string, title = 'Revisá el formulario') {
+  if (!message.trim()) return
+  toast.error(message, title)
+}
+
 /** Dispara un toast cuando una query entra en error (sin duplicar en cada render). */
 export function useQueryErrorToast(
   isError: boolean,

@@ -23,7 +23,8 @@ import {
 } from '@/features/formulas/hooks/use-formulas'
 import type { Formula } from '@/features/formulas/types'
 import type { Material } from '@/features/materials/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
 import { formatCostWarningsMessage } from '@/lib/cost-warnings'
 
 type FormulaFormDialogProps = {
@@ -55,8 +56,6 @@ export function FormulaFormDialog({
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [materialRows, setMaterialRows] = useState<MaterialRow[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [costWarning, setCostWarning] = useState<string | null>(null)
   const [pickExistingId, setPickExistingId] = useState('')
 
   const createMutation = useCreateFormulaMutation()
@@ -73,8 +72,6 @@ export function FormulaFormDialog({
     if (!open) {
       return
     }
-
-    setError(null)
 
     if (formula) {
       setName(formula.name)
@@ -103,11 +100,10 @@ export function FormulaFormDialog({
 
   function addMaterial(material: Material) {
     if (materialRows.some((row) => row.material_id === material.id)) {
-      setError(`"${material.name}" ya está en la fórmula.`)
+      notifyFormError(`"${material.name}" ya está en la fórmula.`)
       return
     }
 
-    setError(null)
     setMaterialRows((rows) => [
       ...rows,
       {
@@ -125,12 +121,9 @@ export function FormulaFormDialog({
   }
 
   async function handleSave() {
-    setError(null)
-    setCostWarning(null)
-
     const trimmedName = name.trim()
     if (!trimmedName) {
-      setError('El nombre de la fórmula es obligatorio.')
+      notifyFormError('El nombre de la fórmula es obligatorio.')
       return
     }
 
@@ -154,8 +147,7 @@ export function FormulaFormDialog({
         })
         const warningMessage = formatCostWarningsMessage(costWarnings)
         if (warningMessage) {
-          setCostWarning(warningMessage)
-          return
+          toast.warning(warningMessage, 'Producto por debajo del costo')
         }
         savedFormula = { id: formula.id, name: trimmedName }
       } else {
@@ -173,8 +165,7 @@ export function FormulaFormDialog({
           })
           const warningMessage = formatCostWarningsMessage(costWarnings)
           if (warningMessage) {
-            setCostWarning(warningMessage)
-            return
+            toast.warning(warningMessage, 'Producto por debajo del costo')
           }
         }
         savedFormula = { id: created.id, name: trimmedName }
@@ -183,7 +174,7 @@ export function FormulaFormDialog({
       onSaved?.(savedFormula)
       onOpenChange(false)
     } catch (saveError) {
-      setError(getApiErrorMessage(saveError))
+      notifyApiError(saveError, 'No se pudo guardar')
     }
   }
 
@@ -336,13 +327,6 @@ export function FormulaFormDialog({
             />
           </div>
         </div>
-
-        {costWarning ? (
-          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm whitespace-pre-line text-amber-900">
-            {costWarning}
-          </p>
-        ) : null}
-        {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

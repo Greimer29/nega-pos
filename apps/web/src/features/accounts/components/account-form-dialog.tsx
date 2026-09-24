@@ -20,7 +20,7 @@ import {
   useUpdateAccountMutation,
 } from '@/features/accounts/hooks/use-accounts'
 import type { Account } from '@/features/accounts/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 
 const schema = z.object({
   name: z.string().trim().min(1, 'El nombre es obligatorio').max(150),
@@ -46,7 +46,6 @@ export function AccountFormDialog({ open, onOpenChange, account, onCreated }: Ac
     register,
     handleSubmit,
     reset,
-    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -92,7 +91,7 @@ export function AccountFormDialog({ open, onOpenChange, account, onCreated }: Ac
 
       onOpenChange(false)
     } catch (err) {
-      setError('root', { message: getApiErrorMessage(err) })
+      notifyApiError(err, 'No se pudo guardar')
     }
   })
 
@@ -124,8 +123,6 @@ export function AccountFormDialog({ open, onOpenChange, account, onCreated }: Ac
               Cuenta activa
             </label>
           ) : null}
-
-          {errors.root ? <p className="text-destructive text-sm whitespace-pre-line">{errors.root.message}</p> : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

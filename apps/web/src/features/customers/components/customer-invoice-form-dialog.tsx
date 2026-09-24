@@ -32,7 +32,7 @@ import {
   isValidPurchaseRate,
   nativeToBase,
 } from '@/features/purchases/utils/purchase-entry-currency'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 const schema = z.object({
@@ -74,7 +74,6 @@ export function CustomerInvoiceFormDialog({
     handleSubmit,
     reset,
     control,
-    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
@@ -139,15 +138,15 @@ export function CustomerInvoiceFormDialog({
 
   const onSubmit = handleSubmit(async (values) => {
     if (!isCredit && !paymentMethodCode) {
-      setError('root', { message: 'Seleccioná el método de pago.' })
+      notifyFormError('Seleccioná el método de pago.')
       return
     }
     if (isCredit && !canUseCredit) {
-      setError('root', { message: 'El cliente no tiene días de crédito configurados.' })
+      notifyFormError('El cliente no tiene días de crédito configurados.')
       return
     }
     if (entryInNative && !isValidPurchaseRate(rateNum)) {
-      setError('root', { message: 'Indicá una tasa válida para la moneda elegida.' })
+      notifyFormError('Indicá una tasa válida para la moneda elegida.')
       return
     }
 
@@ -169,7 +168,7 @@ export function CustomerInvoiceFormDialog({
       onOpenChange(false)
       onSuccess?.()
     } catch (error) {
-      setError('root', { message: getApiErrorMessage(error) })
+      notifyApiError(error, 'No se pudo guardar')
     }
   })
 
@@ -291,10 +290,6 @@ export function CustomerInvoiceFormDialog({
             <Label htmlFor="customer-invoice-note">Nota</Label>
             <Textarea id="customer-invoice-note" rows={2} {...register('note')} />
           </div>
-
-          {errors.root ? (
-            <p className="text-destructive text-sm whitespace-pre-line">{errors.root.message}</p>
-          ) : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

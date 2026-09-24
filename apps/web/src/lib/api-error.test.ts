@@ -31,7 +31,7 @@ describe('formatApiErrorDetails', () => {
     ]
 
     expect(formatApiErrorDetails(details)).toEqual([
-      'The password field must have at least 8 characters',
+      'El campo contraseña debe tener al menos 8 caracteres.',
     ])
   })
 
@@ -111,7 +111,7 @@ describe('getApiErrorMessage', () => {
       },
     })
 
-    expect(getApiErrorMessage(error)).toBe('The password field must have at least 8 characters')
+    expect(getApiErrorMessage(error)).toBe('El campo contraseña debe tener al menos 8 caracteres.')
   })
 
   it('joins multiple detail lines', () => {
@@ -168,7 +168,7 @@ describe('getApiErrorMessage', () => {
       ],
     })
 
-    expect(getApiErrorMessage(error)).toBe('The email field must be a valid email address')
+    expect(getApiErrorMessage(error)).toBe('El campo email debe ser un email válido.')
   })
 
   it('reads legacy top-level errors record when error wrapper is missing', () => {
