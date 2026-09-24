@@ -123,7 +123,7 @@ export type CatalogProductPurchaseHistoryItem = {
 }
 
 function formatUsdNote(value: string | number) {
-  return Number(value).toFixed(2)
+  return Number(value).toFixed(4)
 }
 
 const IMAGE_MIME: Record<string, string> = {

@@ -4,7 +4,7 @@ import { CircularImageField } from '@/components/circular-image-field'
 import { BarcodeScanButton } from '@/components/barcode-scan-button'
 import { DecimalInput, MoneyInput } from '@/components/decimal-input'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import { OptionSwitch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -283,7 +283,7 @@ export function CatalogFormDialog({
     }
 
     const cost = formulaCost
-    setCostPrice(cost.toFixed(2))
+    setCostPrice(cost.toFixed(4))
 
     // Costo de fórmula cambió: conservar venta y actualizar margen.
     // Solo si aún no hay venta, proyectar venta desde el margen.
@@ -292,7 +292,7 @@ export function CatalogFormDialog({
     } else if (marginPercent.trim()) {
       const sale = calcSalePriceFromMargin(cost, Number(marginPercent))
       if (sale !== null) {
-        setSalePrice(sale.toFixed(2))
+        setSalePrice(sale.toFixed(4))
       }
     }
   }, [hasFormula, formulaCost, formulaMaterials])
@@ -312,7 +312,7 @@ export function CatalogFormDialog({
   function applySaleFromMargin(cost: number, margin: string) {
     const sale = calcSalePriceFromMargin(cost, Number(margin))
     if (sale !== null) {
-      setSalePrice(sale.toFixed(2))
+      setSalePrice(sale.toFixed(4))
     }
   }
 
@@ -382,6 +382,19 @@ export function CatalogFormDialog({
     clearFormula()
   }
 
+  function handleUseSizesChange(checked: boolean) {
+    setUseSizes(checked)
+    if (checked) {
+      setUseFormula(false)
+      clearFormula()
+      setWholesaleEnabled(false)
+      setPricePanel('retail')
+      if (sizeRows.length === 0) {
+        setSizeRows([newSizeRow()])
+      }
+    }
+  }
+
   function handleWholesaleChange(checked: boolean) {
     setWholesaleEnabled(checked)
     if (checked) {
@@ -436,7 +449,7 @@ export function CatalogFormDialog({
     setWholesaleMargin(value)
     const sale = calcSalePriceFromMargin(Number(wholesaleCost) || 0, Number(value))
     if (sale !== null) {
-      setWholesaleSale(sale.toFixed(2))
+      setWholesaleSale(sale.toFixed(4))
     }
   }
 
@@ -760,22 +773,29 @@ export function CatalogFormDialog({
             </div>
 
             <div className="space-y-3">
-              <label
-                className={cn(
-                  'flex items-center gap-2 text-sm',
-                  (useSizes || wholesaleEnabled) && 'text-muted-foreground'
-                )}
-              >
-                <Checkbox
+              <div className="flex gap-2">
+                <OptionSwitch
+                  label="Usar fórmula"
                   checked={useFormula}
                   disabled={useSizes || wholesaleEnabled}
-                  onChange={(e) => handleUseFormulaChange(e.target.checked)}
+                  onCheckedChange={handleUseFormulaChange}
                 />
-                Usar fórmula
-              </label>
-              {useSizes ? (
+                <OptionSwitch
+                  label="Usar tallas"
+                  checked={useSizes}
+                  disabled={useFormula || wholesaleEnabled}
+                  onCheckedChange={handleUseSizesChange}
+                />
+                <OptionSwitch
+                  label="Mayorista"
+                  checked={wholesaleEnabled}
+                  disabled={useFormula || useSizes}
+                  onCheckedChange={handleWholesaleChange}
+                />
+              </div>
+              {useFormula || useSizes || wholesaleEnabled ? (
                 <p className="text-muted-foreground text-xs">
-                  Desactivá las tallas para poder usar fórmula.
+                  Solo se puede activar una de estas opciones a la vez.
                 </p>
               ) : null}
               {useFormula && !useSizes ? (
@@ -853,36 +873,6 @@ export function CatalogFormDialog({
             </div>
 
             <div className="space-y-3">
-              <label
-                className={cn(
-                  'flex items-center gap-2 text-sm',
-                  (useFormula || wholesaleEnabled) && 'text-muted-foreground'
-                )}
-              >
-                <Checkbox
-                  checked={useSizes}
-                  disabled={useFormula || wholesaleEnabled}
-                  onChange={(e) => {
-                    const checked = e.target.checked
-                    setUseSizes(checked)
-                    if (checked) {
-                      setUseFormula(false)
-                      clearFormula()
-                      setWholesaleEnabled(false)
-                      setPricePanel('retail')
-                      if (sizeRows.length === 0) {
-                        setSizeRows([newSizeRow()])
-                      }
-                    }
-                  }}
-                />
-                Usar tallas
-              </label>
-              {useFormula ? (
-                <p className="text-muted-foreground text-xs">
-                  Los productos con fórmula no admiten tallas.
-                </p>
-              ) : null}
               {useSizes && !useFormula ? (
                 <div className="space-y-2">
                   {sizeRows.map((row) => (
@@ -945,24 +935,6 @@ export function CatalogFormDialog({
             </div>
 
             <div className="space-y-3">
-              <label
-                className={cn(
-                  'flex items-center gap-2 text-sm',
-                  (useFormula || useSizes) && 'text-muted-foreground'
-                )}
-              >
-                <Checkbox
-                  checked={wholesaleEnabled}
-                  disabled={useFormula || useSizes}
-                  onChange={(e) => handleWholesaleChange(e.target.checked)}
-                />
-                Mayorista
-              </label>
-              {useFormula || useSizes ? (
-                <p className="text-muted-foreground text-xs">
-                  La configuración mayorista no aplica a productos con fórmula o tallas.
-                </p>
-              ) : null}
               {wholesaleEnabled ? (
                 <div className="flex gap-1 rounded-md border p-1">
                   <Button

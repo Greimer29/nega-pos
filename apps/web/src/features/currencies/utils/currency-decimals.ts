@@ -1,33 +1,30 @@
-/** Códigos que permiten hasta 4 decimales al *ingresar* precios (compras). */
-const HIGH_PRECISION_ENTRY_CODES = new Set(['XAU', 'XAG', 'BTC', 'ETH'])
+export const MONEY_DISPLAY_MIN_DECIMALS = 2
+export const MONEY_DISPLAY_MAX_DECIMALS = 4
+export const MONEY_ENTRY_DECIMALS = 4
 
 /**
- * Precisión para visualización (dashboard, reportes, ventas, display currency).
- * Siempre 2 decimales para montos mostrados.
+ * Precisión máxima para visualización. El formateo usa 2–4 decimales
+ * para no ocultar costos como 0.0202.
  */
 export function nativeCurrencyDecimals(_currencyCode?: string): number {
-  return 2
+  return MONEY_DISPLAY_MAX_DECIMALS
 }
 
-/** Precisión al ingresar precios unitarios en compras / montos canónicos de alta resolución. */
-export function currencyEntryDecimals(currencyCode: string): number {
-  const code = currencyCode.toUpperCase()
-  if (HIGH_PRECISION_ENTRY_CODES.has(code)) return 4
-  if (code === 'USD' || code === 'VES') return 2
-  return 2
+/** Precisión al ingresar precios unitarios (costo/venta/compras). */
+export function currencyEntryDecimals(_currencyCode?: string): number {
+  return MONEY_ENTRY_DECIMALS
 }
 
-export function formatNativeAmountNumber(value: number, currencyCode: string): string {
-  const decimals = nativeCurrencyDecimals(currencyCode)
+export function formatNativeAmountNumber(value: number, _currencyCode?: string): string {
   if (!Number.isFinite(value)) {
     return (0).toLocaleString('es-VE', {
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
+      minimumFractionDigits: MONEY_DISPLAY_MIN_DECIMALS,
+      maximumFractionDigits: MONEY_DISPLAY_MAX_DECIMALS,
     })
   }
 
   return value.toLocaleString('es-VE', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    minimumFractionDigits: MONEY_DISPLAY_MIN_DECIMALS,
+    maximumFractionDigits: MONEY_DISPLAY_MAX_DECIMALS,
   })
 }

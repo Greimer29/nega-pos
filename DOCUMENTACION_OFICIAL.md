@@ -404,7 +404,7 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda b
 | `catalog_products` | `name`, `category`, `item_kind` (`PRODUCT`\|`SERVICE`, default `PRODUCT`), `sale_unit`, `formula_id?`, `sale_price_usd`, `cost_usd`, `stock_quantity`, `minimum_stock`, `barcode?` (string ≤64, unique por tabla cuando no es null; solo aplica a `PRODUCT`), `supplier_code?` (string ≤50, nullable, no unique; UI **Referencia** / código del proveedor; solo `PRODUCT`), `wholesale_enabled` (default false), `wholesale_units_per_pack?`, `wholesale_cost_usd?`, `wholesale_sale_price_usd?`, `active`. Si `wholesale_enabled`, el costo unitario se deriva (`wholesale_cost_usd / wholesale_units_per_pack`). Incompatible con `SERVICE`, fórmula y tallas. Los `SERVICE` no usan inventario/fórmula/tallas (`stock`/`minimum` en 0, `formula_id` null) ni barcode ni referencia. |
 | `catalog_product_sizes` | Tallas opcionales por producto: `catalog_product_id`, `size` (texto libre ≤20), `stock_quantity`; UNIQUE `(catalog_product_id, size)`. Si hay filas, el stock del producto es la suma de tallas. Incompatible con `formula_id`. |
 
-Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`.
+Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`. Precios (`cost_usd`, `sale_price_usd` y mayorista) admiten **hasta 4 decimales** (p. ej. `0.0202`).
 
 #### Inventario
 

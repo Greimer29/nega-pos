@@ -50,5 +50,9 @@ export const DecimalInput = React.forwardRef<HTMLInputElement, DecimalInputProps
   }
 )
 
-/** Alias de DecimalInput para montos. Pasá `decimals={4}` para XAU/Au. */
-export const MoneyInput = DecimalInput
+/** Input de montos: hasta 4 decimales (p. ej. costo 0.0202). */
+export const MoneyInput = React.forwardRef<HTMLInputElement, DecimalInputProps>(
+  function MoneyInput({ decimals = 4, ...props }, ref) {
+    return <DecimalInput ref={ref} decimals={decimals} {...props} />
+  }
+)
