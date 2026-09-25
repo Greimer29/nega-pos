@@ -1,6 +1,8 @@
 import type {
   AccountStatementParams,
   AccountStatementResponse,
+  IncomeStatementParams,
+  IncomeStatementResponse,
   InventoryMovementsParams,
   InventoryMovementsResponse,
   InventoryReportParams,
@@ -26,6 +28,26 @@ export async function getAccountStatement(params: AccountStatementParams = {}) {
   const query = buildReportQueryParams(params)
   const url = query.size > 0 ? `/reports/account-statement?${query.toString()}` : '/reports/account-statement'
   const { data } = await api.get<AccountStatementResponse>(url)
+
+  return data.data
+}
+
+function buildIncomeStatementQueryParams(params: IncomeStatementParams) {
+  const search = new URLSearchParams()
+
+  if (params.from) search.set('from', params.from)
+  if (params.to) search.set('to', params.to)
+  if (params.month) search.set('month', params.month)
+  if (params.display_currency) search.set('display_currency', params.display_currency)
+
+  return search
+}
+
+export async function getIncomeStatement(params: IncomeStatementParams = {}) {
+  const query = buildIncomeStatementQueryParams(params)
+  const url =
+    query.size > 0 ? `/reports/income-statement?${query.toString()}` : '/reports/income-statement'
+  const { data } = await api.get<IncomeStatementResponse>(url)
 
   return data.data
 }

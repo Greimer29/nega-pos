@@ -12,7 +12,39 @@ export const MOVEMENT_TYPE_LABELS = {
   income: 'Aporte de capital',
 } as const
 
-export type ReportsHubTab = 'estado-cuenta' | 'inventario'
+export type ReportsHubTab = 'financiero' | 'inventario'
+
+/** Subinformes del reporte financiero. `patrimonio` aún no implementado. */
+export type FinancialSubReport = 'flujo' | 'resultados' | 'patrimonio'
+
+export const REPORT_HUB_OPTIONS: Array<{
+  id: ReportsHubTab
+  label: string
+}> = [
+  { id: 'financiero', label: 'Reporte financiero' },
+  { id: 'inventario', label: 'Reporte de inventario' },
+]
+
+export const FINANCIAL_SUB_REPORTS: Array<{
+  id: FinancialSubReport
+  label: string
+  enabled: boolean
+}> = [
+  { id: 'flujo', label: 'Flujo de caja', enabled: true },
+  { id: 'resultados', label: 'Estado de resultados', enabled: true },
+  { id: 'patrimonio', label: 'Situación patrimonial', enabled: false },
+]
+
+export function parseReportsHubTab(value: string | null): ReportsHubTab {
+  if (value === 'inventario') return 'inventario'
+  return 'financiero'
+}
+
+export function parseFinancialSubReport(value: string | null): FinancialSubReport {
+  if (value === 'resultados') return 'resultados'
+  if (value === 'patrimonio') return 'flujo'
+  return 'flujo'
+}
 
 export function formatMoney(value: string | number | null | undefined, currency = 'USD') {
   if (value === null || value === undefined || value === '') return '—'

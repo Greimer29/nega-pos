@@ -16,6 +16,7 @@ import MachineExpense from '#models/machine_expense'
 import Sale from '#models/sale'
 import Purchase from '#models/purchase'
 import SupplierPayment from '#models/supplier_payment'
+import db from '@adonisjs/lucid/services/db'
 
 import { DateTime } from 'luxon'
 
@@ -149,10 +150,141 @@ export type AccountStatementResult = {
   period: { from: string; to: string }
 }
 
+export type IncomeStatementFilters = {
+  from?: string
+  to?: string
+  month?: string
+  display_currency?: string
+}
+
+export type IncomeStatementSummary = {
+  displayCurrency: string
+  /** Ingresos por ventas (devengo): total_usd de facturas COMPLETED del período. */
+  salesRevenueUsd: string
+  /** Costo de mercancía vendida (qty neta × costo de línea / catálogo). */
+  cogsUsd: string
+  grossProfitUsd: string
+  /** Gastos operativos + gastos máquina legacy del período. */
+  operatingExpensesUsd: string
+  operatingIncomeUsd: string
+  /** Porcentaje; null si no hay ingresos por ventas. */
+  grossMarginPct: number | null
+  operatingMarginPct: number | null
+  salesRevenue: string
+  cogs: string
+  grossProfit: string
+  operatingExpenses: string
+  operatingIncome: string
+  rates: Record<string, string>
+}
+
+export type IncomeStatementResult = {
+  summary: IncomeStatementSummary
+  period: { from: string; to: string }
+}
+
 const SALE_STATUSES = ['COMPLETED'] as const
 
 export default class ReportService {
   private currencyService = new CurrencyService()
+
+  async estadoResultados(filters: IncomeStatementFilters): Promise<IncomeStatementResult> {
+    const period = this.resolvePeriod(filters)
+    const rates = await this.currencyService.getActiveRates()
+    const displayCurrency = (filters.display_currency ?? 'USD').toUpperCase()
+
+    if (!rates[displayCurrency]) {
+      throw new MonedaNoEncontradaException(
+        'La moneda de visualización no está configurada o activa'
+      )
+    }
+
+    const soldFrom = `${period.from} 00:00:00`
+    const soldTo = `${period.to} 23:59:59`
+
+    const revenueRow = await db
+      .from('sales')
+      .whereIn('status', [...SALE_STATUSES])
+      .where('sold_at', '>=', soldFrom)
+      .where('sold_at', '<=', soldTo)
+      .select(db.raw('COALESCE(SUM(total_usd), 0) as revenue'))
+      .first()
+
+    const cogsRow = await db
+      .from('sales')
+      .join('sale_lines', 'sale_lines.sale_id', 'sales.id')
+      .leftJoin('catalog_products', 'catalog_products.id', 'sale_lines.catalog_product_id')
+      .leftJoin('materials', 'materials.id', 'sale_lines.material_id')
+      .whereIn('sales.status', [...SALE_STATUSES])
+      .where('sales.sold_at', '>=', soldFrom)
+      .where('sales.sold_at', '<=', soldTo)
+      .select(
+        db.raw(
+          `COALESCE(SUM(
+            COALESCE(
+              sale_lines.cost_usd,
+              catalog_products.cost_usd,
+              materials.last_purchase_price_usd,
+              materials.reference_cost_usd,
+              0
+            ) * (sale_lines.quantity - sale_lines.returned_quantity)
+          ), 0) as cogs`
+        )
+      )
+      .first()
+
+    const expensesRow = await db
+      .from('expenses')
+      .where('date', '>=', period.from)
+      .where('date', '<=', period.to)
+      .select(db.raw('COALESCE(SUM(amount_usd), 0) as total'))
+      .first()
+
+    const machineExpenses = await MachineExpense.query()
+      .where('date', '>=', period.from)
+      .where('date', '<=', period.to)
+
+    let machineExpensesUsd = 0
+    for (const expense of machineExpenses) {
+      const currencyCode = expense.currencyCode ?? 'USD'
+      const native = Number(expense.amount ?? 0)
+      machineExpensesUsd += this.currencyService.toUsd(native, currencyCode, rates)
+    }
+
+    const salesRevenueUsd = Number(revenueRow?.revenue ?? 0)
+    const cogsUsd = Number(cogsRow?.cogs ?? 0)
+    const operatingExpensesUsd = Number(expensesRow?.total ?? 0) + machineExpensesUsd
+    const grossProfitUsd = salesRevenueUsd - cogsUsd
+    const operatingIncomeUsd = grossProfitUsd - operatingExpensesUsd
+
+    const grossMarginPct =
+      salesRevenueUsd > 0 ? Math.round((grossProfitUsd / salesRevenueUsd) * 10000) / 100 : null
+    const operatingMarginPct =
+      salesRevenueUsd > 0 ? Math.round((operatingIncomeUsd / salesRevenueUsd) * 10000) / 100 : null
+
+    const fmt = (usd: number) =>
+      this.formatDisplay(this.currencyService.fromUsd(usd, displayCurrency, rates), displayCurrency)
+
+    return {
+      period,
+      summary: {
+        displayCurrency,
+        salesRevenueUsd: salesRevenueUsd.toFixed(4),
+        cogsUsd: cogsUsd.toFixed(4),
+        grossProfitUsd: grossProfitUsd.toFixed(4),
+        operatingExpensesUsd: operatingExpensesUsd.toFixed(4),
+        operatingIncomeUsd: operatingIncomeUsd.toFixed(4),
+        grossMarginPct,
+        operatingMarginPct,
+        salesRevenue: fmt(salesRevenueUsd),
+        cogs: fmt(cogsUsd),
+        grossProfit: fmt(grossProfitUsd),
+        operatingExpenses: fmt(operatingExpensesUsd),
+        operatingIncome: fmt(operatingIncomeUsd),
+        rates: this.currencyService.formatRates(rates),
+      },
+    }
+  }
 
   async estadoCuenta(filters: AccountStatementFilters): Promise<AccountStatementResult> {
     const period = this.resolvePeriod(filters)

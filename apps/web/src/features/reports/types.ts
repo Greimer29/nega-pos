@@ -76,6 +76,37 @@ export type AccountStatementResponse = {
   }
 }
 
+export type IncomeStatementParams = {
+  from?: string
+  to?: string
+  month?: string
+  display_currency?: string
+}
+
+export type IncomeStatementSummary = {
+  displayCurrency: string
+  salesRevenueUsd: string
+  cogsUsd: string
+  grossProfitUsd: string
+  operatingExpensesUsd: string
+  operatingIncomeUsd: string
+  grossMarginPct: number | null
+  operatingMarginPct: number | null
+  salesRevenue: string
+  cogs: string
+  grossProfit: string
+  operatingExpenses: string
+  operatingIncome: string
+  rates: Record<string, string>
+}
+
+export type IncomeStatementResponse = {
+  data: {
+    period: { from: string; to: string }
+    summary: IncomeStatementSummary
+  }
+}
+
 export type InventoryReportSortBy = 'id' | 'name' | 'sale_price' | 'quantity'
 export type InventoryReportSortDir = 'asc' | 'desc'
 

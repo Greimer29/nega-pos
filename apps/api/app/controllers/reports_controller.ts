@@ -2,6 +2,7 @@ import ReportService from '#services/report_service'
 import InventoryReportService from '#services/inventory_report_service'
 import {
   accountStatementValidator,
+  incomeStatementValidator,
   inventoryMovementsValidator,
   inventoryReportValidator,
 } from '#validators/report'
@@ -28,6 +29,22 @@ export default class ReportsController {
       period: result.period,
       summary: result.summary,
       movements: result.movements,
+    })
+  }
+
+  async incomeStatement({ request, serialize }: HttpContext) {
+    const filters = await request.validateUsing(incomeStatementValidator)
+
+    const result = await this.service.estadoResultados({
+      from: filters.from,
+      to: filters.to,
+      month: filters.month,
+      display_currency: filters.display_currency,
+    })
+
+    return serialize({
+      period: result.period,
+      summary: result.summary,
     })
   }
 

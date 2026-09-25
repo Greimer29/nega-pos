@@ -4,6 +4,8 @@ import AppSetting from '#models/app_setting'
 import CatalogProduct from '#models/catalog_product'
 import Customer from '#models/customer'
 import CustomerPayment from '#models/customer_payment'
+import Expense from '#models/expense'
+import Income from '#models/income'
 import InventoryMovement from '#models/inventory_movement'
 import Material from '#models/material'
 import ProductInventoryMovement from '#models/product_inventory_movement'
@@ -1054,5 +1056,153 @@ test.group('Reports API', (group) => {
     assert.equal(body.data.product.description, 'Producto movimientos')
     assert.isAtLeast(body.data.movements.length, 1)
     assert.equal(body.data.movements[0].type, 'MANUAL_CARGO')
+  })
+
+  test('GET /api/v1/reports/income-statement returns accrual P&L for month', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const product = await CatalogProduct.create({
+      name: 'Prod resultado',
+      category: 'General',
+      salePriceUsd: '20.0000',
+      costUsd: '8.0000',
+      active: true,
+    })
+
+    await seedTestSale({
+      soldAt: DateTime.fromISO('2026-06-10'),
+      confirmedAt: DateTime.fromISO('2026-06-10'),
+      totalUsd: '40.0000',
+      paymentType: 'CASH',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '2',
+          unitPriceUsd: '20.0000',
+          subtotalUsd: '40.0000',
+          costUsd: '8.0000',
+        },
+      ],
+    })
+
+    await seedTestSale({
+      soldAt: DateTime.fromISO('2026-06-12'),
+      confirmedAt: DateTime.fromISO('2026-06-12'),
+      totalUsd: '20.0000',
+      paymentType: 'CREDIT',
+      amountPaidUsd: '0.0000',
+      balanceUsd: '20.0000',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '1',
+          unitPriceUsd: '20.0000',
+          subtotalUsd: '20.0000',
+          costUsd: '8.0000',
+        },
+      ],
+    })
+
+    await Expense.create({
+      date: DateTime.fromISO('2026-06-15'),
+      description: 'Alquiler',
+      amountUsd: '10.0000',
+      currencyCode: 'USD',
+    })
+
+    const response = await client
+      .get('/api/v1/reports/income-statement')
+      .qs({ month: '2026-06', display_currency: 'USD' })
+      .loginAs(user)
+
+    response.assertStatus(200)
+    const summary = response.body().data.summary as {
+      salesRevenueUsd: string
+      cogsUsd: string
+      grossProfitUsd: string
+      operatingExpensesUsd: string
+      operatingIncomeUsd: string
+      grossMarginPct: number
+      operatingMarginPct: number
+    }
+
+    // Contado + crédito a devengo
+    assert.equal(summary.salesRevenueUsd, '60.0000')
+    // CMV: 2×8 + 1×8
+    assert.equal(summary.cogsUsd, '24.0000')
+    assert.equal(summary.grossProfitUsd, '36.0000')
+    assert.equal(summary.operatingExpensesUsd, '10.0000')
+    assert.equal(summary.operatingIncomeUsd, '26.0000')
+    assert.equal(summary.grossMarginPct, 60)
+    assert.equal(summary.operatingMarginPct, 43.33)
+  })
+
+  test('GET income-statement ignores aportes and purchases (not P&L)', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const product = await CatalogProduct.create({
+      name: 'Prod aislamiento',
+      category: 'General',
+      salePriceUsd: '10.0000',
+      costUsd: '4.0000',
+      active: true,
+    })
+
+    await seedTestSale({
+      soldAt: DateTime.fromISO('2026-07-05'),
+      confirmedAt: DateTime.fromISO('2026-07-05'),
+      totalUsd: '10.0000',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '1',
+          unitPriceUsd: '10.0000',
+          subtotalUsd: '10.0000',
+          costUsd: '4.0000',
+        },
+      ],
+    })
+
+    await Income.create({
+      date: DateTime.fromISO('2026-07-05'),
+      description: 'Aporte capital',
+      amountUsd: '1000.0000',
+      currencyCode: 'USD',
+    })
+
+    const supplier = await Supplier.create({ name: 'Prov P&L', active: true })
+    await Purchase.create({
+      supplierId: Number(supplier.id),
+      date: DateTime.fromISO('2026-07-05'),
+      status: 'CONFIRMED',
+      isCredit: false,
+      totalUsd: '50.0000',
+      totalBs: '0.00',
+    })
+
+    const response = await client
+      .get('/api/v1/reports/income-statement')
+      .qs({ month: '2026-07', display_currency: 'USD' })
+      .loginAs(user)
+
+    response.assertStatus(200)
+    const summary = response.body().data.summary as {
+      salesRevenueUsd: string
+      cogsUsd: string
+      operatingExpensesUsd: string
+      operatingIncomeUsd: string
+    }
+
+    assert.equal(summary.salesRevenueUsd, '10.0000')
+    assert.equal(summary.cogsUsd, '4.0000')
+    assert.equal(summary.operatingExpensesUsd, '0.0000')
+    assert.equal(summary.operatingIncomeUsd, '6.0000')
   })
 })

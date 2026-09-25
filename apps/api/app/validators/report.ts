@@ -33,6 +33,13 @@ export const accountStatementValidator = vine.create({
     }),
 })
 
+export const incomeStatementValidator = vine.create({
+  from: isoDate.optional(),
+  to: isoDate.optional(),
+  month: month.optional(),
+  display_currency: vine.string().trim().toUpperCase().fixedLength(3).optional(),
+})
+
 const inventorySortBy = ['id', 'name', 'sale_price', 'quantity'] as const
 const inventorySortDir = ['asc', 'desc'] as const
 

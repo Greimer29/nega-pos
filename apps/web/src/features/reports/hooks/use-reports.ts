@@ -1,11 +1,13 @@
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query'
 import {
   getAccountStatement,
+  getIncomeStatement,
   getInventoryProductMovements,
   getInventoryReport,
 } from '@/features/reports/services/report-service'
 import type {
   AccountStatementParams,
+  IncomeStatementParams,
   InventoryMovementsParams,
   InventoryReportParams,
 } from '@/features/reports/types'
@@ -19,6 +21,17 @@ export function useAccountStatementQuery(
   return useQuery({
     queryKey: [...reportsQueryKey, 'account-statement', params],
     queryFn: () => getAccountStatement(params),
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useIncomeStatementQuery(
+  params: IncomeStatementParams,
+  options?: Pick<UseQueryOptions<Awaited<ReturnType<typeof getIncomeStatement>>>, 'enabled'>
+) {
+  return useQuery({
+    queryKey: [...reportsQueryKey, 'income-statement', params],
+    queryFn: () => getIncomeStatement(params),
     enabled: options?.enabled ?? true,
   })
 }

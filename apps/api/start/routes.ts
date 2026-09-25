@@ -164,6 +164,7 @@ router
         router.delete('categories/:id', [CategoriesController, 'destroy'])
 
         router.get('reports/account-statement', [ReportsController, 'accountStatement'])
+        router.get('reports/income-statement', [ReportsController, 'incomeStatement'])
         router.get('reports/inventory', [ReportsController, 'inventory'])
         router.get('reports/inventory/:productId/movements', [
           ReportsController,
