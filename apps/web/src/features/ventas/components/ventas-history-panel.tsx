@@ -277,7 +277,7 @@ export function VentasHistoryPanel() {
               No hay ventas que coincidan con los filtros.
             </p>
           ) : (
-            <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto rounded-md border">
+            <div className="scrollbar-subtle min-h-0 flex-1 overflow-auto overscroll-contain rounded-md border">
               <table className="w-full min-w-[720px] text-sm">
                 <thead className="bg-muted/50 sticky top-0">
                   <tr className="border-b text-left">
