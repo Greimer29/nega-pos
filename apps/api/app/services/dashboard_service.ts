@@ -433,7 +433,7 @@ export default class DashboardService {
   }
 
   private resolveDashboardDate(dateInput?: string): string {
-    return dateInput?.trim() || DateTime.now().toISODate()!
+    return dateInput?.trim() || todayIsoDate()
   }
 
   private async gastosDelDia(dateInput?: string): Promise<{ cantidad: number; montoUsd: number }> {
@@ -1041,7 +1041,7 @@ export default class DashboardService {
       shiftForExpenses = shift
       date = shift.openedAt.toISO()!.slice(0, 10)
     } else {
-      date = input?.date?.trim() || DateTime.now().toISODate()!
+      date = input?.date?.trim() || todayIsoDate()
     }
 
     const salesQuery = db
