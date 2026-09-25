@@ -48,43 +48,43 @@ export function DashboardSalesChart({
             <span className="text-muted-foreground text-xs">Actualizando…</span>
           ) : null}
           <div className="inline-flex rounded-full bg-neutral-100 p-1">
-          <button
-            type="button"
-            disabled={!dailyEnabled}
-            title={
-              dailyEnabled
-                ? undefined
-                : 'La vista diaria aún no está disponible en el servidor.'
-            }
-            className={cn(
-              'rounded-full px-3 py-1 text-xs font-medium',
-              mode === 'daily' ? 'bg-neutral-900 text-white' : 'text-neutral-600',
-              !dailyEnabled && 'cursor-not-allowed opacity-50'
-            )}
-            onClick={() => onModeChange('daily')}
-          >
-            Diario
-          </button>
-          <button
-            type="button"
-            className={cn(
-              'rounded-full px-3 py-1 text-xs font-medium',
-              mode === 'weekly' ? 'bg-neutral-900 text-white' : 'text-neutral-600'
-            )}
-            onClick={() => onModeChange('weekly')}
-          >
-            Semanal
-          </button>
-          <button
-            type="button"
-            className={cn(
-              'rounded-full px-3 py-1 text-xs font-medium',
-              mode === 'monthly' ? 'bg-neutral-900 text-white' : 'text-neutral-600'
-            )}
-            onClick={() => onModeChange('monthly')}
-          >
-            Mensual
-          </button>
+            <button
+              type="button"
+              disabled={!dailyEnabled}
+              title={
+                dailyEnabled
+                  ? undefined
+                  : 'La vista diaria aún no está disponible en el servidor.'
+              }
+              className={cn(
+                'rounded-full px-3 py-1 text-xs font-medium',
+                mode === 'daily' ? 'bg-neutral-900 text-white' : 'text-neutral-600',
+                !dailyEnabled && 'cursor-not-allowed opacity-50'
+              )}
+              onClick={() => onModeChange('daily')}
+            >
+              Diario
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'rounded-full px-3 py-1 text-xs font-medium',
+                mode === 'weekly' ? 'bg-neutral-900 text-white' : 'text-neutral-600'
+              )}
+              onClick={() => onModeChange('weekly')}
+            >
+              Semanal
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'rounded-full px-3 py-1 text-xs font-medium',
+                mode === 'monthly' ? 'bg-neutral-900 text-white' : 'text-neutral-600'
+              )}
+              onClick={() => onModeChange('monthly')}
+            >
+              Mensual
+            </button>
           </div>
         </div>
       </div>

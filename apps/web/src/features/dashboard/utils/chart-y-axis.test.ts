@@ -3,15 +3,21 @@ import { describe, expect, it } from 'vitest'
 import { buildUsdStepAxis } from './chart-y-axis'
 
 describe('buildUsdStepAxis', () => {
-  it('uses minimum scale of 100 USD', () => {
-    expect(buildUsdStepAxis(0)).toEqual({ yMaxUsd: 100, ticksUsd: [0, 100] })
+  it('uses a small default scale when there is no data', () => {
+    expect(buildUsdStepAxis(0)).toEqual({ yMaxUsd: 1, ticksUsd: [0, 1] })
   })
 
-  it('rounds up to the next 100 USD step', () => {
-    expect(buildUsdStepAxis(150)).toEqual({ yMaxUsd: 200, ticksUsd: [0, 100, 200] })
+  it('auto-scales to a nice ceiling above the data peak', () => {
+    expect(buildUsdStepAxis(14.24)).toEqual({
+      yMaxUsd: 15,
+      ticksUsd: [0, 5, 10, 15],
+    })
   })
 
-  it('keeps exact multiples of 100', () => {
-    expect(buildUsdStepAxis(300)).toEqual({ yMaxUsd: 300, ticksUsd: [0, 100, 200, 300] })
+  it('auto-scales larger peaks without a fixed 100 step', () => {
+    expect(buildUsdStepAxis(150)).toEqual({
+      yMaxUsd: 150,
+      ticksUsd: [0, 50, 100, 150],
+    })
   })
 })

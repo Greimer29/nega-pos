@@ -55,7 +55,7 @@ export function ChartPlotCanvas({
       <div className={dashboardUi.chartBarsLayer}>
         {series.map((point, index) => {
           const valueUsd = Number(point.totalUsd)
-          const heightPct = yMaxUsd > 0 ? (valueUsd / yMaxUsd) * 100 : 0
+          const heightPct = yMaxUsd > 0 ? Math.min(100, (valueUsd / yMaxUsd) * 100) : 0
           const isPeak = valueUsd > 0 && valueUsd === seriesPeak
           const variation =
             point.variacionPct !== null

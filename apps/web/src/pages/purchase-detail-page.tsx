@@ -694,11 +694,13 @@ export function PurchaseDetallePage() {
               catalog_product_id: item.catalogProductId,
               quantity: item.quantity,
               unit_price_usd: item.unitPriceUsd,
+              ...(item.isWholesale ? { is_wholesale: true } : {}),
             }
           : {
               material_id: item.materialId,
               quantity: item.quantity,
               unit_price_usd: item.unitPriceUsd,
+              ...(item.isWholesale ? { is_wholesale: true } : {}),
             }
       ),
     }),

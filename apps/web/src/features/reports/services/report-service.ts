@@ -1,6 +1,10 @@
 import type {
   AccountStatementParams,
   AccountStatementResponse,
+  BalancePositionParams,
+  BalancePositionResponse,
+  FinancialSummaryParams,
+  FinancialSummaryResponse,
   IncomeStatementParams,
   IncomeStatementResponse,
   InventoryMovementsParams,
@@ -48,6 +52,33 @@ export async function getIncomeStatement(params: IncomeStatementParams = {}) {
   const url =
     query.size > 0 ? `/reports/income-statement?${query.toString()}` : '/reports/income-statement'
   const { data } = await api.get<IncomeStatementResponse>(url)
+
+  return data.data
+}
+
+export async function getBalancePosition(params: BalancePositionParams = {}) {
+  const search = new URLSearchParams()
+  if (params.display_currency) search.set('display_currency', params.display_currency)
+  const url =
+    search.size > 0
+      ? `/reports/balance-position?${search.toString()}`
+      : '/reports/balance-position'
+  const { data } = await api.get<BalancePositionResponse>(url)
+
+  return data.data
+}
+
+export async function getFinancialSummary(params: FinancialSummaryParams = {}) {
+  const search = new URLSearchParams()
+  if (params.from) search.set('from', params.from)
+  if (params.to) search.set('to', params.to)
+  if (params.month) search.set('month', params.month)
+  if (params.display_currency) search.set('display_currency', params.display_currency)
+  const url =
+    search.size > 0
+      ? `/reports/financial-summary?${search.toString()}`
+      : '/reports/financial-summary'
+  const { data } = await api.get<FinancialSummaryResponse>(url)
 
   return data.data
 }

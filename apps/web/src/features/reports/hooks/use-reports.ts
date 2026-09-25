@@ -1,12 +1,16 @@
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query'
 import {
   getAccountStatement,
+  getBalancePosition,
+  getFinancialSummary,
   getIncomeStatement,
   getInventoryProductMovements,
   getInventoryReport,
 } from '@/features/reports/services/report-service'
 import type {
   AccountStatementParams,
+  BalancePositionParams,
+  FinancialSummaryParams,
   IncomeStatementParams,
   InventoryMovementsParams,
   InventoryReportParams,
@@ -32,6 +36,28 @@ export function useIncomeStatementQuery(
   return useQuery({
     queryKey: [...reportsQueryKey, 'income-statement', params],
     queryFn: () => getIncomeStatement(params),
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useBalancePositionQuery(
+  params: BalancePositionParams,
+  options?: Pick<UseQueryOptions<Awaited<ReturnType<typeof getBalancePosition>>>, 'enabled'>
+) {
+  return useQuery({
+    queryKey: [...reportsQueryKey, 'balance-position', params],
+    queryFn: () => getBalancePosition(params),
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useFinancialSummaryQuery(
+  params: FinancialSummaryParams,
+  options?: Pick<UseQueryOptions<Awaited<ReturnType<typeof getFinancialSummary>>>, 'enabled'>
+) {
+  return useQuery({
+    queryKey: [...reportsQueryKey, 'financial-summary', params],
+    queryFn: () => getFinancialSummary(params),
     enabled: options?.enabled ?? true,
   })
 }

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { wholesaleUnitsPerPack } from '@/lib/wholesale'
 import {
   VentasCatalogFiltersPanel,
   type VentasCatalogSortOption,
@@ -601,13 +602,15 @@ function VentasCreateView() {
             canWholesale: Boolean(line.material.wholesaleEnabled),
             isWholesale: Boolean(line.isWholesale),
             wholesaleHint: line.isWholesale
-              ? `× ${Number(line.material.wholesaleUnitsPerPack ?? 0)} und`
+              ? `× ${wholesaleUnitsPerPack(line.material) ?? 0} und`
               : null,
             onToggleWholesale: line.material.wholesaleEnabled
               ? (checked) => toggleCartWholesale(line.id, checked)
               : undefined,
           }
         }
+
+        const productPackUnits = wholesaleUnitsPerPack(line.product)
 
         return {
           key: line.id,
@@ -644,9 +647,8 @@ function VentasCreateView() {
               : undefined,
           canWholesale: Boolean(line.product.wholesale_enabled) && !line.product.formula_id,
           isWholesale: Boolean(line.isWholesale),
-          wholesaleHint: line.isWholesale
-            ? `× ${Number(line.product.wholesale_units_per_pack ?? 0)} und`
-            : null,
+          wholesaleHint:
+            line.isWholesale && productPackUnits != null ? `× ${productPackUnits} und` : null,
           onToggleWholesale:
             line.product.wholesale_enabled && !line.product.formula_id
               ? (checked) => toggleCartWholesale(line.id, checked)

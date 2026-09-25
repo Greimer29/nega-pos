@@ -956,7 +956,11 @@ export default class SaleService {
 
         const sizeLabel = line.size?.trim()
         const sizeNote = sizeLabel ? ` talla ${sizeLabel}` : ''
-        const movementNote = `Venta ${sale.code}${sizeNote}`
+        const wholesaleNote =
+          line.isWholesale && line.unitsPerPack
+            ? ` — ${Number(line.quantity)} paq. × ${Number(line.unitsPerPack)} und`
+            : ''
+        const movementNote = `Venta ${sale.code}${sizeNote}${wholesaleNote}`
 
         if (line.catalogProductSizeId) {
           await this.sizeService.deductSizeStock(Number(line.catalogProductSizeId), quantity, trx)
@@ -990,12 +994,17 @@ export default class SaleService {
           ])
         }
 
+        const wholesaleNote =
+          line.isWholesale && line.unitsPerPack
+            ? ` — ${Number(line.quantity)} paq. × ${Number(line.unitsPerPack)} und`
+            : ''
+
         await InventoryMovement.create(
           {
             materialId,
             type: 'SALE_OUT',
             quantity: formatCantidadMovimiento(quantity),
-            note: `Factura ${sale.code}`,
+            note: `Factura ${sale.code}${wholesaleNote}`,
           },
           { client: trx }
         )

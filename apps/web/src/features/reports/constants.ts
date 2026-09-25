@@ -14,8 +14,8 @@ export const MOVEMENT_TYPE_LABELS = {
 
 export type ReportsHubTab = 'financiero' | 'inventario'
 
-/** Subinformes del reporte financiero. `patrimonio` aún no implementado. */
-export type FinancialSubReport = 'flujo' | 'resultados' | 'patrimonio'
+/** Subinformes del reporte financiero. */
+export type FinancialSubReport = 'flujo' | 'resultados' | 'patrimonio' | 'resumen'
 
 export const REPORT_HUB_OPTIONS: Array<{
   id: ReportsHubTab
@@ -32,7 +32,8 @@ export const FINANCIAL_SUB_REPORTS: Array<{
 }> = [
   { id: 'flujo', label: 'Flujo de caja', enabled: true },
   { id: 'resultados', label: 'Estado de resultados', enabled: true },
-  { id: 'patrimonio', label: 'Situación patrimonial', enabled: false },
+  { id: 'patrimonio', label: 'Situación patrimonial', enabled: true },
+  { id: 'resumen', label: 'Resumen financiero', enabled: true },
 ]
 
 export function parseReportsHubTab(value: string | null): ReportsHubTab {
@@ -41,8 +42,7 @@ export function parseReportsHubTab(value: string | null): ReportsHubTab {
 }
 
 export function parseFinancialSubReport(value: string | null): FinancialSubReport {
-  if (value === 'resultados') return 'resultados'
-  if (value === 'patrimonio') return 'flujo'
+  if (value === 'resultados' || value === 'patrimonio' || value === 'resumen') return value
   return 'flujo'
 }
 

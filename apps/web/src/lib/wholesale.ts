@@ -59,3 +59,49 @@ export function lineInventoryQuantity(
   }
   return lineQuantity * pack
 }
+
+function formatQtyNumber(value: number): string {
+  if (!Number.isFinite(value)) return '0'
+  return value.toLocaleString('es-VE', {
+    maximumFractionDigits: 3,
+    minimumFractionDigits: 0,
+  })
+}
+
+/**
+ * Ej.: "10 paq. × 20 und = 200 und"
+ * Deja explícito que la cantidad de línea son paquetes y el stock sale en unidades.
+ */
+export function formatWholesalePackSummary(
+  packs: number,
+  unitsPerPack: number,
+  unitAbrev = 'und'
+): string {
+  const safePacks = Number.isFinite(packs) ? packs : 0
+  const safeUnits =
+    Number.isFinite(unitsPerPack) && unitsPerPack >= MIN_WHOLESALE_UNITS_PER_PACK
+      ? unitsPerPack
+      : 0
+  const total = safePacks * safeUnits
+  return `${formatQtyNumber(safePacks)} paq. × ${formatQtyNumber(safeUnits)} ${unitAbrev} = ${formatQtyNumber(total)} ${unitAbrev}`
+}
+
+/** Etiqueta corta para columnas: "10 paq · 200 und". */
+export function formatWholesaleQuantityShort(
+  packs: number,
+  unitsPerPack: number | string | null | undefined,
+  unitAbrev = 'und'
+): string {
+  const packSize = Number(unitsPerPack)
+  const safePacks = Number.isFinite(packs) ? packs : 0
+  if (!Number.isFinite(packSize) || packSize < MIN_WHOLESALE_UNITS_PER_PACK) {
+    return `${formatQtyNumber(safePacks)} paq`
+  }
+  const total = safePacks * packSize
+  return `${formatQtyNumber(safePacks)} paq · ${formatQtyNumber(total)} ${unitAbrev}`
+}
+
+/** Precio de línea: mayorista = c/paq, detalle = c/u. */
+export function saleLinePriceUnitLabel(isWholesale: boolean): 'c/paq' | 'c/u' {
+  return isWholesale ? 'c/paq' : 'c/u'
+}

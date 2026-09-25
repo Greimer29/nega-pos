@@ -133,6 +133,72 @@ test.group('Mayorista — catálogo, compra y venta', (group) => {
     assert.equal(Number(product.stockQuantity), 600)
   })
 
+  test('confirm con items en el body conserva is_wholesale (paquetes × und)', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const supplier = await Supplier.create({
+      name: 'Mayorista Confirm Items',
+      rif: 'J111222333',
+      active: true,
+    })
+
+    const createProduct = await client.post('/api/v1/catalog-products').loginAs(user).json({
+      name: 'Arroz pack',
+      category: 'Uniforme',
+      sale_price_usd: 0.02,
+      wholesale_enabled: true,
+      wholesale_units_per_pack: 30,
+      wholesale_cost_usd: 0.3,
+      wholesale_sale_price_usd: 0.6,
+    })
+    createProduct.assertStatus(200)
+    const productId = createProduct.body().data.catalog_product.id
+    assert.equal(createProduct.body().data.catalog_product.cost_usd, '0.0100')
+
+    const purchase = await Purchase.create({
+      supplierId: supplier.id,
+      date: DateTime.fromISO('2026-09-25'),
+      invoiceNumber: 'F-MAY-002',
+      status: 'DRAFT',
+      totalBs: '0.00',
+    })
+
+    await client
+      .post(`/api/v1/purchases/${purchase.id}/items`)
+      .loginAs(user)
+      .json({
+        catalog_product_id: productId,
+        quantity: 20,
+        unit_price_usd: 0.3,
+        is_wholesale: true,
+      })
+      .then((r) => r.assertStatus(200))
+
+    // El front reenvía las líneas en confirm; sin is_wholesale se perdía el modo paquete.
+    const confirm = await client
+      .post(`/api/v1/purchases/${purchase.id}/confirm`)
+      .loginAs(user)
+      .json({
+        invoice_number: 'F-MAY-002',
+        items: [
+          {
+            catalog_product_id: productId,
+            quantity: 20,
+            unit_price_usd: 0.3,
+            is_wholesale: true,
+          },
+        ],
+      })
+    confirm.assertStatus(200)
+
+    const product = await CatalogProduct.findOrFail(productId)
+    assert.equal(Number(product.stockQuantity), 600)
+    assert.equal(product.costUsd, '0.0100')
+    assert.equal(product.wholesaleCostUsd, '0.3000')
+  })
+
   test('venta mayorista descuenta paquetes × und al precio de paquete', async ({
     client,
     assert,

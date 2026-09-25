@@ -107,6 +107,109 @@ export type IncomeStatementResponse = {
   }
 }
 
+export type BalancePositionParams = {
+  display_currency?: string
+}
+
+export type BalancePositionSummary = {
+  displayCurrency: string
+  inventoryUsd: string
+  receivablesUsd: string
+  machinesUsd: string
+  totalAssetsUsd: string
+  payablesUsd: string
+  totalLiabilitiesUsd: string
+  estimatedEquityUsd: string
+  capitalContributionsUsd: string
+  inventory: string
+  receivables: string
+  machines: string
+  totalAssets: string
+  payables: string
+  totalLiabilities: string
+  estimatedEquity: string
+  capitalContributions: string
+  rates: Record<string, string>
+}
+
+export type BalancePositionResponse = {
+  data: {
+    asOf: string
+    summary: BalancePositionSummary
+  }
+}
+
+export type FinancialSummaryParams = {
+  from?: string
+  to?: string
+  month?: string
+  display_currency?: string
+}
+
+export type FinancialSummaryDiagnosisTone = 'positive' | 'caution' | 'negative'
+
+export type FinancialSummaryDiagnosis = {
+  tone: FinancialSummaryDiagnosisTone
+  headline: string
+  detail: string
+}
+
+export type FinancialSummaryData = {
+  period: { from: string; to: string }
+  asOf: string
+  diagnosis: FinancialSummaryDiagnosis
+  displayCurrency: string
+  rates: Record<string, string>
+  resultado: {
+    salesRevenueUsd: string
+    cogsUsd: string
+    grossProfitUsd: string
+    operatingExpensesUsd: string
+    operatingIncomeUsd: string
+    grossMarginPct: number | null
+    operatingMarginPct: number | null
+    salesRevenue: string
+    cogs: string
+    grossProfit: string
+    operatingExpenses: string
+    operatingIncome: string
+  }
+  flujo: {
+    netUsd: string
+    salesUsd: string
+    incomesUsd: string
+    purchasesUsd: string
+    expensesUsd: string
+    net: string
+    sales: string
+    incomes: string
+    purchases: string
+    expenses: string
+  }
+  patrimonio: {
+    inventoryUsd: string
+    receivablesUsd: string
+    machinesUsd: string
+    totalAssetsUsd: string
+    payablesUsd: string
+    totalLiabilitiesUsd: string
+    estimatedEquityUsd: string
+    capitalContributionsUsd: string
+    inventory: string
+    receivables: string
+    machines: string
+    totalAssets: string
+    payables: string
+    totalLiabilities: string
+    estimatedEquity: string
+    capitalContributions: string
+  }
+}
+
+export type FinancialSummaryResponse = {
+  data: FinancialSummaryData
+}
+
 export type InventoryReportSortBy = 'id' | 'name' | 'sale_price' | 'quantity'
 export type InventoryReportSortDir = 'asc' | 'desc'
 

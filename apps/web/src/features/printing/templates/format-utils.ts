@@ -3,6 +3,7 @@ import type { PrintBusinessConfig } from '@/features/printing/types'
 import { paymentMethodLabel } from '@/features/ventas/constants'
 import { formatNativeAmountNumber, nativeCurrencyDecimals } from '@/features/currencies/utils/currency-decimals'
 import { inventoryQuantityDecimals, inventoryUnitAbrev } from '@/lib/inventory-units'
+import { formatWholesaleQuantityShort } from '@/lib/wholesale'
 
 export function escapeHtml(value: string): string {
   return value
@@ -301,9 +302,13 @@ export function renderSaleLines(sale: Sale, linesOverride?: Sale['lines']): stri
       const unitPriceNative = formatNativeMoney(sale, line.unit_price_usd)
       const subtotalLabel = formatReceiptAmountLabel(sale, line.subtotal_usd)
       const measure = resolveLineMeasure(line)
-      const qtyLabel = formatReceiptLineQuantity(qty, measure)
-
-      const detailLeft = `${qtyLabel} x ${unitPriceNative} ${measure}`
+      const isWholesale = Boolean(line.is_wholesale)
+      const unitsPerPack = Number(line.units_per_pack ?? 0)
+      const qtyLabel = isWholesale
+        ? formatWholesaleQuantityShort(qty, unitsPerPack, measure.toLowerCase())
+        : formatReceiptLineQuantity(qty, measure)
+      const priceUnit = isWholesale ? 'c/paq' : measure
+      const detailLeft = `${qtyLabel} × ${unitPriceNative} ${priceUnit}`
 
       return `
         <div class="inv-line">

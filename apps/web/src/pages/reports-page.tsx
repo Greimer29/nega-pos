@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AccountStatementPanel } from '@/features/reports/components/account-statement-panel'
+import { BalancePositionPanel } from '@/features/reports/components/balance-position-panel'
+import { FinancialSummaryPanel } from '@/features/reports/components/financial-summary-panel'
 import { IncomeStatementPanel } from '@/features/reports/components/income-statement-panel'
 import { InventoryReportPanel } from '@/features/reports/components/inventory-report-panel'
 import { ReportHubSelect } from '@/features/reports/components/report-hub-select'
@@ -67,7 +69,20 @@ export function ReportsPage() {
       return {
         title: 'Estado de resultados',
         subtitle:
-          'Resultado del período a devengo: ingresos por ventas − CMV − gastos operativos. No es flujo de caja ni situación patrimonial.',
+          'Resultado operativo del período a devengo: ingresos por ventas − CMV − gastos operativos.',
+      }
+    }
+    if (activeSub === 'patrimonio') {
+      return {
+        title: 'Situación patrimonial',
+        subtitle: 'Foto de hoy: activo − pasivo = patrimonio estimado.',
+      }
+    }
+    if (activeSub === 'resumen') {
+      return {
+        title: 'Resumen financiero',
+        subtitle:
+          'Síntesis del período: contraste entre resultado, flujo de caja y situación patrimonial.',
       }
     }
     return {
@@ -85,7 +100,6 @@ export function ReportsPage() {
       )}
     >
       <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        {/* En móvil el select va primero; en desktop a la derecha */}
         <div className="order-1 md:order-2">
           <ReportHubSelect value={activeTab} onChange={handleTabChange} />
         </div>
@@ -143,6 +157,10 @@ export function ReportsPage() {
         <InventoryReportPanel />
       ) : activeSub === 'resultados' ? (
         <IncomeStatementPanel />
+      ) : activeSub === 'patrimonio' ? (
+        <BalancePositionPanel />
+      ) : activeSub === 'resumen' ? (
+        <FinancialSummaryPanel />
       ) : (
         <AccountStatementPanel />
       )}

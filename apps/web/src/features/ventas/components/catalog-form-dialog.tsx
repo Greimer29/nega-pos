@@ -16,6 +16,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
+import { CategoryFormDialog } from '@/features/categories/components/category-form-dialog'
+import { PermissionGate } from '@/features/permissions/components/permission-gate'
 import { PRODUCT_SALE_UNITS, catalogImageUrl, productSaleUnitLabel } from '@/features/ventas/constants'
 import { useFormatMoney } from '@/features/currencies/context/display-currency-context'
 import {
@@ -98,6 +100,7 @@ export function CatalogFormDialog({
   const [minimumStock, setMinimumStock] = useState('0')
   const [useFormula, setUseFormula] = useState(false)
   const [useSizes, setUseSizes] = useState(false)
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
   const [sizeRows, setSizeRows] = useState<SizeRow[]>([newSizeRow()])
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null)
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null)
@@ -683,18 +686,37 @@ export function CatalogFormDialog({
                   <Label htmlFor="catalog-category" className="text-xs">
                     Categoría
                   </Label>
-                  <select
-                    id="catalog-category"
-                    className="border-input bg-background flex h-8 w-full rounded-md border px-3 text-sm"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex gap-1.5">
+                    <select
+                      id="catalog-category"
+                      className="border-input bg-background flex h-8 min-w-0 flex-1 rounded-md border px-3 text-sm"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                    >
+                      {categories.length === 0 ? (
+                        <option value="">Sin categorías</option>
+                      ) : (
+                        categories.map((c) => (
+                          <option key={c.id} value={c.name}>
+                            {c.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <PermissionGate permission="catalog.edit">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        title="Nueva categoría"
+                        aria-label="Nueva categoría"
+                        onClick={() => setCategoryDialogOpen(true)}
+                      >
+                        <Plus className="size-4" />
+                      </Button>
+                    </PermissionGate>
+                  </div>
                 </div>
                 <div className="space-y-0.5">
                   <Label htmlFor="catalog-sale-unit" className="text-xs">
@@ -1089,6 +1111,12 @@ export function CatalogFormDialog({
       onOpenChange={setFormulaDialogOpen}
       formula={editingFormula}
       onSaved={handleFormulaSaved}
+    />
+
+    <CategoryFormDialog
+      open={categoryDialogOpen}
+      onOpenChange={setCategoryDialogOpen}
+      onCreated={(created) => setCategory(created.name)}
     />
     </>
   )

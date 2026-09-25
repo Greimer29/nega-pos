@@ -90,6 +90,8 @@ const PROTECTED_API_ROUTES: Array<[string, string]> = [
   ['DELETE', '/categories/42'],
   ['GET', '/reports/account-statement'],
   ['GET', '/reports/income-statement'],
+  ['GET', '/reports/balance-position'],
+  ['GET', '/reports/financial-summary'],
   ['GET', '/reports/inventory'],
   ['GET', '/reports/inventory/42/movements'],
   ['GET', '/settings/exchange-rate'],

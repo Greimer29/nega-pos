@@ -7,6 +7,7 @@ import CustomerPayment from '#models/customer_payment'
 import Expense from '#models/expense'
 import Income from '#models/income'
 import InventoryMovement from '#models/inventory_movement'
+import Machine from '#models/machine'
 import Material from '#models/material'
 import ProductInventoryMovement from '#models/product_inventory_movement'
 import Purchase from '#models/purchase'
@@ -1204,5 +1205,179 @@ test.group('Reports API', (group) => {
     assert.equal(summary.cogsUsd, '4.0000')
     assert.equal(summary.operatingExpensesUsd, '0.0000')
     assert.equal(summary.operatingIncomeUsd, '6.0000')
+  })
+
+  test('GET /api/v1/reports/balance-position returns patrimonial snapshot', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+
+    const product = await CatalogProduct.create({
+      name: 'Prod patrimonio',
+      category: 'General',
+      salePriceUsd: '20.0000',
+      costUsd: '5.0000',
+      stockQuantity: '4.000',
+      active: true,
+      itemKind: 'PRODUCT',
+    })
+
+    const material = await Material.create({
+      code: 'MAT-PAT-1',
+      name: 'Tela patrimonio',
+      category: 'Telas',
+      unit: 'MTS',
+      minimumStock: '1.000',
+      lastPurchasePriceUsd: '2.0000',
+      salePriceUsd: '0.0000',
+      active: true,
+    })
+    await InventoryMovement.create({
+      materialId: Number(material.id),
+      type: 'PURCHASE_IN',
+      quantity: '10.000',
+    })
+
+    const customer = await Customer.create({
+      name: 'Cliente patrimonio',
+      type: 'CORPORATE',
+      creditDays: 30,
+      active: true,
+    })
+    await seedTestSale({
+      customerId: Number(customer.id),
+      soldAt: DateTime.now(),
+      confirmedAt: DateTime.now(),
+      totalUsd: '30.0000',
+      paymentType: 'CREDIT',
+      amountPaidUsd: '0.0000',
+      balanceUsd: '30.0000',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '1',
+          unitPriceUsd: '30.0000',
+          subtotalUsd: '30.0000',
+          costUsd: '5.0000',
+        },
+      ],
+    })
+
+    const supplier = await Supplier.create({ name: 'Prov patrimonio', active: true })
+    await Purchase.create({
+      supplierId: Number(supplier.id),
+      date: DateTime.now(),
+      status: 'CONFIRMED',
+      isCredit: true,
+      totalUsd: '15.0000',
+      totalBs: '0.00',
+      balanceUsd: '15.0000',
+      amountPaidUsd: '0.0000',
+    })
+
+    await Machine.create({
+      name: 'Recta patrimonio',
+      type: 'STRAIGHT_STITCH',
+      status: 'OPERATIONAL',
+      active: true,
+      acquisitionCost: '100.0000',
+    })
+
+    await Income.create({
+      date: DateTime.now(),
+      description: 'Aporte inicial',
+      amountUsd: '50.0000',
+      currencyCode: 'USD',
+    })
+
+    const response = await client
+      .get('/api/v1/reports/balance-position')
+      .qs({ display_currency: 'USD' })
+      .loginAs(user)
+
+    response.assertStatus(200)
+    const summary = response.body().data.summary as {
+      inventoryUsd: string
+      receivablesUsd: string
+      machinesUsd: string
+      totalAssetsUsd: string
+      payablesUsd: string
+      totalLiabilitiesUsd: string
+      estimatedEquityUsd: string
+      capitalContributionsUsd: string
+    }
+
+    // Producto 4×5 + material 10×2 = 20 + 20 = 40
+    assert.equal(summary.inventoryUsd, '40.0000')
+    assert.equal(summary.receivablesUsd, '30.0000')
+    assert.equal(summary.machinesUsd, '100.0000')
+    assert.equal(summary.totalAssetsUsd, '170.0000')
+    assert.equal(summary.payablesUsd, '15.0000')
+    assert.equal(summary.totalLiabilitiesUsd, '15.0000')
+    assert.equal(summary.estimatedEquityUsd, '155.0000')
+    assert.equal(summary.capitalContributionsUsd, '50.0000')
+    assert.exists(response.body().data.asOf)
+  })
+
+  test('GET /api/v1/reports/financial-summary contrasts operating income and cash flow', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const product = await CatalogProduct.create({
+      name: 'Prod resumen',
+      category: 'General',
+      salePriceUsd: '20.0000',
+      costUsd: '8.0000',
+      active: true,
+    })
+
+    await seedTestSale({
+      soldAt: DateTime.fromISO('2026-08-10'),
+      confirmedAt: DateTime.fromISO('2026-08-10'),
+      totalUsd: '40.0000',
+      paymentType: 'CASH',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '2',
+          unitPriceUsd: '20.0000',
+          subtotalUsd: '40.0000',
+          costUsd: '8.0000',
+        },
+      ],
+    })
+
+    await Expense.create({
+      date: DateTime.fromISO('2026-08-12'),
+      description: 'Alquiler resumen',
+      amountUsd: '5.0000',
+      currencyCode: 'USD',
+    })
+
+    const response = await client
+      .get('/api/v1/reports/financial-summary')
+      .qs({ month: '2026-08', display_currency: 'USD' })
+      .loginAs(user)
+
+    response.assertStatus(200)
+    const body = response.body().data as {
+      diagnosis: { tone: string; headline: string }
+      resultado: { operatingIncomeUsd: string; salesRevenueUsd: string }
+      flujo: { netUsd: string; salesUsd: string; expensesUsd: string }
+      patrimonio: { estimatedEquityUsd: string }
+    }
+
+    assert.equal(body.resultado.salesRevenueUsd, '40.0000')
+    assert.equal(body.resultado.operatingIncomeUsd, '19.0000') // 40 - 16 CMV - 5 gastos
+    assert.equal(body.flujo.salesUsd, '40.0000')
+    assert.equal(body.flujo.expensesUsd, '5.0000')
+    assert.equal(body.flujo.netUsd, '35.0000')
+    assert.equal(body.diagnosis.tone, 'positive')
+    assert.match(body.diagnosis.headline, /positivos/i)
+    assert.exists(body.patrimonio.estimatedEquityUsd)
   })
 })

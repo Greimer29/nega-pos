@@ -165,6 +165,8 @@ router
 
         router.get('reports/account-statement', [ReportsController, 'accountStatement'])
         router.get('reports/income-statement', [ReportsController, 'incomeStatement'])
+        router.get('reports/balance-position', [ReportsController, 'balancePosition'])
+        router.get('reports/financial-summary', [ReportsController, 'financialSummary'])
         router.get('reports/inventory', [ReportsController, 'inventory'])
         router.get('reports/inventory/:productId/movements', [
           ReportsController,

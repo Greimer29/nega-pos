@@ -512,6 +512,8 @@ export default class PurchaseService {
             trx
           )
 
+          // registrarMovimiento guarda stock en otra instancia; refrescar antes del costo.
+          await product.refresh()
           this.applyConfirmedPurchaseCost(product, item, unitPriceUsd)
           product.useTransaction(trx)
           await product.save()
@@ -802,24 +804,30 @@ export default class PurchaseService {
     line: PurchaseItem,
     unitPriceUsd: string
   ) {
+    // No usar `'costUsd' in item`: en Lucid con `declare` el `in` no detecta la columna
+    // y el costo del producto nunca se persistía al confirmar la compra.
+    if (item instanceof CatalogProduct) {
+      if (line.isWholesale) {
+        const packCost = Number(unitPriceUsd)
+        const unitsPerPack = Number(line.unitsPerPack)
+        const unitCost = (packCost / unitsPerPack).toFixed(4)
+        item.wholesaleCostUsd = packCost.toFixed(4)
+        item.costUsd = unitCost
+        return
+      }
+      item.costUsd = unitPriceUsd
+      return
+    }
+
     if (line.isWholesale) {
       const packCost = Number(unitPriceUsd)
       const unitsPerPack = Number(line.unitsPerPack)
       const unitCost = (packCost / unitsPerPack).toFixed(4)
       item.wholesaleCostUsd = packCost.toFixed(4)
-      if ('costUsd' in item) {
-        item.costUsd = unitCost
-      } else {
-        if (item.lastPurchasePriceUsd !== null && item.lastPurchasePriceUsd !== unitCost) {
-          item.previousPurchasePriceUsd = item.lastPurchasePriceUsd
-        }
-        item.lastPurchasePriceUsd = unitCost
+      if (item.lastPurchasePriceUsd !== null && item.lastPurchasePriceUsd !== unitCost) {
+        item.previousPurchasePriceUsd = item.lastPurchasePriceUsd
       }
-      return
-    }
-
-    if ('costUsd' in item) {
-      item.costUsd = unitPriceUsd
+      item.lastPurchasePriceUsd = unitCost
       return
     }
 
