@@ -20,6 +20,7 @@ import {
   seedTestSale,
   type SeedTestSaleInput,
 } from '#tests/helpers/seed_test_sale'
+import { todayIsoDate } from '#utils/app_timezone'
 import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
 
@@ -339,7 +340,7 @@ test.group('Dashboard API', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const hoy = DateTime.now().toISODate()!
+    const hoy = todayIsoDate()
     const customer = await Customer.create({
       name: 'Cliente Ganancia',
       active: true,
@@ -410,7 +411,7 @@ test.group('Dashboard API', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const hoy = DateTime.now().toISODate()!
+    const hoy = todayIsoDate()
 
     await Expense.create({
       date: DateTime.fromISO(hoy),
@@ -454,7 +455,7 @@ test.group('Dashboard API', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const hoy = DateTime.now().toISODate()!
+    const hoy = todayIsoDate()
 
     await Currency.query().where('code', 'VES').update({ ratePerUsd: '40.0000' })
 
@@ -1112,7 +1113,7 @@ test.group('Dashboard API', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const today = DateTime.now().toISODate()!
+    const today = todayIsoDate()
     const shiftId = openShiftId
 
     await seedDashboardSale({

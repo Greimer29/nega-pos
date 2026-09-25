@@ -24,6 +24,7 @@ import {
   inventoryQuantityDecimals,
   inventoryQuantityStep,
 } from '@/lib/inventory-units'
+import { notifyFormError } from '@/features/notifications/query-error-state'
 import { parseDecimalInput } from '@/lib/numeric-input'
 
 type EditableRow = SaleLineFormulaMaterial & {
@@ -85,7 +86,6 @@ export function SaleLineFormulaDialog({
     open && formulaId ? formulaId : undefined
   )
   const [rows, setRows] = useState<EditableRow[]>([])
-  const [error, setError] = useState<string | null>(null)
 
   const baseFormulaMaterials = useMemo(() => {
     if (product?.formula?.materials?.length) {
@@ -100,7 +100,6 @@ export function SaleLineFormulaDialog({
     }
 
     setRows(buildRowsFromProduct(product, baseFormulaMaterials, initialMaterials))
-    setError(null)
   }, [open, product, baseFormulaMaterials, initialMaterials])
 
   function updateRowQuantity(materialId: number, quantity: number) {
@@ -146,7 +145,7 @@ export function SaleLineFormulaDialog({
   function handleSave() {
     const activeRows = rows.filter((row) => row.quantity_per_unit > 0)
     if (activeRows.length === 0) {
-      setError('Incluí al menos un material con cantidad mayor a cero.')
+      notifyFormError('Incluí al menos un material con cantidad mayor a cero.')
       return
     }
 
@@ -241,8 +240,6 @@ export function SaleLineFormulaDialog({
               label="Agregar material"
               onSelect={addMaterial}
             />
-
-            {error ? <p className="text-destructive text-sm">{error}</p> : null}
           </div>
         )}
 

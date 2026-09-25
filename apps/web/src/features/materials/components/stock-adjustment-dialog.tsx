@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -10,7 +9,7 @@ import { StockAdjustmentForm } from '@/components/stock-adjustment-form'
 import { UNIT_ABREV } from '@/features/materials/constants'
 import { useAjusteStockMutation } from '@/features/materials/hooks/use-materials'
 import type { Material } from '@/features/materials/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 
 type AjusteStockDialogProps = {
   open: boolean
@@ -21,7 +20,6 @@ type AjusteStockDialogProps = {
 
 export function AjusteStockDialog({ open, onOpenChange, material, onSuccess }: AjusteStockDialogProps) {
   const ajusteMutation = useAjusteStockMutation()
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   if (!material) {
     return null
@@ -46,10 +44,8 @@ export function AjusteStockDialog({ open, onOpenChange, material, onSuccess }: A
           unitCode={material.unit}
           unitLabel={unit}
           isSubmitting={ajusteMutation.isPending}
-          errorMessage={errorMessage}
           onCancel={() => onOpenChange(false)}
           onSubmit={async (payload) => {
-            setErrorMessage(null)
             try {
               await ajusteMutation.mutateAsync({
                 id: material.id,
@@ -58,7 +54,7 @@ export function AjusteStockDialog({ open, onOpenChange, material, onSuccess }: A
               onOpenChange(false)
               onSuccess?.()
             } catch (error) {
-              setErrorMessage(getApiErrorMessage(error))
+              notifyApiError(error, 'No se pudo guardar')
             }
           }}
         />

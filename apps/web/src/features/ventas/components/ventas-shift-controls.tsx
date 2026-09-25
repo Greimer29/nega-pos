@@ -1,5 +1,4 @@
 import { Clock, Loader2, Lock } from 'lucide-react'
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import {
@@ -7,7 +6,7 @@ import {
   useCurrentSalesShiftQuery,
   useOpenSalesShiftMutation,
 } from '@/features/ventas/hooks/use-sales-shifts'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 function formatShiftDateTime(iso: string) {
@@ -24,7 +23,6 @@ type VentasShiftControlsProps = {
   className?: string
   /** Botón a ancho completo (útil en carrito). */
   fullWidth?: boolean
-  /** Alineación del mensaje de error. */
   align?: 'start' | 'end'
   /**
    * Solo icono en viewport móvil; desde `sm` muestra texto.
@@ -44,7 +42,6 @@ export function VentasShiftControls({
   const { data: shift, isLoading } = useCurrentSalesShiftQuery()
   const openMutation = useOpenSalesShiftMutation()
   const closeMutation = useCloseSalesShiftMutation()
-  const [error, setError] = useState<string | null>(null)
 
   const busy = openMutation.isPending || closeMutation.isPending
   const alwaysIcon = iconOnly === true
@@ -57,11 +54,10 @@ export function VentasShiftControls({
   )
 
   async function handleOpen() {
-    setError(null)
     try {
       await openMutation.mutateAsync(undefined)
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -75,11 +71,10 @@ export function VentasShiftControls({
       return
     }
 
-    setError(null)
     try {
       await closeMutation.mutateAsync(shift.id)
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      notifyApiError(err)
     }
   }
 
@@ -143,16 +138,6 @@ export function VentasShiftControls({
           {showLabelClass ? <span className={showLabelClass}>Cerrar turno</span> : 'Cerrar turno'}
         </Button>
       )}
-      {error ? (
-        <p
-          className={cn(
-            'text-destructive text-xs',
-            align === 'end' ? 'max-w-[12rem] text-right' : 'text-left'
-          )}
-        >
-          {error}
-        </p>
-      ) : null}
     </div>
   )
 }

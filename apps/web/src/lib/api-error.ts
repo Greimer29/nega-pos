@@ -274,9 +274,65 @@ function formatRecordDetails(details: Record<string, unknown>): string[] {
   return messages
 }
 
+const VINE_FIELD_LABELS: Record<string, string> = {
+  category: 'categoría',
+  name: 'nombre',
+  email: 'email',
+  password: 'contraseña',
+  description: 'descripción',
+  sale_price_usd: 'precio de venta',
+  cost_usd: 'precio costo',
+  stock_quantity: 'existencia',
+  minimum_stock: 'stock mínimo',
+  barcode: 'código de barras',
+  supplier_code: 'referencia',
+  sale_unit: 'unidad',
+  unit: 'unidad',
+  quantity: 'cantidad',
+  unit_price_usd: 'precio unitario',
+  wholesale_units_per_pack: 'unidades por paquete',
+  wholesale_cost_usd: 'costo del paquete',
+  wholesale_sale_price_usd: 'venta del paquete',
+}
+
+function vineFieldLabel(field?: string): string {
+  if (!field) return 'este campo'
+  return VINE_FIELD_LABELS[field] ?? field.replace(/_/g, ' ')
+}
+
+/** Pasa mensajes técnicos de Vine a texto usable (p. ej. «The category field must be defined»). */
+export function translateVineMessage(item: VineValidationDetail): string {
+  const message = item.message.trim()
+  const label = vineFieldLabel(item.field)
+
+  const minChars = message.match(/must have at least (\d+) characters/i)
+  if (minChars) {
+    return `El campo ${label} debe tener al menos ${minChars[1]} caracteres.`
+  }
+
+  if (/must be a valid email/i.test(message)) {
+    return `El campo ${label} debe ser un email válido.`
+  }
+
+  if (/must be defined|is required/i.test(message)) {
+    return `El campo ${label} es obligatorio.`
+  }
+
+  if (/must be a number/i.test(message)) {
+    return `El campo ${label} debe ser un número.`
+  }
+
+  const minValue = message.match(/must be at least (\S+)/i)
+  if (minValue) {
+    return `El campo ${label} debe ser al menos ${minValue[1]}.`
+  }
+
+  return message
+}
+
 function formatDetailItem(item: unknown): string | null {
   if (isVineValidationDetail(item)) {
-    return item.message
+    return translateVineMessage(item)
   }
 
   if (isStockInsuficienteDetail(item)) {
@@ -312,7 +368,7 @@ export function formatApiErrorDetails(details: unknown): string[] {
             return 'El período del gráfico no es válido o aún no está disponible en el servidor.'
           }
 
-          return item.message
+          return translateVineMessage(item)
         })
         .filter(Boolean)
     }

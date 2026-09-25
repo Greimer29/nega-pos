@@ -20,7 +20,7 @@ import { AccountSelect } from '@/features/accounts/components/account-select'
 import { SupplierFormDialog } from '@/features/suppliers/components/supplier-form-dialog'
 import { useSuppliersQuery } from '@/features/suppliers/hooks/use-suppliers'
 import type { Supplier } from '@/features/suppliers/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 
 const schema = z.object({
   supplier_id: z.union([z.literal(''), z.coerce.number().min(1)]).optional(),
@@ -48,7 +48,6 @@ export function NuevaPurchaseDialog({ open, onOpenChange }: NuevaPurchaseDialogP
     register,
     handleSubmit,
     reset,
-    setError,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormInput, unknown, FormValues>({
@@ -73,7 +72,7 @@ export function NuevaPurchaseDialog({ open, onOpenChange }: NuevaPurchaseDialogP
       setAccountId(null)
       void navigate(`/purchases/${purchase.id}`)
     } catch (error) {
-      setError('root', { message: getApiErrorMessage(error) })
+      notifyApiError(error, 'No se pudo guardar')
     }
   })
 
@@ -149,8 +148,6 @@ export function NuevaPurchaseDialog({ open, onOpenChange }: NuevaPurchaseDialogP
             </div>
 
             <AccountSelect value={accountId} onChange={setAccountId} />
-
-            {errors.root ? <p className="text-destructive text-sm whitespace-pre-line">{errors.root.message}</p> : null}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => handlePurchaseDialogChange(false)}>

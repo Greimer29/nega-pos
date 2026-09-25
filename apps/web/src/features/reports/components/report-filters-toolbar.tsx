@@ -38,10 +38,10 @@ const DEFAULT_TYPES: ReportTypeFilters = {
 }
 
 const TYPE_OPTIONS: Array<{ key: keyof ReportTypeFilters; label: string }> = [
-  { key: 'sales', label: 'Ventas' },
-  { key: 'incomes', label: 'Ingresos' },
+  { key: 'sales', label: 'Cobros por ventas' },
+  { key: 'incomes', label: 'Aportes de capital' },
   { key: 'purchases', label: 'Compras' },
-  { key: 'expenses', label: 'Gastos' },
+  { key: 'expenses', label: 'Gastos operativos' },
 ]
 
 export function ReportFiltersToolbar({

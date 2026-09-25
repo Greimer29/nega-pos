@@ -35,7 +35,7 @@ import {
   nativeToBase,
 } from '@/features/purchases/utils/purchase-entry-currency'
 import type { Expense } from '@/features/purchases/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 
 const schema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida'),
@@ -67,7 +67,6 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
     handleSubmit,
     reset,
     control,
-    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
@@ -123,7 +122,7 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
 
   const onSubmit = handleSubmit(async (values) => {
     if (entryInNative && !isValidPurchaseRate(rateNum)) {
-      setError('root', { message: 'Indicá una tasa válida para la moneda elegida.' })
+      notifyFormError('Indicá una tasa válida para la moneda elegida.')
       return
     }
 
@@ -142,7 +141,7 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
       }
       onOpenChange(false)
     } catch (err) {
-      setError('root', { message: getApiErrorMessage(err) })
+      notifyApiError(err, 'No se pudo guardar')
     }
   })
 
@@ -194,10 +193,6 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
           </div>
 
           <AccountSelect value={accountId} onChange={setAccountId} />
-
-          {errors.root ? (
-            <p className="text-destructive text-sm whitespace-pre-line">{errors.root.message}</p>
-          ) : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

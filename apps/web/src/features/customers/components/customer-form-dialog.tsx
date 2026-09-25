@@ -19,7 +19,7 @@ import {
   useUpdateCustomerMutation,
 } from '@/features/customers/hooks/use-customers'
 import type { Customer } from '@/features/customers/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 import { normalizeRif } from '@/lib/rif'
 
 const customerSchema = z.object({
@@ -101,7 +101,6 @@ export function CustomerFormDialog({
     register,
     handleSubmit,
     reset,
-    setError,
     setValue,
     watch,
     formState: { errors, isSubmitting },
@@ -131,7 +130,7 @@ export function CustomerFormDialog({
 
       onOpenChange(false)
     } catch (error) {
-      setError('root', { message: getApiErrorMessage(error) })
+      notifyApiError(error, 'No se pudo guardar')
     }
   })
 
@@ -214,8 +213,6 @@ export function CustomerFormDialog({
               Cliente activo
             </label>
           ) : null}
-
-          {errors.root ? <p className="text-destructive text-sm whitespace-pre-line">{errors.root.message}</p> : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

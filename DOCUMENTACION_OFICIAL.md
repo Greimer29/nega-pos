@@ -548,7 +548,7 @@ catalog_products ──< product_inventory_movements
 
 ### Reportes (`report_service.ts` / `inventory_report_service.ts`)
 
-- **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **ingresos** (aportes), compras de contado, abonos a proveedores, **gastos** (`expenses`, incluidos los vinculados a máquina), **gastos máquina legacy** (`machine_expenses`) y abonos de clientes en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). Balance neto (flujo de caja): `ventas + ingresos − compras_contado/abonos − gastos − gastos_máquina_legacy`. KPI principal de egresos operativos: card **Gastos** (= suma de `expenses`). La card de gastos máquina solo muestra el total **legacy** si es > 0. Las **cuentas por pagar** (compras/facturas a crédito con saldo) se listan como informativas (`pendingPayablesUsd` / `overduePayablesUsd`) y **no restan** del neto hasta el abono.
+- **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **aportes de capital** (`incomes`), compras de contado, abonos a proveedores, **gastos** (`expenses`, incluidos los vinculados a máquina), **gastos máquina legacy** (`machine_expenses`) y abonos de clientes en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). El KPI principal se muestra como **Flujo de caja** (`netUsd`): `ventas + ingresos − compras_contado/abonos − gastos − gastos_máquina_legacy` (entradas menos salidas del período; no es saldo total ni utilidad). La card de ventas se muestra como **Cobros por ventas** (`salesUsd`: contado + abonos; no incluye CxC). La card de compras se muestra como **Pagos a proveedores** (`purchasesUsd`: contado + abonos; no es gasto operativo). KPI de egresos operativos: card **Gastos operativos** (= suma de `expenses`). La card de gastos máquina solo muestra el total **legacy** si es > 0. Las **cuentas por pagar** (`pendingPayablesUsd` / `overduePayablesUsd`) y las **cuentas por cobrar** (`pendingReceivablesUsd` / `overdueReceivablesUsd`) se listan como informativas: no restan ni suman al flujo hasta el abono o el cobro.
 - **Inventario** (`GET /reports/inventory`): snapshot de stock de productos de catálogo (`item_kind=PRODUCT`) y materiales en una sola lista (paginada). Los servicios no aparecen. Filtros: `search`, `category`, `sort_by`/`sort_dir` (`id`|`name`|`sale_price`|`quantity`), `active`, `low_stock`, `hide_zero`, `page`, `per_page`, `export=true` (set completo para Excel). Cada ítem incluye `kind` (`product`|`material`), precios/costos, unidad, `stock_source`, `low_stock`, `has_sizes` y `lines[]` (por talla si aplica; si no, una línea con `size: null`). Con `hide_zero`, se omiten tallas con cantidad ≤ 0 y productos/materiales con total 0. UI: `/reportes?vista=inventario` (query `inv_*`).
 - **Movimientos de producto** (`GET /reports/inventory/:productId/movements`): historial de `product_inventory_movements` de un producto de catálogo (no materiales). Filtros de período (`month`|`from`/`to`) y `types` (PURCHASE_IN, SALE_OUT, ajustes manuales, REVERSAL_ADJUSTMENT). UI: `/reportes/inventario/:productId`.
 
@@ -770,7 +770,7 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 
 ### Gastos (`expenses.*`)
 
-Alta/edición: `amount` (nativo), `currency_code` (cualquier activa), `entry_rate?` (default catálogo). `machine_id` se asigna solo al registrar desde la ficha de máquina (`POST /machines/:id/expenses`); el hub de Gastos no expone ese vínculo en UI. Si `description` viene vacío y hay máquina, se usa `Gasto máquina — {nombre}`. Persistencia: `amount_usd = amount / entry_rate` (o `amount` si moneda = base). Listados y estado de cuenta consolidan con `amount_usd`.
+Alta/edición: `amount` (nativo), `currency_code` (cualquier activa), `entry_rate?` (default catálogo). `machine_id` se asigna solo al registrar desde la ficha de máquina (`POST /machines/:id/expenses`); el hub de Gastos no expone ese vínculo en UI. Si `description` viene vacío y hay máquina, se usa `Gasto máquina — {nombre}`. Persistencia: `amount_usd = amount / entry_rate` (o `amount` si moneda = base). Listados y estado de cuenta consolidan con `amount_usd`. En `/purchases?tab=gastos` cada fila se edita o se elimina (papelera, `expenses.edit`); el borrado es definitivo.
 
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
@@ -782,7 +782,7 @@ Alta/edición: `amount` (nativo), `currency_code` (cualquier activa), `entry_rat
 
 ### Ingresos (`incomes.*`)
 
-Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuenta. Misma semántica multi-moneda que gastos (`entry_rate`). Suman al balance del estado de cuenta.
+Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuenta. Misma semántica multi-moneda que gastos (`entry_rate`). Suman al balance del estado de cuenta. En `/purchases?tab=ingresos` cada fila se edita o se elimina (papelera, `incomes.edit`); el borrado es definitivo.
 
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
@@ -940,7 +940,7 @@ pwsh scripts/publish-github-release.ps1
 | `/productos/servicios` | Catálogo de servicios (`item_kind=SERVICE`): nombre, precio, activo/categoría; sin stock/fórmula/tallas. Misma vista tarjetas/tabla que productos. Permisos `catalog.view` / `catalog.edit`. Filtros en el mismo drawer de icono (categorías y orden). «Importar Excel» |
 | `/productos/materiales` | Materiales. Vista tarjetas o tabla (mismo botón que el resto del catálogo). «Importar Excel» (`materials.edit`) descarga plantilla y carga masiva |
 | `/productos/materiales/:id` | Detalle material |
-| `/purchases` | Hub Compras (`?tab=compras\|gastos\|ingresos`) |
+| `/purchases` | Hub Compras (`?tab=compras\|gastos\|ingresos`). En Gastos e Ingresos, papelera elimina el registro (`expenses.edit` / `incomes.edit`) |
 | `/purchases/:id` | Detalle compra (en borrador: escaneo barcode para sumar línea de material/producto del tab activo) |
 | `/suppliers` | Proveedores |
 | `/suppliers/:id/cuenta` | Estado de cuenta proveedor |

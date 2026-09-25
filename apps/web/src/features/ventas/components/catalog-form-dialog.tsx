@@ -30,6 +30,8 @@ import { useFormulaMaterialsQuery, useFormulasQuery } from '@/features/formulas/
 import type { Formula } from '@/features/formulas/types'
 import type { CatalogProduct } from '@/features/ventas/types'
 import type { ProductSaleUnit } from '@/features/ventas/constants'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { formatCostWarningsMessage, isBelowCost } from '@/lib/cost-warnings'
 import {
@@ -97,8 +99,6 @@ export function CatalogFormDialog({
   const [useFormula, setUseFormula] = useState(false)
   const [useSizes, setUseSizes] = useState(false)
   const [sizeRows, setSizeRows] = useState<SizeRow[]>([newSizeRow()])
-  const [error, setError] = useState<string | null>(null)
-  const [costWarning, setCostWarning] = useState<string | null>(null)
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null)
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null)
   const [imageError, setImageError] = useState<string | null>(null)
@@ -207,8 +207,6 @@ export function CatalogFormDialog({
       return
     }
 
-    setError(null)
-    setCostWarning(null)
     setImageError(null)
     clearPendingImage()
 
@@ -488,49 +486,53 @@ export function CatalogFormDialog({
   }
 
   async function handleSave() {
-    setError(null)
-    setCostWarning(null)
+    if (!category.trim()) {
+      notifyFormError('Elegí una categoría.')
+      return
+    }
 
     if (useFormula && useSizes) {
-      setError('Un producto con fórmula no puede usar tallas.')
+      notifyFormError('Un producto con fórmula no puede usar tallas.')
       return
     }
 
     if (wholesaleEnabled && (useFormula || useSizes)) {
-      setError('La configuración mayorista no aplica a productos con fórmula o tallas.')
+      notifyFormError('La configuración mayorista no aplica a productos con fórmula o tallas.')
       return
     }
 
     if (wholesaleEnabled) {
       const units = Number(wholesaleUnits)
       if (!Number.isFinite(units) || units < MIN_WHOLESALE_UNITS_PER_PACK) {
-        setError(`El paquete mayorista debe traer al menos ${MIN_WHOLESALE_UNITS_PER_PACK} unidades.`)
+        notifyFormError(
+          `El paquete mayorista debe traer al menos ${MIN_WHOLESALE_UNITS_PER_PACK} unidades.`
+        )
         return
       }
       if (!Number.isFinite(Number(wholesaleCost)) || Number(wholesaleCost) < 0) {
-        setError('Indicá el precio costo del paquete mayorista.')
+        notifyFormError('Indicá el precio costo del paquete mayorista.')
         return
       }
       if (!Number.isFinite(Number(wholesaleSale)) || Number(wholesaleSale) < 0) {
-        setError('Indicá el precio de venta del paquete mayorista.')
+        notifyFormError('Indicá el precio de venta del paquete mayorista.')
         return
       }
     }
 
     if (useFormula && !hasFormula) {
-      setError('Elegí o creá una fórmula, o desactivá «Usar fórmula».')
+      notifyFormError('Elegí o creá una fórmula, o desactivá «Usar fórmula».')
       return
     }
 
     if (Number(minimumStock) < 0) {
-      setError('El stock mínimo no puede ser negativo.')
+      notifyFormError('El stock mínimo no puede ser negativo.')
       return
     }
 
     if (useSizes) {
       const sizeError = validateSizeRows()
       if (sizeError) {
-        setError(sizeError)
+        notifyFormError(sizeError)
         return
       }
     }
@@ -582,15 +584,14 @@ export function CatalogFormDialog({
       if (isEditing) {
         const productId = displayProduct?.id ?? product?.id
         if (productId == null) {
-          setError('No se pudo identificar el producto a editar.')
+          notifyFormError('No se pudo identificar el producto a editar.')
           return
         }
 
         const { costWarnings } = await updateMutation.mutateAsync({ id: productId, payload })
         const warningMessage = formatCostWarningsMessage(costWarnings)
         if (warningMessage) {
-          setCostWarning(warningMessage)
-          return
+          toast.warning(warningMessage, 'Producto por debajo del costo')
         }
       } else {
         const created = await createMutation.mutateAsync(payload)
@@ -607,7 +608,7 @@ export function CatalogFormDialog({
       onSaved?.()
       onOpenChange(false)
     } catch (saveError) {
-      setError(getApiErrorMessage(saveError))
+      notifyApiError(saveError, 'No se pudo guardar el producto')
     }
   }
 
@@ -1070,13 +1071,6 @@ export function CatalogFormDialog({
             </div>
           </div>
         </div>
-
-        {costWarning ? (
-          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm whitespace-pre-line text-amber-900">
-            {costWarning}
-          </p>
-        ) : null}
-        {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -16,8 +16,8 @@ import {
   useCreateCatalogProductMutation,
   useUpdateCatalogProductMutation,
 } from '@/features/ventas/hooks/use-catalog'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 import type { CatalogProduct } from '@/features/ventas/types'
-import { getApiErrorMessage } from '@/lib/api-error'
 
 type ServiceFormDialogProps = {
   open: boolean
@@ -37,7 +37,6 @@ export function ServiceFormDialog({
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
   const [salePrice, setSalePrice] = useState('')
-  const [error, setError] = useState<string | null>(null)
 
   const createMutation = useCreateCatalogProductMutation()
   const updateMutation = useUpdateCatalogProductMutation()
@@ -45,7 +44,6 @@ export function ServiceFormDialog({
 
   useEffect(() => {
     if (!open) return
-    setError(null)
     if (service) {
       setName(service.name)
       setDescription(service.description ?? '')
@@ -61,14 +59,13 @@ export function ServiceFormDialog({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    setError(null)
     const price = Number(salePrice)
     if (!name.trim()) {
-      setError('El nombre es obligatorio.')
+      notifyFormError('El nombre es obligatorio.')
       return
     }
     if (!Number.isFinite(price) || price < 0) {
-      setError('Indica un precio de venta válido.')
+      notifyFormError('Indica un precio de venta válido.')
       return
     }
 
@@ -93,7 +90,7 @@ export function ServiceFormDialog({
       onSaved?.()
       onOpenChange(false)
     } catch (err) {
-      setError(getApiErrorMessage(err) || 'No se pudo guardar el servicio.')
+      notifyApiError(err, 'No se pudo guardar')
     }
   }
 
@@ -144,7 +141,6 @@ export function ServiceFormDialog({
               disabled={busy}
             />
           </div>
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
               Cancelar

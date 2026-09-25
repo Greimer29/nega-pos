@@ -27,6 +27,8 @@ import {
 } from '@/features/materials/hooks/use-materials'
 import type { Material } from '@/features/materials/types'
 import { useSuppliersQuery } from '@/features/suppliers/hooks/use-suppliers'
+import { notifyApiError } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { formatCostWarningsMessage } from '@/lib/cost-warnings'
 import { inventoryQuantityDecimals, normalizeInventoryQuantity } from '@/lib/inventory-units'
@@ -161,7 +163,6 @@ export function MaterialForm({
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null)
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null)
   const [imageError, setImageError] = useState<string | null>(null)
-  const [costWarning, setCostWarning] = useState<string | null>(null)
 
   useEffect(() => {
     return () => {
@@ -185,7 +186,6 @@ export function MaterialForm({
     register,
     handleSubmit,
     reset,
-    setError,
     setValue,
     watch,
     formState: { errors, isSubmitting },
@@ -250,7 +250,6 @@ export function MaterialForm({
   }
 
   const onSubmit = handleSubmit(async (values) => {
-    setCostWarning(null)
     try {
       const payload = toPayload(values)
 
@@ -261,7 +260,7 @@ export function MaterialForm({
         })
         const warningMessage = formatCostWarningsMessage(costWarnings)
         if (warningMessage) {
-          setCostWarning(warningMessage)
+          toast.warning(warningMessage, 'Material por debajo del costo')
         }
         onSuccess?.(updated)
       } else {
@@ -273,7 +272,7 @@ export function MaterialForm({
         onSuccess?.(result)
       }
     } catch (error) {
-      setError('root', { message: getApiErrorMessage(error) })
+      notifyApiError(error, 'No se pudo guardar el material')
     }
   })
 
@@ -515,14 +514,6 @@ export function MaterialForm({
           Material activo
         </label>
       ) : null}
-
-      {costWarning ? (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 whitespace-pre-line">
-          {costWarning}
-        </p>
-      ) : null}
-
-      {errors.root ? <p className="text-destructive text-sm whitespace-pre-line">{errors.root.message}</p> : null}
 
       {footer}
     </form>

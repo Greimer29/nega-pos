@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { PermissionGate } from '@/features/permissions/components/permission-gate'
-import { notifyApiError } from '@/features/notifications/query-error-state'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
 import { catalogProductCode } from '@/features/ventas/components/ventas-order-cart'
 import { useBulkAjusteStockProductoMutation } from '@/features/ventas/hooks/use-catalog'
@@ -58,7 +58,6 @@ export function ProductInventoryBulkAdjustmentPage() {
   const [note, setNote] = useState('')
   const [lines, setLines] = useState<BulkLine[]>([])
   const [pendingSizeProduct, setPendingSizeProduct] = useState<CatalogProduct | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
   const excludeIds = useMemo(() => {
     const ids = new Set<number>()
@@ -71,8 +70,6 @@ export function ProductInventoryBulkAdjustmentPage() {
   }, [lines])
 
   function addProduct(product: CatalogProduct) {
-    setError(null)
-
     if (product.formula_id) {
       toast.warning(
         `"${product.name}" usa fórmula: el stock se calcula por materiales, no se ajusta a mano.`,
@@ -143,10 +140,8 @@ export function ProductInventoryBulkAdjustmentPage() {
   }
 
   async function handleSubmit() {
-    setError(null)
-
     if (lines.length === 0) {
-      setError('Agregá al menos un producto.')
+      notifyFormError('Agregá al menos un producto.')
       return
     }
 
@@ -161,17 +156,17 @@ export function ProductInventoryBulkAdjustmentPage() {
       const decimals = inventoryQuantityDecimals(unit)
       const parsed = parseDecimalInput(line.quantity, decimals)
       if (parsed === null) {
-        setError(`Indicá la cantidad de «${line.product.name}».`)
+        notifyFormError(`Indicá la cantidad de «${line.product.name}».`)
         return
       }
 
       const quantity = normalizeInventoryQuantity(parsed, unit)
       if (mode !== 'AJUSTE' && quantity < inventoryQuantityMinPositive(unit)) {
-        setError(`La cantidad de «${line.product.name}» debe ser mayor a cero.`)
+        notifyFormError(`La cantidad de «${line.product.name}» debe ser mayor a cero.`)
         return
       }
       if (mode === 'AJUSTE' && quantity < 0) {
-        setError(`El stock de «${line.product.name}» no puede ser negativo.`)
+        notifyFormError(`El stock de «${line.product.name}» no puede ser negativo.`)
         return
       }
 
@@ -195,7 +190,6 @@ export function ProductInventoryBulkAdjustmentPage() {
       void navigate('/productos')
     } catch (submitError) {
       notifyApiError(submitError)
-      setError('No se pudo registrar el movimiento. Revisá las cantidades y el stock disponible.')
     }
   }
 
@@ -371,8 +365,6 @@ export function ProductInventoryBulkAdjustmentPage() {
                 </div>
               )}
             </div>
-
-            {error ? <p className="text-destructive text-sm">{error}</p> : null}
 
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" asChild>

@@ -19,8 +19,9 @@ type ReportCategoryConfig = {
 export const REPORT_CATEGORIES: Record<ReportMovementCategorySlug, ReportCategoryConfig> = {
   ventas: {
     slug: 'ventas',
-    title: 'Historial de ventas',
-    subtitle: 'Cobros por ventas (contado + abonos) en el período seleccionado',
+    title: 'Historial de cobros por ventas',
+    subtitle:
+      'Ventas de contado y abonos de clientes. El fiado pendiente (CxC) no suma hasta el cobro.',
     movementType: 'sale',
     apiType: 'sales',
     tone: 'income',
@@ -29,7 +30,7 @@ export const REPORT_CATEGORIES: Record<ReportMovementCategorySlug, ReportCategor
   compras: {
     slug: 'compras',
     title: 'Historial de compras',
-    subtitle: 'Egresos por compras en el período seleccionado',
+    subtitle: 'Compras de contado y abonos a proveedores. El inventario permanece en la empresa.',
     movementType: 'purchase',
     apiType: 'purchases',
     tone: 'purchase',
@@ -37,8 +38,9 @@ export const REPORT_CATEGORIES: Record<ReportMovementCategorySlug, ReportCategor
   },
   gastos: {
     slug: 'gastos',
-    title: 'Historial de gastos',
-    subtitle: 'Egresos operativos en el período seleccionado',
+    title: 'Historial de gastos operativos',
+    subtitle:
+      'Egresos del período para operar. No incluyen compras de inventario.',
     movementType: 'expense',
     apiType: 'expenses',
     tone: 'expense',
@@ -55,8 +57,9 @@ export const REPORT_CATEGORIES: Record<ReportMovementCategorySlug, ReportCategor
   },
   ingresos: {
     slug: 'ingresos',
-    title: 'Historial de ingresos',
-    subtitle: 'Aportes de capital y otras entradas de dinero en el período seleccionado',
+    title: 'Historial de aportes de capital',
+    subtitle:
+      'Entradas del titular u otros socios. No son ingresos por ventas ni utilidad.',
     movementType: 'income',
     apiType: 'incomes',
     tone: 'income',

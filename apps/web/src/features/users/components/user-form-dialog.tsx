@@ -20,7 +20,7 @@ import { UserPermissionsMatrix } from '@/features/users/components/user-permissi
 import { useCreateUserMutation, useUpdateUserMutation } from '@/features/users/hooks/use-users'
 import { isAppUserActionable } from '@/features/users/parse-app-user'
 import type { AppUser, AppUserRole } from '@/features/users/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 type UserFormDialogProps = {
@@ -46,7 +46,6 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
   const [role, setRole] = useState<AppUserRole>('OPERATOR')
   const [permissions, setPermissions] = useState<PermissionKey[]>([])
   const [preset, setPreset] = useState<PermissionPresetId>('custom')
-  const [error, setError] = useState<string | null>(null)
 
   const createMutation = useCreateUserMutation()
   const updateMutation = useUpdateUserMutation()
@@ -59,7 +58,6 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
     setRole(user?.role ?? 'OPERATOR')
     setPermissions(normalizePermissions(user))
     setPreset('custom')
-    setError(null)
   }, [open, user])
 
   function applyPreset(nextPreset: PermissionPresetId) {
@@ -70,15 +68,14 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    setError(null)
 
     if (!name.trim() || !email.trim()) {
-      setError('Completá nombre y email.')
+      notifyFormError('Completá nombre y email.')
       return
     }
 
     if (!isEdit && password.length < 8) {
-      setError('La contraseña debe tener al menos 8 caracteres.')
+      notifyFormError('La contraseña debe tener al menos 8 caracteres.')
       return
     }
 
@@ -93,7 +90,7 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
 
       if (isEdit && user) {
         if (!isAppUserActionable(user)) {
-          setError('Este usuario no tiene id válido en la API. No se puede guardar.')
+          notifyFormError('Este usuario no tiene id válido en la API. No se puede guardar.')
           return
         }
         await updateMutation.mutateAsync({ id: user.id, payload })
@@ -103,7 +100,7 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
 
       onOpenChange(false)
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      notifyApiError(err, 'No se pudo guardar')
     }
   }
 
@@ -192,8 +189,6 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
               Los administradores tienen acceso total a la aplicación.
             </p>
           )}
-
-          {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

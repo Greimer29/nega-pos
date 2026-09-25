@@ -42,6 +42,8 @@ export type AccountStatementSummary = {
   incomesUsd: string
   pendingPayablesUsd: string
   overduePayablesUsd: string
+  pendingReceivablesUsd: string
+  overdueReceivablesUsd: string
   netUsd: string
   sales: string
   purchases: string
@@ -50,6 +52,8 @@ export type AccountStatementSummary = {
   incomes: string
   pendingPayables: string
   overduePayables: string
+  pendingReceivables: string
+  overdueReceivables: string
   net: string
   rates: Record<string, string>
 }

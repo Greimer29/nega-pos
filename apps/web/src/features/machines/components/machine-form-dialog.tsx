@@ -25,7 +25,7 @@ import {
   useUpdateMachineMutation,
 } from '@/features/machines/hooks/use-machines'
 import type { Machine } from '@/features/machines/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 
 const schema = z.object({
   name: z.string().trim().min(1, 'El nombre es obligatorio').max(100),
@@ -108,7 +108,6 @@ export function MachineFormDialog({ open, onOpenChange, machine }: MachineFormDi
     register,
     handleSubmit,
     reset,
-    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
@@ -133,7 +132,7 @@ export function MachineFormDialog({ open, onOpenChange, machine }: MachineFormDi
 
       onOpenChange(false)
     } catch (error) {
-      setError('root', { message: getApiErrorMessage(error) })
+      notifyApiError(error, 'No se pudo guardar')
     }
   })
 
@@ -224,8 +223,6 @@ export function MachineFormDialog({ open, onOpenChange, machine }: MachineFormDi
               Máquina activa
             </label>
           ) : null}
-
-          {errors.root ? <p className="text-destructive text-sm whitespace-pre-line">{errors.root.message}</p> : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

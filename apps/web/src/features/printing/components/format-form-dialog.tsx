@@ -14,7 +14,7 @@ import { DocumentPreview } from '@/features/printing/components/document-preview
 import { createSampleSale } from '@/features/printing/render-document'
 import type { PrintConfig, PrintDocumentKind, PrintFormatRecord } from '@/features/printing/types'
 import { FORMAT_PLACEHOLDER_HELP, DEFAULT_TICKET_PAPER_WIDTH_MM } from '@/features/printing/utils/print-format-defaults'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 
 type FormatFormDialogProps = {
   open: boolean
@@ -40,12 +40,10 @@ export function FormatFormDialog({
   const [documentKind, setDocumentKind] = useState<PrintDocumentKind>('invoice')
   const [paperWidthMm, setPaperWidthMm] = useState(String(DEFAULT_TICKET_PAPER_WIDTH_MM))
   const [bodyHtml, setBodyHtml] = useState('')
-  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open || !format) return
-    setError(null)
     setSaving(false)
     setName(format.name)
     setDocumentKind(format.documentKind)
@@ -57,21 +55,20 @@ export function FormatFormDialog({
     event.preventDefault()
     if (!format || !canEdit) return
 
-    setError(null)
     const trimmedName = name.trim()
     const parsedWidth = Number(paperWidthMm)
     const trimmedBody = bodyHtml.trim()
 
     if (!trimmedName) {
-      setError('El nombre es obligatorio.')
+      notifyFormError('El nombre es obligatorio.')
       return
     }
     if (!Number.isFinite(parsedWidth) || parsedWidth <= 0) {
-      setError('El ancho del papel debe ser mayor a 0.')
+      notifyFormError('El ancho del papel debe ser mayor a 0.')
       return
     }
     if (!trimmedBody) {
-      setError('El contenido del formato no puede estar vacío.')
+      notifyFormError('El contenido del formato no puede estar vacío.')
       return
     }
 
@@ -86,7 +83,7 @@ export function FormatFormDialog({
       })
       onOpenChange(false)
     } catch (saveError) {
-      setError(getApiErrorMessage(saveError))
+      notifyApiError(saveError, 'No se pudo guardar')
     } finally {
       setSaving(false)
     }
@@ -174,8 +171,6 @@ export function FormatFormDialog({
 
           <div className="grid gap-6 py-4 lg:grid-cols-2">
             <div className="space-y-4">
-              {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
-
               <div className="space-y-2">
                 <Label htmlFor="format-name">Nombre</Label>
                 <Input

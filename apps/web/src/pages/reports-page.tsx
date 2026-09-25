@@ -68,7 +68,7 @@ export function ReportsPage() {
     if (activeTab === 'inventario') {
       return 'Stock actual de productos de catálogo y materiales, con filtros y exportación.'
     }
-    return 'Ingresos, egresos y balance consolidado a partir de ventas, compras y gastos.'
+    return 'Flujo de caja del período: entradas menos salidas. No equivale al saldo total de la empresa ni a la utilidad.'
   }, [activeTab])
 
   return (

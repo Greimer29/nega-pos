@@ -1,5 +1,4 @@
 import { Loader2 } from 'lucide-react'
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -9,9 +8,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { notifyApiError } from '@/features/notifications/query-error-state'
+import { toast } from '@/features/notifications/toast'
 import { useConfirmarPurchaseMutation } from '@/features/purchases/hooks/use-purchases'
 import type { ConfirmPurchaseInput } from '@/features/purchases/types'
-import { getApiErrorMessage } from '@/lib/api-error'
 import { formatCostWarningsMessage } from '@/lib/cost-warnings'
 import { formatFulfilledOrdersMessage } from '@/lib/material-availability'
 
@@ -37,21 +37,8 @@ export function ConfirmarPurchaseDialog({
   onSuccess,
 }: ConfirmarPurchaseDialogProps) {
   const confirmMutation = useConfirmarPurchaseMutation()
-  const [error, setError] = useState<string | null>(null)
-  const [costWarning, setCostWarning] = useState<string | null>(null)
-  const [fulfilledNotice, setFulfilledNotice] = useState<string | null>(null)
 
   async function handleConfirm() {
-    setError(null)
-
-    if (costWarning || fulfilledNotice) {
-      setCostWarning(null)
-      setFulfilledNotice(null)
-      onOpenChange(false)
-      onSuccess?.()
-      return
-    }
-
     try {
       const { costWarnings, fulfilledOrders } = await confirmMutation.mutateAsync({
         id: purchaseId,
@@ -60,15 +47,16 @@ export function ConfirmarPurchaseDialog({
       const costMessage = formatCostWarningsMessage(costWarnings)
       const fulfilledMessage = formatFulfilledOrdersMessage(fulfilledOrders)
 
-      if (costMessage || fulfilledMessage) {
-        setCostWarning(costMessage)
-        setFulfilledNotice(fulfilledMessage)
-        return
+      if (costMessage) {
+        toast.warning(costMessage, 'Producto por debajo del costo')
+      }
+      if (fulfilledMessage) {
+        toast.success(fulfilledMessage)
       }
       onOpenChange(false)
       onSuccess?.()
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      notifyApiError(err, 'No se pudo guardar')
     }
   }
 
@@ -96,17 +84,6 @@ export function ConfirmarPurchaseDialog({
               hasta que definas una tasa.
             </p>
           ) : null}
-          {error ? <p className="text-destructive whitespace-pre-line">{error}</p> : null}
-          {fulfilledNotice ? (
-            <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-              {fulfilledNotice}
-            </p>
-          ) : null}
-          {costWarning ? (
-            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 whitespace-pre-line">
-              {costWarning}
-            </p>
-          ) : null}
         </div>
 
         <DialogFooter>
@@ -119,7 +96,7 @@ export function ConfirmarPurchaseDialog({
             disabled={confirmMutation.isPending || sinFactura || sinItems}
           >
             {confirmMutation.isPending ? <Loader2 className="animate-spin" /> : null}
-            {costWarning || fulfilledNotice ? 'Entendido' : 'Confirmar compra'}
+            Confirmar compra
           </Button>
         </DialogFooter>
       </DialogContent>

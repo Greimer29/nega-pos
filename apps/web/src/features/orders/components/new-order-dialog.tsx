@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useCustomersQuery } from '@/features/customers/hooks/use-customers'
 import { MODALIDAD_LABELS } from '@/features/orders/constants'
 import { useCreateOrderMutation } from '@/features/orders/hooks/use-orders'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 
 const schema = z.object({
   customer_id: z.coerce.number().min(1, 'Seleccioná un cliente'),
@@ -51,7 +51,6 @@ export function NuevoOrderDialog({ open, onOpenChange }: NuevoOrderDialogProps) 
     register,
     handleSubmit,
     reset,
-    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
@@ -83,7 +82,7 @@ export function NuevoOrderDialog({ open, onOpenChange }: NuevoOrderDialogProps) 
       reset()
       void navigate(`/orders/${order.id}`)
     } catch (error) {
-      setError('root', { message: getApiErrorMessage(error) })
+      notifyApiError(error, 'No se pudo guardar')
     }
   })
 
@@ -171,8 +170,6 @@ export function NuevoOrderDialog({ open, onOpenChange }: NuevoOrderDialogProps) 
             <Label htmlFor="notes">Notas</Label>
             <Textarea id="notes" rows={2} {...register('notes')} />
           </div>
-
-          {errors.root ? <p className="text-destructive text-sm whitespace-pre-line">{errors.root.message}</p> : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

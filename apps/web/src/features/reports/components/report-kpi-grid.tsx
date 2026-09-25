@@ -7,6 +7,7 @@ import {
   Receipt,
   ShoppingCart,
   TrendingUp,
+  Users,
   Wrench,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -32,8 +33,13 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
   const overduePayablesUsd = Number(summary.overduePayablesUsd ?? 0)
   const pendingPayablesDetail =
     overduePayablesUsd > 0
-      ? `${formatUsd(summary.overduePayablesUsd)} vencidas`
-      : 'No resta del balance neto'
+      ? `${formatUsd(summary.overduePayablesUsd)} vencidas. Saldo con proveedores; no forma parte del flujo de caja hasta el abono.`
+      : 'Saldo pendiente con proveedores. No forma parte del flujo de caja hasta el abono.'
+  const overdueReceivablesUsd = Number(summary.overdueReceivablesUsd ?? 0)
+  const pendingReceivablesDetail =
+    overdueReceivablesUsd > 0
+      ? `${formatUsd(summary.overdueReceivablesUsd)} vencidas. Saldo de clientes; no forma parte del flujo de caja hasta el cobro.`
+      : 'Saldo pendiente de clientes. No forma parte del flujo de caja hasta el cobro.'
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -46,24 +52,35 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
 
       <MetricCard
         icon={ArrowUpRight}
-        label="Ingresos (ventas)"
+        label="Cobros por ventas"
         value={formatUsd(summary.salesUsd)}
+        detail="Efectivo recibido por ventas de contado y abonos de clientes. No incluye el fiado pendiente (CxC)."
         tone="income"
         href={reportCategoryHref('ventas', filterSearch)}
       />
       <MetricCard
         icon={ArrowDownToLine}
-        label="Ingresos (aportes)"
+        label="Aportes de capital"
         value={formatUsd(summary.incomesUsd ?? '0')}
+        detail="Entradas del titular u otros socios. Incrementan el efectivo y el patrimonio; no son ingresos por ventas ni utilidad."
         tone="income"
         href={reportCategoryHref('ingresos', filterSearch)}
       />
       <MetricCard
         icon={ShoppingCart}
-        label="Egresos compras"
+        label="Pagos a proveedores"
         value={formatUsd(summary.purchasesUsd)}
+        detail="Incluye compras de contado y abonos. El inventario permanece en la empresa; no es un gasto operativo."
         tone="purchase"
         href={reportCategoryHref('compras', filterSearch)}
+      />
+      <MetricCard
+        icon={Users}
+        label="Cuentas por cobrar"
+        value={formatUsd(summary.pendingReceivablesUsd ?? '0')}
+        detail={pendingReceivablesDetail}
+        tone="income"
+        href={reportCategoryHref('ventas', filterSearch)}
       />
       <MetricCard
         icon={HandCoins}
@@ -75,8 +92,9 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
       />
       <MetricCard
         icon={Receipt}
-        label="Gastos"
+        label="Gastos operativos"
         value={formatUsd(summary.expensesUsd)}
+        detail="Egresos del período para operar (alquiler, servicios, nómina, etc.). No incluyen compras de inventario."
         tone="expense"
         href={reportCategoryHref('gastos', filterSearch)}
       />
@@ -157,7 +175,7 @@ function HeroKpiCard({
 
           >
 
-            {isPositive ? 'Superávit' : 'Déficit'}
+            {isPositive ? 'Entró más' : 'Salió más'}
 
           </span>
 
@@ -169,7 +187,7 @@ function HeroKpiCard({
 
           <p className="text-sm font-medium tracking-wide text-neutral-400 uppercase">
 
-            Balance neto
+            Flujo de caja
 
           </p>
 
@@ -190,8 +208,9 @@ function HeroKpiCard({
           </p>
 
           <p className="mt-3 max-w-md text-xs leading-relaxed text-neutral-400">
-            Flujo de caja en {baseCurrencyCode} (visualización {currency}). La deuda a crédito de
-            proveedores se muestra aparte y no resta este balance hasta el abono.
+            Entradas menos salidas en este período ({baseCurrencyCode}, vista {currency}). No
+            representa el saldo total de la empresa ni la utilidad. Las deudas a crédito no se
+            descuentan hasta el pago.
           </p>
 
         </div>

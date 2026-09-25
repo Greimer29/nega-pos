@@ -1,4 +1,4 @@
-import { Loader2, Pencil, Plus } from 'lucide-react'
+import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { AccountListFiltersPanel } from '@/components/filters/account-list-filters-panel'
 import { FiltersDrawer } from '@/components/filters/filters-drawer'
@@ -9,9 +9,10 @@ import { useAuth } from '@/features/auth/hooks/use-auth'
 import { IncomeFormDialog } from '@/features/purchases/components/income-form-dialog'
 import { DisplayDocumentMoney } from '@/features/currencies/components/display-money'
 import { formatFecha } from '@/features/purchases/constants'
-import { useIncomesQuery } from '@/features/purchases/hooks/use-incomes'
+import { useDeleteIncomeMutation, useIncomesQuery } from '@/features/purchases/hooks/use-incomes'
 import type { Income } from '@/features/purchases/types'
-import { QueryErrorState } from '@/features/notifications/query-error-state'
+import { PermissionGate } from '@/features/permissions/components/permission-gate'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 
@@ -38,11 +39,12 @@ export function PurchasesIngresosPanel() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedIncome, setSelectedIncome] = useState<Income | null>(null)
+  const deleteMutation = useDeleteIncomeMutation()
 
   const { data, isLoading, isError, error } = useIncomesQuery({
     page: filters.page,
     perPage: PER_PAGE,
-    account_id: filters.unassignedOnly ? undefined : filters.accountId ?? undefined,
+    account_id: filters.unassignedOnly ? undefined : (filters.accountId ?? undefined),
     unassigned: filters.unassignedOnly || undefined,
   })
 
@@ -57,6 +59,20 @@ export function PurchasesIngresosPanel() {
   function openEdit(income: Income) {
     setSelectedIncome(income)
     setDialogOpen(true)
+  }
+
+  async function handleDelete(income: Income) {
+    if (!window.confirm(`¿Eliminar el ingreso «${income.description}»? No se podrá recuperar.`)) {
+      return
+    }
+    try {
+      await deleteMutation.mutateAsync(income.id)
+      if (incomes.length === 1 && filters.page > 1) {
+        setFilters((prev) => ({ ...prev, page: prev.page - 1 }))
+      }
+    } catch (err) {
+      notifyApiError(err, 'No se pudo eliminar el ingreso')
+    }
   }
 
   return (
@@ -148,14 +164,36 @@ export function PurchasesIngresosPanel() {
                         />
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEdit(income)}
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Editar ${income.description}`}
+                            onClick={() => openEdit(income)}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <PermissionGate permission="incomes.edit">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              title="Eliminar ingreso"
+                              aria-label={`Eliminar ${income.description}`}
+                              className="text-destructive hover:text-destructive"
+                              disabled={deleteMutation.isPending}
+                              onClick={() => void handleDelete(income)}
+                            >
+                              {deleteMutation.isPending &&
+                              deleteMutation.variables === income.id ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="size-4" />
+                              )}
+                            </Button>
+                          </PermissionGate>
+                        </div>
                       </td>
                     </tr>
                   ))}

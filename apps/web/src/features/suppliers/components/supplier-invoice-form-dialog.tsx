@@ -32,7 +32,7 @@ import {
   nativeToBase,
 } from '@/features/purchases/utils/purchase-entry-currency'
 import { useCreateSupplierInvoiceMutation } from '@/features/suppliers/hooks/use-suppliers'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
 
 const schema = z.object({
@@ -74,7 +74,6 @@ export function SupplierInvoiceFormDialog({
     handleSubmit,
     reset,
     control,
-    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
@@ -129,11 +128,11 @@ export function SupplierInvoiceFormDialog({
 
   const onSubmit = handleSubmit(async (values) => {
     if (!isCredit && !accountId) {
-      setError('root', { message: 'Seleccioná la cuenta de donde sale el pago.' })
+      notifyFormError('Seleccioná la cuenta de donde sale el pago.')
       return
     }
     if (entryInNative && !isValidPurchaseRate(rateNum)) {
-      setError('root', { message: 'Indicá una tasa válida para la moneda elegida.' })
+      notifyFormError('Indicá una tasa válida para la moneda elegida.')
       return
     }
 
@@ -155,7 +154,7 @@ export function SupplierInvoiceFormDialog({
       onOpenChange(false)
       onSuccess?.()
     } catch (error) {
-      setError('root', { message: getApiErrorMessage(error) })
+      notifyApiError(error, 'No se pudo guardar')
     }
   })
 
@@ -251,10 +250,6 @@ export function SupplierInvoiceFormDialog({
             <Label htmlFor="supplier-invoice-note">Nota</Label>
             <Textarea id="supplier-invoice-note" rows={2} {...register('note')} />
           </div>
-
-          {errors.root ? (
-            <p className="text-destructive text-sm whitespace-pre-line">{errors.root.message}</p>
-          ) : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

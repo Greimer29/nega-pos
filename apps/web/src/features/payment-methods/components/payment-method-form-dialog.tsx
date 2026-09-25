@@ -17,7 +17,7 @@ import {
   useUpdatePaymentMethodMutation,
 } from '@/features/payment-methods/hooks/use-payment-methods'
 import type { PaymentMethod } from '@/features/payment-methods/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 
 type PaymentMethodFormDialogProps = {
   open: boolean
@@ -34,12 +34,10 @@ export function PaymentMethodFormDialog({ open, onOpenChange, method }: PaymentM
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [currencyCode, setCurrencyCode] = useState('USD')
-  const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     if (open) {
-      setError(null)
       if (isEditing) {
         setCode(method.code)
         setName(method.name)
@@ -54,10 +52,9 @@ export function PaymentMethodFormDialog({ open, onOpenChange, method }: PaymentM
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    setError(null)
 
     if (!name.trim()) {
-      setError('El nombre es obligatorio')
+      notifyFormError('El nombre es obligatorio')
       return
     }
 
@@ -74,7 +71,7 @@ export function PaymentMethodFormDialog({ open, onOpenChange, method }: PaymentM
       } else {
         const normalizedCode = code.trim().toLowerCase().replace(/\s+/g, '_')
         if (!/^[a-z][a-z0-9_]*$/.test(normalizedCode)) {
-          setError('El código debe usar minúsculas, números y guiones bajos')
+          notifyFormError('El código debe usar minúsculas, números y guiones bajos')
           return
         }
         await createMutation.mutateAsync({
@@ -85,7 +82,7 @@ export function PaymentMethodFormDialog({ open, onOpenChange, method }: PaymentM
       }
       onOpenChange(false)
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      notifyApiError(err, 'No se pudo guardar')
     } finally {
       setIsSubmitting(false)
     }
@@ -139,8 +136,6 @@ export function PaymentMethodFormDialog({ open, onOpenChange, method }: PaymentM
               ))}
             </select>
           </div>
-
-          {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -1,4 +1,4 @@
-import { Loader2, Pencil, Plus } from 'lucide-react'
+import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { AccountListFiltersPanel } from '@/components/filters/account-list-filters-panel'
 import { FiltersDrawer } from '@/components/filters/filters-drawer'
@@ -9,9 +9,10 @@ import { useAuth } from '@/features/auth/hooks/use-auth'
 import { ExpenseFormDialog } from '@/features/purchases/components/expense-form-dialog'
 import { DisplayDocumentMoney } from '@/features/currencies/components/display-money'
 import { formatFecha } from '@/features/purchases/constants'
-import { useExpensesQuery } from '@/features/purchases/hooks/use-expenses'
+import { useDeleteExpenseMutation, useExpensesQuery } from '@/features/purchases/hooks/use-expenses'
 import type { Expense } from '@/features/purchases/types'
-import { QueryErrorState } from '@/features/notifications/query-error-state'
+import { PermissionGate } from '@/features/permissions/components/permission-gate'
+import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
 
@@ -38,11 +39,12 @@ export function PurchasesGastosPanel() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
+  const deleteMutation = useDeleteExpenseMutation()
 
   const { data, isLoading, isError, error } = useExpensesQuery({
     page: filters.page,
     perPage: PER_PAGE,
-    account_id: filters.unassignedOnly ? undefined : filters.accountId ?? undefined,
+    account_id: filters.unassignedOnly ? undefined : (filters.accountId ?? undefined),
     unassigned: filters.unassignedOnly || undefined,
   })
 
@@ -57,6 +59,20 @@ export function PurchasesGastosPanel() {
   function openEdit(expense: Expense) {
     setSelectedExpense(expense)
     setDialogOpen(true)
+  }
+
+  async function handleDelete(expense: Expense) {
+    if (!window.confirm(`¿Eliminar el gasto «${expense.description}»? No se podrá recuperar.`)) {
+      return
+    }
+    try {
+      await deleteMutation.mutateAsync(expense.id)
+      if (expenses.length === 1 && filters.page > 1) {
+        setFilters((prev) => ({ ...prev, page: prev.page - 1 }))
+      }
+    } catch (err) {
+      notifyApiError(err, 'No se pudo eliminar el gasto')
+    }
   }
 
   return (
@@ -115,7 +131,9 @@ export function PurchasesGastosPanel() {
         ) : isError ? (
           <QueryErrorState isError error={error} title="No se pudieron cargar los gastos" />
         ) : expenses.length === 0 ? (
-          <p className="text-muted-foreground py-8 text-center text-sm">No hay gastos registrados.</p>
+          <p className="text-muted-foreground py-8 text-center text-sm">
+            No hay gastos registrados.
+          </p>
         ) : (
           <>
             <div className="overflow-x-auto rounded-md border">
@@ -146,14 +164,36 @@ export function PurchasesGastosPanel() {
                         />
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEdit(expense)}
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Editar ${expense.description}`}
+                            onClick={() => openEdit(expense)}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <PermissionGate permission="expenses.edit">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              title="Eliminar gasto"
+                              aria-label={`Eliminar ${expense.description}`}
+                              className="text-destructive hover:text-destructive"
+                              disabled={deleteMutation.isPending}
+                              onClick={() => void handleDelete(expense)}
+                            >
+                              {deleteMutation.isPending &&
+                              deleteMutation.variables === expense.id ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="size-4" />
+                              )}
+                            </Button>
+                          </PermissionGate>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -194,11 +234,7 @@ export function PurchasesGastosPanel() {
         )}
       </CardContent>
 
-      <ExpenseFormDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        expense={selectedExpense}
-      />
+      <ExpenseFormDialog open={dialogOpen} onOpenChange={setDialogOpen} expense={selectedExpense} />
     </Card>
   )
 }

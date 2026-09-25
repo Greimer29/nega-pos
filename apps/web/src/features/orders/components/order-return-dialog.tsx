@@ -15,7 +15,7 @@ import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-mo
 import { useReturnOrderMutation } from '@/features/orders/hooks/use-orders'
 import { getOrder } from '@/features/orders/services/order-service'
 import type { OrderLine } from '@/features/orders/types'
-import { getApiErrorMessage } from '@/lib/api-error'
+import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 import {
   formatInventoryQuantity,
   inventoryQuantityDecimals,
@@ -59,7 +59,6 @@ export function OrderReturnDialog({
   const [orderCode, setOrderCode] = useState('')
   const [lines, setLines] = useState<OrderLine[]>([])
   const [selection, setSelection] = useState<ReturnSelection[]>([])
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || !orderId) {
@@ -68,7 +67,6 @@ export function OrderReturnDialog({
 
     let cancelled = false
     setLoading(true)
-    setError(null)
 
     void getOrder(orderId)
       .then((order) => {
@@ -88,7 +86,7 @@ export function OrderReturnDialog({
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(getApiErrorMessage(err))
+          notifyApiError(err, 'No se pudo cargar')
         }
       })
       .finally(() => {
@@ -136,7 +134,7 @@ export function OrderReturnDialog({
       .map((item) => ({ line_id: item.lineId, quantity: item.quantity }))
 
     if (payload.length === 0) {
-      setError('Seleccioná al menos un producto para devolver.')
+      notifyFormError('Seleccioná al menos un producto para devolver.')
       return
     }
 
@@ -144,18 +142,17 @@ export function OrderReturnDialog({
       const line = lines.find((l) => l.id === item.line_id)
       if (!line) continue
       if (item.quantity > remainingQty(line) + 0.0005) {
-        setError('Alguna cantidad supera lo disponible para devolver.')
+        notifyFormError('Alguna cantidad supera lo disponible para devolver.')
         return
       }
     }
 
-    setError(null)
     try {
       await returnMutation.mutateAsync({ id: orderId, payload: { lines: payload } })
       onOpenChange(false)
       onSuccess?.()
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      notifyApiError(err, 'No se pudo guardar')
     }
   }
 
@@ -257,8 +254,6 @@ export function OrderReturnDialog({
           <span className="text-muted-foreground">Monto a devolver</span>
           <DisplayMoneyFromUsd amountUsd={selectedTotal} />
         </div>
-
-        {error ? <p className="text-destructive text-sm whitespace-pre-line">{error}</p> : null}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
