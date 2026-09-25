@@ -23,6 +23,8 @@ type CategoryFormDialogProps = {
   onOpenChange: (open: boolean) => void
   category?: Category | null
   readOnly?: boolean
+  /** Se llama tras crear una categoría nueva (no al editar). */
+  onCreated?: (category: Category) => void
 }
 
 export function CategoryFormDialog({
@@ -30,6 +32,7 @@ export function CategoryFormDialog({
   onOpenChange,
   category,
   readOnly = false,
+  onCreated,
 }: CategoryFormDialogProps) {
   const isEditing = category != null
   const createMutation = useCreateCategoryMutation()
@@ -72,10 +75,11 @@ export function CategoryFormDialog({
           payload: { name: name.trim(), sort_order: parsedSort },
         })
       } else {
-        await createMutation.mutateAsync({
+        const created = await createMutation.mutateAsync({
           name: name.trim(),
           sort_order: parsedSort,
         })
+        onCreated?.(created)
       }
       onOpenChange(false)
     } catch (err) {

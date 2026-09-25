@@ -22,6 +22,7 @@ import {
 } from '#utils/dashboard_chart_periods'
 import { allocateInvoiceDiscountToSaleLines } from '#utils/allocate_invoice_discount'
 import { computeSaleOriginalReturnedNet } from '#utils/sale_original_returned_net'
+import { lineInventoryQuantity } from '#utils/wholesale'
 
 export type BajoStockItem = {
   id: number
@@ -524,7 +525,15 @@ export default class DashboardService {
       .join('sale_lines', 'sale_lines.sale_id', 'sales.id')
       .whereIn('sales.status', [...SALE_STATUSES])
       .where('sales.sales_shift_id', shiftId)
-      .select(db.raw('COALESCE(SUM(sale_lines.quantity - sale_lines.returned_quantity), 0) as qty'))
+      .select(
+        db.raw(`COALESCE(SUM(
+          CASE
+            WHEN sale_lines.is_wholesale = 1 AND sale_lines.units_per_pack IS NOT NULL
+              THEN (sale_lines.quantity - sale_lines.returned_quantity) * sale_lines.units_per_pack
+            ELSE (sale_lines.quantity - sale_lines.returned_quantity)
+          END
+        ), 0) as qty`)
+      )
       .first()
 
     const gastos = await this.gastosDelTurno(shift)
@@ -571,6 +580,8 @@ export default class DashboardService {
       'catalog_products.sale_unit as saleUnit',
       'catalog_products.image_path as imagePath',
       'catalog_products.stock_quantity as stockQuantity',
+      'sale_lines.is_wholesale as isWholesale',
+      'sale_lines.units_per_pack as unitsPerPack',
       db.raw('(sale_lines.quantity - sale_lines.returned_quantity) as quantity'),
       db.raw(
         '((sale_lines.quantity - sale_lines.returned_quantity) * sale_lines.unit_price_usd) as grossUsd'
@@ -605,7 +616,14 @@ export default class DashboardService {
     >()
 
     for (const row of lineRows) {
-      const quantity = Number(row.quantity ?? 0)
+      const lineQty = Number(row.quantity ?? 0)
+      if (lineQty <= 0) continue
+
+      const quantity = lineInventoryQuantity(
+        lineQty,
+        Boolean(row.isWholesale),
+        row.unitsPerPack as string | number | null | undefined
+      )
       if (quantity <= 0) continue
 
       const saleId = Number(row.saleId)

@@ -13,6 +13,8 @@ export type SeedTestSaleLineInput = {
   subtotalUsd?: string
   costUsd?: string
   returnedQuantity?: string
+  isWholesale?: boolean
+  unitsPerPack?: string | null
 }
 
 export type SeedTestSaleInput = {
@@ -102,6 +104,8 @@ export async function seedTestSale(input: SeedTestSaleInput) {
       subtotalUsd: subtotal,
       costUsd: line.costUsd ?? null,
       returnedQuantity: line.returnedQuantity ?? '0',
+      isWholesale: Boolean(line.isWholesale),
+      unitsPerPack: line.isWholesale ? (line.unitsPerPack ?? null) : null,
     })
   }
 

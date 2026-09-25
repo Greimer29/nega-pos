@@ -2,6 +2,9 @@ import ReportService from '#services/report_service'
 import InventoryReportService from '#services/inventory_report_service'
 import {
   accountStatementValidator,
+  balancePositionValidator,
+  financialSummaryValidator,
+  incomeStatementValidator,
   inventoryMovementsValidator,
   inventoryReportValidator,
 } from '#validators/report'
@@ -28,6 +31,57 @@ export default class ReportsController {
       period: result.period,
       summary: result.summary,
       movements: result.movements,
+    })
+  }
+
+  async incomeStatement({ request, serialize }: HttpContext) {
+    const filters = await request.validateUsing(incomeStatementValidator)
+
+    const result = await this.service.estadoResultados({
+      from: filters.from,
+      to: filters.to,
+      month: filters.month,
+      display_currency: filters.display_currency,
+    })
+
+    return serialize({
+      period: result.period,
+      summary: result.summary,
+    })
+  }
+
+  async balancePosition({ request, serialize }: HttpContext) {
+    const filters = await request.validateUsing(balancePositionValidator)
+
+    const result = await this.service.situacionPatrimonial({
+      display_currency: filters.display_currency,
+    })
+
+    return serialize({
+      asOf: result.asOf,
+      summary: result.summary,
+    })
+  }
+
+  async financialSummary({ request, serialize }: HttpContext) {
+    const filters = await request.validateUsing(financialSummaryValidator)
+
+    const result = await this.service.resumenFinanciero({
+      from: filters.from,
+      to: filters.to,
+      month: filters.month,
+      display_currency: filters.display_currency,
+    })
+
+    return serialize({
+      period: result.period,
+      asOf: result.asOf,
+      diagnosis: result.diagnosis,
+      displayCurrency: result.displayCurrency,
+      rates: result.rates,
+      resultado: result.resultado,
+      flujo: result.flujo,
+      patrimonio: result.patrimonio,
     })
   }
 

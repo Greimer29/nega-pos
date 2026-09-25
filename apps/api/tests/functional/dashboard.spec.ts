@@ -260,6 +260,58 @@ test.group('Dashboard API', (group) => {
     assert.equal(body.data.summary.monto_productos_usd, '24.0000')
   })
 
+  test('GET daily-product-sales counts wholesale packs as inventory units', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const product = await CatalogProduct.create({
+      name: 'Arroz mayorista',
+      category: 'Solidos',
+      saleUnit: 'UND',
+      salePriceUsd: '0.0200',
+      costUsd: '0.0100',
+      stockQuantity: '1000.000',
+      wholesaleEnabled: true,
+      wholesaleUnitsPerPack: '20.000',
+      wholesaleCostUsd: '0.2000',
+      wholesaleSalePriceUsd: '0.5000',
+      active: true,
+    })
+
+    await seedDashboardSale({
+      guestName: 'Cliente mayorista',
+      soldAt: DateTime.now(),
+      totalUsd: '5.0000',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '10',
+          unitPriceUsd: '0.5000',
+          subtotalUsd: '5.0000',
+          isWholesale: true,
+          unitsPerPack: '20.000',
+        },
+      ],
+    })
+
+    const response = await client.get('/api/v1/dashboard/daily-product-sales').loginAs(user)
+    response.assertStatus(200)
+    const body = response.body() as {
+      data: {
+        products: Array<{ id: number; quantity_sold: number; total_usd: string }>
+        summary: { productos_vendidos: number; monto_productos_usd: string }
+      }
+    }
+
+    const row = body.data.products.find((item) => item.id === Number(product.id))
+    assert.exists(row)
+    assert.equal(row!.quantity_sold, 200)
+    assert.equal(row!.total_usd, '5.0000')
+    assert.equal(body.data.summary.productos_vendidos, 200)
+  })
+
   test('GET daily-product-sales uses formula stock for catalog products', async ({
     client,
     assert,

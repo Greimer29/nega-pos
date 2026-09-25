@@ -401,6 +401,10 @@ test.group('Purchases confirmar API', (group) => {
       .loginAs(user)
     confirmResponse.assertStatus(200)
 
+    await product.refresh()
+    assert.equal(product.stockQuantity, '3.000')
+    assert.equal(product.costUsd, '10.0000')
+
     const monthResponse = await client
       .get(`/api/v1/catalog-products/${product.id}/purchase-history`)
       .qs({ month: '2026-05' })

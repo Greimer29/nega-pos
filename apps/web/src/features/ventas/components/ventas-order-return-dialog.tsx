@@ -26,6 +26,7 @@ import { parseDecimalInput } from '@/lib/numeric-input'
 import { invoiceDiscountLabel, invoiceReturnNetUsd } from '@/features/ventas/utils/invoice-discount'
 import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
 import { cn } from '@/lib/utils'
+import { formatWholesaleQuantityShort } from '@/lib/wholesale'
 
 type ReturnSelection = {
   lineId: number
@@ -223,19 +224,31 @@ export function VentasOrderReturnDialog({
                         {line.catalog_product?.name ?? line.description}
                       </p>
                       <p className="text-muted-foreground text-xs">
-                        Vendido: {formatInventoryQuantity(line.quantity, unit)}
+                        Vendido:{' '}
+                        {line.is_wholesale
+                          ? formatWholesaleQuantityShort(Number(line.quantity), line.units_per_pack)
+                          : formatInventoryQuantity(line.quantity, unit)}
                         {Number(line.returned_quantity ?? 0) > 0 ? (
                           <span className="text-destructive">
                             {' '}
-                            · Devuelto: {formatInventoryQuantity(line.returned_quantity, unit)}
+                            · Devuelto:{' '}
+                            {line.is_wholesale
+                              ? formatWholesaleQuantityShort(
+                                  Number(line.returned_quantity),
+                                  line.units_per_pack
+                                )
+                              : formatInventoryQuantity(line.returned_quantity, unit)}
                           </span>
                         ) : null}
+                        {line.is_wholesale ? ' · c/paq' : null}
                       </p>
                       {fullyReturned ? (
                         <p className="text-destructive mt-1 text-xs font-medium">Devuelto</p>
                       ) : (
                         <div className="mt-2 flex items-center gap-2">
-                          <Label className="text-xs">Cantidad</Label>
+                          <Label className="text-xs">
+                            {line.is_wholesale ? 'Paquetes' : 'Cantidad'}
+                          </Label>
                           <DecimalInput
                             min={inventoryQuantityMinPositive(unit)}
                             step={inventoryQuantityStep(unit)}
@@ -249,7 +262,10 @@ export function VentasOrderReturnDialog({
                             }
                           />
                           <span className="text-muted-foreground text-xs">
-                            / {formatInventoryQuantity(remaining, unit)}
+                            /{' '}
+                            {line.is_wholesale
+                              ? formatWholesaleQuantityShort(remaining, line.units_per_pack)
+                              : formatInventoryQuantity(remaining, unit)}
                           </span>
                         </div>
                       )}

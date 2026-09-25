@@ -94,8 +94,8 @@ export function ReportFiltersToolbar({
         open={filtersOpen}
         onOpenChange={setFiltersOpen}
         id="reportes-financieros-filters"
-        title="Filtros del reporte financiero"
-        description="Cuenta y tipos de movimiento del estado de cuenta."
+        title="Filtros de flujo de caja"
+        description="Cuenta y tipos de movimiento de caja (no de utilidad)."
       >
         <FiltersPanel onClearAll={clearAll}>
           <FilterSection title="Cuenta" icon={<Landmark className="size-4 text-neutral-500" />}>
