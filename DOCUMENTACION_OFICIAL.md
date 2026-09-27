@@ -162,7 +162,7 @@ nega-pos/
 │   ├── desktop/             # Electron
 │   │   ├── electron/        # main.ts, preload, print-service
 │   │   └── print-config.json  # legacy (se migra a userData al arrancar)
-│   └── mobile/              # Capacitor Android (APK; reutiliza web/dist)
+│   └── mobile/              # Capacitor Android (+ iOS en Mac; reutiliza web/dist)
 ├── docker-compose.yml       # MySQL + API opcional
 ├── scripts/                 # dev-setup.ps1, reset-database.ps1, build-mobile.ps1
 └── package.json             # Scripts del monorepo
@@ -230,13 +230,14 @@ Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca produc
 - API de **release**: `apps/desktop/api-url.json` (URL de Railway). No usar ese JSON como fuente para `dev:web`.
 - Actualizaciones: Configuración → General → **Aplicación**. En Electron: descarga el Setup vía API, lo abre, suelta el single-instance lock y `app.exit` para que NSIS reemplace archivos (**auto-update**). Al relanzar, si cambió `app.getVersion()`, se limpia la caché HTTP de Chromium (el `index.html` de `:51740` no debe quedar cacheado; Ctrl+R ya no debería ser necesario). La sesión de login se conserva.
 
-### Mobile APK (Capacitor)
+### Mobile (Capacitor)
 
 - Workspace: `apps/mobile` (WebView de `apps/web/dist`; **no** altera el pipeline desktop)
 - Habla con la **API pública HTTPS** (`VITE_API_URL` al buildear); cookies cross-origin (`SameSite=None; Secure` en producción)
-- CORS: setear `MOBILE_APP_ORIGIN=https://localhost` en la API (Railway / `.env`)
-- Build de release: `$env:VITE_API_URL="https://tu-api"; pnpm build:mobile` luego `pnpm --filter mobile build:apk:release`
-- Actualizaciones: misma card **Aplicación** descarga el APK; Android **no** permite silent replace — el usuario confirma la instalación desde Descargas.
+- CORS: setear `MOBILE_APP_ORIGIN=https://localhost` en la API (Railway / `.env`) para Android; iOS puede requerir origen `capacitor://localhost` adicional tras el primer build en Mac
+- **Android:** build de release `$env:VITE_API_URL="https://tu-api"; pnpm build:mobile` luego `pnpm --filter mobile build:apk:release`
+- **iOS:** dependencia `@capacitor/ios` lista; el proyecto nativo (`cap add ios`) y el Archive se hacen **solo en macOS + Xcode**. Guía: [`apps/mobile/README.md`](apps/mobile/README.md)
+- Actualizaciones Android: card **Aplicación** descarga el APK; el usuario confirma la instalación. (iOS: TestFlight / App Store — no hay silent replace.)
 - **Escáner de código de barras:** `@capacitor/barcode-scanner` ^2.2.6 (oficial Ionic, compatible con Capacitor 7) + `@capacitor/core` en `apps/web` y `apps/mobile`. Abre la cámara en Android nativo (permiso `CAMERA`) y también en el navegador/desktop vía la UI web del plugin. El lector USB sigue escribiendo en el input de búsqueda y confirma con Enter.
 - Detalle: [`apps/mobile/README.md`](apps/mobile/README.md)
 - Impresión térmica es **exclusiva del desktop**; la config de impresión se ve/edita también desde el navegador vía API
