@@ -376,8 +376,6 @@ export function CatalogFormDialog({
     setUseFormula(checked)
     if (checked) {
       setUseSizes(false)
-      setWholesaleEnabled(false)
-      setPricePanel('retail')
       return
     }
     clearFormula()
@@ -399,13 +397,14 @@ export function CatalogFormDialog({
   function handleWholesaleChange(checked: boolean) {
     setWholesaleEnabled(checked)
     if (checked) {
-      setUseFormula(false)
-      clearFormula()
       setUseSizes(false)
       setPricePanel('wholesale')
-      const units = Number(wholesaleUnits)
-      if (Number.isFinite(units) && units >= MIN_WHOLESALE_UNITS_PER_PACK && wholesaleCost.trim()) {
-        setCostPrice(deriveUnitCostFromPack(Number(wholesaleCost) || 0, units).toFixed(4))
+      // Sin fórmula: el costo unitario se deriva del paquete. Con fórmula lo define la receta.
+      if (!useFormula) {
+        const units = Number(wholesaleUnits)
+        if (Number.isFinite(units) && units >= MIN_WHOLESALE_UNITS_PER_PACK && wholesaleCost.trim()) {
+          setCostPrice(deriveUnitCostFromPack(Number(wholesaleCost) || 0, units).toFixed(4))
+        }
       }
       return
     }
@@ -416,7 +415,12 @@ export function CatalogFormDialog({
     setWholesaleCost(value)
     const units = Number(wholesaleUnits)
     const cost = Number(value)
-    if (Number.isFinite(units) && units >= MIN_WHOLESALE_UNITS_PER_PACK && Number.isFinite(cost)) {
+    if (
+      !useFormula &&
+      Number.isFinite(units) &&
+      units >= MIN_WHOLESALE_UNITS_PER_PACK &&
+      Number.isFinite(cost)
+    ) {
       const unitCost = deriveUnitCostFromPack(cost, units)
       setCostPrice(unitCost.toFixed(4))
       if (salePrice.trim()) {
@@ -499,8 +503,8 @@ export function CatalogFormDialog({
       return
     }
 
-    if (wholesaleEnabled && (useFormula || useSizes)) {
-      notifyFormError('La configuración mayorista no aplica a productos con fórmula o tallas.')
+    if (wholesaleEnabled && useSizes) {
+      notifyFormError('La configuración mayorista no aplica a productos con tallas.')
       return
     }
 
@@ -800,7 +804,7 @@ export function CatalogFormDialog({
                 <OptionSwitch
                   label="Usar fórmula"
                   checked={useFormula}
-                  disabled={useSizes || wholesaleEnabled}
+                  disabled={useSizes}
                   onCheckedChange={handleUseFormulaChange}
                 />
                 <OptionSwitch
@@ -812,13 +816,18 @@ export function CatalogFormDialog({
                 <OptionSwitch
                   label="Mayorista"
                   checked={wholesaleEnabled}
-                  disabled={useFormula || useSizes}
+                  disabled={useSizes}
                   onCheckedChange={handleWholesaleChange}
                 />
               </div>
-              {useFormula || useSizes || wholesaleEnabled ? (
+              {useSizes && (useFormula || wholesaleEnabled) ? (
                 <p className="text-muted-foreground text-xs">
-                  Solo se puede activar una de estas opciones a la vez.
+                  Las tallas no se combinan con fórmula ni mayorista.
+                </p>
+              ) : useFormula && wholesaleEnabled ? (
+                <p className="text-muted-foreground text-xs">
+                  Mayorista vende por paquete; el stock se descuenta de los materiales de la fórmula
+                  (paquetes × und/paq × cantidad de la receta).
                 </p>
               ) : null}
               {useFormula && !useSizes ? (

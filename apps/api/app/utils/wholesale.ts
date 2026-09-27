@@ -20,7 +20,6 @@ export type NormalizedWholesaleConfig = {
 export type WholesaleLineSource = {
   wholesaleEnabled?: boolean | null
   wholesaleUnitsPerPack?: string | number | null
-  formulaId?: bigint | number | null
   itemKind?: string | null
 }
 
@@ -139,12 +138,6 @@ export function resolveWholesaleLineSnapshot(
   if (source.itemKind === 'SERVICE') {
     throw new ConfiguracionMayoristaInvalidaException(
       'Los servicios no admiten venta o compra mayorista'
-    )
-  }
-
-  if (source.formulaId) {
-    throw new ConfiguracionMayoristaInvalidaException(
-      'Un producto con fórmula no admite modo mayorista'
     )
   }
 
