@@ -28,4 +28,5 @@ $runtimeConfigPath = Join-Path $root "apps\web\dist\runtime-config.json"
 
 Write-Host "Wrote $runtimeConfigPath"
 pnpm --filter mobile sync
-Write-Host "Mobile web assets synced. Next: pnpm --filter mobile build:apk:debug"
+Write-Host "Mobile web assets synced (Android). Next: pnpm --filter mobile build:apk:debug"
+Write-Host "En una Mac, para iOS: pnpm --filter mobile add:ios (1ª vez) luego sync:ios + open:ios — ver apps/mobile/README.md"
