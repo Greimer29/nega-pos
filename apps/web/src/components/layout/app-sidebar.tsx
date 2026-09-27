@@ -8,6 +8,8 @@ import {
 } from '@/components/layout/nav-config'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { canAccessNav } from '@/features/permissions/catalog'
+import { UpdateAvailableDot } from '@/features/settings/components/update-available-dot'
+import { useUpdateAvailable } from '@/features/settings/hooks/use-app-update-latest-query'
 import { cn } from '@/lib/utils'
 
 function linkClassName(isActive: boolean) {
@@ -23,10 +25,12 @@ function SidebarLinkWithMatch({
   item,
   nested = false,
   onNavigate,
+  showUpdateDot = false,
 }: {
   item: NavLinkItem
   nested?: boolean
   onNavigate?: () => void
+  showUpdateDot?: boolean
 }) {
   const { pathname } = useLocation()
   const isActive = item.match ? item.match(pathname) : pathname === item.to
@@ -38,7 +42,8 @@ function SidebarLinkWithMatch({
       onClick={onNavigate}
     >
       <item.icon className="size-4 shrink-0" />
-      {item.label}
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      {showUpdateDot ? <UpdateAvailableDot /> : null}
     </NavLink>
   )
 }
@@ -133,16 +138,19 @@ export function AppNavLinks({
   className?: string
 }) {
   const visibleEntries = useVisibleNavEntries()
+  const updateAvailable = useUpdateAvailable()
 
   return (
     <nav className={cn('scrollbar-subtle flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3', className)}>
       {visibleEntries.map((entry) => {
         if (entry.type === 'link') {
+          const isSettings = entry.item.navPath === '/settings'
           return (
             <SidebarLinkWithMatch
               key={entry.item.to}
               item={entry.item}
               onNavigate={onNavigate}
+              showUpdateDot={isSettings && updateAvailable}
             />
           )
         }

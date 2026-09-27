@@ -410,7 +410,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`. Precios (`cos
 
 | Tabla | Campos clave |
 |-------|--------------|
-| `materials` | `code`, `name`, `category` (FABRIC/THREAD/…), `unit`, `minimum_stock`, `default_supplier_id`, precios, `barcode?` (string ≤64, unique por tabla cuando no es null; no reemplaza `code`), `supplier_code?` (string ≤50, indexed, nullable; UI **Referencia** / código del proveedor; no unique), `wholesale_enabled` (default false), `wholesale_units_per_pack?`, `wholesale_cost_usd?`, `wholesale_sale_price_usd?`, `active` |
+| `materials` | `code` (alta desde el formulario: `MAT-` + id en 7 dígitos, igual que el código de producto; si el POST trae `code` se respeta, p. ej. importación). Los códigos ya cargados no se reescriben. `name`, `category` (FABRIC/THREAD/…), `unit`, `minimum_stock`, `default_supplier_id`, precios, `barcode?` (string ≤64, unique por tabla cuando no es null; no reemplaza `code`), `supplier_code?` (string ≤50, indexed, nullable; UI **Referencia** / código del proveedor; no unique), `wholesale_enabled` (default false), `wholesale_units_per_pack?`, `wholesale_cost_usd?`, `wholesale_sale_price_usd?`, `active` |
 | `inventory_movements` | `material_id`, `type`, `quantity`, refs a compra/pedido/venta |
 | `product_inventory_movements` | `catalog_product_id`, `type`, `quantity`, refs, `created_by_user_id` |
 
@@ -722,6 +722,8 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 
 ### Materiales (`materials.*`)
 
+`POST /materials` sin `code` asigna `MAT-` + id rellenado a 7 dígitos (mismo ancho que el código de producto). El formulario de alta no pide código y el nombre es el primer campo; en edición el código se muestra y no se edita. Un `code` explícito (importación u otros clientes) se guarda tal cual.
+
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
 | GET | `/api/v1/materials` | `materials.view` | `Materials.index` |
@@ -941,7 +943,7 @@ pwsh scripts/publish-github-release.ps1
 | `/productos/movimientos` | Cargo, descargo o ajuste de stock sobre varios productos (y tallas) en un solo registro |
 | `/productos/:id` | Detalle producto. Incluye stock mínimo, historial de compras a proveedores (filtro por mes o rango de fechas) |
 | `/productos/servicios` | Catálogo de servicios (`item_kind=SERVICE`): nombre, precio, activo/categoría; sin stock/fórmula/tallas. Misma vista tarjetas/tabla que productos. Permisos `catalog.view` / `catalog.edit`. Filtros en el mismo drawer de icono (categorías y orden). «Importar Excel» |
-| `/productos/materiales` | Materiales. Vista tarjetas o tabla (mismo botón que el resto del catálogo). «Importar Excel» (`materials.edit`) descarga plantilla y carga masiva |
+| `/productos/materiales` | Materiales. El alta asigna el código `MAT-` + correlativo (id, 7 dígitos) y el nombre es el primer campo. Vista tarjetas o tabla (mismo botón que el resto del catálogo). «Importar Excel» (`materials.edit`) descarga plantilla y carga masiva |
 | `/productos/materiales/:id` | Detalle material |
 | `/purchases` | Hub Compras (`?tab=compras\|gastos\|ingresos`). En Gastos e Ingresos, papelera elimina el registro (`expenses.edit` / `incomes.edit`) |
 | `/purchases/:id` | Detalle compra (en borrador: escaneo barcode para sumar línea de material/producto del tab activo) |

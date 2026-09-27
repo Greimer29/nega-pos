@@ -3,6 +3,7 @@ import Material from '#models/material'
 import InventoryMovement from '#models/inventory_movement'
 import User from '#models/user'
 import { formatCatalogProductCode } from '#utils/catalog_product_code'
+import { formatMaterialCode } from '#utils/material_code'
 import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
@@ -158,6 +159,24 @@ test.group('Materials API', (group) => {
     assert.equal(ajuste.body().data.stockActual, 5)
     assert.equal(ajuste.body().data.movimiento.type, 'MANUAL_ADJUSTMENT')
     assert.equal(ajuste.body().data.movimiento.quantity, '-2.000')
+  })
+
+  test('POST /api/v1/materials assigns MAT- code when code is omitted', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+
+    const response = await client.post('/api/v1/materials').loginAs(user).json({
+      name: 'Tela auto',
+      category: TEST_MATERIAL_CATEGORY,
+      unit: 'UND',
+    })
+
+    response.assertStatus(200)
+    const material = response.body().data.material
+    assert.equal(material.code, formatMaterialCode(Number(material.id)))
+    assert.match(material.code, /^MAT-\d{7}$/)
   })
 
   test('POST /api/v1/materials rejects duplicate code', async ({ client }) => {

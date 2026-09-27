@@ -34,10 +34,10 @@ import { formatCostWarningsMessage } from '@/lib/cost-warnings'
 import { inventoryQuantityDecimals, normalizeInventoryQuantity } from '@/lib/inventory-units'
 
 const materialSchema = z.object({
-  code: z.string().trim().min(1, 'El código es obligatorio').max(30),
+  code: z.string().trim().max(30).optional(),
   barcode: z.string().trim().max(64).optional(),
   supplier_code: z.string().trim().max(50).optional(),
-  name: z.string().trim().min(1, 'El producto es obligatorio').max(150),
+  name: z.string().trim().min(1, 'El nombre es obligatorio').max(150),
   description: z.string().trim().optional(),
   category: z.string().trim().min(1, 'Seleccioná una categoría'),
   unit: z.enum(MATERIAL_UNITES),
@@ -112,12 +112,12 @@ function toFormValues(material: Material): MaterialFormInput {
   }
 }
 
-function toPayload(values: MaterialFormValues) {
+function toPayload(values: MaterialFormValues, isEditing: boolean) {
   const optionalNumber = (value: number | '' | undefined) =>
     value === '' || value === undefined ? undefined : Number(value)
 
   return {
-    code: values.code.trim(),
+    ...(isEditing ? { code: values.code?.trim() ?? '' } : {}),
     name: values.name.trim(),
     description: values.description?.trim() || undefined,
     category: values.category,
@@ -133,9 +133,7 @@ function toPayload(values: MaterialFormValues) {
     wholesale_units_per_pack: values.wholesale_enabled
       ? optionalNumber(values.wholesale_units_per_pack)
       : null,
-    wholesale_cost_usd: values.wholesale_enabled
-      ? optionalNumber(values.wholesale_cost_usd)
-      : null,
+    wholesale_cost_usd: values.wholesale_enabled ? optionalNumber(values.wholesale_cost_usd) : null,
     wholesale_sale_price_usd: values.wholesale_enabled
       ? optionalNumber(values.wholesale_sale_price_usd)
       : null,
@@ -233,9 +231,7 @@ export function MaterialForm({
   async function handleRemoveImage() {
     setImageError(null)
 
-    const hadServerImage = Boolean(
-      isEditing && (displayMaterial?.imagePath ?? material?.imagePath)
-    )
+    const hadServerImage = Boolean(isEditing && (displayMaterial?.imagePath ?? material?.imagePath))
     const materialId = displayMaterial?.id ?? material?.id
 
     clearPendingImage()
@@ -251,7 +247,7 @@ export function MaterialForm({
 
   const onSubmit = handleSubmit(async (values) => {
     try {
-      const payload = toPayload(values)
+      const payload = toPayload(values, isEditing)
 
       if (isEditing && material) {
         const { material: updated, costWarnings } = await updateMutation.mutateAsync({
@@ -313,9 +309,7 @@ export function MaterialForm({
       <div className="flex gap-4">
         <div className="flex w-1/3 justify-center">
           <CircularImageField
-            imageUrl={
-              displayMaterial?.imagePath ? materialImageUrl(displayMaterial.id) : null
-            }
+            imageUrl={displayMaterial?.imagePath ? materialImageUrl(displayMaterial.id) : null}
             pendingPreviewUrl={pendingPreviewUrl}
             alt={displayMaterial?.name ?? 'Material'}
             pending={imagePending}
@@ -325,15 +319,58 @@ export function MaterialForm({
           />
         </div>
         <div className="flex w-2/3 flex-col gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="code">Código interno *</Label>
-            <Input id="code" {...register('code')} />
-            {errors.code ? <p className="text-destructive text-sm">{errors.code.message}</p> : null}
+          <div className="space-y-1">
+            <Label htmlFor="name">Nombre *</Label>
+            <Input id="name" placeholder="Ej. Muselina stretch negra" {...register('name')} />
+            {errors.name ? <p className="text-destructive text-sm">{errors.name.message}</p> : null}
+            {isEditing ? null : (
+              <p className="text-muted-foreground text-xs">
+                El código se asigna al guardar: MAT- y el correlativo.
+              </p>
+            )}
+            {variant === 'page' &&
+            isEditing &&
+            displayMaterial &&
+            displayMaterial.stockActual !== undefined
+              ? (() => {
+                  const { stock, comprometido, disponible } =
+                    materialStockDisponible(displayMaterial)
+                  const unit = UNIT_ABREV[displayMaterial.unit]
+                  if (comprometido > 0) {
+                    return (
+                      <p className="text-muted-foreground pt-0.5 text-sm tabular-nums">
+                        Stock: {stock} {unit} · Comprometido: {comprometido} {unit} · Disponible:{' '}
+                        {disponible} {unit}
+                      </p>
+                    )
+                  }
+                  return (
+                    <StockBadge
+                      variant="subtitle"
+                      stockActual={stock}
+                      stockMinimo={Number(displayMaterial.minimumStock)}
+                      unitLabel={unit}
+                      className="pt-0.5"
+                    />
+                  )
+                })()
+              : null}
           </div>
+          {isEditing ? (
+            <div className="space-y-2">
+              <Label htmlFor="code">Código interno</Label>
+              <Input id="code" readOnly className="bg-muted" {...register('code')} />
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label htmlFor="barcode">Código de barras</Label>
             <div className="flex gap-2">
-              <Input id="barcode" className="min-w-0 flex-1" placeholder="Opcional" {...register('barcode')} />
+              <Input
+                id="barcode"
+                className="min-w-0 flex-1"
+                placeholder="Opcional"
+                {...register('barcode')}
+              />
               <BarcodeScanButton
                 onScan={(code) => {
                   setValue('barcode', code, { shouldDirty: true })
@@ -352,34 +389,6 @@ export function MaterialForm({
             <p className="text-muted-foreground text-xs">
               Código del proveedor. También sirve para buscar el ítem.
             </p>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="name">Producto *</Label>
-            <Input id="name" placeholder="Ej. Muselina stretch negra" {...register('name')} />
-            {errors.name ? <p className="text-destructive text-sm">{errors.name.message}</p> : null}
-            {variant === 'page' && isEditing && displayMaterial && displayMaterial.stockActual !== undefined ? (
-              (() => {
-                const { stock, comprometido, disponible } = materialStockDisponible(displayMaterial)
-                const unit = UNIT_ABREV[displayMaterial.unit]
-                if (comprometido > 0) {
-                  return (
-                    <p className="text-muted-foreground pt-0.5 text-sm tabular-nums">
-                      Stock: {stock} {unit} · Comprometido: {comprometido} {unit} · Disponible:{' '}
-                      {disponible} {unit}
-                    </p>
-                  )
-                }
-                return (
-                  <StockBadge
-                    variant="subtitle"
-                    stockActual={stock}
-                    stockMinimo={Number(displayMaterial.minimumStock)}
-                    unitLabel={unit}
-                    className="pt-0.5"
-                  />
-                )
-              })()
-            ) : null}
           </div>
         </div>
       </div>
@@ -469,7 +478,11 @@ export function MaterialForm({
       ) : null}
 
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" className="size-4 rounded border" {...register('wholesale_enabled')} />
+        <input
+          type="checkbox"
+          className="size-4 rounded border"
+          {...register('wholesale_enabled')}
+        />
         Mayorista
       </label>
       {watch('wholesale_enabled') ? (

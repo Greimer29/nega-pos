@@ -1,42 +1,38 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { getElectronUpdatesApi, isElectronUpdatesAvailable } from '@/lib/electron-bridge'
 import {
+  appUpdateLatestQueryKey,
+  useAppUpdateLatestQuery,
+} from '@/features/settings/hooks/use-app-update-latest-query'
+import {
   appUpdateDownloadUrl,
   detectClientPlatform,
-  fetchAppUpdateLatest,
   getInstalledAppVersion,
-  type AppUpdateLatest,
   type AppUpdatePlatform,
 } from '@/features/settings/services/app-updates-service'
 
 export function useAppUpdates() {
+  const queryClient = useQueryClient()
   const currentVersion = useMemo(() => getInstalledAppVersion(), [])
   const platform = useMemo(() => detectClientPlatform(), [])
-  const [latest, setLatest] = useState<AppUpdateLatest | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const latestQuery = useAppUpdateLatestQuery(true)
   const [installing, setInstalling] = useState(false)
   const [progressPercent, setProgressPercent] = useState<number | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  const latest = latestQuery.data ?? null
+  const loading = latestQuery.isLoading || latestQuery.isFetching
+  const error =
+    actionError ??
+    (latestQuery.error ? getApiErrorMessage(latestQuery.error) : null)
 
   const refresh = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await fetchAppUpdateLatest(currentVersion)
-      setLatest(data)
-    } catch (err) {
-      setLatest(null)
-      setError(getApiErrorMessage(err))
-    } finally {
-      setLoading(false)
-    }
-  }, [currentVersion])
-
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
+    setActionError(null)
+    await queryClient.invalidateQueries({ queryKey: appUpdateLatestQueryKey })
+  }, [queryClient])
 
   const preferredPlatform: AppUpdatePlatform | null = platform === 'browser' ? null : platform
 
@@ -55,7 +51,7 @@ export function useAppUpdates() {
 
   const startUpdate = useCallback(
     async (target: AppUpdatePlatform) => {
-      setError(null)
+      setActionError(null)
       setStatusMessage(null)
       const url = appUpdateDownloadUrl(target)
 
@@ -77,7 +73,7 @@ export function useAppUpdates() {
           await updatesApi.downloadAndInstall(url)
           setStatusMessage('Instalador abierto. La app se cerrará para completar la actualización.')
         } catch (err) {
-          setError(getApiErrorMessage(err) || 'No se pudo iniciar la actualización automática.')
+          setActionError(getApiErrorMessage(err) || 'No se pudo iniciar la actualización automática.')
           setStatusMessage(null)
         } finally {
           stopProgress()
@@ -86,8 +82,6 @@ export function useAppUpdates() {
         return
       }
 
-      // Android / browser: el WebView o el navegador descarga el archivo.
-      // En Android el usuario confirma la instalación del APK (no hay silent update).
       setStatusMessage(
         target === 'android'
           ? 'Descarga iniciada. Cuando termine, abrí el APK desde Descargas e instalalo.'

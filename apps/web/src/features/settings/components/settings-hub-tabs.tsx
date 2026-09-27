@@ -1,5 +1,7 @@
 import { Banknote, FileText, Settings, Store } from 'lucide-react'
 import type { SettingsHubTab } from '@/features/settings/constants'
+import { UpdateAvailableDot } from '@/features/settings/components/update-available-dot'
+import { useUpdateAvailable } from '@/features/settings/hooks/use-app-update-latest-query'
 import { cn } from '@/lib/utils'
 
 type SettingsHubTabsProps = {
@@ -15,6 +17,8 @@ const tabs: Array<{ id: SettingsHubTab; label: string; icon: typeof Settings }> 
 ]
 
 export function SettingsHubTabs({ activeTab, onTabChange }: SettingsHubTabsProps) {
+  const updateAvailable = useUpdateAvailable()
+
   return (
     <div className="flex flex-wrap gap-2 border-b pb-1">
       {tabs.map((tab) => (
@@ -31,6 +35,7 @@ export function SettingsHubTabs({ activeTab, onTabChange }: SettingsHubTabsProps
         >
           <tab.icon className="size-4" />
           {tab.label}
+          {tab.id === 'general' && updateAvailable ? <UpdateAvailableDot /> : null}
         </button>
       ))}
     </div>
