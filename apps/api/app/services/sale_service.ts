@@ -827,7 +827,15 @@ export default class SaleService {
         if (product?.formulaId) {
           const effectiveMaterials = resolveEffectiveFormulaMaterials(line, product)
           if (effectiveMaterials.length > 0) {
-            line.costUsd = sumEffectiveMaterialCostUsd(effectiveMaterials)
+            const unitCost = Number(sumEffectiveMaterialCostUsd(effectiveMaterials))
+            // CMV = cost_usd × quantity de la línea. En mayorista quantity es paquetes,
+            // así que el costo congelado debe ser el del paquete (und × und/paq).
+            if (line.isWholesale && line.unitsPerPack) {
+              const packUnits = Number(line.unitsPerPack)
+              line.costUsd = (unitCost * packUnits).toFixed(4)
+            } else {
+              line.costUsd = unitCost.toFixed(4)
+            }
           } else if (product.costUsd) {
             line.costUsd = product.costUsd
           }
@@ -920,9 +928,15 @@ export default class SaleService {
 
         if (product.formulaId) {
           const formulaMaterials = resolveEffectiveFormulaMaterials(line, product)
+          // Mayorista: quantity son paquetes → consumir paquetes × und/paq × qty fórmula.
+          const inventoryQty = this.inventoryQuantityForLine(line)
+          const wholesaleNote =
+            line.isWholesale && line.unitsPerPack
+              ? ` · mayorista (${line.quantity} paq × ${line.unitsPerPack} und)`
+              : ''
           for (const formulaItem of formulaMaterials) {
             const materialId = formulaItem.materialId
-            const consumo = quantity * formulaItem.quantityPerUnit
+            const consumo = inventoryQty * formulaItem.quantityPerUnit
             if (consumo <= 0) {
               continue
             }
@@ -946,7 +960,7 @@ export default class SaleService {
                 materialId,
                 type: 'SALE_OUT',
                 quantity: formatCantidadMovimiento(consumo),
-                note: `Factura ${sale.code}`,
+                note: `Factura ${sale.code}${wholesaleNote}`,
               },
               { client: trx }
             )

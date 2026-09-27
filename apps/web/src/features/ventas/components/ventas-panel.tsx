@@ -58,6 +58,11 @@ import { productHasSizes, sizesWithStock } from '@/features/ventas/utils/product
 import { SizePickDialog } from '@/features/ventas/components/size-pick-dialog'
 import { materialSaleUnitPriceUsd } from '@/features/ventas/utils/material-sale-price'
 import {
+  addMaterialToCartLines,
+  addSimpleCatalogProductToCart,
+  addSizedCatalogProductToCart,
+} from '@/features/ventas/utils/ventas-cart-add'
+import {
   clearVentasCartDraft,
   isVentasCartDraftEmpty,
   loadVentasCartDraft,
@@ -90,7 +95,6 @@ import { SaleLineKitchenNoteDialog } from '@/features/ventas/components/sale-lin
 import { ServiceLineDialog } from '@/features/ventas/components/service-line-dialog'
 import {
   createCartLineId,
-  formulaMaterialsSignature,
   getBaseFormulaMaterialIds,
   hasAddedMaterialsBeyondBase,
   resolveCartLineUnitPriceUsd,
@@ -645,14 +649,13 @@ function VentasCreateView() {
             line.product.item_kind === 'SERVICE' || line.product.is_service
               ? () => setServiceEditLineId(line.id)
               : undefined,
-          canWholesale: Boolean(line.product.wholesale_enabled) && !line.product.formula_id,
+          canWholesale: Boolean(line.product.wholesale_enabled),
           isWholesale: Boolean(line.isWholesale),
           wholesaleHint:
             line.isWholesale && productPackUnits != null ? `× ${productPackUnits} und` : null,
-          onToggleWholesale:
-            line.product.wholesale_enabled && !line.product.formula_id
-              ? (checked) => toggleCartWholesale(line.id, checked)
-              : undefined,
+          onToggleWholesale: line.product.wholesale_enabled
+            ? (checked) => toggleCartWholesale(line.id, checked)
+            : undefined,
         }
       }),
     [cart]
@@ -681,32 +684,17 @@ function VentasCreateView() {
 
   function addSizedProductToCart(product: CatalogProduct, size: CatalogProductSize) {
     setSuccessMessage(null)
-    setCart((prev) => {
-      const existing = prev.find(
-        (line) =>
-          line.kind === 'catalog' &&
-          line.product.id === product.id &&
-          Number(line.catalogProductSizeId) === Number(size.id) &&
-          formulaMaterialsSignature(line.formulaMaterials) === formulaMaterialsSignature(null)
-      )
-      if (existing) {
-        return prev.map((line) =>
-          line.id === existing.id ? { ...line, quantity: line.quantity + 1 } : line
-        )
-      }
-      return [
-        ...prev,
-        {
-          id: createCartLineId(),
-          kind: 'catalog' as const,
-          product,
-          quantity: 1,
-          formulaMaterials: null,
-          catalogProductSizeId: size.id,
-          size: size.size,
-        },
-      ]
-    })
+    setCart((prev) =>
+      addSizedCatalogProductToCart(prev, product, size, () => ({
+        id: createCartLineId(),
+        kind: 'catalog' as const,
+        product,
+        quantity: 1,
+        formulaMaterials: null,
+        catalogProductSizeId: size.id,
+        size: size.size,
+      }))
+    )
   }
 
   function addToCart(product: CatalogProduct) {
@@ -728,33 +716,17 @@ function VentasCreateView() {
     }
 
     setSuccessMessage(null)
-    setCart((prev) => {
-      const existing = prev.find(
-        (line) =>
-          line.kind === 'catalog' &&
-          line.product.id === product.id &&
-          !line.catalogProductSizeId &&
-          !line.isWholesale &&
-          formulaMaterialsSignature(line.formulaMaterials) === formulaMaterialsSignature(null)
-      )
-      if (existing) {
-        return prev.map((line) =>
-          line.id === existing.id ? { ...line, quantity: line.quantity + 1 } : line
-        )
-      }
-      return [
-        ...prev,
-        {
-          id: createCartLineId(),
-          kind: 'catalog' as const,
-          product,
-          quantity: 1,
-          formulaMaterials: null,
-          catalogProductSizeId: null,
-          size: null,
-        },
-      ]
-    })
+    setCart((prev) =>
+      addSimpleCatalogProductToCart(prev, product, () => ({
+        id: createCartLineId(),
+        kind: 'catalog' as const,
+        product,
+        quantity: 1,
+        formulaMaterials: null,
+        catalogProductSizeId: null,
+        size: null,
+      }))
+    )
   }
 
   function addServiceToCart(values: {
@@ -803,26 +775,14 @@ function VentasCreateView() {
 
   function addMaterialToCart(material: Material) {
     setSuccessMessage(null)
-    setCart((prev) => {
-      const existing = prev.find(
-        (line) =>
-          line.kind === 'material' && line.material.id === material.id && !line.isWholesale
-      )
-      if (existing) {
-        return prev.map((line) =>
-          line.id === existing.id ? { ...line, quantity: line.quantity + 1 } : line
-        )
-      }
-      return [
-        ...prev,
-        {
-          id: createCartLineId(),
-          kind: 'material' as const,
-          material,
-          quantity: 1,
-        },
-      ]
-    })
+    setCart((prev) =>
+      addMaterialToCartLines(prev, material, () => ({
+        id: createCartLineId(),
+        kind: 'material' as const,
+        material,
+        quantity: 1,
+      }))
+    )
   }
 
   async function filterCatalogByBarcode(rawCode: string) {

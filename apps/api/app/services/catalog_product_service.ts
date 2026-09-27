@@ -310,7 +310,8 @@ export default class CatalogProductService {
       hasFormula: Boolean(input.formula_id),
       hasSizes: Boolean(input.sizes && input.sizes.length > 0),
     })
-    if (wholesale.derivedUnitCost !== null) {
+    // Con fórmula el costo unitario lo define la receta; el paquete mayorista no lo pisa.
+    if (wholesale.derivedUnitCost !== null && !input.formula_id) {
       costUsd = wholesale.derivedUnitCost
     }
 
@@ -793,14 +794,14 @@ export default class CatalogProductService {
     let rejectReason = 'Este ítem no admite configuración mayorista'
     if (options.isService) {
       rejectReason = 'Un servicio no admite configuración mayorista'
-    } else if (options.hasFormula) {
-      rejectReason = 'Un producto con fórmula no admite configuración mayorista'
     } else if (options.hasSizes) {
       rejectReason = 'Un producto con tallas no admite configuración mayorista'
     }
 
+    // Fórmula + mayorista permitido: el mayorista vende paquetes del producto;
+    // el stock se descuenta del material vía fórmula (paquetes × und/paq × qty fórmula).
     return normalizeWholesaleConfig(input, {
-      allowEnabled: !options.isService && !options.hasFormula && !options.hasSizes,
+      allowEnabled: !options.isService && !options.hasSizes,
       rejectReason,
     })
   }
@@ -817,16 +818,11 @@ export default class CatalogProductService {
       input.wholesale_sale_price_usd !== undefined
 
     if (!wholesaleTouched) {
-      if (
-        product.wholesaleEnabled &&
-        (options.hasFormula || options.hasSizes || options.isService)
-      ) {
+      if (product.wholesaleEnabled && (options.hasSizes || options.isService)) {
         throw new ConfiguracionMayoristaInvalidaException(
-          options.hasFormula
-            ? 'Un producto con fórmula no admite configuración mayorista'
-            : options.hasSizes
-              ? 'Un producto con tallas no admite configuración mayorista'
-              : 'Un servicio no admite configuración mayorista'
+          options.hasSizes
+            ? 'Un producto con tallas no admite configuración mayorista'
+            : 'Un servicio no admite configuración mayorista'
         )
       }
       return
@@ -852,7 +848,8 @@ export default class CatalogProductService {
     product.wholesaleUnitsPerPack = wholesale.wholesaleUnitsPerPack
     product.wholesaleCostUsd = wholesale.wholesaleCostUsd
     product.wholesaleSalePriceUsd = wholesale.wholesaleSalePriceUsd
-    if (wholesale.derivedUnitCost !== null) {
+    // Con fórmula el costo unitario lo define la receta; no pisar con costo derivado del paquete.
+    if (wholesale.derivedUnitCost !== null && !options.hasFormula) {
       product.costUsd = wholesale.derivedUnitCost.toFixed(4)
     }
   }
