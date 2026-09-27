@@ -25,6 +25,7 @@ const materialFields = {
 
 export const createMaterialValidator = vine.create({
   ...materialFields,
+  code: vine.string().trim().minLength(1).maxLength(30).optional(),
 })
 
 export const updateMaterialValidator = vine.create({

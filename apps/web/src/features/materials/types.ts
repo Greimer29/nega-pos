@@ -1,4 +1,9 @@
-import type { MaterialCategoria, MaterialSortBy, MaterialStatusFilter, MaterialUnidad } from '@/features/materials/constants'
+import type {
+  MaterialCategoria,
+  MaterialSortBy,
+  MaterialStatusFilter,
+  MaterialUnidad,
+} from '@/features/materials/constants'
 
 export type { MaterialCategoria, MaterialSortBy, MaterialStatusFilter, MaterialUnidad }
 
@@ -82,7 +87,7 @@ export type AjusteStockResponse = {
 }
 
 export type MaterialInput = {
-  code: string
+  code?: string
   name: string
   description?: string
   category: MaterialCategoria

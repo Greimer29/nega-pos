@@ -18,6 +18,7 @@ import ProductCodeService from '#services/product_code_service'
 import CategoryService from '#services/category_service'
 import type { CostWarning } from '#types/cost_warning'
 import { assertMaterialBarcodeAvailable, normalizeBarcode } from '#utils/barcode'
+import { formatMaterialCode } from '#utils/material_code'
 import { normalizeSupplierCode } from '#utils/supplier_code'
 import { normalizeWholesaleConfig } from '#utils/wholesale'
 import drive from '@adonisjs/drive/services/main'
@@ -29,7 +30,7 @@ import { randomUUID } from 'node:crypto'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 
 export type MaterialInput = {
-  code: string
+  code?: string
   name: string
   description?: string | null
   category: Material['category']
@@ -371,17 +372,31 @@ export default class MaterialService {
 
   async crear(input: MaterialInput): Promise<Material> {
     await this.categoryService.assertCategoriaActiva(input.category)
-    const data = this.prepareInput(input)
-    await this.productCodeService.assertUnique(data.code)
-    await assertMaterialBarcodeAvailable(data.barcode)
+    const requestedCode = input.code?.trim() ?? ''
+    await assertMaterialBarcodeAvailable(normalizeBarcode(input.barcode))
 
-    return Material.create(data)
+    if (requestedCode) {
+      await this.productCodeService.assertUnique(requestedCode)
+      return Material.create(this.prepareInput(input, requestedCode))
+    }
+
+    return db.transaction(async (trx) => {
+      const material = await Material.create(
+        this.prepareInput(input, `tmp-${randomUUID().replace(/-/g, '').slice(0, 20)}`),
+        { client: trx }
+      )
+      const code = formatMaterialCode(Number(material.id))
+      await this.productCodeService.assertUnique(code)
+      material.code = code
+      await material.save()
+      return material
+    })
   }
 
   async actualizar(id: number, input: MaterialInput): Promise<MaterialUpdateResult> {
     await this.categoryService.assertCategoriaActiva(input.category)
     const material = await this.obtener(id)
-    const data = this.prepareInput(input)
+    const data = this.prepareInput(input, input.code?.trim() || material.code)
     let costWarnings: CostWarning[] = []
 
     if (data.code !== material.code) {
@@ -590,11 +605,11 @@ export default class MaterialService {
     }))
   }
 
-  private prepareInput(input: MaterialInput) {
+  private prepareInput(input: MaterialInput, code: string) {
     const unit = input.unit
     const wholesale = this.prepareWholesale(input)
     return {
-      code: input.code.trim(),
+      code,
       name: input.name.trim(),
       description: input.description?.trim() || null,
       category: input.category,
