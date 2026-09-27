@@ -36,10 +36,12 @@ import { clampInvoiceDiscountUsd } from '@/features/ventas/utils/invoice-discoun
 import {
   inventoryQuantityDecimals,
   inventoryQuantityStep,
+  isMeasuredSaleUnit,
   normalizeInventoryQuantity,
 } from '@/lib/inventory-units'
 import { cn } from '@/lib/utils'
 import { parseDecimalInput, sanitizeDecimalInput } from '@/lib/numeric-input'
+import { MeasuredQtyDialog } from '@/features/ventas/components/measured-qty-dialog'
 
 export type VentasCartLine = {
   key: string
@@ -114,6 +116,7 @@ function CartLineItem({
   onUpdateQuantity,
   onUpdateUnitPrice,
   onOpenPriceModal,
+  onOpenMeasuredQtyModal,
   formatFromUsd,
 }: {
   line: VentasCartLine
@@ -121,12 +124,18 @@ function CartLineItem({
   onUpdateQuantity?: (key: string, quantity: number) => void
   onUpdateUnitPrice?: (key: string, unitPriceUsd: number) => void
   onOpenPriceModal: (line: VentasCartLine) => void
+  onOpenMeasuredQtyModal?: (line: VentasCartLine) => void
   formatFromUsd: (amountUsd: number) => string
 }) {
   const unit = line.saleUnit ?? 'UND'
   const decimals = inventoryQuantityDecimals(unit)
   const step = inventoryQuantityStep(unit)
   const isIntegerUnit = decimals === 0
+  const usesMeasuredModal =
+    Boolean(onUpdateQuantity) &&
+    Boolean(onOpenMeasuredQtyModal) &&
+    isMeasuredSaleUnit(unit) &&
+    !line.isWholesale
   const [qtyDraft, setQtyDraft] = useState(() => String(line.quantity))
   const [qtyFocused, setQtyFocused] = useState(false)
 
@@ -235,29 +244,47 @@ function CartLineItem({
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-1">
                   <span>Cantidad:</span>
-                  <Input
-                    type="text"
-                    inputMode={isIntegerUnit ? 'numeric' : 'decimal'}
-                    aria-label={`Cantidad de ${line.name}`}
-                    className={cn('h-7 px-2 text-xs tabular-nums', isIntegerUnit ? 'w-12' : 'w-16')}
-                    value={qtyDraft}
-                    onFocus={(e) => {
-                      setQtyFocused(true)
-                      const current = String(line.quantity)
-                      setQtyDraft(current)
-                      e.target.select()
-                    }}
-                    onChange={(e) => {
-                      setQtyDraft(sanitizeDecimalInput(e.target.value, decimals))
-                    }}
-                    onBlur={(e) => commitQuantity(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        e.currentTarget.blur()
-                      }
-                    }}
-                  />
+                  {usesMeasuredModal ? (
+                    <button
+                      type="button"
+                      className={cn(
+                        'border-input bg-background hover:bg-muted h-7 min-w-16 rounded-md border px-2',
+                        'text-left text-xs font-medium tabular-nums transition-colors'
+                      )}
+                      onClick={() => onOpenMeasuredQtyModal?.(line)}
+                      aria-label={`Editar cantidad o monto de ${line.name}`}
+                      title="Cantidad o monto (kg/mts)"
+                    >
+                      {line.quantity}
+                    </button>
+                  ) : (
+                    <Input
+                      type="text"
+                      inputMode={isIntegerUnit ? 'numeric' : 'decimal'}
+                      aria-label={`Cantidad de ${line.name}`}
+                      className={cn(
+                        'h-7 px-2 text-xs tabular-nums',
+                        isIntegerUnit ? 'w-12' : 'w-16'
+                      )}
+                      value={qtyDraft}
+                      onFocus={(e) => {
+                        setQtyFocused(true)
+                        const current = String(line.quantity)
+                        setQtyDraft(current)
+                        e.target.select()
+                      }}
+                      onChange={(e) => {
+                        setQtyDraft(sanitizeDecimalInput(e.target.value, decimals))
+                      }}
+                      onBlur={(e) => commitQuantity(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          e.currentTarget.blur()
+                        }
+                      }}
+                    />
+                  )}
                 </div>
                 {line.hasFormula && line.onAdjustFormula ? (
                   <Button
@@ -385,11 +412,13 @@ export function VentasOrderCart({
   const { formatFromUsd } = useFormatMoney()
   const { displayCurrency, fromUsdAmount, toUsdAmount, symbol } = useDisplayCurrency()
   const [priceLineKey, setPriceLineKey] = useState<string | null>(null)
+  const [measuredLineKey, setMeasuredLineKey] = useState<string | null>(null)
   const [draftPrice, setDraftPrice] = useState('')
   const [discountOpen, setDiscountOpen] = useState(false)
   const [draftDiscount, setDraftDiscount] = useState('')
   const priceDecimals = displayCurrency === 'USD' ? 4 : 6
   const priceLine = lines.find((line) => line.key === priceLineKey) ?? null
+  const measuredLine = lines.find((line) => line.key === measuredLineKey) ?? null
   const appliedDiscount = clampInvoiceDiscountUsd(subtotalUsd, discountUsd)
   const hasInvoiceDiscount = appliedDiscount > 0.0001
 
@@ -405,6 +434,10 @@ export function VentasOrderCart({
   function openPriceModal(line: VentasCartLine) {
     setDraftPrice(formatDraftFromUsd(line.unitPriceUsd))
     setPriceLineKey(line.key)
+  }
+
+  function openMeasuredQtyModal(line: VentasCartLine) {
+    setMeasuredLineKey(line.key)
   }
 
   function applyLinePrice() {
@@ -495,6 +528,7 @@ export function VentasOrderCart({
               onUpdateQuantity={onUpdateQuantity}
               onUpdateUnitPrice={onUpdateUnitPrice}
               onOpenPriceModal={openPriceModal}
+              onOpenMeasuredQtyModal={onUpdateQuantity ? openMeasuredQtyModal : undefined}
               formatFromUsd={formatFromUsd}
             />
           ))
@@ -552,6 +586,20 @@ export function VentasOrderCart({
         </div>
         {children}
       </div>
+
+      <MeasuredQtyDialog
+        open={measuredLine != null}
+        onOpenChange={(open) => !open && setMeasuredLineKey(null)}
+        productName={measuredLine?.name ?? ''}
+        saleUnit={measuredLine?.saleUnit ?? 'KG'}
+        unitPriceUsd={measuredLine?.unitPriceUsd ?? 0}
+        initialQuantity={measuredLine?.quantity ?? 0}
+        onConfirm={(quantity) => {
+          if (!measuredLine || !onUpdateQuantity) return
+          onUpdateQuantity(measuredLine.key, quantity)
+          setMeasuredLineKey(null)
+        }}
+      />
 
       <Dialog open={priceLine != null} onOpenChange={(open) => !open && setPriceLineKey(null)}>
         <DialogContent className="sm:max-w-sm">

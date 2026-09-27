@@ -30,6 +30,11 @@ export function inventoryQuantityDecimals(unit: string): number {
   return unit === 'MTS' || unit === 'KG' ? 2 : 0
 }
 
+/** Unidades vendidas por peso/medida (admiten cantidad ↔ importe en el POS). */
+export function isMeasuredSaleUnit(unit: string): boolean {
+  return unit === 'KG' || unit === 'MTS'
+}
+
 export function isIntegerInventoryUnit(unit: string): boolean {
   return inventoryQuantityDecimals(unit) === 0
 }
