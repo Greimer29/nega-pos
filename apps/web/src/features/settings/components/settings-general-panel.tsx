@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { UpdateAvailableDot } from '@/features/settings/components/update-available-dot'
 import { businessLogoUrl } from '@/features/settings/services/general-settings-service'
 import { useGeneralSettingsPanel } from '@/features/settings/hooks/use-general-settings-panel'
 import { useAppUpdates } from '@/features/settings/hooks/use-app-updates'
@@ -72,8 +73,9 @@ export function SettingsGeneralPanel() {
 
           {!updates.loading && !updates.error && updates.latest ? (
             updates.latest.updateAvailable ? (
-              <p className="text-sm">
-                Hay una actualización disponible:{' '}
+              <p className="flex flex-wrap items-center gap-2 text-sm">
+                <UpdateAvailableDot />
+                <span className="font-medium">Versión disponible</span>
                 <span className="font-medium tabular-nums">v{updates.latest.latestVersion}</span>
               </p>
             ) : (
