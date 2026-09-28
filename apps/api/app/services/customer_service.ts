@@ -10,6 +10,8 @@ import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
+import db from '@adonisjs/lucid/services/db'
+import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
 
 const IMAGE_MIME: Record<string, string> = {
@@ -74,7 +76,53 @@ export default class CustomerService {
       query.where('active', filters.active)
     }
 
-    return query.paginate(page, perPage)
+    const paginator = await query.paginate(page, perPage)
+    await this.attachPendingBalances(paginator.all())
+    return paginator
+  }
+
+  /**
+   * Saldo pendiente = suma de balance_usd de ventas a crédito COMPLETED.
+   */
+  private async attachPendingBalances(customers: Customer[]): Promise<void> {
+    if (customers.length === 0) {
+      return
+    }
+
+    const ids = customers.map((customer) => Number(customer.id))
+    const hoy = DateTime.now().toISODate()!
+
+    const rows = await db
+      .from('sales')
+      .whereIn('customer_id', ids)
+      .where('payment_type', 'CREDIT')
+      .where('status', 'COMPLETED')
+      .where('balance_usd', '>', 0)
+      .groupBy('customer_id')
+      .select(
+        'customer_id',
+        db.raw('SUM(balance_usd) as saldo'),
+        db.raw(
+          `MAX(CASE WHEN credit_due_date IS NOT NULL AND credit_due_date < ? THEN 1 ELSE 0 END) as vencida`,
+          [hoy]
+        )
+      )
+
+    const byCustomer = new Map(
+      rows.map((row) => [
+        Number(row.customer_id),
+        {
+          saldoPendienteUsd: Number(row.saldo).toFixed(4),
+          tieneSaldoVencido: Number(row.vencida) > 0,
+        },
+      ])
+    )
+
+    for (const customer of customers) {
+      const balance = byCustomer.get(Number(customer.id))
+      customer.$extras.saldoPendienteUsd = balance?.saldoPendienteUsd ?? '0.0000'
+      customer.$extras.tieneSaldoVencido = balance?.tieneSaldoVencido ?? false
+    }
   }
 
   async obtener(id: number): Promise<Customer> {

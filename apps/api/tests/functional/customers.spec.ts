@@ -293,6 +293,48 @@ test.group('Customers API', (group) => {
     assert.equal(body.data.meta.total, 1)
     assert.lengthOf(body.data.customers, 1)
     assert.equal(body.data.customers[0].name, 'Listado Alpha')
+    assert.equal(body.data.customers[0].saldoPendienteUsd, '0.0000')
+  })
+
+  test('GET /api/v1/customers includes pending credit balance per customer', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const customer = await Customer.create({
+      name: 'Listado Saldo Cred',
+      type: 'CORPORATE',
+      creditDays: 15,
+      active: true,
+    })
+
+    await seedTestSale({
+      customerId: Number(customer.id),
+      status: 'COMPLETED',
+      paymentType: 'CREDIT',
+      totalUsd: '90.0000',
+      balanceUsd: '90.0000',
+      amountPaidUsd: '0.0000',
+      creditDueDate: DateTime.now().minus({ days: 1 }),
+      lines: [{ quantity: '1', unitPriceUsd: '90.0000' }],
+    })
+
+    const response = await client.get('/api/v1/customers?search=Listado%20Saldo').loginAs(user)
+    response.assertStatus(200)
+
+    const body = response.body() as {
+      data: {
+        customers: Array<{
+          id: number
+          saldoPendienteUsd: string
+          tieneSaldoVencido: boolean
+        }>
+      }
+    }
+    const row = body.data.customers.find((item) => item.id === Number(customer.id))
+    assert.exists(row)
+    assert.equal(row!.saldoPendienteUsd, '90.0000')
+    assert.isTrue(row!.tieneSaldoVencido)
   })
 
   test('POST /api/v1/customers/:id/image stores customer photo', async ({ client, assert }) => {

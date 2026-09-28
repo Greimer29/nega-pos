@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useAuth } from '@/features/auth/hooks/use-auth'
+import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { TIPO_LABELS } from '@/features/customers/constants'
 import { CustomerDeleteDialog } from '@/features/customers/components/customer-delete-dialog'
 import { CustomerFormDialog } from '@/features/customers/components/customer-form-dialog'
@@ -115,7 +116,7 @@ export function CustomersPage() {
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Clientes</h1>
           <p className="text-muted-foreground text-sm">
-            Gestioná los clientes y consultá su historial de pedidos.
+            Gestioná los clientes, su saldo a crédito y el historial de pedidos.
           </p>
         </div>
         <Button onClick={openCreateDialog} className="w-fit shrink-0">
@@ -196,31 +197,57 @@ export function CustomersPage() {
                     <th className="px-4 py-3 font-medium">Nombre</th>
                     <th className="px-4 py-3 font-medium">Tipo</th>
                     <th className="px-4 py-3 font-medium">Teléfono</th>
+                    <th className="px-4 py-3 text-right font-medium">Saldo pendiente</th>
                     <th className="px-4 py-3 font-medium">Estado</th>
                     <th className="px-4 py-3 text-right font-medium">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {customers.map((customer) => (
-                    <tr key={customer.id} className="border-b last:border-b-0">
-                      <td className="px-4 py-3 font-medium">{customer.name}</td>
-                      <td className="text-muted-foreground px-4 py-3">{TIPO_LABELS[customer.type]}</td>
-                      <td className="text-muted-foreground px-4 py-3">{customer.phone ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={cn(
-                            'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-                            customer.active
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-muted text-muted-foreground'
-                          )}
-                        >
-                          {customer.active ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1">
-                          {(customer.creditDays ?? 0) > 0 ? (
+                  {customers.map((customer) => {
+                    const saldoUsd = Number(customer.saldoPendienteUsd ?? 0)
+                    const hasDebt = saldoUsd > 0
+                    return (
+                      <tr key={customer.id} className="border-b last:border-b-0">
+                        <td className="px-4 py-3 font-medium">{customer.name}</td>
+                        <td className="text-muted-foreground px-4 py-3">
+                          {TIPO_LABELS[customer.type]}
+                        </td>
+                        <td className="text-muted-foreground px-4 py-3">
+                          {customer.phone ?? '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex flex-col items-end gap-1">
+                            <span
+                              className={cn(
+                                'font-medium tabular-nums',
+                                hasDebt ? 'text-amber-800' : 'text-muted-foreground'
+                              )}
+                            >
+                              <DisplayMoneyFromUsd
+                                amountUsd={(customer.saldoPendienteUsd ?? '0').toString()}
+                              />
+                            </span>
+                            {customer.tieneSaldoVencido ? (
+                              <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800">
+                                Vencido
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={cn(
+                              'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
+                              customer.active
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-muted text-muted-foreground'
+                            )}
+                          >
+                            {customer.active ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -231,33 +258,36 @@ export function CustomersPage() {
                                 <Wallet />
                               </Link>
                             </Button>
-                          ) : null}
-                          <Button variant="ghost" size="icon" asChild>
-                            <Link to={`/customers/${customer.id}`} aria-label={`Ver ${customer.name}`}>
-                              <Eye />
-                            </Link>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Editar ${customer.name}`}
-                            onClick={() => openEditDialog(customer)}
-                          >
-                            <Pencil />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Eliminar ${customer.name}`}
-                            onClick={() => openDeleteDialog(customer)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            <Button variant="ghost" size="icon" asChild>
+                              <Link
+                                to={`/customers/${customer.id}`}
+                                aria-label={`Ver ${customer.name}`}
+                              >
+                                <Eye />
+                              </Link>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Editar ${customer.name}`}
+                              onClick={() => openEditDialog(customer)}
+                            >
+                              <Pencil />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Eliminar ${customer.name}`}
+                              onClick={() => openDeleteDialog(customer)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
