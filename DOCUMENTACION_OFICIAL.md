@@ -622,7 +622,7 @@ catalog_products ──< product_inventory_movements
 
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
-| GET | `/api/v1/customers` | `customers.view` | `Customers.index` |
+| GET | `/api/v1/customers` | `customers.view` | `Customers.index` — listado incluye `saldoPendienteUsd` y `tieneSaldoVencido` (CxC a crédito COMPLETED) |
 | GET | `/api/v1/customers/:id` | `customers.view` | `Customers.show` |
 | GET | `/api/v1/customers/:id/account-statement` | `customers.view` | `Customers.accountStatement` |
 | POST | `/api/v1/customers` | `customers.edit` | `Customers.store` |

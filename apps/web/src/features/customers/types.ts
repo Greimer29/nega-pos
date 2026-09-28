@@ -12,6 +12,10 @@ export type Customer = {
   creditDays: number | null
   imagePath: string | null
   active: boolean
+  /** Presente en listado: CxC a crédito COMPLETED. */
+  saldoPendienteUsd?: string
+  /** Presente en listado: hay al menos una venta vencida con saldo. */
+  tieneSaldoVencido?: boolean
   createdAt: string
   updatedAt: string
 }

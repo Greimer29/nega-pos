@@ -4,6 +4,15 @@ import { BaseTransformer } from '@adonisjs/core/transformers'
 
 export default class CustomerTransformer extends BaseTransformer<Customer> {
   toObject() {
+    const saldoPendienteUsd =
+      this.resource.$extras.saldoPendienteUsd !== undefined
+        ? String(this.resource.$extras.saldoPendienteUsd)
+        : undefined
+    const tieneSaldoVencido =
+      this.resource.$extras.tieneSaldoVencido !== undefined
+        ? Boolean(this.resource.$extras.tieneSaldoVencido)
+        : undefined
+
     return {
       ...this.pick(this.resource, [
         'id',
@@ -20,6 +29,8 @@ export default class CustomerTransformer extends BaseTransformer<Customer> {
         'updatedAt',
       ]),
       active: Boolean(this.resource.active),
+      ...(saldoPendienteUsd !== undefined ? { saldoPendienteUsd } : {}),
+      ...(tieneSaldoVencido !== undefined ? { tieneSaldoVencido } : {}),
     }
   }
 }
