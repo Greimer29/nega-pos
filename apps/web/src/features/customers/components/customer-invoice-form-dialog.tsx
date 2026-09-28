@@ -92,9 +92,10 @@ export function CustomerInvoiceFormDialog({
     setIsCredit(false)
     const firstMethod = paymentMethods[0] ?? null
     setPaymentMethodCode(firstMethod?.code ?? null)
-    const initialCurrency = firstMethod?.currency_code ?? baseCurrencyCode
-    setCurrencyCode(initialCurrency)
-    setEntryRate(catalogRateForCurrency(currencies, initialCurrency))
+    // Moneda de ingreso arranca en la base de la empresa; el usuario puede cambiarla.
+    // No se toma del método de pago (p. ej. Efectivo USD no debe forzar Monto ($)).
+    setCurrencyCode(baseCurrencyCode)
+    setEntryRate(catalogRateForCurrency(currencies, baseCurrencyCode))
     const today = new Date().toISOString().slice(0, 10)
     let due = ''
     if (defaultCreditDays && defaultCreditDays > 0) {
@@ -117,11 +118,6 @@ export function CustomerInvoiceFormDialog({
 
   function handlePaymentMethodChange(code: string) {
     setPaymentMethodCode(code)
-    const method = paymentMethods.find((item) => item.code === code)
-    if (method) {
-      setCurrencyCode(method.currency_code)
-      setEntryRate(catalogRateForCurrency(currencies, method.currency_code))
-    }
   }
 
   const entryInNative = isPurchaseEntryInNative(currencyCode, baseCurrencyCode)

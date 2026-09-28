@@ -499,7 +499,7 @@ catalog_products ──< product_inventory_movements
 
 - **Contado** (`is_credit: false`): crea una `sale` `COMPLETED` con `payment_type=CASH`, sin líneas, `amount_paid_usd = total_usd`, `payment_method_code` obligatorio. No toca inventario ni exige turno abierto (`sales_shift_id` null). Aparece en el historial del estado de cuenta y suma a ventas/caja vía `total_usd`.
 - **Crédito** (`is_credit: true`): crea una `sale` `COMPLETED` con `payment_type=CREDIT`, sin líneas, `balance_usd = total`, requiere cliente con `credit_days > 0`. Vencimiento = `credit_due_date` del payload o fecha + días de crédito. El **Abono** baja ese saldo como en ventas a crédito del POS. Nota opcional en `sales.notes`.
-- UI: botón **Factura** en estado de cuenta / ficha del cliente; las ventas sin líneas se etiquetan «Sin ítems».
+- UI: botón **Factura** en estado de cuenta / ficha del cliente; las ventas sin líneas se etiquetan «Sin ítems». Al abrir el diálogo, la **moneda de ingreso** arranca en la **moneda base** de la empresa (no en la del método de pago); el usuario puede cambiarla con el toggle. Mismo criterio que gastos, ingresos, compras y facturas de proveedor.
 
 ### Catálogo, fórmulas y tallas
 

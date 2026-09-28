@@ -9,5 +9,5 @@ Al publicar instaladores (`apps/desktop` / `apps/mobile` / `versionCode` Android
 
 - **No asumas** el próximo número. Preguntá al humano qué versión quiere (p. ej. `1.2.14` vs `1.3.0`).
 - Preferí **no alargar** la serie de patch (`1.2.x`) sin confirmación cuando ya pasó de `.10`; ante duda, ofrecé subir el **minor** (`1.3.0`).
-- Versión vigente: **1.3.2** (tras publicar; no reescribir historial de tags anteriores).
+- Versión vigente: **1.3.4** (tras publicar; no reescribir historial de tags anteriores).
 - Tras acordar el número: bump en `apps/desktop/package.json`, `apps/mobile/package.json`, `apps/mobile/android/app/build.gradle` (`versionName` + `versionCode++`), sync vía `pnpm build:desktop` / `build:mobile`, commit `chore: publicar instaladores vX.Y.Z`.

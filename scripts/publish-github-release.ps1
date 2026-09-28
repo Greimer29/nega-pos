@@ -2,11 +2,11 @@
 # Requisitos: gh autenticado, artefactos ya buildeados.
 #
 # Uso:
-#   pwsh scripts/publish-github-release.ps1
-#   pwsh scripts/publish-github-release.ps1 -Version 1.2.1
-#   pwsh scripts/publish-github-release.ps1 -DesktopExe "path\to\Setup.exe" -AndroidApk "path\to\app.apk"
+#   powershell -File scripts/publish-github-release.ps1
+#   powershell -File scripts/publish-github-release.ps1 -Version 1.2.1
+#   powershell -File scripts/publish-github-release.ps1 -DesktopExe "path\to\Setup.exe" -AndroidApk "path\to\app.apk"
 #
-# Convención de assets (obligatoria para la API):
+# Convencion de assets (obligatoria para la API):
 #   Nega-POS-Setup-{version}.exe
 #   Nega-POS-{version}.apk
 
@@ -28,7 +28,7 @@ if (-not $Version -or $Version.Trim() -eq "") {
 
 $Version = $Version.Trim().TrimStart("v", "V")
 if (-not $Version) {
-  Write-Error "No se pudo determinar la versión."
+  Write-Error "No se pudo determinar la version."
 }
 
 $tag = "v$Version"
@@ -47,10 +47,10 @@ if (-not $AndroidApk -or $AndroidApk.Trim() -eq "") {
 }
 
 if (-not (Test-Path $DesktopExe)) {
-  Write-Error "No existe el instalador desktop: $DesktopExe. Corré pnpm build:desktop primero."
+  Write-Error "No existe el instalador desktop: $DesktopExe. Corre pnpm build:desktop primero."
 }
 if (-not (Test-Path $AndroidApk)) {
-  Write-Error "No existe el APK: $AndroidApk. Corré pnpm build:mobile y build:apk:release primero."
+  Write-Error "No existe el APK: $AndroidApk. Corre pnpm build:mobile y build:apk:release primero."
 }
 
 $staging = Join-Path $env:TEMP "nega-pos-release-$Version"
@@ -68,13 +68,15 @@ Write-Host "Publicando $tag en $Repo"
 Write-Host "  Desktop: $stagedDesktop"
 Write-Host "  Android: $stagedAndroid"
 
+$notes = "Release $Version - instaladores Desktop (.exe) y Android (.apk). En la app: Configuracion > General > Descargar actualizacion."
+
 $ghArgs = @(
   "release", "create", $tag,
   $stagedDesktop,
   $stagedAndroid,
   "--repo", $Repo,
   "--title", "Nega POS $Version",
-  "--notes", "Release $Version — instaladores Desktop (.exe) y Android (.apk). En la app: Configuración → General → Descargar actualización."
+  "--notes", $notes
 )
 
 if ($Draft) {
@@ -83,7 +85,7 @@ if ($Draft) {
 
 & gh @ghArgs
 if ($LASTEXITCODE -ne 0) {
-  Write-Error "gh release create falló con código $LASTEXITCODE"
+  Write-Error "gh release create fallo con codigo $LASTEXITCODE"
 }
 
-Write-Host "Listo. Tag $tag publicado. Los clientes verán la actualización tras refrescar Configuración."
+Write-Host "Listo. Tag $tag publicado. Los clientes veran la actualizacion tras refrescar Configuracion."
