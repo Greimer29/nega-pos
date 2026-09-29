@@ -260,6 +260,10 @@ function registerPrintingHandlers(): void {
 }
 
 function registerUpdateHandlers(): void {
+  ipcMain.on('app:getVersion', (event) => {
+    event.returnValue = app.getVersion()
+  })
+
   ipcMain.handle('updates:downloadAndInstall', async (event, downloadUrl: string) => {
     if (typeof downloadUrl !== 'string' || !downloadUrl.trim()) {
       throw new Error('Falta la URL de descarga.')

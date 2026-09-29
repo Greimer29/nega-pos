@@ -40,8 +40,15 @@ export type ElectronUpdatesApi = {
 }
 
 export type ElectronBridge = {
+  /** Versión del paquete Electron (`app.getVersion()`), fuente de verdad en desktop. */
+  appVersion?: string
   printing: ElectronPrintingApi
   updates?: ElectronUpdatesApi
+}
+
+export function getElectronAppVersion(): string | null {
+  const version = typeof window !== 'undefined' ? window.negaPos?.appVersion?.trim() : undefined
+  return version || null
 }
 
 export function isElectronPrintingAvailable(): boolean {

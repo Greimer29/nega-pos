@@ -892,6 +892,8 @@ Endpoints sobre la tabla histórica `machine_expenses` (lectura/edición de dato
 
 Instaladores publicados en **GitHub Releases**. La API consulta la última release y proxifica la descarga (los clientes del POS no necesitan acceso a GitHub).
 
+En **desktop**, la “versión instalada” de la UI sale de `app.getVersion()` (paquete Electron / instalador), no solo del `VITE_APP_VERSION` del bundle web. `scripts/sync-app-version.mjs` escribe `apps/web/.env.local` y `.env.production.local` (Vite las carga; `.env.app.local` solo es legacy).
+
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
 | GET | `/api/v1/app-updates/latest?current=1.2.1` | `settings.view` | `AppUpdatesController.latest` |
