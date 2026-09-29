@@ -22,6 +22,11 @@ type LatestResponse = {
 }
 
 export function getInstalledAppVersion(): string | null {
+  // Desktop: versión del instalador/paquete Electron (no el VITE_* del bundle web).
+  if (typeof window !== 'undefined') {
+    const fromElectron = window.negaPos?.appVersion?.trim()
+    if (fromElectron) return fromElectron
+  }
   const fromEnv = import.meta.env.VITE_APP_VERSION?.trim()
   if (fromEnv) return fromEnv
   const buildId = import.meta.env.VITE_BUILD_ID?.trim()

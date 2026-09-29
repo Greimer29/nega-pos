@@ -1,6 +1,6 @@
 /**
  * Sincroniza la versión de apps/desktop/package.json hacia:
- * - apps/web/.env.app.local (VITE_APP_VERSION / VITE_BUILD_ID)
+ * - apps/web/.env.local + .env.production.local (Vite sí los carga; .env.app.local NO)
  * - apps/desktop/app-meta.json (runtime desktop + cache bust)
  * - apps/mobile/capacitor.app.json (si existe mobile)
  *
@@ -26,7 +26,12 @@ const appVersion = desktopPackage.version?.trim() || '0.0.0'
 const buildId = `${appVersion}-${Date.now()}`
 
 const envLines = [`VITE_APP_VERSION=${appVersion}`, `VITE_BUILD_ID=${buildId}`, '']
-fs.writeFileSync(path.join(webDir, '.env.app.local'), envLines.join('\n'), 'utf8')
+const envBody = envLines.join('\n')
+// Vite loadEnv solo lee .env / .env.local / .env.[mode] / .env.[mode].local
+fs.writeFileSync(path.join(webDir, '.env.local'), envBody, 'utf8')
+fs.writeFileSync(path.join(webDir, '.env.production.local'), envBody, 'utf8')
+// Legacy name (documentación / scripts viejos); Vite lo ignora.
+fs.writeFileSync(path.join(webDir, '.env.app.local'), envBody, 'utf8')
 
 const appMeta = {
   appName: 'Nega POS',

@@ -162,6 +162,10 @@ export function AppNavLinks({
 }
 
 export function getAppVersionLabel() {
+  if (typeof window !== 'undefined') {
+    const fromElectron = window.negaPos?.appVersion?.trim()
+    if (fromElectron) return fromElectron
+  }
   const fromEnv = import.meta.env.VITE_APP_VERSION?.trim()
   if (fromEnv) return fromEnv
   const buildId = import.meta.env.VITE_BUILD_ID?.trim()

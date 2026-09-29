@@ -34,7 +34,10 @@ const updatesApi = {
   },
 }
 
+const appVersion = String(ipcRenderer.sendSync('app:getVersion') ?? '')
+
 contextBridge.exposeInMainWorld('negaPos', {
+  appVersion,
   printing: printingApi,
   updates: updatesApi,
 })
