@@ -54,28 +54,60 @@ export function ChartPlotCanvas({
 
       <div className={dashboardUi.chartBarsLayer}>
         {series.map((point, index) => {
-          const valueUsd = Number(point.totalUsd)
-          const heightPct = yMaxUsd > 0 ? Math.min(100, (valueUsd / yMaxUsd) * 100) : 0
-          const isPeak = valueUsd > 0 && valueUsd === seriesPeak
+          const totalUsd = Number(point.totalUsd)
+          const contadoUsd = Number(point.contadoUsd ?? 0)
+          const creditoUsd = Number(point.creditoUsd ?? 0)
+          const heightPct = yMaxUsd > 0 ? Math.min(100, (totalUsd / yMaxUsd) * 100) : 0
+          const isPeak = totalUsd > 0 && totalUsd === seriesPeak
           const variation =
             point.variacionPct !== null
               ? ` (${point.variacionPct > 0 ? '+' : ''}${point.variacionPct}%)`
               : ''
+          const contadoPct = totalUsd > 0 ? (contadoUsd / totalUsd) * 100 : 0
+          const creditoPct = totalUsd > 0 ? (creditoUsd / totalUsd) * 100 : 0
 
           return (
             <div key={index} className={dashboardUi.chartBarSlot}>
               <div className={dashboardUi.chartTooltip}>
-                <p className="font-semibold">{formatFromUsd(valueUsd)}</p>
+                <p className="font-semibold">{formatFromUsd(totalUsd)}</p>
+                <p className="font-normal text-neutral-600">
+                  Contado {formatFromUsd(contadoUsd)}
+                </p>
+                <p className="font-normal text-amber-700">
+                  Crédito {formatFromUsd(creditoUsd)}
+                </p>
                 <p className="font-normal text-neutral-500">
                   {point.label}
                   {variation}
                 </p>
               </div>
-              {valueUsd > 0 ? (
+              {totalUsd > 0 ? (
                 <div
-                  className={isPeak ? dashboardUi.bar : dashboardUi.barMuted}
+                  className="flex w-full max-w-7 flex-col justify-end overflow-hidden rounded-full"
                   style={{ height: `${heightPct}%` }}
-                />
+                  aria-label={`${point.label}: total ${formatFromUsd(totalUsd)}, contado ${formatFromUsd(contadoUsd)}, crédito ${formatFromUsd(creditoUsd)}`}
+                >
+                  {creditoUsd > 0 ? (
+                    <div
+                      className={creditoUsd >= totalUsd ? dashboardUi.barCreditSolo : dashboardUi.barCredit}
+                      style={{ height: `${creditoPct}%` }}
+                    />
+                  ) : null}
+                  {contadoUsd > 0 ? (
+                    <div
+                      className={
+                        contadoUsd >= totalUsd
+                          ? isPeak
+                            ? dashboardUi.barCashSolo
+                            : dashboardUi.barMuted
+                          : isPeak
+                            ? dashboardUi.barCash
+                            : `${dashboardUi.barMuted} rounded-b-full`
+                      }
+                      style={{ height: `${contadoPct}%` }}
+                    />
+                  ) : null}
+                </div>
               ) : (
                 <div className="h-0 w-full max-w-7" aria-hidden />
               )}

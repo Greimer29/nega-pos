@@ -36,12 +36,24 @@ export function DashboardSalesChart({
   const seriesPeak = dataMax
   const { yMaxUsd, ticksUsd } = buildUsdStepAxis(dataMax)
 
+  const latest = series.length > 0 ? series[series.length - 1]! : null
+  const latestTotal = latest ? Number(latest.totalUsd) : 0
+  const latestContado = latest ? Number(latest.contadoUsd ?? 0) : 0
+  const latestCredito = latest ? Number(latest.creditoUsd ?? 0) : 0
+
   return (
     <div className={dashboardUi.metricCardFill}>
       <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
         <div>
           <h3 className={dashboardUi.sectionTitle}>Ventas</h3>
           <p className={dashboardUi.muted}>Comparativo {MODE_SUBTITLE[mode]}</p>
+          {latest && latestTotal > 0 ? (
+            <p className="mt-1 text-xs tabular-nums text-neutral-700">
+              {latest.label}: {formatFromUsd(latestTotal)}
+              <span className="text-neutral-500"> · Contado {formatFromUsd(latestContado)}</span>
+              <span className="text-amber-700"> · Crédito {formatFromUsd(latestCredito)}</span>
+            </p>
+          ) : null}
         </div>
         <div className="inline-flex items-center gap-2">
           {isUpdating ? (
@@ -87,6 +99,17 @@ export function DashboardSalesChart({
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="mb-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-600">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-[#0d3d2e]" aria-hidden />
+          Contado
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-amber-400" aria-hidden />
+          Crédito
+        </span>
       </div>
 
       <div className={dashboardUi.chartBody}>
