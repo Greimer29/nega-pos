@@ -70,6 +70,10 @@ export type GananciaDelDia = {
 export type VentasSeriePoint = {
   label: string
   totalUsd: string
+  /** Ventas CASH del período. */
+  contadoUsd: string
+  /** Ventas CREDIT del período (facturado a crédito; no es caja). */
+  creditoUsd: string
   variacionPct: number | null
 }
 
@@ -966,15 +970,27 @@ export default class DashboardService {
         .whereIn('sales.status', [...SALE_STATUSES])
         .whereRaw('DATE(sales.sold_at) >= ?', [bucket.desde])
         .whereRaw('DATE(sales.sold_at) <= ?', [bucket.hasta])
-        .select(db.raw('COALESCE(SUM(sales.total_usd), 0) as total_usd'))
+        .select(
+          db.raw('COALESCE(SUM(sales.total_usd), 0) as total_usd'),
+          db.raw(
+            `COALESCE(SUM(CASE WHEN sales.payment_type = 'CASH' THEN sales.total_usd ELSE 0 END), 0) as contado_usd`
+          ),
+          db.raw(
+            `COALESCE(SUM(CASE WHEN sales.payment_type = 'CREDIT' THEN sales.total_usd ELSE 0 END), 0) as credito_usd`
+          )
+        )
         .first()
 
       const total = Number(row?.total_usd ?? 0)
+      const contado = Number(row?.contado_usd ?? 0)
+      const credito = Number(row?.credito_usd ?? 0)
       const variacionPct = prevTotal > 0 ? ((total - prevTotal) / prevTotal) * 100 : null
 
       points.push({
         label: bucket.label,
         totalUsd: total.toFixed(4),
+        contadoUsd: contado.toFixed(4),
+        creditoUsd: credito.toFixed(4),
         variacionPct: variacionPct !== null ? Math.round(variacionPct * 100) / 100 : null,
       })
       prevTotal = total

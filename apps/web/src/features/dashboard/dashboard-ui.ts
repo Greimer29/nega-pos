@@ -26,6 +26,10 @@ export const dashboardUi = {
   chartXLabel: 'min-w-0 flex-1 truncate text-center text-[10px] text-neutral-500',
   bar: 'w-full max-w-7 rounded-full bg-[#0d3d2e] transition-all',
   barMuted: 'w-full max-w-7 rounded-full bg-neutral-200 transition-all',
+  barCredit: 'w-full max-w-7 rounded-t-full bg-amber-400/90 transition-all',
+  barCash: 'w-full max-w-7 rounded-b-full bg-[#0d3d2e] transition-all',
+  barCashSolo: 'w-full max-w-7 rounded-full bg-[#0d3d2e] transition-all',
+  barCreditSolo: 'w-full max-w-7 rounded-full bg-amber-400/90 transition-all',
   chartTooltip:
     'pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] font-medium text-neutral-900 opacity-0 shadow-md transition-opacity group-hover:opacity-100',
   table: 'w-full text-sm',

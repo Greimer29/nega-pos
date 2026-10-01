@@ -34,6 +34,8 @@ export type GananciaDelDia = {
 export type VentasSeriePoint = {
   label: string
   totalUsd: string
+  contadoUsd: string
+  creditoUsd: string
   variacionPct: number | null
 }
 
