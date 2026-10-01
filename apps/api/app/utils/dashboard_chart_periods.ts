@@ -31,7 +31,7 @@ export function buildWeeklyVentasBuckets(anchor: DateTime): ChartBucket[] {
     buckets.push({
       desde: start.toISODate()!,
       hasta: end.toISODate()!,
-      label: String(8 - i),
+      label: start.setLocale('es').toFormat('d LLL'),
     })
   }
 

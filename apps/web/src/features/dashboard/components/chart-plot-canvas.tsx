@@ -34,6 +34,30 @@ type ChartPlotCanvasProps = {
   className?: string
 }
 
+function resolveSplit(point: VentasSeriePoint): {
+  totalUsd: number
+  contadoUsd: number
+  creditoUsd: number
+} {
+  const totalUsd = Number(point.totalUsd)
+  let contadoUsd = Number(point.contadoUsd ?? NaN)
+  let creditoUsd = Number(point.creditoUsd ?? NaN)
+
+  if (!Number.isFinite(contadoUsd)) contadoUsd = 0
+  if (!Number.isFinite(creditoUsd)) creditoUsd = 0
+
+  // API vieja o filas sin payment_type: usar el total como contado para no dejar la barra vacía.
+  if (Number.isFinite(totalUsd) && totalUsd > 0 && contadoUsd <= 0 && creditoUsd <= 0) {
+    contadoUsd = totalUsd
+  }
+
+  return {
+    totalUsd: Number.isFinite(totalUsd) ? totalUsd : contadoUsd + creditoUsd,
+    contadoUsd,
+    creditoUsd,
+  }
+}
+
 export function ChartPlotCanvas({
   series,
   yMaxUsd,
@@ -54,9 +78,7 @@ export function ChartPlotCanvas({
 
       <div className={dashboardUi.chartBarsLayer}>
         {series.map((point, index) => {
-          const totalUsd = Number(point.totalUsd)
-          const contadoUsd = Number(point.contadoUsd ?? 0)
-          const creditoUsd = Number(point.creditoUsd ?? 0)
+          const { totalUsd, contadoUsd, creditoUsd } = resolveSplit(point)
           const heightPct = yMaxUsd > 0 ? Math.min(100, (totalUsd / yMaxUsd) * 100) : 0
           const isPeak = totalUsd > 0 && totalUsd === seriesPeak
           const variation =
@@ -81,30 +103,38 @@ export function ChartPlotCanvas({
                   {variation}
                 </p>
               </div>
-              {totalUsd > 0 ? (
+              {totalUsd > 0 && heightPct > 0 ? (
                 <div
-                  className="flex w-full max-w-7 flex-col justify-end overflow-hidden rounded-full"
+                  className="relative w-full max-w-7 overflow-hidden rounded-full"
                   style={{ height: `${heightPct}%` }}
                   aria-label={`${point.label}: total ${formatFromUsd(totalUsd)}, contado ${formatFromUsd(contadoUsd)}, crédito ${formatFromUsd(creditoUsd)}`}
                 >
-                  {creditoUsd > 0 ? (
-                    <div
-                      className={creditoUsd >= totalUsd ? dashboardUi.barCreditSolo : dashboardUi.barCredit}
-                      style={{ height: `${creditoPct}%` }}
-                    />
-                  ) : null}
                   {contadoUsd > 0 ? (
                     <div
                       className={
-                        contadoUsd >= totalUsd
+                        creditoUsd > 0
                           ? isPeak
+                            ? 'absolute inset-x-0 bottom-0 bg-[#0d3d2e]'
+                            : 'absolute inset-x-0 bottom-0 bg-neutral-300'
+                          : isPeak
                             ? dashboardUi.barCashSolo
                             : dashboardUi.barMuted
-                          : isPeak
-                            ? dashboardUi.barCash
-                            : `${dashboardUi.barMuted} rounded-b-full`
                       }
                       style={{ height: `${contadoPct}%` }}
+                    />
+                  ) : null}
+                  {creditoUsd > 0 ? (
+                    <div
+                      className={
+                        contadoUsd > 0
+                          ? 'absolute inset-x-0 bg-amber-400/90'
+                          : dashboardUi.barCreditSolo
+                      }
+                      style={
+                        contadoUsd > 0
+                          ? { bottom: `${contadoPct}%`, height: `${creditoPct}%` }
+                          : { height: '100%' }
+                      }
                     />
                   ) : null}
                 </div>

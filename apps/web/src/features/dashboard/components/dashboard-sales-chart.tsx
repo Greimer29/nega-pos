@@ -38,8 +38,17 @@ export function DashboardSalesChart({
 
   const latest = series.length > 0 ? series[series.length - 1]! : null
   const latestTotal = latest ? Number(latest.totalUsd) : 0
-  const latestContado = latest ? Number(latest.contadoUsd ?? 0) : 0
-  const latestCredito = latest ? Number(latest.creditoUsd ?? 0) : 0
+  const latestContadoRaw = latest ? Number(latest.contadoUsd ?? NaN) : 0
+  const latestCreditoRaw = latest ? Number(latest.creditoUsd ?? NaN) : 0
+  const latestCredito = Number.isFinite(latestCreditoRaw) ? latestCreditoRaw : 0
+  const latestContado =
+    Number.isFinite(latestContadoRaw) && latestContadoRaw > 0
+      ? latestContadoRaw
+      : latestTotal > 0 && latestCredito <= 0
+        ? latestTotal
+        : Number.isFinite(latestContadoRaw)
+          ? latestContadoRaw
+          : 0
 
   return (
     <div className={dashboardUi.metricCardFill}>
@@ -54,6 +63,16 @@ export function DashboardSalesChart({
               <span className="text-amber-700"> · Crédito {formatFromUsd(latestCredito)}</span>
             </p>
           ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-600">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2 shrink-0 rounded-full bg-[#0d3d2e]" aria-hidden />
+              Contado
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2 shrink-0 rounded-full bg-amber-400" aria-hidden />
+              Crédito
+            </span>
+          </div>
         </div>
         <div className="inline-flex items-center gap-2">
           {isUpdating ? (
@@ -99,17 +118,6 @@ export function DashboardSalesChart({
             </button>
           </div>
         </div>
-      </div>
-
-      <div className="mb-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-600">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-[#0d3d2e]" aria-hidden />
-          Contado
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-amber-400" aria-hidden />
-          Crédito
-        </span>
       </div>
 
       <div className={dashboardUi.chartBody}>
