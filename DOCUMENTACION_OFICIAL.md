@@ -734,7 +734,7 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 | PUT | `/api/v1/materials/:id` | `materials.edit` | `Materials.update` |
 | DELETE | `/api/v1/materials/:id` | `materials.edit` | `Materials.destroy` |
 | POST | `/api/v1/materials/:id/adjustment` | `materials.adjust` | `Materials.ajuste` |
-| GET | `/api/v1/materials/:id/price-history` | `materials.view` | `Materials.historialPrecios` |
+| GET | `/api/v1/materials/:id/price-history` | `materials.view` | `Materials.historialPrecios` — compras CONFIRMADAS; si la compra no tiene proveedor, responde `supplier: { id: 0, name: "Sin proveedor" }` |
 | POST | `/api/v1/materials/:id/image` | `materials.edit` | `Materials.uploadImage` |
 | GET | `/api/v1/materials/:id/image` | `materials.view` | `Materials.downloadImage` |
 | DELETE | `/api/v1/materials/:id/image` | `materials.edit` | `Materials.deleteImage` |

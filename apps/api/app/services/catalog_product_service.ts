@@ -256,19 +256,28 @@ export default class CatalogProductService {
 
     const items = await query
 
-    return items.map((item) => ({
-      purchaseItemId: Number(item.id),
-      purchaseId: Number(item.purchaseId),
-      date: item.purchase.date.toISODate()!,
-      supplier: {
-        id: Number(item.purchase.supplier.id),
-        code: item.purchase.supplier.rif?.trim() || null,
-        name: item.purchase.supplier.name,
-      },
-      quantity: item.quantity,
-      unitPriceUsd: item.unitPriceUsd,
-      subtotalUsd: item.subtotalUsd,
-    }))
+    return items.map((item) => {
+      const supplier = item.purchase.supplier
+      return {
+        purchaseItemId: Number(item.id),
+        purchaseId: Number(item.purchaseId),
+        date: item.purchase.date.toISODate()!,
+        supplier: supplier
+          ? {
+              id: Number(supplier.id),
+              code: supplier.rif?.trim() || null,
+              name: supplier.name,
+            }
+          : {
+              id: 0,
+              code: null,
+              name: 'Sin proveedor',
+            },
+        quantity: item.quantity,
+        unitPriceUsd: item.unitPriceUsd,
+        subtotalUsd: item.subtotalUsd,
+      }
+    })
   }
 
   async crear(input: CatalogProductInput): Promise<CatalogProduct> {

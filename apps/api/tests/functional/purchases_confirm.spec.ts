@@ -76,14 +76,14 @@ async function seedMaterial(overrides: Partial<Material> = {}) {
 }
 
 async function seedPurchaseBorrador(options: {
-  supplier: Supplier
+  supplier?: Supplier | null
   material: Material
   usdRate?: string | null
   invoiceNumber?: string | null
   withItem?: boolean
 }) {
   const purchase = await Purchase.create({
-    supplierId: options.supplier.id,
+    supplierId: options.supplier?.id ?? null,
     date: DateTime.fromISO('2026-05-20'),
     invoiceNumber: options.invoiceNumber !== undefined ? options.invoiceNumber : 'F-001',
     usdRate: options.usdRate ?? null,
@@ -359,6 +359,31 @@ test.group('Purchases confirmar API', (group) => {
     assert.equal(body.data.historial[0].unitPriceBs, '808.30')
     assert.equal(body.data.historial[0].unitPriceUsd, '22.1452')
     assert.equal(body.data.historial[0].supplier.name, 'El Castillo')
+  })
+
+  test('GET /api/v1/materials/:id/price-history tolerates purchases without supplier', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const material = await seedMaterial()
+    const purchase = await seedPurchaseBorrador({
+      supplier: null,
+      material,
+      usdRate: '36.5000',
+    })
+
+    await client.post(`/api/v1/purchases/${purchase.id}/confirm`).loginAs(user)
+
+    const response = await client
+      .get(`/api/v1/materials/${material.id}/price-history`)
+      .loginAs(user)
+
+    response.assertStatus(200)
+    const body = response.body()
+    assert.lengthOf(body.data.historial, 1)
+    assert.equal(body.data.historial[0].supplier.id, 0)
+    assert.equal(body.data.historial[0].supplier.name, 'Sin proveedor')
   })
 
   test('GET /api/v1/catalog-products/:id/purchase-history returns confirmed product purchases', async ({
