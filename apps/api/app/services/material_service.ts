@@ -588,21 +588,29 @@ export default class MaterialService {
         query.preload('supplier')
       })
 
-    return items.map((item) => ({
-      purchaseItemId: Number(item.id),
-      purchaseId: Number(item.purchaseId),
-      date: item.purchase.date.toISODate()!,
-      invoiceNumber: item.purchase.invoiceNumber,
-      supplier: {
-        id: Number(item.purchase.supplier.id),
-        name: item.purchase.supplier.name,
-      },
-      quantity: item.quantity,
-      unitPriceBs: item.unitPriceBs,
-      unitPriceUsd: item.unitPriceUsd,
-      subtotalBs: item.subtotalBs,
-      subtotalUsd: item.subtotalUsd,
-    }))
+    return items.map((item) => {
+      const supplier = item.purchase.supplier
+      return {
+        purchaseItemId: Number(item.id),
+        purchaseId: Number(item.purchaseId),
+        date: item.purchase.date.toISODate()!,
+        invoiceNumber: item.purchase.invoiceNumber,
+        supplier: supplier
+          ? {
+              id: Number(supplier.id),
+              name: supplier.name,
+            }
+          : {
+              id: 0,
+              name: 'Sin proveedor',
+            },
+        quantity: item.quantity,
+        unitPriceBs: item.unitPriceBs,
+        unitPriceUsd: item.unitPriceUsd,
+        subtotalBs: item.subtotalBs,
+        subtotalUsd: item.subtotalUsd,
+      }
+    })
   }
 
   private prepareInput(input: MaterialInput, code: string) {
