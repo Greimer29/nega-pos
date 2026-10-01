@@ -7,7 +7,7 @@ import SalesShift from '#models/sales_shift'
 import TurnoNoEncontradoException from '#exceptions/turno_no_encontrado_exception'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
-import { todayIsoDate } from '#utils/app_timezone'
+import { currentMonthRange, nowInAppZone, todayIsoDate } from '#utils/app_timezone'
 import {
   creditPurchaseCountsTowardPeriodTotal,
   creditPurchaseReportAmountUsd,
@@ -321,8 +321,7 @@ export default class DashboardService {
   }
 
   private async comprasDelMes(): Promise<PurchasesMonthSummary> {
-    const inicioMes = DateTime.now().startOf('month').toISODate()!
-    const finMes = DateTime.now().endOf('month').toISODate()!
+    const { from: inicioMes, to: finMes } = currentMonthRange()
     const period = { from: inicioMes, to: finMes }
 
     const purchases = await db
@@ -415,8 +414,7 @@ export default class DashboardService {
   }
 
   private async gastosMaquinasDelMes(): Promise<MachineExpensesMonthSummary> {
-    const inicioMes = DateTime.now().startOf('month').toISODate()!
-    const finMes = DateTime.now().endOf('month').toISODate()!
+    const { from: inicioMes, to: finMes } = currentMonthRange()
     const rates = await this.currencyService.getActiveRates()
 
     const machineRows = await db
@@ -951,7 +949,7 @@ export default class DashboardService {
   }
 
   private async ventasSeries(chart: 'daily' | 'weekly' | 'monthly'): Promise<VentasSeriePoint[]> {
-    const hoy = DateTime.now()
+    const hoy = nowInAppZone()
     const buckets =
       chart === 'daily'
         ? buildDailyVentasBuckets(hoy)
@@ -986,7 +984,7 @@ export default class DashboardService {
   }
 
   private async clientesConCredito(): Promise<ClienteCreditoItem[]> {
-    const hoy = DateTime.now().toISODate()!
+    const hoy = todayIsoDate()
 
     const rows = await db
       .from('customers')
@@ -1015,7 +1013,7 @@ export default class DashboardService {
   }
 
   private async proveedoresConCredito(): Promise<ProveedorCreditoItem[]> {
-    const hoy = DateTime.now().toISODate()!
+    const hoy = todayIsoDate()
 
     const rows = await db
       .from('suppliers')
