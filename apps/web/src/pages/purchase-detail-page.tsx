@@ -617,8 +617,21 @@ export function PurchaseDetallePage() {
   }
 
   function updateLocalItemPriceNative(localId: string, native: number, rate: number) {
+    // Conservar el nativo tipado: si el input muestra base×tasa en cada tecla,
+    // el redondeo $→Au→$ pisa lo que el usuario escribe (p. ej. 1,67 → 1,6706).
     itemNativeEntryRef.current.set(localId, native)
     updateLocalItem(localId, { unitPriceUsd: nativeToUsd(native, rate) })
+  }
+
+  function nativeUnitPriceDisplay(item: LocalPurchaseItem): number {
+    const drafted = itemNativeEntryRef.current.get(item.localId)
+    if (drafted !== undefined) return drafted
+    return formatItemNativeDisplay(
+      item.unitPriceUsd,
+      rateNum,
+      displayEntryCurrency,
+      baseCurrencyCode
+    )
   }
 
   async function removeLocalItem(localId: string) {
@@ -928,9 +941,9 @@ export function PurchaseDetallePage() {
                           </p>
                         ) : (
                           <p className="text-muted-foreground text-xs">
-                            La tasa queda en esta compra; no modifica Configuración. Al cambiarla,
-                            el monto en {entrySymbol} se recalcula y el monto en{' '}
-                            {baseCurrencyCode} del ítem no cambia.
+                            La tasa queda en esta compra; no modifica Configuración. Podés editar el
+                            precio en {entrySymbol}; al cambiar la tasa, ese monto se recalcula y el
+                            costo en {baseCurrencyCode} del ítem no cambia.
                           </p>
                         )}
                       </>
@@ -1256,12 +1269,7 @@ export function PurchaseDetallePage() {
                                   decimals={entryPriceDecimals}
                                   className="h-8 w-28"
                                   disabled={!canEnterPriceInNative}
-                                  value={formatItemNativeDisplay(
-                                    item.unitPriceUsd,
-                                    rateNum,
-                                    displayEntryCurrency,
-                                    baseCurrencyCode
-                                  )}
+                                  value={nativeUnitPriceDisplay(item)}
                                   onChange={(e) => {
                                     const native =
                                       parseDecimalInput(e.target.value, entryPriceDecimals) ?? 0
@@ -1288,13 +1296,7 @@ export function PurchaseDetallePage() {
                             <td className="px-3 py-2 tabular-nums">
                               {entryInNative && isValidPurchaseRate(rateNum) ? (
                                 formatNative(
-                                  item.quantity *
-                                    formatItemNativeDisplay(
-                                      item.unitPriceUsd,
-                                      rateNum,
-                                      displayEntryCurrency,
-                                      baseCurrencyCode
-                                    ),
+                                  item.quantity * nativeUnitPriceDisplay(item),
                                   displayEntryCurrency
                                 )
                               ) : (
