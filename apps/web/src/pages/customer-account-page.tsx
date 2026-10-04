@@ -144,7 +144,7 @@ export function CustomerAccountPage() {
               <table className="w-full min-w-[880px] text-sm">
                 <thead>
                   <tr className="bg-muted/50 border-b text-left">
-                    <th className="px-4 py-3 font-medium">Pedido</th>
+                    <th className="px-4 py-3 font-medium">Factura</th>
                     <th className="px-4 py-3 font-medium">Fecha</th>
                     <th className="px-4 py-3 font-medium">Estado</th>
                     <th className="px-4 py-3 font-medium">Pago</th>
@@ -252,7 +252,7 @@ export function CustomerAccountPage() {
                 <thead>
                   <tr className="bg-muted/50 border-b text-left">
                     <th className="px-4 py-3 font-medium">Fecha</th>
-                    <th className="px-4 py-3 font-medium">Pedido</th>
+                    <th className="px-4 py-3 font-medium">Factura</th>
                     <th className="px-4 py-3 text-right font-medium">Monto</th>
                     <th className="px-4 py-3 font-medium">Nota</th>
                   </tr>

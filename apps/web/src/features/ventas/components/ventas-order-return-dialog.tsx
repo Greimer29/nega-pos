@@ -60,7 +60,10 @@ export function VentasOrderReturnDialog({
   const [saleCode, setSaleCode] = useState('')
   const [lines, setLines] = useState<SaleLine[]>([])
   const [invoiceDiscountUsd, setInvoiceDiscountUsd] = useState(0)
+  const [amountOnlyTotalUsd, setAmountOnlyTotalUsd] = useState(0)
   const [selection, setSelection] = useState<ReturnSelection[]>([])
+
+  const isAmountOnly = !loading && lines.length === 0 && amountOnlyTotalUsd > 0.0001
 
   useEffect(() => {
     if (!open || !saleId) {
@@ -77,6 +80,9 @@ export function VentasOrderReturnDialog({
         setInvoiceDiscountUsd(Number(sale.discount_usd ?? 0))
         const saleLines = sale.lines ?? []
         setLines(saleLines)
+        setAmountOnlyTotalUsd(
+          Math.max(Number(sale.total_usd ?? 0), Number(sale.balance_usd ?? 0))
+        )
         setSelection(
           saleLines
             .filter((line) => remainingQty(line) > 0)
@@ -117,8 +123,15 @@ export function VentasOrderReturnDialog({
   }, [selection, lines])
 
   const selectedTotal = useMemo(() => {
+    if (isAmountOnly) return amountOnlyTotalUsd
     return invoiceReturnNetUsd(selectedGross, remainingActiveGross, invoiceDiscountUsd)
-  }, [selectedGross, remainingActiveGross, invoiceDiscountUsd])
+  }, [
+    isAmountOnly,
+    amountOnlyTotalUsd,
+    selectedGross,
+    remainingActiveGross,
+    invoiceDiscountUsd,
+  ])
 
   const discountLabel = invoiceDiscountLabel(
     Math.max(0, remainingActiveGross - invoiceDiscountUsd),
@@ -144,6 +157,17 @@ export function VentasOrderReturnDialog({
 
   async function handleSubmit() {
     if (!saleId) return
+
+    if (isAmountOnly) {
+      try {
+        await returnMutation.mutateAsync({ id: saleId, payload: {} })
+        onOpenChange(false)
+        onSuccess?.()
+      } catch (err) {
+        notifyApiError(err, 'No se pudo guardar')
+      }
+      return
+    }
 
     const payload = selection
       .filter((item) => item.selected && item.quantity > 0)
@@ -172,21 +196,39 @@ export function VentasOrderReturnDialog({
     }
   }
 
+  const confirmDisabled =
+    loading ||
+    returnMutation.isPending ||
+    (!isAmountOnly && selection.every((s) => !s.selected)) ||
+    (isAmountOnly && amountOnlyTotalUsd <= 0.0001)
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Registrar devolución</DialogTitle>
           <DialogDescription>
-            {saleCode
-              ? `Elegí qué productos devolver de ${saleCode}. El ajuste impacta el día de la venta original.`
-              : 'Elegí los productos a devolver.'}
+            {isAmountOnly
+              ? saleCode
+                ? `Factura ${saleCode} sin ítems (solo monto). Se anula el total y el saldo pendiente.`
+                : 'Factura sin ítems (solo monto). Se anula el total y el saldo pendiente.'
+              : saleCode
+                ? `Elegí qué productos devolver de ${saleCode}. El ajuste impacta el día de la venta original.`
+                : 'Elegí los productos a devolver.'}
           </DialogDescription>
         </DialogHeader>
 
         {loading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="text-muted-foreground size-5 animate-spin" />
+          </div>
+        ) : isAmountOnly ? (
+          <div className="rounded-lg border border-dashed p-4">
+            <p className="text-sm font-medium">Sin productos en la factura</p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Esta es una factura de monto (cuenta por cobrar / contado sin ítems). La devolución
+              deja el documento en cero y marca la factura como devuelta. No mueve inventario.
+            </p>
           </div>
         ) : (
           <div className="scrollbar-subtle max-h-80 space-y-3 overflow-y-auto pr-1">
@@ -286,7 +328,7 @@ export function VentasOrderReturnDialog({
             <span className="text-muted-foreground">Monto a devolver</span>
             <DisplayMoneyFromUsd amountUsd={selectedTotal} />
           </div>
-          {invoiceDiscountUsd > 0.0001 && selectedGross > 0 ? (
+          {!isAmountOnly && invoiceDiscountUsd > 0.0001 && selectedGross > 0 ? (
             <p className="text-muted-foreground text-xs">
               Neto de factura{discountLabel ? ` (${discountLabel})` : ''}. Bruto líneas{' '}
               <DisplayMoneyFromUsd amountUsd={selectedGross} className="inline text-xs" />.
@@ -300,7 +342,7 @@ export function VentasOrderReturnDialog({
           </Button>
           <Button
             type="button"
-            disabled={loading || returnMutation.isPending || selection.every((s) => !s.selected)}
+            disabled={confirmDisabled}
             onClick={() => void handleSubmit()}
           >
             {returnMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
