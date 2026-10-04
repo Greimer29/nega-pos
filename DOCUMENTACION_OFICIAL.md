@@ -544,7 +544,7 @@ catalog_products ──< product_inventory_movements
    - Descuenta stock (producto directo, materiales de fórmula, o línea de material); **omite** líneas cuyo catálogo es `SERVICE`.
    - Aplica método de pago y saldo si es crédito.
 3. **Transición de pedido de venta** (`billing_mode ORDER`): `PENDING → IN_PROCESS → DELIVERED` (solo ventas completadas).
-4. **Devolución** (`POST .../return`): parcial o total; revierte stock de productos/materiales (no de servicios) y actualiza `RETURNED`.
+4. **Devolución** (`POST .../return`): parcial o total; revierte stock de productos/materiales (no de servicios) y actualiza `RETURNED`. **Facturas sin ítems** (monto desde ficha de cliente): la devolución anula `total_usd` / `balance_usd` / `amount_paid_usd`, marca `RETURNED` y no mueve inventario. En UI el diálogo muestra confirmación de monto en lugar de selección de productos.
 5. **Eliminar borrador** (`DELETE /sales/:id`): solo `DRAFT`. Borra el documento en espera y sus líneas (no hay stock que revertir). En el POS: **Cargar factura** → papelera en cada ítem (icono). La papelera del carrito **vacía líneas locales** y no borra el documento guardado. Una factura confirmada no se elimina por esta vía.
 
 ### Reportes (`report_service.ts` / `inventory_report_service.ts`)

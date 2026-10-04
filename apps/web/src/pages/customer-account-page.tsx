@@ -14,17 +14,14 @@ import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { cn } from '@/lib/utils'
 import { pageHeaderClass } from '@/components/layout/responsive-toolbar'
-
-function formatFecha(value: string | null | undefined) {
-  if (!value) return '—'
-  return new Date(value).toLocaleDateString('es-VE')
-}
+import { formatFecha, todayLocalIsoDate } from '@/lib/format-date'
 
 function creditEstado(creditDueDate: string | null, balanceUsd: string) {
   if (Number(balanceUsd) <= 0) return { label: 'Pagada', className: 'bg-emerald-100 text-emerald-800' }
   if (!creditDueDate) return { label: 'Vigente', className: 'bg-amber-100 text-amber-800' }
-  const today = new Date().toISOString().slice(0, 10)
-  if (creditDueDate < today) return { label: 'Vencida', className: 'bg-red-100 text-red-800' }
+  const today = todayLocalIsoDate()
+  const dueDate = creditDueDate.includes('T') ? creditDueDate.slice(0, 10) : creditDueDate
+  if (dueDate < today) return { label: 'Vencida', className: 'bg-red-100 text-red-800' }
   return { label: 'Vigente', className: 'bg-amber-100 text-amber-800' }
 }
 
@@ -144,7 +141,7 @@ export function CustomerAccountPage() {
               <table className="w-full min-w-[880px] text-sm">
                 <thead>
                   <tr className="bg-muted/50 border-b text-left">
-                    <th className="px-4 py-3 font-medium">Pedido</th>
+                    <th className="px-4 py-3 font-medium">Factura</th>
                     <th className="px-4 py-3 font-medium">Fecha</th>
                     <th className="px-4 py-3 font-medium">Estado</th>
                     <th className="px-4 py-3 font-medium">Pago</th>
@@ -252,7 +249,7 @@ export function CustomerAccountPage() {
                 <thead>
                   <tr className="bg-muted/50 border-b text-left">
                     <th className="px-4 py-3 font-medium">Fecha</th>
-                    <th className="px-4 py-3 font-medium">Pedido</th>
+                    <th className="px-4 py-3 font-medium">Factura</th>
                     <th className="px-4 py-3 text-right font-medium">Monto</th>
                     <th className="px-4 py-3 font-medium">Nota</th>
                   </tr>

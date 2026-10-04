@@ -14,6 +14,11 @@ import type { CustomerInvoiceValidatorPayload } from '#validators/customer_invoi
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 
+/** Día calendario `YYYY-MM-DD` como medianoche UTC (DATETIME MySQL sin TZ). */
+function calendarDayUtc(isoDate: string): DateTime {
+  return DateTime.fromISO(isoDate, { zone: 'utc' }).startOf('day')
+}
+
 export default class CustomerInvoiceService {
   private currencyService = new CurrencyService()
   private paymentMethodService = new PaymentMethodService()
@@ -33,7 +38,10 @@ export default class CustomerInvoiceService {
     })
 
     const note = input.note?.trim() || null
-    const soldAt = DateTime.fromISO(input.date).startOf('day')
+    // Guardar el día calendario en UTC (no zona app): Lucid/MySQL DATETIME es naive;
+    // si se persiste medianoche Caracas, al leer en UTC el front con toLocaleDateString
+    // mostraba el día anterior. La UI formatea por la parte `YYYY-MM-DD` del ISO.
+    const soldAt = calendarDayUtc(input.date)
     const totalUsd = resolved.amountUsd
 
     return db.transaction(async (trx) => {
@@ -45,7 +53,7 @@ export default class CustomerInvoiceService {
         }
 
         const creditDueDate = input.credit_due_date
-          ? DateTime.fromISO(input.credit_due_date)
+          ? calendarDayUtc(input.credit_due_date)
           : soldAt.plus({ days: customer.creditDays })
 
         const sale = await Sale.create(

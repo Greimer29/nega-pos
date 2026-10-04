@@ -24,16 +24,12 @@ import {
   reprintSaleDocument,
 } from '@/features/printing/services/printing-service'
 import { getSale } from '@/features/ventas/services/sales-service'
+import { formatFecha } from '@/lib/format-date'
 
 const ORDER_TRANSITIONS: Record<SaleOrderStatus, SaleOrderStatus[]> = {
   PENDING: ['IN_PROCESS', 'DELIVERED'],
   IN_PROCESS: ['DELIVERED'],
   DELIVERED: [],
-}
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return '—'
-  return new Date(value).toLocaleDateString('es-VE')
 }
 
 export function SaleDetailPage() {
@@ -229,7 +225,7 @@ export function SaleDetailPage() {
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <div>
             <p className="text-muted-foreground text-xs">Fecha</p>
-            <p className="text-sm">{formatDate(sale.sold_at ?? sale.confirmed_at)}</p>
+            <p className="text-sm">{formatFecha(sale.sold_at ?? sale.confirmed_at)}</p>
           </div>
           <div>
             <p className="text-muted-foreground text-xs">Modalidad</p>
@@ -244,16 +240,21 @@ export function SaleDetailPage() {
           <div>
             <p className="text-muted-foreground text-xs">Pago</p>
             <p className="text-sm">
-              {sale.payment_type === 'CREDIT'
-                ? `Crédito · Saldo ${sale.balance_usd} USD`
-                : sale.payments && sale.payments.length > 1
-                  ? sale.payments
-                      .map(
-                        (payment) =>
-                          `${paymentMethodLabel(payment.payment_method) || payment.payment_method_code} ${payment.amount_usd}`
-                      )
-                      .join(' · ')
-                  : paymentMethodLabel(sale.payment_method) || 'Contado'}
+              {sale.payment_type === 'CREDIT' ? (
+                <span className="inline-flex flex-wrap items-baseline gap-1">
+                  Crédito · Saldo{' '}
+                  <DisplayMoneyFromUsd amountUsd={sale.balance_usd} size="sm" />
+                </span>
+              ) : sale.payments && sale.payments.length > 1 ? (
+                sale.payments
+                  .map(
+                    (payment) =>
+                      `${paymentMethodLabel(payment.payment_method) || payment.payment_method_code} ${payment.amount_usd}`
+                  )
+                  .join(' · ')
+              ) : (
+                paymentMethodLabel(sale.payment_method) || 'Contado'
+              )}
             </p>
           </div>
           <div>

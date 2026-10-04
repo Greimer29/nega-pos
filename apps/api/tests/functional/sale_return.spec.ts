@@ -15,8 +15,11 @@ const TEST_PASSWORD = 'password123'
 async function resetDatabase() {
   await db.from('product_inventory_movements').delete()
   await db.from('inventory_movements').delete()
+  await db.from('sale_payments').delete()
   await db.from('sale_lines').delete()
   await db.from('sales').delete()
+  await db.from('purchase_items').delete()
+  await db.from('purchases').delete()
   await db.from('catalog_products').delete()
   await db.from('materials').delete()
   await db.from('customers').delete()
@@ -242,5 +245,56 @@ test.group('Sale devolución venta API', (group) => {
     assert.equal(afterFull.status, 'RETURNED')
     assert.equal(afterFull.total_usd, '0.0000')
     assert.equal(afterFull.discount_usd, '0.0000')
+  })
+
+  test('POST /api/v1/sales/:id/return voids amount-only credit invoice without lines', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const customer = await Customer.create({
+      name: 'Cliente CxC monto',
+      type: 'CORPORATE',
+      creditDays: 30,
+      active: true,
+    })
+
+    const invoiceResponse = await client
+      .post(`/api/v1/customers/${customer.id}/invoices`)
+      .loginAs(user)
+      .json({
+        amount: 0.5,
+        currency_code: 'XAU',
+        is_credit: true,
+        date: '2026-10-03',
+        credit_due_date: '2026-11-02',
+      })
+
+    invoiceResponse.assertStatus(200)
+    const sale = invoiceResponse.body().data.sale as {
+      id: number
+      total_usd: string
+      balance_usd: string
+      status: string
+      lines: unknown[]
+    }
+    assert.equal(sale.status, 'COMPLETED')
+    assert.equal(sale.total_usd, '0.5000')
+    assert.equal(sale.balance_usd, '0.5000')
+    assert.lengthOf(sale.lines ?? [], 0)
+
+    const returnResponse = await client.post(`/api/v1/sales/${sale.id}/return`).loginAs(user)
+
+    returnResponse.assertStatus(200)
+    const after = returnResponse.body().data.sale as {
+      status: string
+      total_usd: string
+      balance_usd: string
+      amount_paid_usd: string
+    }
+    assert.equal(after.status, 'RETURNED')
+    assert.equal(after.total_usd, '0.0000')
+    assert.equal(after.balance_usd, '0.0000')
+    assert.equal(after.amount_paid_usd, '0.0000')
   })
 })

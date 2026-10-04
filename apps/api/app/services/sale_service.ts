@@ -536,6 +536,31 @@ export default class SaleService {
         throw new OrderNoDevolvableException()
       }
 
+      // Factura de monto (ficha cliente / sin ítems): anula total y saldo, sin stock.
+      if (sale.saleLines.length === 0) {
+        const outstanding = Math.max(Number(sale.totalUsd ?? 0), Number(sale.balanceUsd ?? 0))
+        if (outstanding <= 0.0001) {
+          throw new OrderNoDevolvableException()
+        }
+
+        sale.totalUsd = '0.0000'
+        sale.discountUsd = '0.0000'
+        sale.amountPaidUsd = '0.0000'
+        sale.balanceUsd = '0.0000'
+        sale.status = 'RETURNED'
+        sale.returnedAt = DateTime.now()
+        sale.useTransaction(trx)
+        await sale.save()
+
+        await sale.load('paymentMethod')
+        await sale.load('customer')
+        await sale.load('saleLines', (q) => {
+          q.preload('catalogProduct').preload('material').orderBy('id', 'asc')
+        })
+
+        return sale
+      }
+
       const returnRequests = this.resolveReturnRequests(sale.saleLines, lines)
 
       if (returnRequests.length === 0) {
