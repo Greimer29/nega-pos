@@ -383,14 +383,19 @@ export default class PurchaseService {
       if (input.invoice_number !== undefined) {
         purchase.invoiceNumber = input.invoice_number?.trim() || null
       }
-      if (input.usd_rate !== undefined) {
-        purchase.usdRate = this.formatTasaUsd(input.usd_rate)
-      }
       if (input.entry_currency_code !== undefined) {
         purchase.entryCurrencyCode = await this.resolveEntryCurrencyCode(input.entry_currency_code)
-        if (purchase.entryCurrencyCode === 'USD') {
-          purchase.usdRate = null
-        }
+      }
+
+      const baseCode = await this.currencyService.getBaseCurrencyCode()
+      const entryCode = (
+        purchase.entryCurrencyCode ?? (input.usd_rate !== undefined ? 'VES' : baseCode)
+      ).toUpperCase()
+
+      if (entryCode === baseCode.toUpperCase()) {
+        purchase.usdRate = null
+      } else if (input.usd_rate !== undefined) {
+        purchase.usdRate = this.formatTasaUsd(input.usd_rate)
       }
       if (input.notes !== undefined) {
         purchase.notes = input.notes?.trim() || null

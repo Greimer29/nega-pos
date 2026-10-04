@@ -1,8 +1,10 @@
 import Purchase from '#models/purchase'
 import PurchaseItem from '#models/purchase_item'
 import CatalogProduct from '#models/catalog_product'
+import Currency from '#models/currency'
 import Material from '#models/material'
 import InventoryMovement from '#models/inventory_movement'
+import AppSetting from '#models/app_setting'
 import Supplier from '#models/supplier'
 import User from '#models/user'
 import testUtils from '@adonisjs/core/services/test_utils'
@@ -52,6 +54,27 @@ async function seedAdminUser() {
       role: 'ADMIN',
       active: true,
     }
+  )
+}
+
+/** Base XAU + USD/VES activos (misma semántica que producción: unidades por 1 de base). */
+async function seedMultiCurrencyBaseXau() {
+  await AppSetting.updateOrCreate(
+    { key: 'base_currency_code' },
+    { value: 'XAU', updatedAt: DateTime.now() }
+  )
+
+  await Currency.updateOrCreate(
+    { code: 'XAU' },
+    { name: 'Oro', ratePerUsd: '1.0000', isActive: true }
+  )
+  await Currency.updateOrCreate(
+    { code: 'USD' },
+    { name: 'Dólar estadounidense', ratePerUsd: '100.0000', isActive: true }
+  )
+  await Currency.updateOrCreate(
+    { code: 'VES' },
+    { name: 'Bolívar', ratePerUsd: '4000.0000', isActive: true }
   )
 }
 
@@ -118,6 +141,110 @@ test.group('Purchases confirmar API', (group) => {
     await resetStorage()
     await resetDatabase()
     await seedAdminUser()
+    await seedMultiCurrencyBaseXau()
+  })
+
+  test('confirm multi-currency: XAU/USD/VES assigns product cost in base and keeps document rate', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const supplier = await seedSupplier()
+
+    const cases: Array<{
+      entry: string
+      rate: number | null
+      /** Precio unitario ya convertido a base (como envía el front). */
+      unitPriceBase: number
+      nativeUnit: number
+      invoice: string
+    }> = [
+      { entry: 'XAU', rate: null, unitPriceBase: 0.5, nativeUnit: 0.5, invoice: 'F-XAU-1' },
+      // 50 USD ÷ tasa 100 = 0.5 XAU
+      { entry: 'USD', rate: 100, unitPriceBase: 0.5, nativeUnit: 50, invoice: 'F-USD-1' },
+      // 2000 VES ÷ tasa 4000 = 0.5 XAU
+      { entry: 'VES', rate: 4000, unitPriceBase: 0.5, nativeUnit: 2000, invoice: 'F-VES-1' },
+    ]
+
+    for (const scenario of cases) {
+      const product = await CatalogProduct.create({
+        name: `Prod ${scenario.entry}`,
+        category: 'UNIFORM',
+        salePriceUsd: '9.9999',
+        costUsd: '0.0100',
+        stockQuantity: '0.000',
+        active: true,
+      })
+
+      const createResponse = await client
+        .post('/api/v1/purchases')
+        .loginAs(user)
+        .json({
+          supplier_id: Number(supplier.id),
+          date: '2026-05-20',
+          entry_currency_code: scenario.entry,
+          ...(scenario.rate !== null ? { usd_rate: scenario.rate } : {}),
+        })
+      createResponse.assertStatus(200)
+
+      const purchaseId = Number(
+        (createResponse.body() as { data: { purchase: { id: number } } }).data.purchase.id
+      )
+
+      const itemResponse = await client
+        .post(`/api/v1/purchases/${purchaseId}/items`)
+        .loginAs(user)
+        .json({
+          catalog_product_id: Number(product.id),
+          quantity: 2,
+          unit_price_usd: scenario.unitPriceBase,
+          ...(scenario.rate !== null ? { unit_price_bs: scenario.nativeUnit } : {}),
+        })
+      itemResponse.assertStatus(200)
+
+      const confirmResponse = await client
+        .post(`/api/v1/purchases/${purchaseId}/confirm`)
+        .loginAs(user)
+        .json({
+          invoice_number: scenario.invoice,
+          entry_currency_code: scenario.entry,
+          ...(scenario.rate !== null ? { usd_rate: scenario.rate } : {}),
+          items: [
+            {
+              catalog_product_id: Number(product.id),
+              quantity: 2,
+              unit_price_usd: scenario.unitPriceBase,
+              ...(scenario.rate !== null ? { unit_price_bs: scenario.nativeUnit } : {}),
+            },
+          ],
+        })
+
+      confirmResponse.assertStatus(200)
+
+      const purchaseBody = confirmResponse.body().data.purchase as {
+        entryCurrencyCode: string
+        usdRate: string | null
+        totalUsd: string
+        totalBs: string
+        status: string
+      }
+
+      assert.equal(purchaseBody.status, 'CONFIRMED')
+      assert.equal(purchaseBody.entryCurrencyCode, scenario.entry)
+      assert.equal(purchaseBody.totalUsd, '1.0000')
+
+      if (scenario.rate === null) {
+        assert.isNull(purchaseBody.usdRate)
+      } else {
+        assert.equal(Number(purchaseBody.usdRate), scenario.rate)
+        assert.equal(Number(purchaseBody.totalBs), scenario.nativeUnit * 2)
+      }
+
+      await product.refresh()
+      assert.equal(product.costUsd, '0.5000')
+      assert.equal(product.salePriceUsd, '9.9999')
+      assert.equal(product.stockQuantity, '2.000')
+    }
   })
 
   test('POST /api/v1/purchases/:id/confirm with usd_rate persists USD snapshots and stock', async ({
