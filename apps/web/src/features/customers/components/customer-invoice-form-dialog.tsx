@@ -33,6 +33,7 @@ import {
   nativeToBase,
 } from '@/features/purchases/utils/purchase-entry-currency'
 import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
+import { addLocalDaysIsoDate, todayLocalIsoDate } from '@/lib/format-date'
 import { cn } from '@/lib/utils'
 
 const schema = z.object({
@@ -78,7 +79,7 @@ export function CustomerInvoiceFormDialog({
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      date: new Date().toISOString().slice(0, 10),
+      date: todayLocalIsoDate(),
       amount: '',
       note: '',
       credit_due_date: '',
@@ -96,13 +97,9 @@ export function CustomerInvoiceFormDialog({
     // No se toma del método de pago (p. ej. Efectivo USD no debe forzar Monto ($)).
     setCurrencyCode(baseCurrencyCode)
     setEntryRate(catalogRateForCurrency(currencies, baseCurrencyCode))
-    const today = new Date().toISOString().slice(0, 10)
-    let due = ''
-    if (defaultCreditDays && defaultCreditDays > 0) {
-      const d = new Date()
-      d.setDate(d.getDate() + defaultCreditDays)
-      due = d.toISOString().slice(0, 10)
-    }
+    const today = todayLocalIsoDate()
+    const due =
+      defaultCreditDays && defaultCreditDays > 0 ? addLocalDaysIsoDate(defaultCreditDays) : ''
     reset({
       date: today,
       amount: '',

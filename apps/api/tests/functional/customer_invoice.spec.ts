@@ -90,6 +90,9 @@ test.group('Customer invoices API', (group) => {
 
     const sale = await Sale.findOrFail(body.data.sale.id)
     assert.isNull(sale.salesShiftId)
+    // Día calendario preservado en DATETIME (medianoche UTC del YYYY-MM-DD enviado).
+    assert.equal(sale.soldAt?.toUTC().toISODate(), '2026-09-10')
+    assert.equal(sale.soldAt?.toISO()?.slice(0, 10), '2026-09-10')
     const lines = await SaleLine.query().where('saleId', Number(sale.id))
     assert.lengthOf(lines, 0)
   })
