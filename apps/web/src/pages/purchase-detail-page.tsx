@@ -66,7 +66,8 @@ import type { Material } from '@/features/materials/types'
 import type { CatalogProduct } from '@/features/ventas/types'
 import { CatalogFormDialog } from '@/features/ventas/components/catalog-form-dialog'
 import { catalogProductCode } from '@/features/ventas/components/ventas-order-cart'
-import { productSaleUnitAbrev } from '@/features/ventas/constants'
+import { productSaleUnitAbrev, type ProductSaleUnit } from '@/features/ventas/constants'
+import { getCatalogProduct } from '@/features/ventas/services/catalog-service'
 import { useSuppliersQuery } from '@/features/suppliers/hooks/use-suppliers'
 import { supplierImageUrl } from '@/features/suppliers/constants'
 import { PublicImage } from '@/components/public-image'
@@ -242,6 +243,7 @@ export function PurchaseDetallePage() {
   const [materialDialogOpen, setMaterialDialogOpen] = useState(false)
   const [productDialogOpen, setProductDialogOpen] = useState(false)
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null)
+  const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null)
   const { data: purchase, isLoading, isError, error } = usePurchaseQuery(purchaseId)
   const { data: globalRate } = useExchangeRateQuery()
   const { data: activeCurrencies = [] } = useActiveCurrenciesQuery()
@@ -617,8 +619,21 @@ export function PurchaseDetallePage() {
   }
 
   function updateLocalItemPriceNative(localId: string, native: number, rate: number) {
+    // Conservar el nativo tipado: si el input muestra base×tasa en cada tecla,
+    // el redondeo $→Au→$ pisa lo que el usuario escribe (p. ej. 1,67 → 1,6706).
     itemNativeEntryRef.current.set(localId, native)
     updateLocalItem(localId, { unitPriceUsd: nativeToUsd(native, rate) })
+  }
+
+  function nativeUnitPriceDisplay(item: LocalPurchaseItem): number {
+    const drafted = itemNativeEntryRef.current.get(item.localId)
+    if (drafted !== undefined) return drafted
+    return formatItemNativeDisplay(
+      item.unitPriceUsd,
+      rateNum,
+      displayEntryCurrency,
+      baseCurrencyCode
+    )
   }
 
   async function removeLocalItem(localId: string) {
@@ -654,6 +669,29 @@ export function PurchaseDetallePage() {
     markDirty()
   }
 
+  function syncProductInItems(product: CatalogProduct) {
+    setLocalItems((prev) =>
+      prev.map((item) =>
+        item.itemType === 'product' && item.catalogProductId === product.id
+          ? {
+              ...item,
+              catalogProduct: {
+                id: product.id,
+                name: product.name,
+                category: product.category,
+                saleUnit: product.sale_unit,
+                wholesaleEnabled: product.wholesale_enabled,
+                wholesaleUnitsPerPack: product.wholesale_units_per_pack,
+                wholesaleCostUsd: product.wholesale_cost_usd,
+                wholesaleSalePriceUsd: product.wholesale_sale_price_usd,
+              },
+            }
+          : item
+      )
+    )
+    markDirty()
+  }
+
   function openEditMaterial(item: LocalPurchaseItem) {
     if (item.itemType !== 'material' || !item.material) return
     setEditingMaterial({
@@ -676,6 +714,29 @@ export function PurchaseDetallePage() {
       updatedAt: '',
     })
     setMaterialDialogOpen(true)
+  }
+
+  function openEditProduct(item: LocalPurchaseItem) {
+    if (item.itemType !== 'product' || !item.catalogProductId) return
+    const saleUnit = (item.catalogProduct?.saleUnit as ProductSaleUnit | undefined) ?? 'UND'
+    // Stub mínimo: CatalogFormDialog recarga el producto completo por id.
+    setEditingProduct({
+      id: item.catalogProductId,
+      name: item.catalogProduct?.name ?? 'Producto',
+      description: null,
+      category: item.catalogProduct?.category ?? 'OTHER',
+      sale_unit: saleUnit,
+      formula_id: null,
+      image_path: null,
+      sale_price_usd: '0',
+      previous_sale_price_usd: null,
+      cost_usd: '0',
+      stock_quantity: '0',
+      active: true,
+      created_at: '',
+      updated_at: '',
+    })
+    setProductDialogOpen(true)
   }
 
   const confirmPayload = useMemo(
@@ -928,9 +989,9 @@ export function PurchaseDetallePage() {
                           </p>
                         ) : (
                           <p className="text-muted-foreground text-xs">
-                            La tasa queda en esta compra; no modifica Configuración. Al cambiarla,
-                            el monto en {entrySymbol} se recalcula y el monto en{' '}
-                            {baseCurrencyCode} del ítem no cambia.
+                            La tasa queda en esta compra; no modifica Configuración. Podés editar el
+                            precio en {entrySymbol}; al cambiar la tasa, ese monto se recalcula y el
+                            costo en {baseCurrencyCode} del ítem no cambia.
                           </p>
                         )}
                       </>
@@ -1172,7 +1233,10 @@ export function PurchaseDetallePage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setProductDialogOpen(true)}
+                      onClick={() => {
+                        setEditingProduct(null)
+                        setProductDialogOpen(true)
+                      }}
                     >
                       <Plus />
                       Nuevo producto
@@ -1256,12 +1320,7 @@ export function PurchaseDetallePage() {
                                   decimals={entryPriceDecimals}
                                   className="h-8 w-28"
                                   disabled={!canEnterPriceInNative}
-                                  value={formatItemNativeDisplay(
-                                    item.unitPriceUsd,
-                                    rateNum,
-                                    displayEntryCurrency,
-                                    baseCurrencyCode
-                                  )}
+                                  value={nativeUnitPriceDisplay(item)}
                                   onChange={(e) => {
                                     const native =
                                       parseDecimalInput(e.target.value, entryPriceDecimals) ?? 0
@@ -1288,13 +1347,7 @@ export function PurchaseDetallePage() {
                             <td className="px-3 py-2 tabular-nums">
                               {entryInNative && isValidPurchaseRate(rateNum) ? (
                                 formatNative(
-                                  item.quantity *
-                                    formatItemNativeDisplay(
-                                      item.unitPriceUsd,
-                                      rateNum,
-                                      displayEntryCurrency,
-                                      baseCurrencyCode
-                                    ),
+                                  item.quantity * nativeUnitPriceDisplay(item),
                                   displayEntryCurrency
                                 )
                               ) : (
@@ -1310,6 +1363,17 @@ export function PurchaseDetallePage() {
                                     title="Editar material"
                                     aria-label="Editar material"
                                     onClick={() => openEditMaterial(item)}
+                                  >
+                                    <Pencil />
+                                  </Button>
+                                ) : null}
+                                {item.itemType === 'product' ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    title="Editar producto"
+                                    aria-label="Editar producto"
+                                    onClick={() => openEditProduct(item)}
                                   >
                                     <Pencil />
                                   </Button>
@@ -1427,9 +1491,25 @@ export function PurchaseDetallePage() {
           />
           <CatalogFormDialog
             open={productDialogOpen}
-            onOpenChange={setProductDialogOpen}
+            onOpenChange={(open) => {
+              setProductDialogOpen(open)
+              if (!open) setEditingProduct(null)
+            }}
+            product={editingProduct}
             purchaseFlow
-            onCreated={(product) => void addProductToItems(product)}
+            onCreated={(product) => {
+              if (editingProduct) {
+                syncProductInItems(product)
+              } else {
+                void addProductToItems(product)
+              }
+            }}
+            onSaved={() => {
+              if (!editingProduct) return
+              void getCatalogProduct(editingProduct.id)
+                .then((product) => syncProductInItems(product))
+                .catch((err) => notifyApiError(err, 'No se pudo actualizar el producto en la compra'))
+            }}
           />
           <ConfirmarPurchaseDialog
             open={confirmDialogOpen}
