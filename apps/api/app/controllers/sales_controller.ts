@@ -1,3 +1,4 @@
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import SaleService from '#services/sale_service'
 import { serializeSale, serializeSaleListItem } from '#transformers/sale_transformer'
 import { parseRouteId } from '#utils/parse_route_id'
@@ -54,6 +55,10 @@ export default class SalesController {
     const sale = await this.service.crear(
       payload.confirm ? { ...payload, sold_by_user_id: Number(auth.getUserOrFail().id) } : payload
     )
+    // confirm:true already broadcasts inside sale_service.confirmar
+    if (!payload.confirm) {
+      broadcastCompanyEvent('sale.changed')
+    }
 
     return serialize({
       sale: serializeSale(sale),
@@ -63,6 +68,7 @@ export default class SalesController {
   async update({ params, request, serialize }: HttpContext) {
     const payload = await request.validateUsing(updateSaleValidator)
     const sale = await this.service.actualizar(parseRouteId(params.id, 'factura'), payload)
+    broadcastCompanyEvent('sale.changed')
 
     return serialize({
       sale: serializeSale(sale),
@@ -71,6 +77,7 @@ export default class SalesController {
 
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(parseRouteId(params.id, 'factura'))
+    broadcastCompanyEvent('sale.changed')
 
     return serialize(result)
   }
@@ -94,6 +101,7 @@ export default class SalesController {
       parseRouteId(params.id, 'factura'),
       payload.order_status
     )
+    broadcastCompanyEvent('sale.changed')
 
     return serialize({
       sale: serializeSale(sale),

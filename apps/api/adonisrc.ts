@@ -54,6 +54,8 @@ export default defineConfig({
     () => import('@adonisjs/cors/cors_provider'),
     () => import('@adonisjs/auth/auth_provider'),
     () => import('@adonisjs/drive/drive_provider'),
+    // Compat shim: upstream transmit_provider needs app.getMode() (core ≥ warmup API).
+    () => import('#providers/transmit_compat_provider'),
     () => import('#providers/api_provider'),
   ],
 
@@ -70,6 +72,7 @@ export default defineConfig({
     () => import('#start/kernel'),
     () => import('#start/validator'),
     () => import('#start/storage'),
+    () => import('#start/transmit'),
   ],
 
   /*

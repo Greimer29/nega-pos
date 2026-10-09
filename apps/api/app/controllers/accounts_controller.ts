@@ -6,6 +6,7 @@ import {
   updateAccountValidator,
 } from '#validators/account'
 import type { HttpContext } from '@adonisjs/core/http'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 
 export default class AccountsController {
   private service = new AccountService()
@@ -37,6 +38,7 @@ export default class AccountsController {
     const payload = await request.validateUsing(createAccountValidator)
     const account = await this.service.crear(payload)
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       account: serializeAccount(account),
     })
@@ -46,6 +48,7 @@ export default class AccountsController {
     const payload = await request.validateUsing(updateAccountValidator)
     const account = await this.service.actualizar(Number(params.id), payload)
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       account: serializeAccount(account),
     })
@@ -54,6 +57,7 @@ export default class AccountsController {
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       id: result.id,
       eliminado: true,

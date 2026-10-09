@@ -5,6 +5,7 @@ import { RouterProvider } from 'react-router-dom'
 import { AuthProvider } from '@/features/auth/components/auth-provider'
 import { BusinessThemeProvider } from '@/features/branding/business-theme-provider'
 import { ToastViewport } from '@/features/notifications/toast-viewport'
+import { CompanyRealtimeProvider } from '@/features/realtime/company-realtime-provider'
 import { loadRuntimeApiConfig } from '@/lib/api'
 import { queryClient } from '@/lib/query-client'
 import { router } from '@/routes/router'
@@ -18,10 +19,12 @@ async function bootstrap() {
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <BusinessThemeProvider>
-            <RouterProvider router={router} />
-            <ToastViewport />
-          </BusinessThemeProvider>
+          <CompanyRealtimeProvider>
+            <BusinessThemeProvider>
+              <RouterProvider router={router} />
+              <ToastViewport />
+            </BusinessThemeProvider>
+          </CompanyRealtimeProvider>
         </AuthProvider>
       </QueryClientProvider>
     </StrictMode>

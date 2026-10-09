@@ -1,3 +1,4 @@
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import ExpenseService from '#services/expense_service'
 import { serializeExpense } from '#transformers/expense_transformer'
 import {
@@ -39,6 +40,7 @@ export default class ExpensesController {
   async store({ request, serialize }: HttpContext) {
     const payload = await request.validateUsing(createExpenseValidator)
     const expense = await this.service.crear(payload)
+    broadcastCompanyEvent('expense.changed')
 
     return serialize({
       expense: await serializeExpense(expense),
@@ -48,6 +50,7 @@ export default class ExpensesController {
   async update({ params, request, serialize }: HttpContext) {
     const payload = await request.validateUsing(updateExpenseValidator)
     const expense = await this.service.actualizar(Number(params.id), payload)
+    broadcastCompanyEvent('expense.changed')
 
     return serialize({
       expense: await serializeExpense(expense),
@@ -56,6 +59,7 @@ export default class ExpensesController {
 
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
+    broadcastCompanyEvent('expense.changed')
 
     return serialize({
       id: result.id,

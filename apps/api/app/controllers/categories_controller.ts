@@ -5,6 +5,7 @@ import {
   updateCategoryValidator,
 } from '#validators/category'
 import type { HttpContext } from '@adonisjs/core/http'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 
 function serializeCategory(category: Awaited<ReturnType<CategoryService['listar']>>[number]) {
   return {
@@ -33,6 +34,7 @@ export default class CategoriesController {
     const payload = await request.validateUsing(createCategoryValidator)
     const category = await this.service.crear(payload)
 
+    broadcastCompanyEvent('catalog.changed')
     return serialize({
       category: serializeCategory(category),
     })
@@ -42,6 +44,7 @@ export default class CategoriesController {
     const payload = await request.validateUsing(updateCategoryValidator)
     const category = await this.service.actualizar(Number(params.id), payload)
 
+    broadcastCompanyEvent('catalog.changed')
     return serialize({
       category: serializeCategory(category),
     })
@@ -50,6 +53,7 @@ export default class CategoriesController {
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
 
+    broadcastCompanyEvent('catalog.changed')
     return serialize(result)
   }
 }

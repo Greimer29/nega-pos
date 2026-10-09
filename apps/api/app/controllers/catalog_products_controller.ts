@@ -1,5 +1,6 @@
 import CatalogProductService from '#services/catalog_product_service'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import ProductInventoryService from '#services/product_inventory_service'
 import type CatalogProduct from '#models/catalog_product'
 import {
@@ -99,6 +100,7 @@ export default class CatalogProductsController {
       ...payload,
       created_by_user_id: Number(auth.getUserOrFail().id),
     })
+    broadcastCompanyEvent('catalog.changed')
 
     return serialize({
       movimiento: serializeProductMovimientos([movimiento])[0],
@@ -111,6 +113,7 @@ export default class CatalogProductsController {
       ...payload,
       created_by_user_id: Number(auth.getUserOrFail().id),
     })
+    broadcastCompanyEvent('catalog.changed')
 
     return serialize({
       movimientos: serializeProductMovimientos(movimientos),
@@ -121,6 +124,7 @@ export default class CatalogProductsController {
   async store({ request, serialize }: HttpContext) {
     const payload = await request.validateUsing(createCatalogProductValidator)
     const product = await this.service.crear(payload)
+    broadcastCompanyEvent('catalog.changed')
 
     return serialize({
       catalog_product: await this.serializeWithStock(product),
@@ -132,6 +136,7 @@ export default class CatalogProductsController {
     const { product, costWarnings } = await this.service.actualizar(Number(params.id), payload, {
       userId: Number(auth.getUserOrFail().id),
     })
+    broadcastCompanyEvent('catalog.changed')
 
     return serialize({
       catalog_product: await this.serializeWithStock(product),
@@ -144,6 +149,7 @@ export default class CatalogProductsController {
     const product = await this.service.replaceSizes(Number(params.id), payload.sizes, {
       userId: Number(auth.getUserOrFail().id),
     })
+    broadcastCompanyEvent('catalog.changed')
 
     return serialize({
       catalog_product: await this.serializeWithStock(product),
@@ -157,6 +163,7 @@ export default class CatalogProductsController {
       profit_margin_percent: payload.profit_margin_percent,
       userId: Number(auth.getUserOrFail().id),
     })
+    broadcastCompanyEvent('catalog.changed')
 
     return serialize({
       updatedCount: result.updatedCount,
@@ -167,12 +174,14 @@ export default class CatalogProductsController {
   async importar({ request, serialize }: HttpContext) {
     const payload = await request.validateUsing(importCatalogProductsValidator)
     const result = await this.service.importar(payload.item_kind, payload.rows)
+    broadcastCompanyEvent('catalog.changed')
 
     return serialize(result)
   }
 
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
+    broadcastCompanyEvent('catalog.changed')
 
     return serialize(result)
   }

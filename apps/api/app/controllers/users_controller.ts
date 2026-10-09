@@ -7,6 +7,7 @@ import {
   updateUserValidator,
 } from '#validators/user'
 import type { HttpContext } from '@adonisjs/core/http'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 
 export default class UsersController {
   private service = new UserService()
@@ -35,6 +36,7 @@ export default class UsersController {
     const payload = await request.validateUsing(createUserValidator)
     const user = await this.service.crear(payload)
 
+    broadcastCompanyEvent('user.changed')
     return serialize({ user: serializeUser(user) })
   }
 
@@ -43,6 +45,7 @@ export default class UsersController {
     const actor = auth.getUserOrFail()
     const user = await this.service.actualizar(Number(params.id), payload, Number(actor.id))
 
+    broadcastCompanyEvent('user.changed')
     return serialize({ user: serializeUser(user) })
   }
 
@@ -55,6 +58,7 @@ export default class UsersController {
       Number(actor.id)
     )
 
+    broadcastCompanyEvent('user.changed')
     return serialize({ user: serializeUser(user) })
   }
 }

@@ -3,6 +3,7 @@ import TurnoNoAbiertoException from '#exceptions/turno_no_abierto_exception'
 import TurnoNoEncontradoException from '#exceptions/turno_no_encontrado_exception'
 import TurnoYaAbiertoException from '#exceptions/turno_ya_abierto_exception'
 import TurnoYaCerradoException from '#exceptions/turno_ya_cerrado_exception'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import { APP_TIMEZONE, nowInAppZone } from '#utils/app_timezone'
 import db from '@adonisjs/lucid/services/db'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
@@ -52,7 +53,7 @@ export default class SalesShiftService {
   }
 
   async abrir(userId: number, notes?: string | null): Promise<SalesShift> {
-    return db.transaction(async (trx) => {
+    const shift = await db.transaction(async (trx) => {
       const existing = await SalesShift.query({ client: trx })
         .where('status', 'OPEN')
         .forUpdate()
@@ -62,40 +63,44 @@ export default class SalesShiftService {
         throw new TurnoYaAbiertoException()
       }
 
-      const shift = new SalesShift()
-      shift.openedAt = DateTime.now()
-      shift.closedAt = null
-      shift.openedByUserId = userId
-      shift.closedByUserId = null
-      shift.status = 'OPEN'
-      shift.notes = notes?.trim() ? notes.trim() : null
-      shift.useTransaction(trx)
-      await shift.save()
+      const created = new SalesShift()
+      created.openedAt = DateTime.now()
+      created.closedAt = null
+      created.openedByUserId = userId
+      created.closedByUserId = null
+      created.status = 'OPEN'
+      created.notes = notes?.trim() ? notes.trim() : null
+      created.useTransaction(trx)
+      await created.save()
 
-      return shift
+      return created
     })
+    broadcastCompanyEvent('shift.changed')
+    return shift
   }
 
   async cerrar(id: number, userId: number): Promise<SalesShift> {
-    return db.transaction(async (trx) => {
-      const shift = await SalesShift.query({ client: trx }).where('id', id).forUpdate().first()
+    const shift = await db.transaction(async (trx) => {
+      const current = await SalesShift.query({ client: trx }).where('id', id).forUpdate().first()
 
-      if (!shift) {
+      if (!current) {
         throw new TurnoNoEncontradoException()
       }
 
-      if (shift.status !== 'OPEN') {
+      if (current.status !== 'OPEN') {
         throw new TurnoYaCerradoException()
       }
 
-      shift.status = 'CLOSED'
-      shift.closedAt = DateTime.now()
-      shift.closedByUserId = userId
-      shift.useTransaction(trx)
-      await shift.save()
+      current.status = 'CLOSED'
+      current.closedAt = DateTime.now()
+      current.closedByUserId = userId
+      current.useTransaction(trx)
+      await current.save()
 
-      return shift
+      return current
     })
+    broadcastCompanyEvent('shift.changed')
+    return shift
   }
 
   /**

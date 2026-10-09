@@ -13,6 +13,7 @@ import {
 } from '#validators/purchase'
 import type { HttpContext } from '@adonisjs/core/http'
 import { serializeCostWarning } from '#types/cost_warning'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 
 export default class PurchasesControleler {
   private service = new PurchaseService()
@@ -93,6 +94,7 @@ export default class PurchasesControleler {
     const payload = await request.validateUsing(createPurchaseValidator)
     const purchase = await this.service.crear(payload)
 
+    broadcastCompanyEvent('purchase.changed')
     return serialize({
       purchase: serializePurchase(purchase),
     })
@@ -105,6 +107,7 @@ export default class PurchasesControleler {
     const payload = await request.validateUsing(updatePurchaseValidator)
     const purchase = await this.service.actualizar(Number(params.id), payload)
 
+    broadcastCompanyEvent('purchase.changed')
     return serialize({
       purchase: serializePurchase(purchase),
     })
@@ -116,6 +119,7 @@ export default class PurchasesControleler {
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
 
+    broadcastCompanyEvent('purchase.changed')
     return serialize({
       id: result.id,
       eliminado: result.eliminado,
@@ -129,6 +133,7 @@ export default class PurchasesControleler {
     const payload = await request.validateUsing(createPurchaseItemValidator)
     const item = await this.service.agregarItem(Number(params.id), payload)
 
+    broadcastCompanyEvent('purchase.changed')
     return serialize({
       item: serializePurchaseItems([item])[0],
     })
@@ -145,6 +150,7 @@ export default class PurchasesControleler {
       payload
     )
 
+    broadcastCompanyEvent('purchase.changed')
     return serialize({
       item: serializePurchaseItems([item])[0],
     })
@@ -156,6 +162,7 @@ export default class PurchasesControleler {
   async destroyItem({ params, serialize }: HttpContext) {
     const result = await this.service.eliminarItem(Number(params.id), Number(params.itemId))
 
+    broadcastCompanyEvent('purchase.changed')
     return serialize({
       id: result.id,
       eliminado: result.eliminado,

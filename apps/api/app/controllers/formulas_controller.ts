@@ -12,6 +12,7 @@ import {
   updateFormulaValidator,
 } from '#validators/formula'
 import type { HttpContext } from '@adonisjs/core/http'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 
 export default class FormulasController {
   private service = new FormulaService()
@@ -51,6 +52,7 @@ export default class FormulasController {
     const payload = await request.validateUsing(createFormulaValidator)
     const formula = await this.service.crear(payload)
 
+    broadcastCompanyEvent('catalog.changed')
     return serialize({
       formula: serializeFormula(formula, { productsCount: 0 }),
     })
@@ -61,6 +63,7 @@ export default class FormulasController {
     const formula = await this.service.actualizar(Number(params.id), payload)
     const productsCount = await this.service.contarProductosVinculados(Number(formula.id))
 
+    broadcastCompanyEvent('catalog.changed')
     return serialize({
       formula: serializeFormula(formula, { productsCount }),
     })
@@ -68,6 +71,7 @@ export default class FormulasController {
 
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
+    broadcastCompanyEvent('catalog.changed')
     return serialize(result)
   }
 
@@ -86,6 +90,7 @@ export default class FormulasController {
       payload.items
     )
 
+    broadcastCompanyEvent('catalog.changed')
     return serialize({
       materials: items.map((item) => serializeFormulaMaterialItem(item)),
       cost_warnings: costWarnings.map(serializeCostWarning),

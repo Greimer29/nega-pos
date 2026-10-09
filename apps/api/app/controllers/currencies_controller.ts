@@ -7,6 +7,7 @@ import {
 import { updateBaseCurrencyValidator } from '#validators/settings'
 import { serializeCurrency } from '#transformers/currency_transformer'
 import type { HttpContext } from '@adonisjs/core/http'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 
 export default class CurrenciesController {
   private service = new CurrencyService()
@@ -32,6 +33,7 @@ export default class CurrenciesController {
   async updateBaseCurrency({ request, serialize }: HttpContext) {
     const payload = await request.validateUsing(updateBaseCurrencyValidator)
     const baseCurrencyCode = await this.service.setBaseCurrencyCode(payload.base_currency_code)
+    broadcastCompanyEvent('settings.changed')
     return serialize({ base_currency_code: baseCurrencyCode })
   }
 
@@ -39,6 +41,7 @@ export default class CurrenciesController {
     const payload = await request.validateUsing(createCurrencyValidator)
     const currency = await this.service.crear(payload)
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       currency: serializeCurrency(currency),
     })
@@ -48,6 +51,7 @@ export default class CurrenciesController {
     const payload = await request.validateUsing(updateCurrencyValidator)
     const currency = await this.service.actualizar(params.code, payload)
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       currency: serializeCurrency(currency),
     })
@@ -56,6 +60,7 @@ export default class CurrenciesController {
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(params.code)
 
+    broadcastCompanyEvent('settings.changed')
     return serialize(result)
   }
 }

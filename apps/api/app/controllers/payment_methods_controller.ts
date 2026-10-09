@@ -6,6 +6,7 @@ import {
 } from '#validators/payment_method'
 import { serializePaymentMethod } from '#transformers/payment_method_transformer'
 import type { HttpContext } from '@adonisjs/core/http'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 
 export default class PaymentMethodsController {
   private service = new PaymentMethodService()
@@ -23,6 +24,7 @@ export default class PaymentMethodsController {
     const payload = await request.validateUsing(createPaymentMethodValidator)
     const method = await this.service.crear(payload)
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       payment_method: serializePaymentMethod(method),
     })
@@ -32,6 +34,7 @@ export default class PaymentMethodsController {
     const payload = await request.validateUsing(updatePaymentMethodValidator)
     const method = await this.service.actualizar(params.code, payload)
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       payment_method: serializePaymentMethod(method),
     })
@@ -40,6 +43,7 @@ export default class PaymentMethodsController {
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(params.code)
 
+    broadcastCompanyEvent('settings.changed')
     return serialize(result)
   }
 }

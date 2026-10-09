@@ -1,4 +1,5 @@
 import MachineExpenseService from '#services/machine_expense_service'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import { serializeMachineExpense } from '#transformers/machine_transformer'
 import { listMachineExpensesValidator, updateMachineExpenseValidator } from '#validators/machine'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -38,6 +39,8 @@ export default class MachineExpensesControleler {
   async update({ params, request, serialize }: HttpContext) {
     const payload = await request.validateUsing(updateMachineExpenseValidator)
     const expense = await this.service.actualizar(Number(params.id), payload)
+    broadcastCompanyEvent('machine.changed')
+    broadcastCompanyEvent('expense.changed')
 
     return serialize({
       expense: serializeMachineExpense(expense),
@@ -49,6 +52,8 @@ export default class MachineExpensesControleler {
    */
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
+    broadcastCompanyEvent('machine.changed')
+    broadcastCompanyEvent('expense.changed')
 
     return serialize({
       id: result.id,
@@ -84,6 +89,8 @@ export default class MachineExpensesControleler {
     }
 
     const expense = await this.service.guardarComprobante(Number(params.id), comprobante)
+    broadcastCompanyEvent('machine.changed')
+    broadcastCompanyEvent('expense.changed')
 
     return serialize({
       expense: serializeMachineExpense(expense),
