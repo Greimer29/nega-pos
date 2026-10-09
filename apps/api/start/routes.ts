@@ -5,8 +5,19 @@
 */
 
 import router from '@adonisjs/core/services/router'
+import transmit from '@adonisjs/transmit/services/main'
 import { middleware } from '#start/kernel'
 import { controllers } from '#generated/controllers'
+
+/**
+ * SSE realtime (Adonis Transmit). Subscribe requires session auth so channel
+ * authorization can read ctx.auth.user + tenant store.
+ */
+transmit.registerRoutes((route) => {
+  if (route.getPattern() === '__transmit/subscribe') {
+    route.middleware(middleware.auth({ guards: ['web'] }))
+  }
+})
 const FormulasController = () => import('#controllers/formulas_controller')
 const CatalogProductsController = () => import('#controllers/catalog_products_controller')
 const SalesController = () => import('#controllers/sales_controller')

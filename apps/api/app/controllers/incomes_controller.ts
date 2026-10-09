@@ -1,3 +1,4 @@
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import IncomeService from '#services/income_service'
 import { serializeIncome } from '#transformers/income_transformer'
 import {
@@ -38,6 +39,7 @@ export default class IncomesController {
   async store({ request, serialize }: HttpContext) {
     const payload = await request.validateUsing(createIncomeValidator)
     const income = await this.service.crear(payload)
+    broadcastCompanyEvent('income.changed')
 
     return serialize({
       income: await serializeIncome(income),
@@ -47,6 +49,7 @@ export default class IncomesController {
   async update({ params, request, serialize }: HttpContext) {
     const payload = await request.validateUsing(updateIncomeValidator)
     const income = await this.service.actualizar(Number(params.id), payload)
+    broadcastCompanyEvent('income.changed')
 
     return serialize({
       income: await serializeIncome(income),
@@ -55,6 +58,7 @@ export default class IncomesController {
 
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
+    broadcastCompanyEvent('income.changed')
 
     return serialize({
       id: result.id,

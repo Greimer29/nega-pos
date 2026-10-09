@@ -1,6 +1,7 @@
 import SupplierService from '#services/supplier_service'
 import SupplierPaymentService from '#services/supplier_payment_service'
 import SupplierInvoiceService from '#services/supplier_invoice_service'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import { serializeSupplier } from '#transformers/supplier_transformer'
 import { serializeExpense } from '#transformers/expense_transformer'
 import { serializePurchase } from '#transformers/purchase_transformer'
@@ -52,6 +53,7 @@ export default class SuppliersControleler {
   async store({ request, serialize }: HttpContext) {
     const payload = await request.validateUsing(createSupplierValidator)
     const supplier = await this.service.crear(payload)
+    broadcastCompanyEvent('supplier.changed')
 
     return serialize({
       supplier: serializeSupplier(supplier),
@@ -64,6 +66,7 @@ export default class SuppliersControleler {
   async update({ params, request, serialize }: HttpContext) {
     const payload = await request.validateUsing(updateSupplierValidator)
     const supplier = await this.service.actualizar(Number(params.id), payload)
+    broadcastCompanyEvent('supplier.changed')
 
     return serialize({
       supplier: serializeSupplier(supplier),
@@ -75,6 +78,7 @@ export default class SuppliersControleler {
    */
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
+    broadcastCompanyEvent('supplier.changed')
 
     return serialize({
       id: result.id,
@@ -115,6 +119,8 @@ export default class SuppliersControleler {
   async storeInvoice({ params, request, serialize }: HttpContext) {
     const payload = await request.validateUsing(createSupplierInvoiceValidator)
     const result = await this.invoiceService.registrar(Number(params.id), payload)
+    broadcastCompanyEvent('supplier.changed')
+    broadcastCompanyEvent(result.kind === 'expense' ? 'expense.changed' : 'purchase.changed')
 
     if (result.kind === 'expense') {
       return serialize({
@@ -135,6 +141,7 @@ export default class SuppliersControleler {
       ...payload,
       supplier_id: Number(params.id),
     })
+    broadcastCompanyEvent('supplier.changed')
 
     return serialize({
       payment: {

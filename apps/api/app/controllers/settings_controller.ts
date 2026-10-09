@@ -9,6 +9,7 @@ import {
   updateProfitMarginValidator,
 } from '#validators/settings'
 import type { HttpContext } from '@adonisjs/core/http'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 
 export default class SettingsController {
   private service = new AppSettingsService()
@@ -27,6 +28,7 @@ export default class SettingsController {
     const payload = await request.validateUsing(updateExchangeRateValidator)
     const saved = await this.service.setExchangeRate(payload.usd_rate)
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       usdRate: saved.toFixed(4),
     })
@@ -44,6 +46,7 @@ export default class SettingsController {
     const payload = await request.validateUsing(updateProfitMarginValidator)
     const saved = await this.service.setProfitMarginPercent(payload.profit_margin_percent)
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       profitMarginPercent: saved.toFixed(2),
     })
@@ -64,6 +67,7 @@ export default class SettingsController {
       email: payload.email ?? '',
     })
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       business_profile: serializeBusinessProfile(profile),
     })
@@ -81,6 +85,7 @@ export default class SettingsController {
 
     const profile = await this.businessProfileService.guardarLogo(file)
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       business_profile: serializeBusinessProfile(profile),
     })
@@ -98,6 +103,7 @@ export default class SettingsController {
   async deleteLogo({ serialize }: HttpContext) {
     const profile = await this.businessProfileService.eliminarLogo()
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       business_profile: serializeBusinessProfile(profile),
     })
@@ -139,6 +145,7 @@ export default class SettingsController {
       categoryRouting: payload.categoryRouting,
     })
 
+    broadcastCompanyEvent('settings.changed')
     return serialize({
       print_config: result.printConfig,
       persisted: result.persisted,

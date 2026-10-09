@@ -16,6 +16,7 @@ import {
 import { serializeOrderLine } from '#transformers/order_line_transformer'
 import { createOrderLineValidator, updateOrderLineValidator } from '#validators/order_line'
 import type { HttpContext } from '@adonisjs/core/http'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 
 export default class OrdersController {
   private service = new OrderService()
@@ -73,6 +74,7 @@ export default class OrdersController {
 
     const order = await this.service.crear(payload)
 
+    broadcastCompanyEvent('order.changed')
     return serialize({
       order: serializeOrder(order),
     })
@@ -90,6 +92,7 @@ export default class OrdersController {
 
     const order = await this.service.actualizar(Number(params.id), payload)
 
+    broadcastCompanyEvent('order.changed')
     return serialize({
       order: serializeOrder(order),
     })
@@ -101,6 +104,7 @@ export default class OrdersController {
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
 
+    broadcastCompanyEvent('order.changed')
     return serialize({
       id: result.id,
       eliminado: result.eliminado,
@@ -116,6 +120,7 @@ export default class OrdersController {
 
     const order = await this.service.obtener(Number(params.id))
 
+    broadcastCompanyEvent('order.changed')
     return serialize({
       orderMaterial: serializeOrderMaterial(orderMaterial, order.totalQuantity),
     })
@@ -134,6 +139,7 @@ export default class OrdersController {
 
     const order = await this.service.obtener(Number(params.id))
 
+    broadcastCompanyEvent('order.changed')
     return serialize({
       orderMaterial: serializeOrderMaterial(orderMaterial, order.totalQuantity),
     })
@@ -145,6 +151,7 @@ export default class OrdersController {
   async destroyMaterial({ params, serialize }: HttpContext) {
     const result = await this.service.eliminarMaterial(Number(params.id), Number(params.pmId))
 
+    broadcastCompanyEvent('order.changed')
     return serialize({
       id: result.id,
       eliminado: result.eliminado,
@@ -167,6 +174,7 @@ export default class OrdersController {
       { force: payload.force, payment_type: payload.payment_type }
     )
 
+    broadcastCompanyEvent('order.changed')
     return serialize({
       order: serializeOrder(order, {
         lines: order.orderLines?.map((line) => serializeOrderLine(line)),
@@ -182,6 +190,7 @@ export default class OrdersController {
     const payload = await request.validateUsing(createOrderLineValidator)
     const line = await this.service.agregarLinea(Number(params.id), payload)
 
+    broadcastCompanyEvent('order.changed')
     return serialize({
       order_line: serializeOrderLine(line),
     })
@@ -195,6 +204,7 @@ export default class OrdersController {
       payload
     )
 
+    broadcastCompanyEvent('order.changed')
     return serialize({
       order_line: serializeOrderLine(line),
     })
@@ -203,6 +213,7 @@ export default class OrdersController {
   async destroyLine({ params, serialize }: HttpContext) {
     const result = await this.service.eliminarLinea(Number(params.id), Number(params.lineId))
 
+    broadcastCompanyEvent('order.changed')
     return serialize({
       id: result.id,
       eliminado: result.eliminado,
@@ -232,6 +243,7 @@ export default class OrdersController {
     const payload = await request.validateUsing(returnOrderValidator)
     const order = await this.service.devolver(Number(params.id), payload.lines)
 
+    broadcastCompanyEvent('order.changed')
     return serialize({
       order: serializeOrder(order, {
         lines: order.orderLines?.map((line) => serializeOrderLine(line)),

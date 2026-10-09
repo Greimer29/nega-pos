@@ -1,6 +1,7 @@
 import CustomerService from '#services/customer_service'
 import CustomerInvoiceService from '#services/customer_invoice_service'
 import CustomerPaymentService from '#services/customer_payment_service'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import { serializeCustomer, serializeCustomerConOrders } from '#transformers/customer_transformer'
 import { serializeSale } from '#transformers/sale_transformer'
 import {
@@ -53,6 +54,7 @@ export default class CustomersControleler {
   async store({ request, serialize }: HttpContext) {
     const payload = await request.validateUsing(createCustomerValidator)
     const customer = await this.service.crear(payload)
+    broadcastCompanyEvent('customer.changed')
 
     return serialize({
       customer: serializeCustomer(customer),
@@ -65,6 +67,7 @@ export default class CustomersControleler {
   async update({ params, request, serialize }: HttpContext) {
     const payload = await request.validateUsing(updateCustomerValidator)
     const customer = await this.service.actualizar(Number(params.id), payload)
+    broadcastCompanyEvent('customer.changed')
 
     return serialize({
       customer: serializeCustomer(customer),
@@ -76,6 +79,7 @@ export default class CustomersControleler {
    */
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
+    broadcastCompanyEvent('customer.changed')
 
     return serialize({
       id: result.id,
@@ -168,6 +172,8 @@ export default class CustomersControleler {
   async storeInvoice({ params, request, serialize }: HttpContext) {
     const payload = await request.validateUsing(createCustomerInvoiceValidator)
     const sale = await this.invoiceService.registrar(Number(params.id), payload)
+    broadcastCompanyEvent('sale.changed')
+    broadcastCompanyEvent('customer.changed')
 
     return serialize({
       sale: serializeSale(sale),
@@ -180,6 +186,7 @@ export default class CustomersControleler {
       ...payload,
       customer_id: Number(params.id),
     })
+    broadcastCompanyEvent('customer.changed')
 
     return serialize({
       payment: {

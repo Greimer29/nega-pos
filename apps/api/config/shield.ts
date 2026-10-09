@@ -36,8 +36,9 @@ const shieldConfig = defineConfig({
     /**
      * Route patterns to exclude from CSRF checks.
      * Useful for external webhooks or API endpoints.
+     * Transmit subscribe/unsubscribe already require session auth.
      */
-    exceptRoutes: [],
+    exceptRoutes: ['/__transmit/subscribe', '/__transmit/unsubscribe'],
 
     /**
      * Expose an encrypted XSRF-TOKEN cookie for frontend HTTP clients.

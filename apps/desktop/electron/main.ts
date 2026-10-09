@@ -199,7 +199,7 @@ function startStaticServer(): Promise<void> {
       return
     }
 
-    if (req.url?.startsWith('/api/')) {
+    if (req.url?.startsWith('/api/') || req.url?.startsWith('/__transmit')) {
       proxyApiRequest(req, res)
       return
     }

@@ -48,6 +48,7 @@ import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
 import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
@@ -405,6 +406,12 @@ export default class SaleService {
   }
 
   async confirmar(id: number, input: ConfirmSaleInput = {}): Promise<Sale> {
+    const confirmed = await this.confirmarInternal(id, input)
+    broadcastCompanyEvent('sale.changed')
+    return confirmed
+  }
+
+  private async confirmarInternal(id: number, input: ConfirmSaleInput = {}): Promise<Sale> {
     return db.transaction(async (trx) => {
       const sale = await Sale.query({ client: trx })
         .where('id', id)
@@ -514,6 +521,12 @@ export default class SaleService {
   }
 
   async devolver(id: number, lines?: SaleReturnLineInput[]): Promise<Sale> {
+    const returned = await this.devolverInternal(id, lines)
+    broadcastCompanyEvent('sale.changed')
+    return returned
+  }
+
+  private async devolverInternal(id: number, lines?: SaleReturnLineInput[]): Promise<Sale> {
     return db.transaction(async (trx) => {
       const sale = await Sale.query({ client: trx })
         .where('id', id)

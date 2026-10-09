@@ -98,6 +98,11 @@ export async function ensureCsrfToken(): Promise<void> {
   await csrfBootstrapPromise
 }
 
+/** Plain CSRF from GET /csrf (preferred over encrypted XSRF cookie). */
+export function getCachedCsrfToken(): string | null {
+  return cachedCsrfToken
+}
+
 export async function refreshCsrfToken(): Promise<void> {
   cachedCsrfToken = null
   csrfBootstrapPromise = null
@@ -211,6 +216,22 @@ export async function loadRuntimeApiConfig(): Promise<void> {
 
 export function getApiBaseUrl() {
   return apiBaseUrl
+}
+
+/**
+ * Base URL for Adonis Transmit (SSE).
+ * Same-origin when Vite/Electron proxies `/__transmit`; absolute API URL on mobile.
+ */
+export function getTransmitBaseUrl(): string {
+  if (usesLocalApiProxy() && typeof window !== 'undefined') {
+    return window.location.origin
+  }
+
+  const base = apiBaseUrl.replace(/\/$/, '')
+  if (!base) {
+    throw new Error('VITE_API_URL no configurada para Transmit.')
+  }
+  return base
 }
 
 export function getApiV1BaseUrl(): string {

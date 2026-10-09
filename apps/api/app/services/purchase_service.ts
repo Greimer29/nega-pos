@@ -28,6 +28,7 @@ import CurrencyService from '#services/currency_service'
 import MaterialService from '#services/material_service'
 import FormulaService from '#services/formula_service'
 import OrderService from '#services/order_service'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import type { CostWarning } from '#types/cost_warning'
 import type { FulfilledPendingOrder } from '#services/order_service'
 import drive from '@adonisjs/drive/services/main'
@@ -585,6 +586,7 @@ export default class PurchaseService {
       txResult.materialIds
     )
 
+    broadcastCompanyEvent('purchase.changed')
     return {
       purchase: txResult.purchase,
       costWarnings: txResult.costWarnings,
@@ -593,15 +595,15 @@ export default class PurchaseService {
   }
 
   async devolver(id: number): Promise<Purchase> {
-    return db.transaction(async (trx) => {
-      const purchase = await this.obtenerConLock(id, trx)
+    const purchase = await db.transaction(async (trx) => {
+      const locked = await this.obtenerConLock(id, trx)
 
-      if (purchase.status !== 'CONFIRMED') {
+      if (locked.status !== 'CONFIRMED') {
         throw new PurchaseNoDevolvableException()
       }
 
       const items = await PurchaseItem.query({ client: trx })
-        .where('purchaseId', Number(purchase.id))
+        .where('purchaseId', Number(locked.id))
         .preload('material')
         .preload('catalogProduct')
         .forUpdate()
@@ -680,7 +682,7 @@ export default class PurchaseService {
               type: 'REVERSAL_ADJUSTMENT',
               quantity: (-qty).toFixed(3),
               purchaseItemId: Number(item.id),
-              note: `Devolución compra #${purchase.id}`,
+              note: `Devolución compra #${locked.id}`,
             },
             { client: trx }
           )
@@ -693,22 +695,24 @@ export default class PurchaseService {
               type: 'REVERSAL_ADJUSTMENT',
               quantity: -qty,
               purchaseItemId: Number(item.id),
-              note: `Devolución compra #${purchase.id}`,
+              note: `Devolución compra #${locked.id}`,
             },
             trx
           )
         }
       }
 
-      purchase.status = 'VOIDED'
-      purchase.voidedAt = DateTime.now()
+      locked.status = 'VOIDED'
+      locked.voidedAt = DateTime.now()
       // Anulada: ya no hay CxP ni "por pagar".
-      purchase.balanceUsd = '0.0000'
-      purchase.useTransaction(trx)
-      await purchase.save()
+      locked.balanceUsd = '0.0000'
+      locked.useTransaction(trx)
+      await locked.save()
 
-      return purchase
+      return locked
     })
+    broadcastCompanyEvent('purchase.changed')
+    return purchase
   }
 
   async guardarFactura(purchaseId: number, file: MultipartFile): Promise<Purchase> {

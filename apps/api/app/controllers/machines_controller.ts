@@ -10,6 +10,7 @@ import {
   updateMachineValidator,
 } from '#validators/machine'
 import type { HttpContext } from '@adonisjs/core/http'
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 
 export default class MachinesControleler {
   private service = new MachineService()
@@ -64,6 +65,7 @@ export default class MachinesControleler {
     const payload = await request.validateUsing(createMachineValidator)
     const machine = await this.service.crear(payload)
 
+    broadcastCompanyEvent('machine.changed')
     return serialize({
       machine: serializeMachine(machine),
     })
@@ -76,6 +78,7 @@ export default class MachinesControleler {
     const payload = await request.validateUsing(updateMachineValidator)
     const machine = await this.service.actualizar(Number(params.id), payload)
 
+    broadcastCompanyEvent('machine.changed')
     return serialize({
       machine: serializeMachine(machine),
     })
@@ -87,6 +90,7 @@ export default class MachinesControleler {
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
 
+    broadcastCompanyEvent('machine.changed')
     return serialize({
       id: result.id,
       eliminado: true,
@@ -143,6 +147,8 @@ export default class MachinesControleler {
       account_id: payload.account_id,
     })
 
+    broadcastCompanyEvent('machine.changed')
+    broadcastCompanyEvent('expense.changed')
     return serialize({
       expense: await serializeExpense(expense),
     })

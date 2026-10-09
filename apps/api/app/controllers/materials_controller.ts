@@ -1,3 +1,4 @@
+import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import MaterialService from '#services/material_service'
 import { serializeMaterial, serializeMovimientos } from '#transformers/material_transformer'
 import {
@@ -71,6 +72,7 @@ export default class MaterialsControleler {
     const payload = await request.validateUsing(createMaterialValidator)
     const material = await this.service.crear(payload)
     const stockActual = await this.service.calcularStock(Number(material.id))
+    broadcastCompanyEvent('material.changed')
 
     return serialize({
       material: serializeMaterial(material, { stockActual }),
@@ -83,6 +85,7 @@ export default class MaterialsControleler {
   async importar({ request, serialize }: HttpContext) {
     const payload = await request.validateUsing(importMaterialsValidator)
     const result = await this.service.importar(payload.rows)
+    broadcastCompanyEvent('material.changed')
 
     return serialize(result)
   }
@@ -94,6 +97,7 @@ export default class MaterialsControleler {
     const payload = await request.validateUsing(updateMaterialValidator)
     const { material, costWarnings } = await this.service.actualizar(Number(params.id), payload)
     const stockActual = await this.service.calcularStock(Number(material.id))
+    broadcastCompanyEvent('material.changed')
 
     return serialize({
       material: serializeMaterial(material, { stockActual }),
@@ -106,6 +110,7 @@ export default class MaterialsControleler {
    */
   async destroy({ params, serialize }: HttpContext) {
     const result = await this.service.eliminar(Number(params.id))
+    broadcastCompanyEvent('material.changed')
 
     return serialize({
       id: result.id,
@@ -120,6 +125,7 @@ export default class MaterialsControleler {
   async ajuste({ params, request, serialize }: HttpContext) {
     const payload = await request.validateUsing(ajusteMaterialValidator)
     const movimiento = await this.service.ajustar(Number(params.id), payload)
+    broadcastCompanyEvent('material.changed')
     const stockActual = await this.service.calcularStock(Number(params.id))
 
     return serialize({

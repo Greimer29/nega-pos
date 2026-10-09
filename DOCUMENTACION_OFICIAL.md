@@ -59,10 +59,21 @@ flowchart TB
   Central[(nega_pos_central)]
   TenantA[(nega_pos_t_empresa)]
   Web -->|HTTP /api/v1| API
+  Web -->|SSE __transmit| API
   Desktop -->|HTTP + IPC printing| API
   API --> Central
   API --> TenantA
 ```
+
+### Realtime multi-caja (SSE / Transmit)
+
+Las mutaciones de una caja invalidan la caché **local** de TanStack Query; las demás cajas no se enteraban hasta refrescar. Con **Adonis Transmit** (SSE):
+
+1. Tras mutaciones relevantes, la API emite un evento liviano al canal `company/{companyId}` (p. ej. `sale.changed`, `shift.changed`, `catalog.changed`).
+2. Cada cliente autenticado se suscribe a su canal (cookie de sesión + CSRF en subscribe).
+3. El web mapea el evento a helpers de [`apps/web/src/lib/query-invalidation.ts`](apps/web/src/lib/query-invalidation.ts) y refetch **solo** las queries montadas.
+
+No se empujan filas completas por SSE. Vite y Electron proxyan `/__transmit` hacia la API. En Railway/proxy, no comprimir `text/event-stream`.
 
 **Dos planos de datos:**
 
@@ -888,6 +899,16 @@ Endpoints sobre la tabla histórica `machine_expenses` (lectura/edición de dato
 | DELETE | `/api/v1/settings/general/logo` | `settings.edit` | `SettingsController.deleteLogo` |
 | GET | `/api/v1/settings/printing` | `settings.view` | `SettingsController.getPrinting` |
 | PUT | `/api/v1/settings/printing` | `settings.edit` | `SettingsController.updatePrinting` |
+
+### Realtime Transmit (SSE)
+
+| Método | Ruta | Auth | Uso |
+|--------|------|------|-----|
+| GET | `/__transmit/events` | cookie (sesión) | Stream SSE |
+| POST | `/__transmit/subscribe` | `auth` + CSRF | Suscribir canal `company/{id}` |
+| POST | `/__transmit/unsubscribe` | cookie + CSRF | Baja del canal |
+
+Autorización de canal: solo si `tenant.companyId` coincide con el `:id` del canal y hay usuario autenticado.
 
 ### Actualizaciones de app (`settings.view`)
 
