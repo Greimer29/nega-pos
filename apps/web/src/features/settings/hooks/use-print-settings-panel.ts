@@ -58,6 +58,7 @@ export function usePrintSettingsPanel() {
   const configRef = useRef(config)
   const dirtyRef = useRef(false)
   const savingRef = useRef(false)
+  const loadGenerationRef = useRef(0)
 
   const [printers, setPrinters] = useState<PrinterInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -128,13 +129,14 @@ export function usePrintSettingsPanel() {
     let cancelled = false
 
     async function load() {
+      const generation = ++loadGenerationRef.current
       setLoading(true)
       try {
         const [{ printConfig: loadedConfig }, loadedPrinters] = await Promise.all([
           loadPrintConfigWithMigration(),
           electronAvailable ? loadPrinters() : Promise.resolve([] as PrinterInfo[]),
         ])
-        if (cancelled) {
+        if (cancelled || generation !== loadGenerationRef.current) {
           return
         }
 
@@ -162,7 +164,7 @@ export function usePrintSettingsPanel() {
           notifyApiError(loadError, 'No se pudo cargar la configuración de impresión')
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && generation === loadGenerationRef.current) {
           setLoading(false)
         }
       }

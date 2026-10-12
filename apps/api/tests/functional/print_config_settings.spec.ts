@@ -104,7 +104,7 @@ test.group('Print config settings API', (group) => {
     assert.isAbove(response.body().data.print_config.formats.length, 0)
   })
 
-  test('PUT devices: comanda.enabled=true + deviceName → GET keeps values', async ({
+  test('PUT devices: comanda.enabled=true + deviceName â†’ GET keeps values', async ({
     client,
     assert,
   }) => {
@@ -224,7 +224,7 @@ test.group('Print config settings API', (group) => {
     const user = await User.findByOrFail('email', ADMIN_EMAIL)
     const customHtml = '<div class="acceptance">CUSTOM HTML</div>'
 
-    // 1) Habilitar comanda + deviceName → “reinicio” (GET fresco) sigue habilitado
+    // 1) Habilitar comanda + deviceName â†’ â€œreinicioâ€ (GET fresco) sigue habilitado
     const devicesPut = await client
       .put('/api/v1/settings/printing')
       .loginAs(user)
@@ -240,7 +240,7 @@ test.group('Print config settings API', (group) => {
     )
     assert.equal(afterRestart1.body().data.print_config.behavior.printComandaOnConfirm, true)
 
-    // 2) Editar formato + guardar → “reinicio” conserva HTML
+    // 2) Editar formato + guardar â†’ â€œreinicioâ€ conserva HTML
     const formatsPut = await client
       .put('/api/v1/settings/printing')
       .loginAs(user)
@@ -287,9 +287,82 @@ test.group('Print config settings API', (group) => {
       )
     assert.equal(formatV2.bodyHtml, '<div class="acceptance">V2</div>')
 
-    // 5) “Navegador”: mismo API sin Electron — GET/PUT funcionan (persisted + business desde profile)
+    // 5) â€œNavegadorâ€: mismo API sin Electron â€” GET/PUT funcionan (persisted + business desde profile)
     assert.equal(afterFormats.body().data.persisted, true)
     assert.property(afterFormats.body().data.print_config, 'business')
     assert.property(afterFormats.body().data.print_config.business, 'name')
+  })
+
+  test('PUT onlyIfEmpty does not overwrite formats already saved', async ({ client, assert }) => {
+    const user = await User.findByOrFail('email', ADMIN_EMAIL)
+    const customHtml = '<div class="keep-on-import">KEEP</div>'
+
+    await client.put('/api/v1/settings/printing').loginAs(user).json(formatsPayload(customHtml))
+
+    const factory = createDefaultStoredPrintConfig()
+    const importResponse = await client.put('/api/v1/settings/printing').loginAs(user).json({
+      scope: 'full',
+      onlyIfEmpty: true,
+      ticket: factory.ticket,
+      formats: factory.formats,
+      documents: factory.documents,
+      behavior: factory.behavior,
+      categoryRouting: factory.categoryRouting,
+    })
+
+    importResponse.assertStatus(200)
+    const imported = importResponse
+      .body()
+      .data.print_config.formats.find(
+        (format: { id: string }) => format.id === BUILTIN_FORMAT_IDS.comanda
+      )
+    assert.equal(imported.bodyHtml, customHtml)
+
+    const getResponse = await client.get('/api/v1/settings/printing').loginAs(user)
+    const stored = getResponse
+      .body()
+      .data.print_config.formats.find(
+        (format: { id: string }) => format.id === BUILTIN_FORMAT_IDS.comanda
+      )
+    assert.equal(stored.bodyHtml, customHtml)
+  })
+
+  test('PUT onlyIfEmpty stores the payload when printing config is empty', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', ADMIN_EMAIL)
+    const customHtml = '<div class="first-import">FIRST</div>'
+    const base = createDefaultStoredPrintConfig()
+    const formats = createBuiltinFormats().map((format) =>
+      format.id === BUILTIN_FORMAT_IDS.invoice ? { ...format, bodyHtml: customHtml } : format
+    )
+
+    const importResponse = await client.put('/api/v1/settings/printing').loginAs(user).json({
+      scope: 'full',
+      onlyIfEmpty: true,
+      ticket: base.ticket,
+      formats,
+      documents: base.documents,
+      behavior: base.behavior,
+      categoryRouting: base.categoryRouting,
+    })
+
+    importResponse.assertStatus(200)
+    const imported = importResponse
+      .body()
+      .data.print_config.formats.find(
+        (format: { id: string }) => format.id === BUILTIN_FORMAT_IDS.invoice
+      )
+    assert.equal(imported.bodyHtml, customHtml)
+    assert.equal(importResponse.body().data.persisted, true)
+
+    const getResponse = await client.get('/api/v1/settings/printing').loginAs(user)
+    const stored = getResponse
+      .body()
+      .data.print_config.formats.find(
+        (format: { id: string }) => format.id === BUILTIN_FORMAT_IDS.invoice
+      )
+    assert.equal(stored.bodyHtml, customHtml)
   })
 })

@@ -5,6 +5,8 @@ export type PrintConfigSaveScope = 'devices' | 'formats' | 'full'
 
 export type PrintConfigSavePayload = {
   scope?: PrintConfigSaveScope
+  /** Importación legacy: el servidor no escribe si ya hay configuración guardada. */
+  onlyIfEmpty?: boolean
   ticket?: PrintConfig['ticket']
   formats?: PrintConfig['formats']
   documents?: PrintConfig['documents']

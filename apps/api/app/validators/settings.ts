@@ -62,6 +62,7 @@ const categoryComandaRuleSchema = vine.object({
 
 export const updatePrintConfigValidator = vine.create({
   scope: vine.enum(['devices', 'formats', 'full'] as const).optional(),
+  onlyIfEmpty: vine.boolean().optional(),
   ticket: vine
     .object({
       station_label: vine.string().trim().maxLength(120).optional().nullable(),

@@ -42,14 +42,18 @@ export function FormatFormDialog({
   const [bodyHtml, setBodyHtml] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const openedFormatId = open ? (format?.id ?? null) : null
+
+  // Solo al abrir o al cambiar de formato. Un refresh del objeto no debe
+  // borrar el HTML que el usuario está editando.
   useEffect(() => {
-    if (!open || !format) return
+    if (!openedFormatId || !format) return
     setSaving(false)
     setName(format.name)
     setDocumentKind(format.documentKind)
     setPaperWidthMm(String(format.paperWidthMm))
     setBodyHtml(format.bodyHtml)
-  }, [open, format])
+  }, [openedFormatId])
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -68,7 +72,7 @@ export function FormatFormDialog({
       return
     }
     if (!trimmedBody) {
-      notifyFormError('El contenido del formato no puede estar vacío.')
+      notifyFormError('El contenido del formato no puede estar vacÃ­o.')
       return
     }
 
@@ -148,7 +152,7 @@ export function FormatFormDialog({
               <div className="flex flex-col gap-1.5 text-center sm:text-left">
                 <DialogTitle>{isEditing ? 'Editar formato' : 'Nuevo formato'}</DialogTitle>
                 <DialogDescription>
-                  Editá el HTML del ticket. Al guardar se escribe de inmediato en el archivo local de
+                  EditÃ¡ el HTML del ticket. Al guardar se escribe de inmediato en el archivo local de
                   la app de escritorio.
                 </DialogDescription>
               </div>

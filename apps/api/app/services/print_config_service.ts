@@ -15,6 +15,7 @@ import {
   normalizeStoredPrintConfig,
   withPrintBusiness,
 } from '#utils/print_config_normalize'
+import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 
 export const PRINT_CONFIG_SETTING_KEY = 'print_config'
@@ -76,6 +77,10 @@ export default class PrintConfigService {
     scope: PrintConfigSaveScope,
     patch: PrintConfigPatch
   ): Promise<PrintConfigResult> {
+    if (patch.onlyIfEmpty) {
+      return this.guardarSoloSiNoHayFila(scope, patch)
+    }
+
     const { stored: current } = await this.obtenerStored()
     const next = mergePrintConfigPatch(current, patch, scope)
     await this.persist(next)
@@ -87,10 +92,84 @@ export default class PrintConfigService {
     }
   }
 
+  /**
+   * Importación legacy del desktop. Si la fila ya existe, no se toca:
+   * un arranque de la app no puede pisar formatos que el usuario ya guardó.
+   */
+  private async guardarSoloSiNoHayFila(
+    scope: PrintConfigSaveScope,
+    patch: PrintConfigPatch
+  ): Promise<PrintConfigResult> {
+    const stored = await db.transaction(async (trx) => {
+      const row = await AppSetting.query({ client: trx })
+        .where('key', PRINT_CONFIG_SETTING_KEY)
+        .forUpdate()
+        .first()
+
+      if (row) {
+        return parseStoredPrintConfig(row.value) ?? createDefaultStoredPrintConfig()
+      }
+
+      const next = mergePrintConfigPatch(createDefaultStoredPrintConfig(), patch, scope)
+      try {
+        await AppSetting.create(
+          {
+            key: PRINT_CONFIG_SETTING_KEY,
+            value: JSON.stringify(next),
+            updatedAt: DateTime.now(),
+          },
+          { client: trx }
+        )
+      } catch (error) {
+        if (!isDuplicateKeyError(error)) {
+          throw error
+        }
+        const raced = await AppSetting.query({ client: trx })
+          .where('key', PRINT_CONFIG_SETTING_KEY)
+          .first()
+        if (raced) {
+          return parseStoredPrintConfig(raced.value) ?? createDefaultStoredPrintConfig()
+        }
+        throw error
+      }
+
+      return next
+    })
+
+    const profile = await this.businessProfileService.obtener()
+    return {
+      printConfig: withPrintBusiness(stored, businessProfileToPrintBusiness(profile)),
+      persisted: true,
+    }
+  }
+
   private async persist(stored: StoredPrintConfig): Promise<void> {
     await AppSetting.updateOrCreate(
       { key: PRINT_CONFIG_SETTING_KEY },
       { value: JSON.stringify(stored), updatedAt: DateTime.now() }
     )
   }
+}
+
+function parseStoredPrintConfig(value: string | null | undefined): StoredPrintConfig | null {
+  if (!value) {
+    return null
+  }
+  try {
+    return normalizeStoredPrintConfig(JSON.parse(value) as Record<string, unknown>)
+  } catch {
+    return null
+  }
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  let current: unknown = error
+  for (let depth = 0; depth < 5 && current && typeof current === 'object'; depth += 1) {
+    const candidate = current as { code?: string; errno?: number; cause?: unknown }
+    if (candidate.code === 'ER_DUP_ENTRY' || candidate.errno === 1062) {
+      return true
+    }
+    current = candidate.cause
+  }
+  return false
 }

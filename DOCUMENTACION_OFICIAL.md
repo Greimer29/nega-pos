@@ -247,7 +247,7 @@ Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca produc
 - Habla con la **API pública HTTPS** (`VITE_API_URL` al buildear); cookies cross-origin (`SameSite=None; Secure` en producción)
 - CORS: setear `MOBILE_APP_ORIGIN=https://localhost` en la API (Railway / `.env`) para Android; iOS puede requerir origen `capacitor://localhost` adicional tras el primer build en Mac
 - **Android:** build de release `$env:VITE_API_URL="https://tu-api"; pnpm build:mobile` luego `pnpm --filter mobile build:apk:release`
-- **iOS:** dependencia `@capacitor/ios` lista; el proyecto nativo (`cap add ios`) y el Archive se hacen **solo en macOS + Xcode**. Guía: [`apps/mobile/README.md`](apps/mobile/README.md)
+- **iOS:** dependencia `@capacitor/ios` + esqueleto `apps/mobile/ios` (Capacitor). Archive **solo en macOS + Xcode**. En Mac: `export VITE_API_URL=…` + `bash scripts/prepare-ios.sh` + `pnpm --filter mobile open:ios`. Guía: [`apps/mobile/README.md`](apps/mobile/README.md)
 - Actualizaciones Android: card **Aplicación** descarga el APK; el usuario confirma la instalación. (iOS: TestFlight / App Store — no hay silent replace.)
 - **Escáner de código de barras:** `@capacitor/barcode-scanner` ^2.2.6 (oficial Ionic, compatible con Capacitor 7) + `@capacitor/core` en `apps/web` y `apps/mobile`. Abre la cámara en Android nativo (permiso `CAMERA`) y también en el navegador/desktop vía la UI web del plugin. El lector USB sigue escribiendo en el input de búsqueda y confirma con Enter.
 - Detalle: [`apps/mobile/README.md`](apps/mobile/README.md)
@@ -1020,7 +1020,7 @@ Cada feature encapsula servicios API (axios), hooks TanStack Query, componentes 
 - **Carrito de ventas**: `sessionStorage` vía `ventas-cart-draft.ts` — persiste borrador del POS entre recargas de pestaña.
 - **Filtros de listado**: `sessionStorage` vía `session-persisted-state.ts` (`nega-pos:filters:…`, scoped por empresa). El disparador UI es un **botón de icono** (`SlidersHorizontal`) con badge de filtros activos; el panel abre en drawer (desktop desde la derecha; móvil sheet ~80% desde abajo), con «Limpiar todo» y secciones plegables. El contenido del panel varía por módulo (catálogo vs período/cuenta vs estado). Se mantienen al navegar entre módulos en la misma pestaña hasta que el usuario los cambie; se limpian al logout y al cerrar la pestaña. No incluye diálogos abiertos ni UI efímera (acordeones, filas expandidas).
 - **Vista del catálogo**: `sessionStorage` key `catalog-layout` (`grid` \| `table`) compartida entre Productos, Servicios, Materiales y el POS de `/ventas`. El botón de lista (tabla) / grilla 2×2 (tarjetas) está junto a la búsqueda.
-- **Formatos de impresión**: leídos/escritos vía API (`app_settings.print_config`). El PUT acepta `scope: devices | formats | full` para que Ventas y Formatos no se pisen. En Desktop, si la BD está vacía, se importa una vez el JSON legacy de userData.
+- **Formatos de impresión**: leídos/escritos vía API (`app_settings.print_config`). El PUT acepta `scope: devices | formats | full` para que Ventas y Formatos no se pisen. En Desktop, si la BD está vacía y ya existe un JSON en userData de una versión anterior, se importa una sola vez (`onlyIfEmpty`: no pisa una fila existente). El `print-config.json` empaquetado con el instalador no se copia ni se sube.
 
 ---
 
