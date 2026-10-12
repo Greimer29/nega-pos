@@ -51,6 +51,21 @@ if (fs.existsSync(mobileDir)) {
     appVersion,
     buildId,
   })
+
+  // Capacitor iOS: MARKETING_VERSION = semver; CURRENT_PROJECT_VERSION = build entero (CFBundleVersion).
+  const iosPbx = path.join(mobileDir, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj')
+  if (fs.existsSync(iosPbx)) {
+    const buildNumber = String(
+      appVersion
+        .split('.')
+        .map((n) => Number.parseInt(n, 10) || 0)
+        .reduce((acc, n, i) => acc + n * [10000, 100, 1][i], 0)
+    )
+    let pbx = fs.readFileSync(iosPbx, 'utf8')
+    pbx = pbx.replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${appVersion};`)
+    pbx = pbx.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${buildNumber};`)
+    fs.writeFileSync(iosPbx, pbx, 'utf8')
+  }
 }
 
 console.log(`sync-app-version: v${appVersion} (build ${buildId})`)
