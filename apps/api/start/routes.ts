@@ -58,6 +58,10 @@ router
             router.post('companies', [PlatformController, 'createCompany'])
             router.post('companies/:id/retry', [PlatformController, 'retryProvision'])
             router.patch('companies/:id/status', [PlatformController, 'updateCompanyStatus'])
+            router.patch('companies/:id/offline-sales', [
+              PlatformController,
+              'updateCompanyOfflineSales',
+            ])
             router.delete('companies/:id', [PlatformController, 'destroyCompany'])
           })
           .use(middleware.platformAuth())
@@ -265,6 +269,11 @@ router
         router.patch('users/:id/active', [UsersController, 'updateActive'])
 
         router.get('sales/next-code', [SalesController, 'nextCode'])
+        router.get('sales/offline-catalog', [SalesController, 'offlineCatalog'])
+        router.post('sales/offline', [SalesController, 'syncOffline'])
+        router.post('sales/offline/returns', [SalesController, 'syncOfflineReturn'])
+        router.post('sales/offline/transitions', [SalesController, 'syncOfflineTransition'])
+        router.post('sales/offline/close-shift', [SalesController, 'syncOfflineCloseShift'])
         router.get('sales', [SalesController, 'index'])
         router.get('sales/:id', [SalesController, 'show'])
         router.post('sales', [SalesController, 'store'])

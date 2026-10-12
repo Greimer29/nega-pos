@@ -34,10 +34,26 @@ const updatesApi = {
   },
 }
 
+const offlineApi = {
+  isAvailable: true as const,
+  getRootPath: (): Promise<string> => ipcRenderer.invoke('offline:getRootPath'),
+  writeCatalog: (json: string): Promise<void> => ipcRenderer.invoke('offline:writeCatalog', json),
+  readCatalog: (): Promise<string | null> => ipcRenderer.invoke('offline:readCatalog'),
+  listOperations: (): Promise<string[]> => ipcRenderer.invoke('offline:listOperations'),
+  writeOperation: (fileName: string, json: string): Promise<void> =>
+    ipcRenderer.invoke('offline:writeOperation', fileName, json),
+  readOperation: (fileName: string): Promise<string | null> =>
+    ipcRenderer.invoke('offline:readOperation', fileName),
+  deleteOperation: (fileName: string): Promise<boolean> =>
+    ipcRenderer.invoke('offline:deleteOperation', fileName),
+  hasPending: (): Promise<boolean> => ipcRenderer.invoke('offline:hasPending'),
+}
+
 const appVersion = String(ipcRenderer.sendSync('app:getVersion') ?? '')
 
 contextBridge.exposeInMainWorld('negaPos', {
   appVersion,
   printing: printingApi,
   updates: updatesApi,
+  offline: offlineApi,
 })

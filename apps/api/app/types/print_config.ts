@@ -64,13 +64,15 @@ export type PrintConfig = {
   }
 }
 
-/** Stored JSON in app_settings — business is never the source of truth. */
+/** Stored JSON in app_settings â€” business is never the source of truth. */
 export type StoredPrintConfig = Omit<PrintConfig, 'business'>
 
 export type PrintConfigSaveScope = 'devices' | 'formats' | 'full'
 
 export type PrintConfigPatch = {
   scope?: PrintConfigSaveScope
+  /** Legacy desktop import: write only when no print_config row exists yet. */
+  onlyIfEmpty?: boolean
   ticket?: PrintTicketConfig
   formats?: PrintFormatRecord[]
   documents?: PrintConfig['documents']

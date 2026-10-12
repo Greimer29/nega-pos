@@ -1030,7 +1030,9 @@ export class SaleSchema extends BaseModel {
     'discountUsd',
     'guestName',
     'id',
+    'needsStockReview',
     'notes',
+    'offlineClientId',
     'orderStatus',
     'paymentMethodCode',
     'paymentType',
@@ -1068,7 +1070,11 @@ export class SaleSchema extends BaseModel {
   @column({ isPrimary: true })
   declare id: bigint | number
   @column()
+  declare needsStockReview: boolean
+  @column()
   declare notes: string | null
+  @column()
+  declare offlineClientId: string | null
   @column()
   declare orderStatus: string
   @column()

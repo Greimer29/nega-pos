@@ -230,7 +230,7 @@ Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca produc
 | Servicio | Puerto | Comando |
 |----------|--------|---------|
 | API | 3333 | `pnpm dev:api` o contenedor `nega-pos-api` |
-| Web (Vite) | 5173 | `pnpm dev:web` |
+| Web (Vite) | 5173 | `pnpm dev:web` (escucha en todas las interfaces; otra PC de la LAN usa `http://<ip-de-esta-máquina>:5173`) |
 | MySQL | 3306 | `pnpm dev:db` / `pnpm dev:stack` |
 
 ### Desktop
@@ -247,7 +247,7 @@ Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca produc
 - Habla con la **API pública HTTPS** (`VITE_API_URL` al buildear); cookies cross-origin (`SameSite=None; Secure` en producción)
 - CORS: setear `MOBILE_APP_ORIGIN=https://localhost` en la API (Railway / `.env`) para Android; iOS puede requerir origen `capacitor://localhost` adicional tras el primer build en Mac
 - **Android:** build de release `$env:VITE_API_URL="https://tu-api"; pnpm build:mobile` luego `pnpm --filter mobile build:apk:release`
-- **iOS:** dependencia `@capacitor/ios` lista; el proyecto nativo (`cap add ios`) y el Archive se hacen **solo en macOS + Xcode**. Guía: [`apps/mobile/README.md`](apps/mobile/README.md)
+- **iOS:** dependencia `@capacitor/ios` + esqueleto `apps/mobile/ios` (Capacitor). Archive **solo en macOS + Xcode**. En Mac: `export VITE_API_URL=…` + `bash scripts/prepare-ios.sh` + `pnpm --filter mobile open:ios`. Guía: [`apps/mobile/README.md`](apps/mobile/README.md)
 - Actualizaciones Android: card **Aplicación** descarga el APK; el usuario confirma la instalación. (iOS: TestFlight / App Store — no hay silent replace.)
 - **Escáner de código de barras:** `@capacitor/barcode-scanner` ^2.2.6 (oficial Ionic, compatible con Capacitor 7) + `@capacitor/core` en `apps/web` y `apps/mobile`. Abre la cámara en Android nativo (permiso `CAMERA`) y también en el navegador/desktop vía la UI web del plugin. El lector USB sigue escribiendo en el input de búsqueda y confirma con Enter.
 - Detalle: [`apps/mobile/README.md`](apps/mobile/README.md)
@@ -453,11 +453,13 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`. Precios (`cos
 | Tabla | Campos clave |
 |-------|--------------|
 | `sales_shifts` | `opened_at`, `closed_at`, `opened_by_user_id`, `closed_by_user_id`, `status` (OPEN/CLOSED), `notes` |
-| `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), `discount_usd` (descuento de factura, default 0), `total_usd` (subtotal de líneas − descuento), `notes?` (nota de factura financiera / carga manual). `payment_method_code` queda como método principal (primer pago). |
+| `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), `discount_usd` (descuento de factura, default 0), `total_usd` (subtotal de líneas − descuento), `notes?` (nota de factura financiera / carga manual), `offline_client_id?` (id de caja, único; sync offline idempotente), `needs_stock_review` (venta offline aceptada con stock insuficiente). `payment_method_code` queda como método principal (primer pago). |
 | `sale_payments` | `sale_id`, `payment_method_code`, `amount_usd` (monto en moneda base), `currency_code`, `usd_rate`, `amount_native`, `sort_order`. Una factura de contado puede tener varios métodos; la suma de `amount_usd` = `sales.total_usd`. |
 | `sale_lines` | `catalog_product_id?`, `catalog_product_size_id?`, `size?` (snapshot), `material_id?`, `description`, `kitchen_note?` (indicaciones de cocina para comanda), cantidades y precios, `is_wholesale` (default false), `units_per_pack?` (snapshot). Si `is_wholesale`, la cantidad de la línea es en paquetes; al confirmar se descuenta `cantidad × units_per_pack` y el precio de línea es el de venta mayorista. |
 
 **Turnos de venta:** solo puede haber un turno `OPEN`. Confirmar venta (`POST /sales/:id/confirm` o `POST /sales` con `confirm: true`) exige turno abierto; sin turno → `TURNO_NO_ABIERTO` (409). La venta confirmada guarda `sales.sales_shift_id`.
+
+**Venta sin conexión:** el admin de plataforma habilita `companies.offline_sales_enabled` (BD central). Con el flag activo, desktop (`userData/offline/`) y móvil (IndexedDB) guardan `catalogo.json` al abrir el POS en línea y una cola de operaciones (`venta-*.json`, `devolucion-*.json`, `estado-*.json`, `cierre-turno.json`). Al reconectar se sincronizan en ese orden vía `POST /sales/offline*` y luego se refresca el catálogo (no se reemplaza si la cola sigue pendiente). El cobro online no cambia; el POS muestra **En línea** / **Sin conexión**.
 
 #### Máquinas
 
@@ -618,6 +620,7 @@ catalog_products ──< product_inventory_movements
 | POST | `/api/v1/platform/companies` | Platform | `Platform.createCompany` (provision inmediato) |
 | POST | `/api/v1/platform/companies/:id/retry` | Platform | `Platform.retryProvision` |
 | PATCH | `/api/v1/platform/companies/:id/status` | Platform | `Platform.updateCompanyStatus` |
+| PATCH | `/api/v1/platform/companies/:id/offline-sales` | Platform | `Platform.updateCompanyOfflineSales` (`offline_sales_enabled`) |
 | DELETE | `/api/v1/platform/companies/:id` | Platform | `Platform.destroyCompany` (borrado forzado: `confirm_slug` + DROP BD + directorio + uploads) |
 
 ### Usuarios (`users.*`)
@@ -675,6 +678,11 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
 | GET | `/api/v1/sales/next-code` | `ventas.view` | `SalesController.nextCode` |
+| GET | `/api/v1/sales/offline-catalog` | `ventas.view` | `SalesController.offlineCatalog` (snapshot para copia local) |
+| POST | `/api/v1/sales/offline` | `ventas.confirm` | `SalesController.syncOffline` (idempotente por `offline_client_id`; asigna `code`; acepta stock insuficiente → `needs_stock_review`) |
+| POST | `/api/v1/sales/offline/returns` | `ventas.confirm` | `SalesController.syncOfflineReturn` |
+| POST | `/api/v1/sales/offline/transitions` | `ventas.confirm` | `SalesController.syncOfflineTransition` |
+| POST | `/api/v1/sales/offline/close-shift` | `ventas.confirm` | `SalesController.syncOfflineCloseShift` |
 | GET | `/api/v1/sales` | `ventas.view` | `SalesController.index` |
 | GET | `/api/v1/sales/:id` | `ventas.view` | `SalesController.show` |
 | POST | `/api/v1/sales` | `ventas.confirm` | `SalesController.store` |
@@ -1012,7 +1020,7 @@ Cada feature encapsula servicios API (axios), hooks TanStack Query, componentes 
 - **Carrito de ventas**: `sessionStorage` vía `ventas-cart-draft.ts` — persiste borrador del POS entre recargas de pestaña.
 - **Filtros de listado**: `sessionStorage` vía `session-persisted-state.ts` (`nega-pos:filters:…`, scoped por empresa). El disparador UI es un **botón de icono** (`SlidersHorizontal`) con badge de filtros activos; el panel abre en drawer (desktop desde la derecha; móvil sheet ~80% desde abajo), con «Limpiar todo» y secciones plegables. El contenido del panel varía por módulo (catálogo vs período/cuenta vs estado). Se mantienen al navegar entre módulos en la misma pestaña hasta que el usuario los cambie; se limpian al logout y al cerrar la pestaña. No incluye diálogos abiertos ni UI efímera (acordeones, filas expandidas).
 - **Vista del catálogo**: `sessionStorage` key `catalog-layout` (`grid` \| `table`) compartida entre Productos, Servicios, Materiales y el POS de `/ventas`. El botón de lista (tabla) / grilla 2×2 (tarjetas) está junto a la búsqueda.
-- **Formatos de impresión**: leídos/escritos vía API (`app_settings.print_config`). El PUT acepta `scope: devices | formats | full` para que Ventas y Formatos no se pisen. En Desktop, si la BD está vacía, se importa una vez el JSON legacy de userData.
+- **Formatos de impresión**: leídos/escritos vía API (`app_settings.print_config`). El PUT acepta `scope: devices | formats | full` para que Ventas y Formatos no se pisen. En Desktop, si la BD está vacía y ya existe un JSON en userData de una versión anterior, se importa una sola vez (`onlyIfEmpty`: no pisa una fila existente). El `print-config.json` empaquetado con el instalador no se copia ni se sube.
 
 ---
 

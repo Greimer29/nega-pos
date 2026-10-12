@@ -12,6 +12,17 @@ import DirectoryAuthService, {
   readTenantClaims,
 } from '#services/directory_auth_service'
 import env from '#start/env'
+import type CompanyModel from '#models/company'
+
+function serializeAuthCompany(company: CompanyModel) {
+  return {
+    id: company.id,
+    slug: company.slug,
+    name: company.name,
+    status: company.status,
+    offlineSalesEnabled: Boolean(company.offlineSalesEnabled),
+  }
+}
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
 const LOGIN_MAX_ATTEMPTS = 10
@@ -125,12 +136,7 @@ export default class AuthControleler {
         clearLoginRateLimit(ip)
         return serialize({
           user: serializeUser(user),
-          company: {
-            id: activeCompany.id,
-            slug: activeCompany.slug,
-            name: activeCompany.name,
-            status: activeCompany.status,
-          },
+          company: serializeAuthCompany(activeCompany),
         })
       } catch (error) {
         return mapAuthError(error, response)
@@ -189,12 +195,7 @@ export default class AuthControleler {
       )
       return serialize({
         user: serializeUser(user),
-        company: {
-          id: activeCompany.id,
-          slug: activeCompany.slug,
-          name: activeCompany.name,
-          status: activeCompany.status,
-        },
+        company: serializeAuthCompany(activeCompany),
       })
     } catch (error) {
       return mapAuthError(error, response)
@@ -224,12 +225,7 @@ export default class AuthControleler {
     if (isMultiTenantEnabled() && claims) {
       const row = await Company.find(claims.companyId)
       if (row) {
-        company = {
-          id: row.id,
-          slug: row.slug,
-          name: row.name,
-          status: row.status,
-        }
+        company = serializeAuthCompany(row)
       }
     }
 

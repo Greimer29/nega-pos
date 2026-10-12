@@ -25,22 +25,9 @@ function mmToThermalPx(mm: number): number {
   return Math.round((mm / 25.4) * THERMAL_DPI)
 }
 
-/** Única fuente de verdad: userData (igual en dev y packaged). */
+/** JSON legacy en userData. La configuración que se imprime vive en la API. */
 export function getPrintConfigPath(): string {
   return path.join(app.getPath('userData'), PRINT_CONFIG_FILE)
-}
-
-function getLegacyConfigCandidates(): string[] {
-  const candidates = [path.join(app.getAppPath(), PRINT_CONFIG_FILE)]
-
-  if (app.isPackaged) {
-    candidates.push(
-      path.join(path.dirname(process.execPath), PRINT_CONFIG_FILE),
-      path.join(process.resourcesPath, PRINT_CONFIG_FILE)
-    )
-  }
-
-  return candidates
 }
 
 function tryParseConfigFile(filePath: string): PrintConfig | null {
@@ -56,45 +43,8 @@ function tryParseConfigFile(filePath: string): PrintConfig | null {
   }
 }
 
-/**
- * Si aún no hay config en userData, copia la primera legacy válida y la escribe ahí.
- */
-function migrateLegacyConfigIfNeeded(targetPath: string): PrintConfig | null {
-  if (fs.existsSync(targetPath)) {
-    return null
-  }
-
-  for (const candidate of getLegacyConfigCandidates()) {
-    if (path.resolve(candidate) === path.resolve(targetPath)) {
-      continue
-    }
-
-    const parsed = tryParseConfigFile(candidate)
-    if (!parsed) {
-      continue
-    }
-
-    fs.mkdirSync(path.dirname(targetPath), { recursive: true })
-    fs.writeFileSync(targetPath, JSON.stringify(parsed, null, 2), 'utf8')
-    return parsed
-  }
-
-  return null
-}
-
 export function readPrintConfig(): PrintConfig {
-  const target = getPrintConfigPath()
-  const migrated = migrateLegacyConfigIfNeeded(target)
-  if (migrated) {
-    return migrated
-  }
-
-  const fromUserData = tryParseConfigFile(target)
-  if (fromUserData) {
-    return fromUserData
-  }
-
-  return structuredClone(DEFAULT_PRINT_CONFIG)
+  return tryParseConfigFile(getPrintConfigPath()) ?? structuredClone(DEFAULT_PRINT_CONFIG)
 }
 
 export function writePrintConfig(config: PrintConfig): PrintConfig {
@@ -121,16 +71,12 @@ export function markPrintConfigMigrated(): void {
 }
 
 /**
- * Local JSON for one-shot API import. Returns null when no file exists
- * (avoids pushing pure code defaults into an empty DB).
+ * JSON ya presente en userData, para una importación única a la API.
+ * No copia el print-config.json del instalador: ese archivo es la plantilla
+ * de fábrica y pisaría los formatos guardados en la base.
  */
 export function readLocalPrintConfigForMigration(): PrintConfig | null {
-  const target = getPrintConfigPath()
-  const migrated = migrateLegacyConfigIfNeeded(target)
-  if (migrated) {
-    return migrated
-  }
-  return tryParseConfigFile(target)
+  return tryParseConfigFile(getPrintConfigPath())
 }
 
 export type PrinterInfo = {
@@ -167,7 +113,8 @@ export type PrintHtmlOptions = {
 }
 
 export async function printHtml(options: PrintHtmlOptions): Promise<void> {
-  const { html, deviceName, paperWidthMm = DEFAULT_TICKET_PAPER_WIDTH_MM, jobName = 'Nega POS' } = options
+  const { html, deviceName, paperWidthMm = DEFAULT_TICKET_PAPER_WIDTH_MM, jobName = 'Nega POS' } =
+    options
 
   if (!deviceName.trim()) {
     throw new Error('No hay impresora configurada para este documento.')

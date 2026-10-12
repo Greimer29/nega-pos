@@ -39,9 +39,11 @@ function frontendOrigins(): string[] {
   addOriginWithLocalhostTwins(origins, env.get('DESKTOP_APP_ORIGIN'))
   addOriginWithLocalhostTwins(origins, env.get('MOBILE_APP_ORIGIN'))
 
-  // Capacitor Android (http scheme / iOS capacitor://) — orígenes fijos del WebView.
+  // Capacitor Android/iOS — orígenes fijos del WebView (además de MOBILE_APP_ORIGIN).
   origins.add('http://localhost')
+  origins.add('https://localhost')
   origins.add('capacitor://localhost')
+  origins.add('ionic://localhost')
 
   return [...origins]
 }

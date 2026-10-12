@@ -5,7 +5,7 @@ Wrapper Capacitor que empaqueta el build de `apps/web` y habla con la **API púb
 | Plataforma | Estado | Dónde se buildea |
 |------------|--------|------------------|
 | Android | Listo (`apps/mobile/android`) | Windows o Mac |
-| iOS | Dependencia lista; proyecto nativo se genera en Mac | **Solo macOS + Xcode** |
+| iOS | Esqueleto `apps/mobile/ios` en repo; Archive en Mac | **Solo macOS + Xcode** |
 
 ## Requisitos comunes
 
@@ -72,30 +72,25 @@ Alternativa: copiar el monorepo por USB/airdrop (excluí `node_modules`, `apps/w
 - Cuenta **Apple Developer** (para device físico, TestFlight o App Store)
 - CocoaPods (`sudo gem install cocoapods` o vía Homebrew)
 
-### Primera vez: crear el proyecto nativo iOS
+### Preparar y abrir en Xcode
 
-Desde la raíz del monorepo en la Mac:
-
-```bash
-export VITE_API_URL="https://nega-pos-api-production.up.railway.app"
-pnpm build:mobile          # build web + sync android (ok)
-pnpm --filter mobile add:ios   # crea apps/mobile/ios (solo una vez)
-pnpm --filter mobile sync:ios  # copia web/dist + plugins a ios
-pnpm --filter mobile open:ios  # abre Xcode
-```
-
-Si `cap add ios` ya corrió y existe `apps/mobile/ios`, en siguientes builds:
+El esqueleto nativo `apps/mobile/ios` ya puede existir en el repo (generado con Capacitor).
+En la Mac (con Xcode + CocoaPods):
 
 ```bash
 export VITE_API_URL="https://nega-pos-api-production.up.railway.app"
-pnpm --filter web build
-# regenerar runtime-config (mismo que build:mobile)
-node -e "const fs=require('fs'); const u=process.env.VITE_API_URL; fs.writeFileSync('apps/web/dist/runtime-config.json', JSON.stringify({apiUrl:u,useLocalApiProxy:false},null,2))"
-pnpm --filter mobile sync:ios
+bash scripts/prepare-ios.sh
 pnpm --filter mobile open:ios
 ```
 
-O usá el script PowerShell equivalente en Mac con bash (build web + sync ios).
+Equivale a: sync versión → build web → `runtime-config.json` → `cap sync ios` → `pod install`.
+
+Si `apps/mobile/ios` no existiera:
+
+```bash
+pnpm --filter mobile add:ios
+bash scripts/prepare-ios.sh
+```
 
 ### En Xcode
 
@@ -118,4 +113,5 @@ O usá el script PowerShell equivalente en Mac con bash (build web + sync ios).
 - Impresión térmica y `print-config.json` son exclusivos del desktop.
 - `pnpm build:desktop` no invoca Capacitor.
 - Tras cambiar la web, volvé a correr `pnpm build:mobile` (Android) o web build + `sync:ios` (iOS en Mac).
-- El escáner de barcode (`@capacitor/barcode-scanner`) requiere permisos de cámara en iOS (`NSCameraUsageDescription` en `Info.plist`) — Capacitor/plugin suelen agregarlo al sync; verificá en Xcode.
+- El escáner de barcode (`@capacitor/barcode-scanner`) usa `NSCameraUsageDescription` en `Info.plist` (ya incluido en el esqueleto iOS).
+- Con `iosScheme: 'https'`, el origen WebView suele ser `https://localhost` (mismo allowlist que Android vía `MOBILE_APP_ORIGIN`). Si Xcode muestra otro origen, sumalo al CORS de la API.

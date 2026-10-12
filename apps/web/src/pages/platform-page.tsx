@@ -113,6 +113,25 @@ export function PlatformPage() {
     }
   }
 
+  async function onToggleOfflineSales(company: PlatformCompany, enabled: boolean) {
+    setBusy(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const updated = await platformService.updateCompanyOfflineSales(company.id, enabled)
+      setCompanies((prev) => prev.map((row) => (row.id === updated.id ? updated : row)))
+      setSuccess(
+        enabled
+          ? `Venta sin conexión habilitada para ${updated.name}.`
+          : `Venta sin conexión deshabilitada para ${updated.name}.`
+      )
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   function startDelete(company: PlatformCompany) {
     setError(null)
     setSuccess(null)
@@ -212,13 +231,14 @@ export function PlatformPage() {
                   <th className="py-2 pr-3">Slug</th>
                   <th className="py-2 pr-3">BD</th>
                   <th className="py-2 pr-3">Estado</th>
+                  <th className="py-2 pr-3">Venta sin conexión</th>
                   <th className="py-2">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {companies.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-4 text-neutral-500">
+                    <td colSpan={6} className="py-4 text-neutral-500">
                       Todavía no hay empresas. Usá “Nueva empresa” para crear la primera.
                     </td>
                   </tr>
@@ -229,6 +249,20 @@ export function PlatformPage() {
                       <td className="py-2 pr-3">{company.slug}</td>
                       <td className="py-2 pr-3 font-mono text-xs">{company.dbName}</td>
                       <td className="py-2 pr-3">{company.status}</td>
+                      <td className="py-2 pr-3">
+                        <label className="inline-flex items-center gap-2 text-xs text-neutral-300">
+                          <input
+                            type="checkbox"
+                            className="size-4 rounded border-neutral-600"
+                            checked={Boolean(company.offlineSalesEnabled)}
+                            disabled={busy || company.status !== 'ACTIVE'}
+                            onChange={(event) => {
+                              void onToggleOfflineSales(company, event.target.checked)
+                            }}
+                          />
+                          Habilitada
+                        </label>
+                      </td>
                       <td className="py-2">
                         <div className="flex flex-wrap gap-2">
                           {company.status === 'SUSPENDED' || company.status === 'PROVISIONING' ? (

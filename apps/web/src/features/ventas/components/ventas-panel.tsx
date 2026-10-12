@@ -90,6 +90,14 @@ import {
 } from '@/lib/barcode-scan'
 import { VentasPaymentMethodDialog } from '@/features/ventas/components/ventas-payment-method-dialog'
 import { useCurrentSalesShiftQuery } from '@/features/ventas/hooks/use-sales-shifts'
+import { useOfflinePos } from '@/features/offline/use-offline-pos'
+import {
+  applyLocalStockDeduction,
+  mapOfflineMaterials,
+  mapOfflineProducts,
+} from '@/features/offline/map-offline-catalog'
+import { writeOfflineCatalogSnapshot } from '@/features/offline/offline-storage'
+import { getElectronPrintingApi, isElectronPrintingAvailable } from '@/lib/electron-bridge'
 import { SaleLineFormulaDialog } from '@/features/ventas/components/sale-line-formula-dialog'
 import { SaleLineKitchenNoteDialog } from '@/features/ventas/components/sale-line-kitchen-note-dialog'
 import { ServiceLineDialog } from '@/features/ventas/components/service-line-dialog'
@@ -225,7 +233,16 @@ function VentasCreateView() {
   const canConfirmSale = can('ventas.confirm')
   const canCreditSale = can('ventas.credit')
   const { data: currentShift, isLoading: shiftLoading } = useCurrentSalesShiftQuery()
-  const shiftOpen = Boolean(currentShift)
+  const {
+    offlineEnabled,
+    connectivity,
+    catalog: offlineCatalog,
+    canSellOffline,
+    syncMessage,
+    clearSyncMessage,
+    persistOfflineSale,
+  } = useOfflinePos({ salesShiftId: currentShift ? Number(currentShift.id) : null })
+  const shiftOpen = Boolean(currentShift) || canSellOffline
   const [initialDraft] = useState(() => loadVentasCartDraft())
   const [catalogFilters, setCatalogFilters] = useSessionPersistedState(
     sessionFilterKey('ventas-catalog', company?.id),
@@ -469,12 +486,75 @@ function VentasCreateView() {
     invoiceDiscountUsd,
   ])
 
-  const productsRaw = catalogData?.catalog_products ?? []
-  const catalogMeta = catalogData?.meta
-  const servicesRaw = servicesData?.catalog_products ?? []
-  const servicesMeta = servicesData?.meta
-  const materialsRaw = materialsData?.materials ?? []
-  const materialsMeta = materialsData?.meta
+  const offlineProducts = useMemo(
+    () =>
+      canSellOffline && offlineCatalog
+        ? mapOfflineProducts(offlineCatalog, {
+            itemKind: 'PRODUCT',
+            search: catalogFilters.search || undefined,
+            category: category || undefined,
+          })
+        : null,
+    [canSellOffline, offlineCatalog, catalogFilters.search, category]
+  )
+  const offlineServices = useMemo(
+    () =>
+      canSellOffline && offlineCatalog
+        ? mapOfflineProducts(offlineCatalog, {
+            itemKind: 'SERVICE',
+            search: catalogFilters.search || undefined,
+            category: category || undefined,
+          })
+        : null,
+    [canSellOffline, offlineCatalog, catalogFilters.search, category]
+  )
+  const offlineMaterials = useMemo(
+    () =>
+      canSellOffline && offlineCatalog
+        ? mapOfflineMaterials(offlineCatalog, {
+            search: catalogFilters.search || undefined,
+          })
+        : null,
+    [canSellOffline, offlineCatalog, catalogFilters.search]
+  )
+
+  const productsRaw = offlineProducts ?? catalogData?.catalog_products ?? []
+  const catalogMeta = offlineProducts
+    ? {
+        total: offlineProducts.length,
+        perPage: offlineProducts.length,
+        currentPage: 1,
+        lastPage: 1,
+        firstPage: 1,
+      }
+    : catalogData?.meta
+  const servicesRaw = offlineServices ?? servicesData?.catalog_products ?? []
+  const servicesMeta = offlineServices
+    ? {
+        total: offlineServices.length,
+        perPage: offlineServices.length,
+        currentPage: 1,
+        lastPage: 1,
+        firstPage: 1,
+      }
+    : servicesData?.meta
+  const materialsRaw = offlineMaterials ?? materialsData?.materials ?? []
+  const materialsMeta = offlineMaterials
+    ? {
+        total: offlineMaterials.length,
+        perPage: offlineMaterials.length,
+        currentPage: 1,
+        lastPage: 1,
+        firstPage: 1,
+      }
+    : materialsData?.meta
+
+  useEffect(() => {
+    if (syncMessage) {
+      setSuccessMessage(syncMessage)
+      clearSyncMessage()
+    }
+  }, [syncMessage, clearSyncMessage])
 
   const priceBounds = useMemo(() => {
     const prices =
@@ -1122,6 +1202,64 @@ function VentasCreateView() {
     }
   }
 
+  async function printOfflineTicket(localRef: string, totalUsd: number) {
+    if (!isElectronPrintingAvailable()) {
+      return
+    }
+    const printing = getElectronPrintingApi()
+    if (!printing) {
+      return
+    }
+    try {
+      const printers = await printing.listPrinters()
+      const deviceName = printers.find((printer) => printer.isDefault)?.name ?? printers[0]?.name
+      if (!deviceName) {
+        return
+      }
+      const html = `<html><body style="font-family:monospace;font-size:12px">
+        <h3>Venta sin conexión</h3>
+        <p>Ref: ${localRef}</p>
+        <p>Total USD: ${totalUsd.toFixed(2)}</p>
+        <p>Se sincronizará al recuperar la red.</p>
+      </body></html>`
+      await printing.printHtml({ html, deviceName, jobName: `Offline ${localRef}` })
+    } catch {
+      // Ticket local is best-effort.
+    }
+  }
+
+  async function finalizeOfflineConfirm(payments?: ConfirmSaleInput['payments']) {
+    if (!canSellOffline) {
+      if (offlineEnabled) {
+        throw new Error(
+          'Sin conexión y sin copia local del catálogo. Abrí el POS con internet al menos una vez.'
+        )
+      }
+      throw new Error('La venta sin conexión no está habilitada para esta empresa.')
+    }
+
+    const lines = buildSaleLines()
+    const { localRef } = await persistOfflineSale({
+      customerId: customerId === '' ? null : Number(customerId),
+      guestName: clientName.trim() || null,
+      paymentType,
+      billingMode: billingMethod,
+      discountUsd: invoiceDiscount,
+      lines,
+      payments,
+      salesShiftId: currentShift ? Number(currentShift.id) : null,
+    })
+
+    if (offlineCatalog) {
+      const updated = applyLocalStockDeduction(offlineCatalog, lines)
+      await writeOfflineCatalogSnapshot(updated)
+    }
+
+    clearLocalCart()
+    setSuccessMessage(`Venta guardada sin conexión (${localRef}). Se subirá al recuperar la red.`)
+    await printOfflineTicket(localRef, payableTotal)
+  }
+
   async function confirmOrder() {
     if (cart.length === 0) {
       toast.warning('Agregá al menos un producto al carrito.')
@@ -1147,6 +1285,23 @@ function VentasCreateView() {
     setIsSubmitting(true)
 
     try {
+      if (canSellOffline) {
+        if (paymentType === 'CASH') {
+          setPendingSaleId(-1)
+          setPaymentDialogOpen(true)
+          return
+        }
+        await finalizeOfflineConfirm()
+        return
+      }
+
+      if (connectivity === 'offline' && offlineEnabled && !offlineCatalog) {
+        toast.warning(
+          'Sin conexión y sin copia local. Abrí el POS con internet al menos una vez para vender offline.'
+        )
+        return
+      }
+
       const saleId = await persistDraftSale()
       if (!isValidEntityId(saleId)) {
         throw new Error('No se pudo confirmar la venta: ID de factura inválido.')
@@ -1167,12 +1322,16 @@ function VentasCreateView() {
   }
 
   async function handlePaymentMethodConfirm(payments: ConfirmSaleInput['payments']) {
-    if (!pendingSaleId) return
+    if (pendingSaleId === null) return
 
     setIsSubmitting(true)
 
     try {
-      await finalizeConfirm(pendingSaleId, { payments })
+      if (pendingSaleId === -1 || canSellOffline) {
+        await finalizeOfflineConfirm(payments)
+      } else {
+        await finalizeConfirm(pendingSaleId, { payments })
+      }
       setPaymentDialogOpen(false)
       setPendingSaleId(null)
     } catch (submitError) {
@@ -1379,6 +1538,31 @@ function VentasCreateView() {
                 </CardDescription>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {offlineEnabled ? (
+                  <span
+                    className={cn(
+                      'rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                      connectivity === 'online'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : connectivity === 'offline'
+                          ? 'bg-amber-100 text-amber-900'
+                          : 'bg-neutral-100 text-neutral-600'
+                    )}
+                    title={
+                      canSellOffline
+                        ? 'Cobro local habilitado con copia en disco'
+                        : connectivity === 'offline'
+                          ? 'Sin copia local o sin permiso de cobro offline'
+                          : 'Conexión con la API disponible'
+                    }
+                  >
+                    {connectivity === 'online'
+                      ? 'En línea'
+                      : connectivity === 'offline'
+                        ? 'Sin conexión'
+                        : 'Comprobando…'}
+                  </span>
+                ) : null}
                 <Button
                   type="button"
                   variant="outline"

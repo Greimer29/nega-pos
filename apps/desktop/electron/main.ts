@@ -23,6 +23,16 @@ import {
   writePrintConfig,
   type PrintHtmlOptions,
 } from './print-service'
+import {
+  deleteOfflineOperation,
+  getOfflineRootPath,
+  hasPendingOfflineOperations,
+  listOfflineOperationFiles,
+  readOfflineCatalog,
+  readOfflineOperation,
+  writeOfflineCatalog,
+  writeOfflineOperation,
+} from './offline-store'
 
 const APP_NAME = 'Nega POS'
 const PORT = 51740
@@ -272,6 +282,37 @@ function registerUpdateHandlers(): void {
   })
 }
 
+function registerOfflineHandlers(): void {
+  ipcMain.handle('offline:getRootPath', async () => getOfflineRootPath())
+  ipcMain.handle('offline:writeCatalog', async (_event, json: string) => {
+    if (typeof json !== 'string') {
+      throw new Error('Catálogo offline inválido')
+    }
+    writeOfflineCatalog(json)
+  })
+  ipcMain.handle('offline:readCatalog', async () => readOfflineCatalog())
+  ipcMain.handle('offline:listOperations', async () => listOfflineOperationFiles())
+  ipcMain.handle('offline:writeOperation', async (_event, fileName: string, json: string) => {
+    if (typeof fileName !== 'string' || typeof json !== 'string') {
+      throw new Error('Operación offline inválida')
+    }
+    writeOfflineOperation(fileName, json)
+  })
+  ipcMain.handle('offline:readOperation', async (_event, fileName: string) => {
+    if (typeof fileName !== 'string') {
+      throw new Error('Nombre de operación inválido')
+    }
+    return readOfflineOperation(fileName)
+  })
+  ipcMain.handle('offline:deleteOperation', async (_event, fileName: string) => {
+    if (typeof fileName !== 'string') {
+      throw new Error('Nombre de operación inválido')
+    }
+    return deleteOfflineOperation(fileName)
+  })
+  ipcMain.handle('offline:hasPending', async () => hasPendingOfflineOperations())
+}
+
 function getLoadedVersionPath(): string {
   return path.join(app.getPath('userData'), LOADED_VERSION_FILE)
 }
@@ -336,6 +377,7 @@ if (!gotSingleInstanceLock) {
     try {
       registerPrintingHandlers()
       registerUpdateHandlers()
+      registerOfflineHandlers()
       await startStaticServer()
       warmupApiConnection(runtimeApiUrl)
       await createWindow()

@@ -111,6 +111,16 @@ if (-not $NoBrowser) {
 Write-Host "==> Arrancando web (Ctrl+C detiene Vite; Docker sigue arriba)" -ForegroundColor Cyan
 Write-Host "    API:  http://localhost:3333" -ForegroundColor DarkGray
 Write-Host "    Web:  http://localhost:5173" -ForegroundColor DarkGray
+$lanIp = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+  Where-Object {
+    $_.PrefixOrigin -eq 'Dhcp' -and
+    $_.IPAddress -notlike '127.*' -and
+    $_.InterfaceAlias -notmatch 'vEthernet|WSL|Radmin|Loopback|VPN|TUN'
+  } |
+  Select-Object -ExpandProperty IPAddress -First 1
+if ($lanIp) {
+  Write-Host "    LAN:  http://${lanIp}:5173  (otra PC en la misma red)" -ForegroundColor DarkGray
+}
 Write-Host ""
 
 pnpm dev:web

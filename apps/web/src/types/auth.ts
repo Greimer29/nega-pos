@@ -14,6 +14,7 @@ export type AuthCompany = {
   slug: string
   name: string
   status: string
+  offlineSalesEnabled?: boolean
 }
 
 export type VineValidationDetail = {

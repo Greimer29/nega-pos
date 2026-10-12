@@ -39,11 +39,24 @@ export type ElectronUpdatesApi = {
   onProgress: (listener: (progress: ElectronUpdateProgress) => void) => () => void
 }
 
+export type ElectronOfflineApi = {
+  isAvailable: true
+  getRootPath: () => Promise<string>
+  writeCatalog: (json: string) => Promise<void>
+  readCatalog: () => Promise<string | null>
+  listOperations: () => Promise<string[]>
+  writeOperation: (fileName: string, json: string) => Promise<void>
+  readOperation: (fileName: string) => Promise<string | null>
+  deleteOperation: (fileName: string) => Promise<boolean>
+  hasPending: () => Promise<boolean>
+}
+
 export type ElectronBridge = {
   /** Versión del paquete Electron (`app.getVersion()`), fuente de verdad en desktop. */
   appVersion?: string
   printing: ElectronPrintingApi
   updates?: ElectronUpdatesApi
+  offline?: ElectronOfflineApi
 }
 
 export function getElectronAppVersion(): string | null {
@@ -71,4 +84,15 @@ export function getElectronUpdatesApi(): ElectronUpdatesApi | null {
     return null
   }
   return window.negaPos!.updates!
+}
+
+export function isElectronOfflineAvailable(): boolean {
+  return typeof window !== 'undefined' && window.negaPos?.offline?.isAvailable === true
+}
+
+export function getElectronOfflineApi(): ElectronOfflineApi | null {
+  if (!isElectronOfflineAvailable()) {
+    return null
+  }
+  return window.negaPos!.offline!
 }

@@ -133,6 +133,12 @@ async function maybeImportLocalPrintConfig(persisted: boolean): Promise<PrintCon
     return null
   }
 
+  const fresh = await fetchPrintConfig()
+  if (fresh.persisted) {
+    await markLocalPrintConfigMigrated()
+    return fresh.printConfig
+  }
+
   const local = await getLocalPrintConfigForMigration()
   if (!local) {
     await markLocalPrintConfigMigrated()
@@ -141,6 +147,7 @@ async function maybeImportLocalPrintConfig(persisted: boolean): Promise<PrintCon
 
   const imported = await savePrintConfig({
     scope: 'full',
+    onlyIfEmpty: true,
     ticket: local.ticket,
     formats: local.formats,
     documents: local.documents,
@@ -198,7 +205,7 @@ async function printComandaGroups(
   let jobIndex = startJobIndex
 
   if (!isComandaPrintingConfigured(config)) {
-    errors.push({ kind, message: `${label} está deshabilitado en configuración.` })
+    errors.push({ kind, message: `${label} estÃ¡ deshabilitado en configuraciÃ³n.` })
     return jobIndex
   }
 
@@ -217,7 +224,7 @@ async function printComandaGroups(
     if (!deviceName.trim()) {
       errors.push({
         kind,
-        message: `No hay impresora configurada para comanda (${categoryLabel ?? 'líneas sin destino'}).`,
+        message: `No hay impresora configurada para comanda (${categoryLabel ?? 'lÃ­neas sin destino'}).`,
       })
       continue
     }
@@ -238,7 +245,7 @@ async function printComandaGroups(
         error instanceof Error ? error.message : `No se pudo imprimir ${label.toLowerCase()}.`
       errors.push({
         kind,
-        message: `${label} (${categoryLabel ?? printerLabel} → ${deviceName}): ${baseMessage}`,
+        message: `${label} (${categoryLabel ?? printerLabel} â†’ ${deviceName}): ${baseMessage}`,
       })
     }
   }
@@ -274,7 +281,7 @@ export async function printSaleDocuments(
     jobIndex += 1
 
     if (!docSettings.enabled) {
-      errors.push({ kind, message: `${label} está deshabilitado en configuración.` })
+      errors.push({ kind, message: `${label} estÃ¡ deshabilitado en configuraciÃ³n.` })
       continue
     }
 
@@ -328,7 +335,7 @@ export async function reprintSaleDocument(
 export async function printTestDocument(kind: PrintDocumentKind): Promise<void> {
   const api = getElectronPrintingApi()
   if (!api) {
-    throw new Error('La impresión de prueba solo está disponible en la app de escritorio.')
+    throw new Error('La impresiÃ³n de prueba solo estÃ¡ disponible en la app de escritorio.')
   }
 
   const config = await getPrintConfig()
@@ -341,7 +348,7 @@ export async function printTestDocument(kind: PrintDocumentKind): Promise<void> 
   }
 
   if (!docSettings.deviceName.trim()) {
-    throw new Error(`Seleccioná una impresora para ${label.toLowerCase()}.`)
+    throw new Error(`SeleccionÃ¡ una impresora para ${label.toLowerCase()}.`)
   }
 
   const rendered = renderTestDocument(kind, config)
@@ -349,7 +356,7 @@ export async function printTestDocument(kind: PrintDocumentKind): Promise<void> 
     html: rendered.html,
     deviceName: docSettings.deviceName,
     paperWidthMm: docSettings.paperWidthMm,
-    jobName: `Prueba — ${label}`,
+    jobName: `Prueba â€” ${label}`,
   })
 }
 
@@ -361,7 +368,7 @@ async function printTestComanda(config: PrintConfig): Promise<void> {
 
   if (!isComandaPrintingConfigured(config)) {
     throw new Error(
-      'Habilitá la comanda o activá el enrutamiento por categoría con al menos una impresora asignada.'
+      'HabilitÃ¡ la comanda o activÃ¡ el enrutamiento por categorÃ­a con al menos una impresora asignada.'
     )
   }
 
@@ -376,7 +383,7 @@ async function printTestComanda(config: PrintConfig): Promise<void> {
   for (const [deviceName, lines] of groups) {
     if (!deviceName.trim()) {
       throw new Error(
-        `Hay categorías sin impresora (ej. ${resolveCategoryLabelForLines(lines) ?? 'sin categoría'}). Asigná una impresora en la tabla o en Comanda.`
+        `Hay categorÃ­as sin impresora (ej. ${resolveCategoryLabelForLines(lines) ?? 'sin categorÃ­a'}). AsignÃ¡ una impresora en la tabla o en Comanda.`
       )
     }
 
@@ -393,7 +400,7 @@ async function printTestComanda(config: PrintConfig): Promise<void> {
       html: rendered.html,
       deviceName,
       paperWidthMm: config.documents.comanda.paperWidthMm,
-      jobName: `Prueba — Comanda (${resolveCategoryLabelForLines(lines) ?? deviceName})`,
+      jobName: `Prueba â€” Comanda (${resolveCategoryLabelForLines(lines) ?? deviceName})`,
     })
   }
 }
