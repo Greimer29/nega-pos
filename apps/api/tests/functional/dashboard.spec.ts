@@ -980,6 +980,56 @@ test.group('Dashboard API', (group) => {
     assert.match(dailySeries[0]!.label, /^lun/i)
   })
 
+  test('GET dashboard overview ventasSeries splits contado and credito', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const customer = await Customer.create({
+      name: 'Cliente credito chart',
+      creditDays: 15,
+      active: true,
+    })
+
+    await seedDashboardSale({
+      totalUsd: '40.0000',
+      paymentType: 'CASH',
+      paymentMethodCode: 'cash_usd',
+      soldAt: DateTime.now(),
+      lines: [{ quantity: '1', unitPriceUsd: '40.0000' }],
+    })
+
+    await seedDashboardSale({
+      customerId: Number(customer.id),
+      totalUsd: '25.0000',
+      paymentType: 'CREDIT',
+      paymentMethodCode: null,
+      balanceUsd: '25.0000',
+      amountPaidUsd: '0.0000',
+      creditDueDate: DateTime.now().plus({ days: 7 }),
+      soldAt: DateTime.now(),
+      lines: [{ quantity: '1', unitPriceUsd: '25.0000' }],
+    })
+
+    const response = await client
+      .get('/api/v1/dashboard/overview')
+      .qs({ chart: 'weekly' })
+      .loginAs(user)
+    response.assertStatus(200)
+
+    const series = response.body().data.ventasSeries as Array<{
+      totalUsd: string
+      contadoUsd: string
+      creditoUsd: string
+    }>
+    const withSales = series.filter((point) => Number(point.totalUsd) > 0)
+    assert.isAtLeast(withSales.length, 1)
+    const bucket = withSales[withSales.length - 1]!
+    assert.equal(bucket.totalUsd, '65.0000')
+    assert.equal(bucket.contadoUsd, '40.0000')
+    assert.equal(bucket.creditoUsd, '25.0000')
+  })
+
   test('GET /api/v1/dashboard/daily-closing aggregates sales by payment method', async ({
     client,
     assert,
