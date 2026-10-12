@@ -16,6 +16,7 @@ import { SALE_ORDER_STATUS_LABELS, paymentMethodLabel } from '@/features/ventas/
 import type { SaleOrderStatus } from '@/features/ventas/types'
 import { invoiceDiscountLabel } from '@/features/ventas/utils/invoice-discount'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
+import { OfflinePendingSalesCard } from '@/features/offline/offline-pending-sales-card'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
 
@@ -163,6 +164,8 @@ export function VentasHistoryPanel() {
       <p className="text-muted-foreground shrink-0 text-sm">
         Consultá facturas confirmadas, abrí el detalle y registrá devoluciones.
       </p>
+
+      <OfflinePendingSalesCard />
 
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <CardHeader className="shrink-0 gap-4">

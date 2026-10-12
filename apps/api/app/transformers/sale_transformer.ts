@@ -51,6 +51,8 @@ export function serializeSale(sale: Sale) {
   return {
     id: Number(sale.id),
     code: sale.code,
+    offline_client_id: sale.offlineClientId ?? null,
+    needs_stock_review: Boolean(sale.needsStockReview),
     customer_id: sale.customerId ? Number(sale.customerId) : null,
     guest_name: sale.guestName,
     payment_method_code: sale.paymentMethodCode,

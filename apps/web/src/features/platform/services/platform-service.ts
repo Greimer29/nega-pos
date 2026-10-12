@@ -12,6 +12,7 @@ export type PlatformCompany = {
   name: string
   dbName: string
   status: 'PROVISIONING' | 'ACTIVE' | 'SUSPENDED'
+  offlineSalesEnabled: boolean
   createdAt: string | null
   updatedAt: string | null
 }
@@ -65,6 +66,14 @@ export async function updateCompanyStatus(id: number, status: 'ACTIVE' | 'SUSPEN
   const { data } = await api.patch<{ data: { company: PlatformCompany } }>(
     `/platform/companies/${id}/status`,
     { status }
+  )
+  return data.data.company
+}
+
+export async function updateCompanyOfflineSales(id: number, offlineSalesEnabled: boolean) {
+  const { data } = await api.patch<{ data: { company: PlatformCompany } }>(
+    `/platform/companies/${id}/offline-sales`,
+    { offline_sales_enabled: offlineSalesEnabled }
   )
   return data.data.company
 }

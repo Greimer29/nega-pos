@@ -230,7 +230,7 @@ Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca produc
 | Servicio | Puerto | Comando |
 |----------|--------|---------|
 | API | 3333 | `pnpm dev:api` o contenedor `nega-pos-api` |
-| Web (Vite) | 5173 | `pnpm dev:web` |
+| Web (Vite) | 5173 | `pnpm dev:web` (escucha en todas las interfaces; otra PC de la LAN usa `http://<ip-de-esta-máquina>:5173`) |
 | MySQL | 3306 | `pnpm dev:db` / `pnpm dev:stack` |
 
 ### Desktop
@@ -453,11 +453,13 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`. Precios (`cos
 | Tabla | Campos clave |
 |-------|--------------|
 | `sales_shifts` | `opened_at`, `closed_at`, `opened_by_user_id`, `closed_by_user_id`, `status` (OPEN/CLOSED), `notes` |
-| `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), `discount_usd` (descuento de factura, default 0), `total_usd` (subtotal de líneas − descuento), `notes?` (nota de factura financiera / carga manual). `payment_method_code` queda como método principal (primer pago). |
+| `sales` | `code`, `customer_id?`, `guest_name`, `sales_shift_id?`, `billing_mode` (FAST/ORDER), `order_status` (PENDING/IN_PROCESS/DELIVERED), `payment_type`, `status` (DRAFT/COMPLETED/RETURNED), `discount_usd` (descuento de factura, default 0), `total_usd` (subtotal de líneas − descuento), `notes?` (nota de factura financiera / carga manual), `offline_client_id?` (id de caja, único; sync offline idempotente), `needs_stock_review` (venta offline aceptada con stock insuficiente). `payment_method_code` queda como método principal (primer pago). |
 | `sale_payments` | `sale_id`, `payment_method_code`, `amount_usd` (monto en moneda base), `currency_code`, `usd_rate`, `amount_native`, `sort_order`. Una factura de contado puede tener varios métodos; la suma de `amount_usd` = `sales.total_usd`. |
 | `sale_lines` | `catalog_product_id?`, `catalog_product_size_id?`, `size?` (snapshot), `material_id?`, `description`, `kitchen_note?` (indicaciones de cocina para comanda), cantidades y precios, `is_wholesale` (default false), `units_per_pack?` (snapshot). Si `is_wholesale`, la cantidad de la línea es en paquetes; al confirmar se descuenta `cantidad × units_per_pack` y el precio de línea es el de venta mayorista. |
 
 **Turnos de venta:** solo puede haber un turno `OPEN`. Confirmar venta (`POST /sales/:id/confirm` o `POST /sales` con `confirm: true`) exige turno abierto; sin turno → `TURNO_NO_ABIERTO` (409). La venta confirmada guarda `sales.sales_shift_id`.
+
+**Venta sin conexión:** el admin de plataforma habilita `companies.offline_sales_enabled` (BD central). Con el flag activo, desktop (`userData/offline/`) y móvil (IndexedDB) guardan `catalogo.json` al abrir el POS en línea y una cola de operaciones (`venta-*.json`, `devolucion-*.json`, `estado-*.json`, `cierre-turno.json`). Al reconectar se sincronizan en ese orden vía `POST /sales/offline*` y luego se refresca el catálogo (no se reemplaza si la cola sigue pendiente). El cobro online no cambia; el POS muestra **En línea** / **Sin conexión**.
 
 #### Máquinas
 
@@ -618,6 +620,7 @@ catalog_products ──< product_inventory_movements
 | POST | `/api/v1/platform/companies` | Platform | `Platform.createCompany` (provision inmediato) |
 | POST | `/api/v1/platform/companies/:id/retry` | Platform | `Platform.retryProvision` |
 | PATCH | `/api/v1/platform/companies/:id/status` | Platform | `Platform.updateCompanyStatus` |
+| PATCH | `/api/v1/platform/companies/:id/offline-sales` | Platform | `Platform.updateCompanyOfflineSales` (`offline_sales_enabled`) |
 | DELETE | `/api/v1/platform/companies/:id` | Platform | `Platform.destroyCompany` (borrado forzado: `confirm_slug` + DROP BD + directorio + uploads) |
 
 ### Usuarios (`users.*`)
@@ -675,6 +678,11 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 | Método | Ruta | Permiso | Controlador |
 |--------|------|---------|-------------|
 | GET | `/api/v1/sales/next-code` | `ventas.view` | `SalesController.nextCode` |
+| GET | `/api/v1/sales/offline-catalog` | `ventas.view` | `SalesController.offlineCatalog` (snapshot para copia local) |
+| POST | `/api/v1/sales/offline` | `ventas.confirm` | `SalesController.syncOffline` (idempotente por `offline_client_id`; asigna `code`; acepta stock insuficiente → `needs_stock_review`) |
+| POST | `/api/v1/sales/offline/returns` | `ventas.confirm` | `SalesController.syncOfflineReturn` |
+| POST | `/api/v1/sales/offline/transitions` | `ventas.confirm` | `SalesController.syncOfflineTransition` |
+| POST | `/api/v1/sales/offline/close-shift` | `ventas.confirm` | `SalesController.syncOfflineCloseShift` |
 | GET | `/api/v1/sales` | `ventas.view` | `SalesController.index` |
 | GET | `/api/v1/sales/:id` | `ventas.view` | `SalesController.show` |
 | POST | `/api/v1/sales` | `ventas.confirm` | `SalesController.store` |

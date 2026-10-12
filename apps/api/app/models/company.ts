@@ -22,6 +22,9 @@ export default class Company extends BaseModel {
   @column()
   declare status: CompanyStatus
 
+  @column({ columnName: 'offline_sales_enabled' })
+  declare offlineSalesEnabled: boolean
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

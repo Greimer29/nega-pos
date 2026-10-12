@@ -1,11 +1,17 @@
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import SaleService from '#services/sale_service'
+import OfflineCatalogService from '#services/offline_catalog_service'
+import SalesShiftService from '#services/sales_shift_service'
 import { serializeSale, serializeSaleListItem } from '#transformers/sale_transformer'
 import { parseRouteId } from '#utils/parse_route_id'
 import {
   confirmSaleValidator,
   createSaleValidator,
   listSalesValidator,
+  offlineSyncCloseShiftValidator,
+  offlineSyncReturnValidator,
+  offlineSyncSaleValidator,
+  offlineSyncTransitionValidator,
   returnSaleValidator,
   transitionSaleValidator,
   updateSaleValidator,
@@ -14,6 +20,8 @@ import type { HttpContext } from '@adonisjs/core/http'
 
 export default class SalesController {
   private service = new SaleService()
+  private offlineCatalogService = new OfflineCatalogService()
+  private salesShiftService = new SalesShiftService()
 
   async nextCode({ serialize }: HttpContext) {
     const code = await this.service.previewNextCode()
@@ -114,6 +122,52 @@ export default class SalesController {
 
     return serialize({
       sale: serializeSale(sale),
+    })
+  }
+
+  async offlineCatalog({ serialize }: HttpContext) {
+    const catalog = await this.offlineCatalogService.buildSnapshot()
+    return serialize({ catalog })
+  }
+
+  async syncOffline({ request, auth, serialize }: HttpContext) {
+    const payload = await request.validateUsing(offlineSyncSaleValidator)
+    const user = auth.getUserOrFail()
+    const result = await this.service.sincronizarOffline({
+      ...payload,
+      sold_by_user_id: Number(user.id),
+    })
+
+    return serialize({
+      already_synced: result.alreadySynced,
+      sale: serializeSale(result.sale),
+    })
+  }
+
+  async syncOfflineReturn({ request, serialize }: HttpContext) {
+    const payload = await request.validateUsing(offlineSyncReturnValidator)
+    const sale = await this.service.devolver(payload.sale_id, payload.lines)
+    return serialize({ sale: serializeSale(sale) })
+  }
+
+  async syncOfflineTransition({ request, serialize }: HttpContext) {
+    const payload = await request.validateUsing(offlineSyncTransitionValidator)
+    const sale = await this.service.transicionar(payload.sale_id, payload.order_status)
+    broadcastCompanyEvent('sale.changed')
+    return serialize({ sale: serializeSale(sale) })
+  }
+
+  async syncOfflineCloseShift({ request, auth, serialize }: HttpContext) {
+    const payload = await request.validateUsing(offlineSyncCloseShiftValidator)
+    const user = auth.getUserOrFail()
+    const shift = await this.salesShiftService.cerrar(payload.sales_shift_id, Number(user.id))
+    // sales_shift_service.cerrar already broadcasts shift.changed
+    return serialize({
+      shift: {
+        id: Number(shift.id),
+        status: shift.status,
+        closed_at: shift.closedAt?.toISO() ?? null,
+      },
     })
   }
 }

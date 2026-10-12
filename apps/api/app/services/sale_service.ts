@@ -23,6 +23,7 @@ import Sale from '#models/sale'
 import SaleLine from '#models/sale_line'
 import SaleLineMaterial from '#models/sale_line_material'
 import SalePayment from '#models/sale_payment'
+import SalesShift from '#models/sales_shift'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
 import CatalogProductSizeService from '#services/catalog_product_size_service'
 import CurrencyService from '#services/currency_service'
@@ -117,6 +118,24 @@ export type ConfirmSaleInput = {
 export type SaleReturnLineInput = {
   line_id: number
   quantity: number
+}
+
+export type OfflineSyncSaleInput = {
+  offline_client_id: string
+  sold_at: string
+  sales_shift_id?: number | null
+  customer_id?: number | null
+  guest_name?: string | null
+  payment_type: SalePaymentType
+  billing_mode: SaleBillingMode
+  discount_usd?: number
+  notes?: string | null
+  lines: SaleLineInput[]
+  payments?: ConfirmSalePaymentInput[]
+  payment_method_code?: string | null
+  currency_code?: string | null
+  usd_rate?: number | null
+  sold_by_user_id?: number | null
 }
 
 export type ListSalesFilters = {
@@ -481,6 +500,143 @@ export default class SaleService {
 
       return sale
     })
+  }
+
+  /**
+   * Idempotent offline sale sync. Accepts the sale even if stock is short or the shift already closed.
+   */
+  async sincronizarOffline(
+    input: OfflineSyncSaleInput
+  ): Promise<{ sale: Sale; alreadySynced: boolean }> {
+    const offlineClientId = input.offline_client_id.trim()
+    if (!offlineClientId) {
+      throw new LineaVentaInvalidaException('offline_client_id es obligatorio')
+    }
+
+    const existing = await Sale.query().where('offlineClientId', offlineClientId).first()
+    if (existing) {
+      return { sale: await this.obtenerDetalle(Number(existing.id)), alreadySynced: true }
+    }
+
+    if (input.lines.length === 0) {
+      throw new LineaVentaInvalidaException('Debe incluir al menos una línea de venta')
+    }
+
+    await this.assertCustomer(input.customer_id)
+
+    const soldAt = DateTime.fromISO(input.sold_at)
+    if (!soldAt.isValid) {
+      throw new LineaVentaInvalidaException('sold_at inválido')
+    }
+
+    const result = await db.transaction(async (trx) => {
+      const raced = await Sale.query({ client: trx })
+        .where('offlineClientId', offlineClientId)
+        .forUpdate()
+        .first()
+      if (raced) {
+        return { saleId: Number(raced.id), alreadySynced: true as const }
+      }
+
+      const { totalUsd: subtotalUsd, resolvedLines } = await this.resolveLines(input.lines, trx)
+      const { discountUsd, totalUsd } = applyInvoiceDiscount(subtotalUsd, input.discount_usd)
+
+      const sale = await Sale.create(
+        {
+          code: null,
+          offlineClientId,
+          needsStockReview: false,
+          customerId: input.customer_id ?? null,
+          guestName: input.guest_name?.trim() || null,
+          paymentMethodCode: null,
+          paymentType: input.payment_type,
+          billingMode: input.billing_mode,
+          orderStatus: input.billing_mode === 'FAST' ? 'DELIVERED' : 'PENDING',
+          discountUsd: discountUsd.toFixed(4),
+          totalUsd: totalUsd.toFixed(4),
+          totalBs: null,
+          usdRate: input.usd_rate ? input.usd_rate.toFixed(4) : null,
+          amountPaidUsd: '0.0000',
+          balanceUsd: '0.0000',
+          creditDueDate: null,
+          status: 'DRAFT',
+          soldAt: null,
+          confirmedAt: null,
+          returnedAt: null,
+          notes: input.notes?.trim() || null,
+        },
+        { client: trx }
+      )
+
+      await this.persistLines(Number(sale.id), resolvedLines, trx)
+
+      const hydrated = await Sale.query({ client: trx })
+        .where('id', Number(sale.id))
+        .preload('customer')
+        .preload('paymentMethod')
+        .preload('saleLines', (q) => {
+          q.preload('catalogProduct', (cp) =>
+            cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
+          ).preload('saleLineMaterials', (slm) => slm.preload('material'))
+        })
+        .forUpdate()
+        .firstOrFail()
+
+      await this.aplicarPagosAlConfirmar(
+        hydrated,
+        input.payment_type,
+        {
+          payment_type: input.payment_type,
+          payment_method_code: input.payment_method_code,
+          currency_code: input.currency_code,
+          usd_rate: input.usd_rate,
+          payments: input.payments,
+        },
+        trx
+      )
+
+      hydrated.code = await this.codeService.generar(trx)
+      hydrated.status = 'COMPLETED'
+      hydrated.soldAt = soldAt
+      hydrated.confirmedAt = soldAt
+      hydrated.orderStatus = input.billing_mode === 'FAST' ? 'DELIVERED' : 'PENDING'
+      if (input.sold_by_user_id) {
+        hydrated.soldByUserId = input.sold_by_user_id
+      }
+
+      if (input.sales_shift_id) {
+        const shift = await SalesShift.query({ client: trx })
+          .where('id', input.sales_shift_id)
+          .first()
+        hydrated.salesShiftId = shift ? shift.id : null
+      } else {
+        const openShift = await SalesShift.query({ client: trx })
+          .where('status', 'OPEN')
+          .orderBy('id', 'desc')
+          .first()
+        hydrated.salesShiftId = openShift ? openShift.id : null
+      }
+
+      await this.congelarCostoLineas(hydrated, trx)
+      const needsReview = await this.descontarStock(hydrated, trx, { allowInsufficient: true })
+      hydrated.needsStockReview = needsReview
+      await this.aplicarPagoAlConfirmar(hydrated, input.payment_type, trx)
+
+      hydrated.useTransaction(trx)
+      await hydrated.save()
+
+      return { saleId: Number(hydrated.id), alreadySynced: false as const }
+    })
+
+    const sale = await this.obtenerDetalle(result.saleId)
+    if (!result.alreadySynced) {
+      broadcastCompanyEvent('sale.changed')
+    }
+
+    return {
+      sale,
+      alreadySynced: result.alreadySynced,
+    }
   }
 
   async transicionar(id: number, orderStatus: SaleOrderStatus): Promise<Sale> {
@@ -907,8 +1063,14 @@ export default class SaleService {
     return lineInventoryQuantity(quantity, Boolean(line.isWholesale), line.unitsPerPack)
   }
 
-  private async descontarStock(sale: Sale, trx: TransactionClientContract) {
+  private async descontarStock(
+    sale: Sale,
+    trx: TransactionClientContract,
+    options?: { allowInsufficient?: boolean }
+  ): Promise<boolean> {
     const saleId = Number(sale.id)
+    let needsReview = false
+    const allowInsufficient = Boolean(options?.allowInsufficient)
 
     for (const line of sale.saleLines) {
       const quantity = this.inventoryQuantityForLine(line)
@@ -934,15 +1096,18 @@ export default class SaleService {
           await this.catalogProductStockService.calcularStockDisponible(product, { trx })
 
         if (quantity > disponible) {
-          throw new StockInsuficienteException([
-            {
-              material_id: Number(product.id),
-              name: product.name,
-              stock_actual: disponible,
-              consumo_proyectado: quantity,
-              faltante: quantity - disponible,
-            },
-          ])
+          if (!allowInsufficient) {
+            throw new StockInsuficienteException([
+              {
+                material_id: Number(product.id),
+                name: product.name,
+                stock_actual: disponible,
+                consumo_proyectado: quantity,
+                faltante: quantity - disponible,
+              },
+            ])
+          }
+          needsReview = true
         }
 
         if (line.catalogProductSizeId) {
@@ -952,15 +1117,18 @@ export default class SaleService {
             .first()
           const sizeStock = sizeRow ? Number(sizeRow.stockQuantity) : 0
           if (quantity > sizeStock) {
-            throw new StockInsuficienteException([
-              {
-                material_id: Number(product.id),
-                name: `${product.name}${sizeRow ? ` (${sizeRow.size})` : ''}`,
-                stock_actual: sizeStock,
-                consumo_proyectado: quantity,
-                faltante: quantity - sizeStock,
-              },
-            ])
+            if (!allowInsufficient) {
+              throw new StockInsuficienteException([
+                {
+                  material_id: Number(product.id),
+                  name: `${product.name}${sizeRow ? ` (${sizeRow.size})` : ''}`,
+                  stock_actual: sizeStock,
+                  consumo_proyectado: quantity,
+                  faltante: quantity - sizeStock,
+                },
+              ])
+            }
+            needsReview = true
           }
         }
 
@@ -981,16 +1149,19 @@ export default class SaleService {
 
             const stockActual = await this.materialService.calcularStock(materialId, trx)
             if (stockActual < consumo) {
-              const material = formulaItem.material ?? (await Material.findOrFail(materialId))
-              throw new StockInsuficienteException([
-                {
-                  material_id: materialId,
-                  name: material.name,
-                  stock_actual: stockActual,
-                  consumo_proyectado: consumo,
-                  faltante: consumo - stockActual,
-                },
-              ])
+              if (!allowInsufficient) {
+                const material = formulaItem.material ?? (await Material.findOrFail(materialId))
+                throw new StockInsuficienteException([
+                  {
+                    material_id: materialId,
+                    name: material.name,
+                    stock_actual: stockActual,
+                    consumo_proyectado: consumo,
+                    faltante: consumo - stockActual,
+                  },
+                ])
+              }
+              needsReview = true
             }
 
             await InventoryMovement.create(
@@ -1025,6 +1196,7 @@ export default class SaleService {
             quantity: -quantity,
             saleId,
             note: movementNote,
+            allowNegativeStock: allowInsufficient,
           },
           trx
         )
@@ -1034,16 +1206,19 @@ export default class SaleService {
         const materialId = Number(line.materialId)
         const stockActual = await this.materialService.calcularStock(materialId, trx)
         if (stockActual < quantity) {
-          const material = line.material ?? (await Material.findOrFail(materialId))
-          throw new StockInsuficienteException([
-            {
-              material_id: materialId,
-              name: material.name,
-              stock_actual: stockActual,
-              consumo_proyectado: quantity,
-              faltante: quantity - stockActual,
-            },
-          ])
+          if (!allowInsufficient) {
+            const material = line.material ?? (await Material.findOrFail(materialId))
+            throw new StockInsuficienteException([
+              {
+                material_id: materialId,
+                name: material.name,
+                stock_actual: stockActual,
+                consumo_proyectado: quantity,
+                faltante: quantity - stockActual,
+              },
+            ])
+          }
+          needsReview = true
         }
 
         const wholesaleNote =
@@ -1062,6 +1237,8 @@ export default class SaleService {
         )
       }
     }
+
+    return needsReview
   }
 
   private async aplicarPagosAlConfirmar(

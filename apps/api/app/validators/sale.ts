@@ -87,3 +87,51 @@ export const listSalesValidator = vine.create({
   date_from: vine.string().trim().optional(),
   date_to: vine.string().trim().optional(),
 })
+
+export const offlineSyncSaleValidator = vine.create({
+  offline_client_id: vine.string().trim().minLength(8).maxLength(64),
+  sold_at: vine.string().trim().minLength(10).maxLength(40),
+  sales_shift_id: vine.number().min(1).optional().nullable(),
+  customer_id: vine.number().min(1).optional().nullable(),
+  guest_name: vine.string().trim().maxLength(150).optional().nullable(),
+  payment_type: vine.enum(['CASH', 'CREDIT']),
+  billing_mode: vine.enum(['FAST', 'ORDER']),
+  discount_usd: vine.number().min(0).optional(),
+  notes: vine.string().trim().maxLength(255).optional().nullable(),
+  payment_method_code: vine.string().trim().maxLength(50).optional().nullable(),
+  currency_code: vine.string().trim().toUpperCase().fixedLength(3).optional().nullable(),
+  usd_rate: vine.number().positive().optional().nullable(),
+  payments: vine
+    .array(
+      vine.object({
+        payment_method_code: vine.string().trim().maxLength(50),
+        amount_usd: vine.number().min(0.0001),
+        currency_code: vine.string().trim().toUpperCase().fixedLength(3).optional(),
+        usd_rate: vine.number().positive().optional(),
+      })
+    )
+    .minLength(1)
+    .optional(),
+  lines: vine.array(saleLineSchema).minLength(1),
+})
+
+export const offlineSyncReturnValidator = vine.create({
+  sale_id: vine.number().min(1),
+  lines: vine
+    .array(
+      vine.object({
+        line_id: vine.number().min(1),
+        quantity: vine.number().min(0.001),
+      })
+    )
+    .optional(),
+})
+
+export const offlineSyncTransitionValidator = vine.create({
+  sale_id: vine.number().min(1),
+  order_status: vine.enum(['IN_PROCESS', 'DELIVERED']),
+})
+
+export const offlineSyncCloseShiftValidator = vine.create({
+  sales_shift_id: vine.number().min(1),
+})

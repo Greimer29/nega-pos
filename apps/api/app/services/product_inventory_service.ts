@@ -32,6 +32,8 @@ export type RegistrarMovimientoProductoInput = {
   createdByUserId?: number | null
   /** Si true, solo escribe el historial (el stock ya fue aplicado). */
   skipStockUpdate?: boolean
+  /** Offline sync: permite dejar stock negativo y marcar revisión en la venta. */
+  allowNegativeStock?: boolean
 }
 
 export type AjusteProductoInput = {
@@ -209,7 +211,7 @@ export default class ProductInventoryService {
         const stockActual = Number(product.stockQuantity)
         const nuevoStock = normalizeInventoryQuantity(stockActual + movementQty, unit)
 
-        if (nuevoStock < 0) {
+        if (nuevoStock < 0 && !input.allowNegativeStock) {
           throw new StockInsuficienteException([
             {
               material_id: Number(product.id),

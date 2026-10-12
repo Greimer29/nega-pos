@@ -10,6 +10,7 @@ import {
   destroyCompanyValidator,
   platformLoginValidator,
   retryCompanyValidator,
+  updateCompanyOfflineSalesValidator,
   updateCompanyStatusValidator,
 } from '#validators/platform'
 
@@ -20,6 +21,7 @@ function serializeCompany(company: Company) {
     name: company.name,
     dbName: company.dbName,
     status: company.status,
+    offlineSalesEnabled: Boolean(company.offlineSalesEnabled),
     createdAt: company.createdAt.toISO(),
     updatedAt: company.updatedAt.toISO(),
   }
@@ -169,6 +171,22 @@ export default class PlatformController {
     }
 
     company.status = payload.status
+    await company.save()
+
+    return serialize({ company: serializeCompany(company) })
+  }
+
+  async updateCompanyOfflineSales({ params, request, serialize, response }: HttpContext) {
+    const payload = await request.validateUsing(updateCompanyOfflineSalesValidator)
+    const company = await Company.find(Number(params.id))
+
+    if (!company) {
+      return response.status(404).json({
+        error: { code: 'COMPANY_NOT_FOUND', message: 'Empresa no encontrada' },
+      })
+    }
+
+    company.offlineSalesEnabled = payload.offline_sales_enabled
     await company.save()
 
     return serialize({ company: serializeCompany(company) })
