@@ -23,6 +23,7 @@ export function DashboardDailySalesCard({ ventas, ganancia }: DashboardDailySale
   const brutoUsd = parseUsd(ventas.montoProductosUsd)
   const creditoUsd = parseUsd(ventas.montoCreditoUsd)
   const gastosUsd = parseUsd(ventas.gastosMontoUsd)
+  // Gastos operativos del día restan. Pagos/facturas a proveedor no entran en gastosUsd.
   const entradasNetasUsd = brutoUsd - gastosUsd - creditoUsd
 
   return (
@@ -85,11 +86,7 @@ export function DashboardDailySalesCard({ ventas, ganancia }: DashboardDailySale
             <div>
               <p className="text-sm text-white/70">Facturado a crédito</p>
               <p className="text-lg font-semibold">
-                <DisplayMoneyFromUsd
-                  amountUsd={creditoUsd}
-                  size="md"
-                  className="text-white"
-                />
+                <DisplayMoneyFromUsd amountUsd={creditoUsd} size="md" className="text-white" />
               </p>
               {ventas.pedidosCredito > 0 ? (
                 <p className="text-xs tabular-nums text-white/70">

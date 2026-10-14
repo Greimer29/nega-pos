@@ -23,6 +23,8 @@ export type VentasDelDia = {
   pedidosCredito: number
   gastosCantidad: number
   gastosMontoUsd: string
+  pagosProveedoresCantidad?: number
+  pagosProveedoresMontoUsd?: string
 }
 
 export type GananciaDelDia = {
@@ -167,6 +169,11 @@ export type DailyClosing = {
     expenses_count: number
     expenses_total_usd: string
     net_cash_usd: string
+    supplier_payments_count?: number
+    supplier_payments_total_usd?: string
+    cash_purchases_count?: number
+    cash_purchases_total_usd?: string
+    drawer_cash_usd?: string
   }
   by_payment_method: DailyClosingPaymentMethod[]
   products: DailySoldProduct[]

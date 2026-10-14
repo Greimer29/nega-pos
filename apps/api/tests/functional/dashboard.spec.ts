@@ -5,6 +5,7 @@ import Machine from '#models/machine'
 import MachineExpense from '#models/machine_expense'
 import Expense from '#models/expense'
 import Supplier from '#models/supplier'
+import SupplierPayment from '#models/supplier_payment'
 import User from '#models/user'
 import Customer from '#models/customer'
 import CatalogProduct from '#models/catalog_product'
@@ -387,7 +388,7 @@ test.group('Dashboard API', (group) => {
     assert.equal(soldItem.stock_quantity, '10.000')
   })
 
-  test('GET /api/v1/dashboard/overview subtracts daily expenses from ganancia del dia', async ({
+  test('GET /api/v1/dashboard/overview subtracts daily expenses but not supplier payments', async ({
     client,
     assert,
   }) => {
@@ -443,17 +444,54 @@ test.group('Dashboard API', (group) => {
       currencyCode: 'XAU',
     })
 
+    const supplier = await Supplier.create({
+      name: 'Proveedor abono ganancia',
+      active: true,
+    })
+    // Factura antigua mal guardada como gasto con supplier_id: no debe restar del día.
+    await Expense.create({
+      supplierId: Number(supplier.id),
+      date: DateTime.fromISO(hoy),
+      description: 'Factura proveedor legacy',
+      amountUsd: '100.0000',
+      currencyCode: 'XAU',
+    })
+    const creditPurchase = await Purchase.create({
+      supplierId: Number(supplier.id),
+      date: DateTime.fromISO(hoy).minus({ days: 5 }),
+      status: 'CONFIRMED',
+      isCredit: true,
+      affectsInventory: true,
+      totalUsd: '50.0000',
+      amountPaidUsd: '0.0000',
+      balanceUsd: '50.0000',
+    })
+    await SupplierPayment.create({
+      supplierId: Number(supplier.id),
+      purchaseId: Number(creditPurchase.id),
+      amountUsd: '40.0000',
+      date: DateTime.fromISO(hoy),
+    })
+    creditPurchase.amountPaidUsd = '40.0000'
+    creditPurchase.balanceUsd = '10.0000'
+    await creditPurchase.save()
+
     const response = await client.get('/api/v1/dashboard/overview').loginAs(user)
 
     response.assertStatus(200)
     const body = response.body() as {
       data: {
-        ventasDelDia: { gastosMontoUsd: string }
+        ventasDelDia: {
+          gastosMontoUsd: string
+          pagosProveedoresMontoUsd: string
+        }
         gananciaDelDia: { montoUsd: string; porcentajeSobreVentas: number }
       }
     }
 
+    // Margen 14 − gastos operativos 10 = 4. Abono 40 y gasto-con-proveedor 100 no restan.
     assert.equal(body.data.ventasDelDia.gastosMontoUsd, '10.0000')
+    assert.equal(body.data.ventasDelDia.pagosProveedoresMontoUsd, '40.0000')
     assert.equal(body.data.gananciaDelDia.montoUsd, '4.0000')
     assert.equal(body.data.gananciaDelDia.porcentajeSobreVentas, 16.67)
   })
@@ -1223,6 +1261,38 @@ test.group('Dashboard API', (group) => {
     assert.equal(body.summary.expenses_total_usd, '15.0000')
     assert.equal(body.summary.net_cash_usd, '35.0000')
     assert.lengthOf(body.expenses.items, 2)
+
+    const supplier = await Supplier.create({ name: 'Proveedor cierre abono', active: true })
+    const creditPurchase = await Purchase.create({
+      supplierId: Number(supplier.id),
+      date: DateTime.fromISO(today).minus({ days: 10 }),
+      status: 'CONFIRMED',
+      isCredit: true,
+      affectsInventory: true,
+      totalUsd: '100.0000',
+      amountPaidUsd: '0.0000',
+      balanceUsd: '100.0000',
+    })
+    await SupplierPayment.create({
+      supplierId: Number(supplier.id),
+      purchaseId: Number(creditPurchase.id),
+      amountUsd: '25.0000',
+      date: DateTime.fromISO(today),
+    })
+
+    const withPayment = await client
+      .get('/api/v1/dashboard/daily-closing')
+      .qs({ sales_shift_id: shiftId })
+      .loginAs(user)
+    withPayment.assertStatus(200)
+    const closingWithPayment = withPayment.body().data
+    assert.equal(closingWithPayment.summary.supplier_payments_total_usd, '25.0000')
+    assert.equal(closingWithPayment.summary.supplier_payments_count, 1)
+    // Abono no entra en gastos ni en net_cash (contado − gastos).
+    assert.equal(closingWithPayment.summary.expenses_total_usd, '15.0000')
+    assert.equal(closingWithPayment.summary.net_cash_usd, '35.0000')
+    // Caja estimada sí descuenta el abono: 50 − 15 − 25 = 10.
+    assert.equal(closingWithPayment.summary.drawer_cash_usd, '10.0000')
   })
 
   test('GET /api/v1/dashboard/daily-closing marks fully returned invoices with original amount', async ({

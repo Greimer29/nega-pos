@@ -59,6 +59,9 @@ export type VentasDelDia = {
   pedidosCredito: number
   gastosCantidad: number
   gastosMontoUsd: string
+  /** Abonos a proveedores del turno (CxP); no son gasto operativo ni restan a ventas. */
+  pagosProveedoresCantidad: number
+  pagosProveedoresMontoUsd: string
 }
 
 export type GananciaDelDia = {
@@ -208,7 +211,17 @@ export type DailyClosingResult = {
     discountsTotalUsd: string
     expensesCount: number
     expensesTotalUsd: string
+    /** Contado − gastos operativos (no incluye abonos ni compras de inventario). */
     netCashUsd: string
+    supplierPaymentsCount: number
+    supplierPaymentsTotalUsd: string
+    cashPurchasesCount: number
+    cashPurchasesTotalUsd: string
+    /**
+     * Contado − gastos − abonos a proveedores − compras de inventario al contado.
+     * Sirve para conciliar caja; no mide el resultado de ventas del día.
+     */
+    drawerCashUsd: string
   }
   byPaymentMethod: DailyClosingPaymentMethodItem[]
   products: DailySoldProductItem[]
@@ -435,11 +448,20 @@ export default class DashboardService {
     return dateInput?.trim() || todayIsoDate()
   }
 
+  /**
+   * Gastos operativos del día/turno.
+   * Excluye `expenses.supplier_id` (facturas antiguas a proveedor guardadas como gasto):
+   * eso es pago/compra a proveedor, no gasto de caja del día de ventas.
+   */
   private async gastosDelDia(dateInput?: string): Promise<{ cantidad: number; montoUsd: number }> {
     const date = this.resolveDashboardDate(dateInput)
     const rates = await this.currencyService.getActiveRates()
 
-    const expenseRows = await db.from('expenses').where('date', date).select('amount_usd')
+    const expenseRows = await db
+      .from('expenses')
+      .where('date', date)
+      .whereNull('supplier_id')
+      .select('amount_usd')
 
     let expenseUsd = 0
     for (const row of expenseRows) {
@@ -459,11 +481,7 @@ export default class DashboardService {
     }
   }
 
-  private async gastosDelTurno(shift: {
-    openedAt: DateTime
-    closedAt: DateTime | null
-  }): Promise<{ cantidad: number; montoUsd: number }> {
-    const dates = this.salesShiftService.calendarDatesForShift(shift)
+  private async gastosForDates(dates: string[]): Promise<{ cantidad: number; montoUsd: number }> {
     if (dates.length === 0) {
       return { cantidad: 0, montoUsd: 0 }
     }
@@ -472,6 +490,7 @@ export default class DashboardService {
     const expenses = await db
       .from('expenses')
       .whereIn('date', dates)
+      .whereNull('supplier_id')
       .select(db.raw('COUNT(*) as qty'), db.raw('COALESCE(SUM(amount_usd), 0) as total_usd'))
       .first()
 
@@ -488,6 +507,48 @@ export default class DashboardService {
     }
   }
 
+  /** Abonos a CxP: salida de caja / balance sheet — no es gasto del P&L ni reduce ventas. */
+  private async pagosProveedoresForDates(
+    dates: string[]
+  ): Promise<{ cantidad: number; montoUsd: number }> {
+    if (dates.length === 0) {
+      return { cantidad: 0, montoUsd: 0 }
+    }
+
+    const row = await db
+      .from('supplier_payments')
+      .whereIn('date', dates)
+      .select(db.raw('COUNT(*) as qty'), db.raw('COALESCE(SUM(amount_usd), 0) as total_usd'))
+      .first()
+
+    return {
+      cantidad: Number(row?.qty ?? 0),
+      montoUsd: Number(row?.total_usd ?? 0),
+    }
+  }
+
+  /** Compras de inventario al contado (no crédito): salida de caja, activo inventario. */
+  private async comprasContadoForDates(
+    dates: string[]
+  ): Promise<{ cantidad: number; montoUsd: number }> {
+    if (dates.length === 0) {
+      return { cantidad: 0, montoUsd: 0 }
+    }
+
+    const row = await db
+      .from('purchases')
+      .where('status', 'CONFIRMED')
+      .where('is_credit', false)
+      .whereIn('date', dates)
+      .select(db.raw('COUNT(*) as qty'), db.raw('COALESCE(SUM(total_usd), 0) as total_usd'))
+      .first()
+
+    return {
+      cantidad: Number(row?.qty ?? 0),
+      montoUsd: Number(row?.total_usd ?? 0),
+    }
+  }
+
   /** Ventas del dashboard usan el turno abierto actual (sales_shift_id).
    * Montos = `sales.total_usd` (ya neto de descuento de factura), no suma bruta de líneas. */
   private async ventasDelDia(): Promise<VentasDelDia> {
@@ -500,6 +561,8 @@ export default class DashboardService {
         pedidosCredito: 0,
         gastosCantidad: 0,
         gastosMontoUsd: '0.0000',
+        pagosProveedoresCantidad: 0,
+        pagosProveedoresMontoUsd: '0.0000',
       }
     }
 
@@ -534,7 +597,9 @@ export default class DashboardService {
       )
       .first()
 
-    const gastos = await this.gastosDelTurno(shift)
+    const dates = this.salesShiftService.calendarDatesForShift(shift)
+    const gastos = await this.gastosForDates(dates)
+    const pagosProveedores = await this.pagosProveedoresForDates(dates)
 
     return {
       productosVendidos: Number(qtyRow?.qty ?? 0),
@@ -543,6 +608,8 @@ export default class DashboardService {
       pedidosCredito: Number(money?.pedidos_credito ?? 0),
       gastosCantidad: gastos.cantidad,
       gastosMontoUsd: gastos.montoUsd.toFixed(4),
+      pagosProveedoresCantidad: pagosProveedores.cantidad,
+      pagosProveedoresMontoUsd: pagosProveedores.montoUsd.toFixed(4),
     }
   }
 
@@ -752,6 +819,7 @@ export default class DashboardService {
       .from('expenses')
       .leftJoin('machines', 'machines.id', 'expenses.machine_id')
       .whereIn('expenses.date', dates)
+      .whereNull('expenses.supplier_id')
       .select(
         'expenses.id',
         'expenses.description',
@@ -823,6 +891,7 @@ export default class DashboardService {
       .from('expenses')
       .leftJoin('machines', 'machines.id', 'expenses.machine_id')
       .where('expenses.date', date)
+      .whereNull('expenses.supplier_id')
       .select(
         'expenses.id',
         'expenses.description',
@@ -936,7 +1005,8 @@ export default class DashboardService {
     const cashDiscount = Number(money?.cash_discount ?? 0)
     const creditDiscount = Number(money?.credit_discount ?? 0)
     const creditProfit = creditProfitGross - creditDiscount
-    const gastos = await this.gastosDelTurno(shift)
+    const gastos = await this.gastosForDates(this.salesShiftService.calendarDatesForShift(shift))
+    // Gastos operativos del día sí restan. Abonos/facturas a proveedor no (van aparte).
     const netProfit = profit - creditProfitGross - cashDiscount - gastos.montoUsd
     const ventasContado = Number(money?.cash_sales ?? 0)
     const porcentaje = ventasContado > 0 ? (netProfit / ventasContado) * 100 : 0
@@ -1321,13 +1391,18 @@ export default class DashboardService {
       }
     }
 
+    const closingDates = shiftForExpenses
+      ? this.salesShiftService.calendarDatesForShift(shiftForExpenses)
+      : [date]
     const expenses = shiftForExpenses
-      ? await this.gastosDelDiaDetalleForDates(
-          this.salesShiftService.calendarDatesForShift(shiftForExpenses)
-        )
+      ? await this.gastosDelDiaDetalleForDates(closingDates)
       : await this.gastosDelDiaDetalle(date)
     const expensesTotalUsd = Number(expenses.summary.gastosMontoUsd)
     const netCashUsd = cashTotalUsd - expensesTotalUsd
+    const supplierPayments = await this.pagosProveedoresForDates(closingDates)
+    const cashPurchases = await this.comprasContadoForDates(closingDates)
+    const drawerCashUsd =
+      cashTotalUsd - expensesTotalUsd - supplierPayments.montoUsd - cashPurchases.montoUsd
 
     return {
       date,
@@ -1342,6 +1417,11 @@ export default class DashboardService {
         expensesCount: expenses.summary.gastosCantidad,
         expensesTotalUsd: expenses.summary.gastosMontoUsd,
         netCashUsd: netCashUsd.toFixed(4),
+        supplierPaymentsCount: supplierPayments.cantidad,
+        supplierPaymentsTotalUsd: supplierPayments.montoUsd.toFixed(4),
+        cashPurchasesCount: cashPurchases.cantidad,
+        cashPurchasesTotalUsd: cashPurchases.montoUsd.toFixed(4),
+        drawerCashUsd: drawerCashUsd.toFixed(4),
       },
       byPaymentMethod,
       products,
