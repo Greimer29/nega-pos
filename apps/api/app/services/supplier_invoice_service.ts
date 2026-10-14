@@ -1,6 +1,5 @@
 import FacturaProveedorCuentaRequeridaException from '#exceptions/factura_proveedor_cuenta_requerida_exception'
 import SupplierNoEncontradoException from '#exceptions/proveedor_no_encontrado_exception'
-import Expense from '#models/expense'
 import Purchase from '#models/purchase'
 import Supplier from '#models/supplier'
 import AccountService from '#services/account_service'
@@ -9,10 +8,13 @@ import { resolveMonetaryEntryAmount } from '#utils/monetary_entry'
 import type { SupplierInvoiceValidatorPayload } from '#validators/supplier_invoice'
 import { DateTime } from 'luxon'
 
-export type SupplierInvoiceResult =
-  | { kind: 'expense'; expense: Expense }
-  | { kind: 'purchase'; purchase: Purchase }
+export type SupplierInvoiceResult = { kind: 'purchase'; purchase: Purchase }
 
+/**
+ * Facturas desde ficha de proveedor (sin líneas de inventario).
+ * Contado y crédito son compras: afectan caja/CxP del negocio en el tiempo,
+ * no se registran como gasto operativo del día (eso es `expenses` sin proveedor).
+ */
 export default class SupplierInvoiceService {
   private accountService = new AccountService()
   private currencyService = new CurrencyService()
@@ -35,8 +37,6 @@ export default class SupplierInvoiceService {
 
     const invoiceNumber = input.invoice_number?.trim() || null
     const note = input.note?.trim() || null
-    const description =
-      note || (invoiceNumber ? `Factura ${invoiceNumber}` : `Factura proveedor ${supplier.name}`)
 
     if (input.is_credit) {
       const purchase = await Purchase.create({
@@ -66,20 +66,25 @@ export default class SupplierInvoiceService {
 
     await this.accountService.assertActiva(input.account_id)
 
-    const expense = await Expense.create({
+    // Contado sin stock: compra pagada. Sale de caja del negocio, no del “día de ventas”.
+    const purchase = await Purchase.create({
       supplierId,
       accountId: input.account_id,
       date: DateTime.fromISO(input.date),
-      description,
       invoiceNumber,
-      amountUsd: resolved.amountUsd,
-      currencyCode: resolved.currencyCode,
-      entryRate: resolved.entryRate,
+      notes: note,
+      entryCurrencyCode: resolved.currencyCode,
+      usdRate: resolved.entryRate,
+      totalUsd: resolved.amountUsd,
+      totalBs: Number(resolved.amountNative).toFixed(2),
+      status: 'CONFIRMED',
+      isCredit: false,
+      affectsInventory: false,
+      creditDueDate: null,
+      amountPaidUsd: resolved.amountUsd,
+      balanceUsd: '0.0000',
     })
 
-    await expense.load('account')
-    await expense.load('currency')
-
-    return { kind: 'expense', expense }
+    return { kind: 'purchase', purchase }
   }
 }

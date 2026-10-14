@@ -424,4 +424,45 @@ test.group('Suppliers API', (group) => {
     assert.equal(Number(purchase.balanceUsd), 0)
     assert.equal(Number(purchase.accountId), Number(account.id))
   })
+
+  test('POST /api/v1/suppliers/:id/invoices contado creates paid purchase without expense', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const account = await Account.create({
+      name: 'Caja factura',
+      description: null,
+      isActive: true,
+    })
+    const supplier = await Supplier.create({
+      name: 'Proveedor Factura Contado',
+      active: true,
+    })
+
+    const response = await client
+      .post(`/api/v1/suppliers/${supplier.id}/invoices`)
+      .loginAs(user)
+      .json({
+        date: '2026-10-12',
+        amount: 30,
+        currency_code: 'XAU',
+        is_credit: false,
+        account_id: account.id,
+        invoice_number: 'FC-1',
+      })
+
+    response.assertStatus(200)
+    const body = response.body() as {
+      data: { kind: string; purchase: { id: number; isCredit: boolean; balanceUsd: string } }
+    }
+    assert.equal(body.data.kind, 'purchase')
+    assert.equal(body.data.purchase.isCredit, false)
+    assert.equal(Number(body.data.purchase.balanceUsd), 0)
+
+    const purchase = await Purchase.findOrFail(body.data.purchase.id)
+    assert.equal(purchase.affectsInventory, false)
+    assert.equal(Number(purchase.amountPaidUsd), 30)
+    assert.equal(Number(purchase.accountId), Number(account.id))
+  })
 })

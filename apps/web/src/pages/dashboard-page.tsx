@@ -105,7 +105,7 @@ export function DashboardPage() {
       <div className={pageHeaderClass}>
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Dashboard</h1>
-          <p className="text-sm text-neutral-500">Resumen del día — {todayLabel()}</p>
+          <p className="text-sm text-neutral-500">Resumen del turno — {todayLabel()}</p>
         </div>
         <Button variant="outline" size="sm" asChild title="Cierre diario" className="w-fit shrink-0">
           <Link to="/dashboard/cierre-diario">

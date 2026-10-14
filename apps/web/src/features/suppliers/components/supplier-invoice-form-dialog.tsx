@@ -164,8 +164,7 @@ export function SupplierInvoiceFormDialog({
         <DialogHeader>
           <DialogTitle>Registrar factura</DialogTitle>
           <DialogDescription>
-            Contado se guarda como gasto (sin stock). Crédito genera deuda al proveedor para abonar
-            después.
+            Compra sin stock (contado o crédito). No afecta las ventas del día.
           </DialogDescription>
         </DialogHeader>
 

@@ -27,7 +27,7 @@ export function DashboardProfitDonut({
       className={cn('relative shrink-0', className)}
       style={{ width: size, height: size }}
       role="img"
-      aria-label={ariaLabel ?? `Ganancia ${label} sobre ventas del día`}
+      aria-label={ariaLabel ?? `Ganancia ${label} sobre ventas del turno`}
     >
       <svg width={size} height={size} className="-rotate-90">
         <circle

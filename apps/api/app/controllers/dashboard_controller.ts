@@ -95,6 +95,11 @@ export default class DashboardControleler {
         expenses_count: data.summary.expensesCount,
         expenses_total_usd: data.summary.expensesTotalUsd,
         net_cash_usd: data.summary.netCashUsd,
+        supplier_payments_count: data.summary.supplierPaymentsCount,
+        supplier_payments_total_usd: data.summary.supplierPaymentsTotalUsd,
+        cash_purchases_count: data.summary.cashPurchasesCount,
+        cash_purchases_total_usd: data.summary.cashPurchasesTotalUsd,
+        drawer_cash_usd: data.summary.drawerCashUsd,
       },
       by_payment_method: data.byPaymentMethod.map((item) => ({
         code: item.code,

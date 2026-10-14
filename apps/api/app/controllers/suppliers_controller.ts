@@ -120,14 +120,7 @@ export default class SuppliersControleler {
     const payload = await request.validateUsing(createSupplierInvoiceValidator)
     const result = await this.invoiceService.registrar(Number(params.id), payload)
     broadcastCompanyEvent('supplier.changed')
-    broadcastCompanyEvent(result.kind === 'expense' ? 'expense.changed' : 'purchase.changed')
-
-    if (result.kind === 'expense') {
-      return serialize({
-        kind: 'expense' as const,
-        expense: await serializeExpense(result.expense),
-      })
-    }
+    broadcastCompanyEvent('purchase.changed')
 
     return serialize({
       kind: 'purchase' as const,

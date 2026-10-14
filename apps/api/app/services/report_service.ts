@@ -117,7 +117,14 @@ export type AccountStatementSummary = {
 
   overdueReceivablesUsd: string
 
+  /** Movimiento del período: entradas − salidas (puede ser negativo). */
   netUsd: string
+
+  /** Flujo acumulado antes de `period.from` (mismas reglas que el período). */
+  openingBalanceUsd: string
+
+  /** openingBalanceUsd + netUsd. */
+  closingBalanceUsd: string
 
   sales: string
 
@@ -136,6 +143,10 @@ export type AccountStatementSummary = {
   pendingReceivables: string
 
   overdueReceivables: string
+
+  openingBalance: string
+
+  closingBalance: string
 
   net: string
 
@@ -253,11 +264,15 @@ export type FinancialSummaryResult = {
   }
   flujo: {
     netUsd: string
+    openingBalanceUsd: string
+    closingBalanceUsd: string
     salesUsd: string
     incomesUsd: string
     purchasesUsd: string
     expensesUsd: string
     net: string
+    openingBalance: string
+    closingBalance: string
     sales: string
     incomes: string
     purchases: string
@@ -334,11 +349,15 @@ export default class ReportService {
       },
       flujo: {
         netUsd: flujo.summary.netUsd,
+        openingBalanceUsd: flujo.summary.openingBalanceUsd,
+        closingBalanceUsd: flujo.summary.closingBalanceUsd,
         salesUsd: flujo.summary.salesUsd,
         incomesUsd: flujo.summary.incomesUsd,
         purchasesUsd: flujo.summary.purchasesUsd,
         expensesUsd: flujo.summary.expensesUsd,
         net: flujo.summary.net,
+        openingBalance: flujo.summary.openingBalance,
+        closingBalance: flujo.summary.closingBalance,
         sales: flujo.summary.sales,
         incomes: flujo.summary.incomes,
         purchases: flujo.summary.purchases,
@@ -1131,6 +1150,13 @@ export default class ReportService {
     })
 
     const netUsd = salesUsd + incomesUsd - purchasesUsd - expensesUsd - machineExpensesUsd
+    const openingBalanceUsd = await this.computePriorCashFlowNetUsd({
+      beforeDate: period.from,
+      types,
+      filters,
+      rates,
+    })
+    const closingBalanceUsd = openingBalanceUsd + netUsd
     const { pendingReceivablesUsd, overdueReceivablesUsd } = await this.computeOpenReceivables()
 
     return {
@@ -1158,6 +1184,10 @@ export default class ReportService {
         overdueReceivablesUsd: overdueReceivablesUsd.toFixed(4),
 
         netUsd: netUsd.toFixed(4),
+
+        openingBalanceUsd: openingBalanceUsd.toFixed(4),
+
+        closingBalanceUsd: closingBalanceUsd.toFixed(4),
 
         sales: this.formatDisplay(
           this.currencyService.fromUsd(salesUsd, displayCurrency, rates),
@@ -1214,11 +1244,123 @@ export default class ReportService {
           displayCurrency
         ),
 
+        openingBalance: this.formatDisplay(
+          this.currencyService.fromUsd(openingBalanceUsd, displayCurrency, rates),
+          displayCurrency
+        ),
+
+        closingBalance: this.formatDisplay(
+          this.currencyService.fromUsd(closingBalanceUsd, displayCurrency, rates),
+          displayCurrency
+        ),
+
         rates: this.currencyService.formatRates(rates),
       },
 
       movements,
     }
+  }
+
+  /**
+   * Flujo neto acumulado con fecha estrictamente anterior a `beforeDate`
+   * (mismas reglas de caja que el período: contado + abonos − compras contado −
+   * abonos proveedor − gastos; CxC/CxP no cuentan hasta el cobro/pago).
+   */
+  private async computePriorCashFlowNetUsd(options: {
+    beforeDate: string
+    types: Set<string>
+    filters: AccountStatementFilters
+    rates: Record<string, number>
+  }): Promise<number> {
+    const { beforeDate, types, filters, rates } = options
+    let inflows = 0
+    let outflows = 0
+
+    if (types.has('sales')) {
+      const cashSales = await db
+        .from('sales')
+        .where('status', 'COMPLETED')
+        .where('payment_type', 'CASH')
+        .where('sold_at', '<', `${beforeDate} 00:00:00`)
+        .select(db.raw('COALESCE(SUM(total_usd), 0) as total_usd'))
+        .first()
+      inflows += Number(cashSales?.total_usd ?? 0)
+
+      let paymentQuery = db
+        .from('customer_payments')
+        .where('date', '<', beforeDate)
+        .select(db.raw('COALESCE(SUM(amount_usd), 0) as total_usd'))
+      paymentQuery = this.applyAccountFilterToKnex(paymentQuery, filters)
+      const customerPayments = await paymentQuery.first()
+      inflows += Number(customerPayments?.total_usd ?? 0)
+    }
+
+    if (types.has('incomes')) {
+      let incomeQuery = db
+        .from('incomes')
+        .where('date', '<', beforeDate)
+        .select(db.raw('COALESCE(SUM(amount_usd), 0) as total_usd'))
+      incomeQuery = this.applyAccountFilterToKnex(incomeQuery, filters)
+      const incomes = await incomeQuery.first()
+      inflows += Number(incomes?.total_usd ?? 0)
+    }
+
+    if (types.has('purchases')) {
+      let purchaseQuery = db
+        .from('purchases')
+        .where('status', 'CONFIRMED')
+        .where('is_credit', false)
+        .where('date', '<', beforeDate)
+        .select(db.raw('COALESCE(SUM(total_usd), 0) as total_usd'))
+      purchaseQuery = this.applyAccountFilterToKnex(purchaseQuery, filters)
+      const cashPurchases = await purchaseQuery.first()
+      outflows += Number(cashPurchases?.total_usd ?? 0)
+
+      let supplierPaymentQuery = db
+        .from('supplier_payments')
+        .where('date', '<', beforeDate)
+        .select(db.raw('COALESCE(SUM(amount_usd), 0) as total_usd'))
+      supplierPaymentQuery = this.applyAccountFilterToKnex(supplierPaymentQuery, filters)
+      const supplierPayments = await supplierPaymentQuery.first()
+      outflows += Number(supplierPayments?.total_usd ?? 0)
+    }
+
+    if (types.has('expenses')) {
+      let expenseQuery = db
+        .from('expenses')
+        .where('date', '<', beforeDate)
+        .select(db.raw('COALESCE(SUM(amount_usd), 0) as total_usd'))
+      expenseQuery = this.applyAccountFilterToKnex(expenseQuery, filters)
+      const expenses = await expenseQuery.first()
+      outflows += Number(expenses?.total_usd ?? 0)
+    }
+
+    if (types.has('machine_expenses')) {
+      let machineQuery = db
+        .from('machine_expenses')
+        .where('date', '<', beforeDate)
+        .select('amount', 'currency_code')
+      machineQuery = this.applyAccountFilterToKnex(machineQuery, filters)
+      const machineRows = await machineQuery
+      for (const row of machineRows) {
+        const currencyCode = row.currency_code ? String(row.currency_code) : 'USD'
+        outflows += this.currencyService.toUsd(Number(row.amount ?? 0), currencyCode, rates)
+      }
+    }
+
+    return inflows - outflows
+  }
+
+  private applyAccountFilterToKnex<
+    T extends { whereNull(column: string): T; where(column: string, value: unknown): T },
+  >(query: T, filters: AccountStatementFilters): T {
+    if (filters.unassigned) {
+      return query.whereNull('account_id')
+    }
+    if (filters.account_id) {
+      return query.where('account_id', filters.account_id)
+    }
+    return query
   }
 
   private async computeInventoryValueUsd(): Promise<number> {
