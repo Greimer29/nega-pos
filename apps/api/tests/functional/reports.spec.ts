@@ -777,6 +777,95 @@ test.group('Reports API', (group) => {
     assert.equal(filteredBody.data.movements[0].amountUsd, '30.0000')
   })
 
+  test('GET account-statement opening and closing balance include prior period cash', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const customer = await Customer.create({ name: 'Cliente saldo apertura', active: true })
+    const product = await CatalogProduct.create({
+      name: 'Producto saldo apertura',
+      category: 'Camisas',
+      saleUnit: 'UND',
+      salePriceUsd: '10.0000',
+      costUsd: '2.0000',
+      stockQuantity: '20.000',
+      active: true,
+    })
+
+    // Venta previa al período (mayo): suma al opening.
+    await seedTestSale({
+      customerId: Number(customer.id),
+      soldAt: DateTime.fromISO('2026-05-10T12:00:00', { zone: 'America/Caracas' }),
+      totalUsd: '10.0000',
+      paymentType: 'CASH',
+      paymentMethodCode: 'cash_usd',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '1',
+          unitPriceUsd: '10.0000',
+          subtotalUsd: '10.0000',
+        },
+      ],
+    })
+
+    // En junio: cobro 4 y compra contado 8.5 → movimiento −4.5; cierre 10 − 4.5 = 5.5
+    await seedTestSale({
+      customerId: Number(customer.id),
+      soldAt: DateTime.fromISO('2026-06-12T12:00:00', { zone: 'America/Caracas' }),
+      totalUsd: '4.0000',
+      paymentType: 'CASH',
+      paymentMethodCode: 'cash_usd',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '1',
+          unitPriceUsd: '4.0000',
+          subtotalUsd: '4.0000',
+        },
+      ],
+    })
+
+    const supplier = await Supplier.create({ name: 'Proveedor saldo apertura', active: true })
+    await Purchase.create({
+      supplierId: Number(supplier.id),
+      date: DateTime.fromISO('2026-06-12'),
+      totalUsd: '8.5000',
+      status: 'CONFIRMED',
+      isCredit: false,
+      affectsInventory: false,
+      amountPaidUsd: '8.5000',
+      balanceUsd: '0.0000',
+    })
+
+    const response = await client
+      .get('/api/v1/reports/account-statement')
+      .qs({
+        month: '2026-06',
+        types: 'sales,purchases',
+        display_currency: 'USD',
+      })
+      .loginAs(user)
+
+    response.assertStatus(200)
+    const summary = response.body().data.summary as {
+      salesUsd: string
+      purchasesUsd: string
+      netUsd: string
+      openingBalanceUsd: string
+      closingBalanceUsd: string
+    }
+
+    assert.equal(summary.salesUsd, '4.0000')
+    assert.equal(summary.purchasesUsd, '8.5000')
+    assert.equal(summary.netUsd, '-4.5000')
+    assert.equal(summary.openingBalanceUsd, '10.0000')
+    assert.equal(summary.closingBalanceUsd, '5.5000')
+  })
+
   test('GET account-statement includes supplier payments in purchases', async ({
     client,
     assert,

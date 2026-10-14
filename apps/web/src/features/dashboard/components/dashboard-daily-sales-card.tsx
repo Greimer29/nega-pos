@@ -23,7 +23,7 @@ export function DashboardDailySalesCard({ ventas, ganancia }: DashboardDailySale
   const brutoUsd = parseUsd(ventas.montoProductosUsd)
   const creditoUsd = parseUsd(ventas.montoCreditoUsd)
   const gastosUsd = parseUsd(ventas.gastosMontoUsd)
-  // Gastos operativos del día restan. Pagos/facturas a proveedor no entran en gastosUsd.
+  // Gastos operativos del turno restan. Pagos/facturas a proveedor no entran en gastosUsd.
   const entradasNetasUsd = brutoUsd - gastosUsd - creditoUsd
 
   return (
@@ -32,7 +32,7 @@ export function DashboardDailySalesCard({ ventas, ganancia }: DashboardDailySale
       <div className="relative flex min-h-0 flex-1 flex-col justify-between gap-6">
         <div className="space-y-4">
           <div>
-            <p className="text-sm text-white/70">Entradas netas del día</p>
+            <p className="text-sm text-white/70">Entradas netas del turno</p>
             <div className="mt-2">
               <DisplayMoneyFromUsd
                 amountUsd={entradasNetasUsd}
@@ -65,7 +65,7 @@ export function DashboardDailySalesCard({ ventas, ganancia }: DashboardDailySale
               className="group space-y-1 rounded-xl transition-colors hover:bg-white/5"
             >
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm text-white/70">Gastos del día</p>
+                <p className="text-sm text-white/70">Gastos del turno</p>
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white/80 transition-colors group-hover:bg-white/15 group-hover:text-white">
                   <ArrowUpRight className="size-4" aria-hidden />
                 </span>
@@ -99,7 +99,7 @@ export function DashboardDailySalesCard({ ventas, ganancia }: DashboardDailySale
 
           <div className="flex items-center justify-between rounded-2xl bg-white/10 p-3">
             <div>
-              <p className="text-sm text-white/70">Ganancia del día</p>
+              <p className="text-sm text-white/70">Ganancia del turno</p>
               <p className="text-lg font-semibold">
                 <DisplayMoneyFromUsd amountUsd={ganancia.montoUsd} size="md" className="text-white" />
               </p>

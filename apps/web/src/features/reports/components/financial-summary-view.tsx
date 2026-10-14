@@ -92,9 +92,16 @@ export function FinancialSummaryView({ data }: FinancialSummaryViewProps) {
 
         <ReportStatementCascade
           title="Caja"
-          subtitle="Entradas y salidas del período."
+          subtitle="Saldo acumulado y movimiento del período."
           ariaLabel="Flujo de caja"
           rows={[
+            {
+              id: 'opening',
+              label: 'Saldo al inicio',
+              hint: 'Acumulado antes del período.',
+              amount: formatUsd(data.flujo.openingBalanceUsd ?? '0'),
+              variant: 'line',
+            },
             {
               id: 'collections',
               label: 'Cobros por ventas',
@@ -125,11 +132,19 @@ export function FinancialSummaryView({ data }: FinancialSummaryViewProps) {
             },
             {
               id: 'net-cash',
-              label: 'Flujo de caja',
-              hint: 'Entradas − salidas.',
+              label: 'Movimiento del período',
+              hint: 'Entradas − salidas del rango.',
               amount: formatUsd(data.flujo.netUsd),
-              variant: 'total',
+              variant: 'line',
               emphasizeNegative: cashFlow < 0,
+            },
+            {
+              id: 'closing',
+              label: 'Saldo al cierre',
+              hint: 'Inicio + movimiento.',
+              amount: formatUsd(data.flujo.closingBalanceUsd ?? data.flujo.netUsd),
+              variant: 'total',
+              emphasizeNegative: Number(data.flujo.closingBalanceUsd ?? data.flujo.netUsd) < 0,
             },
           ]}
         />

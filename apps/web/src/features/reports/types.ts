@@ -45,6 +45,8 @@ export type AccountStatementSummary = {
   pendingReceivablesUsd: string
   overdueReceivablesUsd: string
   netUsd: string
+  openingBalanceUsd: string
+  closingBalanceUsd: string
   sales: string
   purchases: string
   expenses: string
@@ -55,6 +57,8 @@ export type AccountStatementSummary = {
   pendingReceivables: string
   overdueReceivables: string
   net: string
+  openingBalance: string
+  closingBalance: string
   rates: Record<string, string>
 }
 
@@ -176,11 +180,15 @@ export type FinancialSummaryData = {
   }
   flujo: {
     netUsd: string
+    openingBalanceUsd: string
+    closingBalanceUsd: string
     salesUsd: string
     incomesUsd: string
     purchasesUsd: string
     expensesUsd: string
     net: string
+    openingBalance: string
+    closingBalance: string
     sales: string
     incomes: string
     purchases: string

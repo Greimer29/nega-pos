@@ -28,7 +28,10 @@ type ReportKpiGridProps = {
 export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
   const { displayCurrency, formatFromUsd, baseCurrencyCode } = useDisplayCurrency()
   const netUsd = Number(summary.netUsd)
-  const isPositive = netUsd >= 0
+  const closingUsd = Number(summary.closingBalanceUsd ?? summary.netUsd)
+  const openingUsd = Number(summary.openingBalanceUsd ?? 0)
+  const periodPositive = netUsd >= 0
+  const closingPositive = closingUsd >= 0
   const formatUsd = (amountUsd: string) => formatReportDisplayAmount(amountUsd, formatFromUsd)
   const overduePayablesUsd = Number(summary.overduePayablesUsd ?? 0)
   const pendingPayablesDetail =
@@ -45,10 +48,15 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
 
   const renderHero = () => (
     <HeroKpiCard
-      netLabel={formatUsd(summary.netUsd)}
+      closingLabel={formatUsd(summary.closingBalanceUsd ?? summary.netUsd)}
+      openingLabel={formatUsd(summary.openingBalanceUsd ?? '0')}
+      periodMovementLabel={formatUsd(summary.netUsd)}
+      periodPositive={periodPositive}
+      closingPositive={closingPositive}
       currency={displayCurrency}
       baseCurrencyCode={baseCurrencyCode}
-      isPositive={isPositive}
+      openingUsd={openingUsd}
+      periodUsd={netUsd}
     />
   )
 
@@ -165,16 +173,32 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
 }
 
 function HeroKpiCard({
-  netLabel,
+  closingLabel,
+  openingLabel,
+  periodMovementLabel,
+  periodPositive,
+  closingPositive,
   currency,
   baseCurrencyCode,
-  isPositive,
+  openingUsd,
+  periodUsd,
 }: {
-  netLabel: string
+  closingLabel: string
+  openingLabel: string
+  periodMovementLabel: string
+  periodPositive: boolean
+  closingPositive: boolean
   currency: string
   baseCurrencyCode: string
-  isPositive: boolean
+  openingUsd: number
+  periodUsd: number
 }) {
+  const periodSign = periodUsd > 0.00005 ? '+' : periodUsd < -0.00005 ? '−' : ''
+  const periodAbsLabel =
+    periodSign === '−'
+      ? periodMovementLabel.replace(/^-/, '')
+      : periodMovementLabel.replace(/^\+/, '')
+
   return (
     <div className={reportUi.hero}>
       <span
@@ -198,41 +222,61 @@ function HeroKpiCard({
           <span
             className={cn(
               'rounded-full border px-2.5 py-1 text-xs font-semibold tracking-wide',
-              isPositive
+              periodPositive
                 ? 'border-white/20 bg-white/10 text-white'
                 : 'border-red-400/30 bg-red-500/15 text-red-200'
             )}
           >
-            {isPositive ? 'Entró más' : 'Salió más'}
+            {periodPositive ? 'Entró más en el período' : 'Salió más en el período'}
           </span>
         </div>
 
         <div>
           <p className="text-sm font-medium tracking-wide text-neutral-400 uppercase">
-            Flujo de caja
+            Saldo de caja
           </p>
           <p
             className={cn(
               'mt-1 text-4xl font-bold tracking-tight tabular-nums',
-              isPositive ? 'text-white' : 'text-red-100'
+              closingPositive ? 'text-white' : 'text-red-100'
             )}
           >
-            {netLabel}
+            {closingLabel}
           </p>
-          <p className="mt-3 max-w-md text-xs leading-relaxed text-neutral-400">
-            Entradas menos salidas en este período ({baseCurrencyCode}, vista {currency}). No
-            representa el saldo total de la empresa ni la utilidad. Las deudas a crédito no se
-            descuentan hasta el pago.
+          <p className="mt-3 max-w-lg text-xs leading-relaxed text-neutral-400">
+            Saldo al cierre = saldo al inicio ({openingLabel}){' '}
+            {periodUsd >= 0 ? '+' : '−'} movimiento del período ({periodSign}
+            {periodAbsLabel}). Vista {currency} sobre base {baseCurrencyCode}. Las deudas a crédito
+            no se descuentan hasta el pago.
           </p>
+          <div className="mt-4 grid max-w-md grid-cols-2 gap-3">
+            <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+              <p className="text-[11px] tracking-wide text-neutral-500 uppercase">Al inicio</p>
+              <p className="mt-0.5 text-sm font-semibold tabular-nums text-white">{openingLabel}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+              <p className="text-[11px] tracking-wide text-neutral-500 uppercase">Movimiento</p>
+              <p
+                className={cn(
+                  'mt-0.5 text-sm font-semibold tabular-nums',
+                  periodPositive ? 'text-white' : 'text-red-200'
+                )}
+              >
+                {periodSign}
+                {periodAbsLabel}
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-neutral-500">
-          {isPositive ? (
+          {closingPositive ? (
             <ArrowUpRight className="size-4 text-white/70" />
           ) : (
             <ArrowDownLeft className="size-4 text-red-300/80" />
           )}
           Base de consolidación: {baseCurrencyCode} ({currencySymbol(baseCurrencyCode)})
+          {Math.abs(openingUsd) < 0.00005 ? ' · Sin movimientos previos al rango' : null}
         </div>
       </div>
     </div>

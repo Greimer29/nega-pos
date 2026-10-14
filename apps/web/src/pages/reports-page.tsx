@@ -88,7 +88,7 @@ export function ReportsPage() {
     return {
       title: 'Flujo de caja',
       subtitle:
-        'Flujo de caja del período: entradas menos salidas. No equivale al saldo total de la empresa ni a la utilidad.',
+        'Saldo de caja (inicio + movimiento del período). El movimiento puede ser negativo un día aunque el saldo acumulado sea positivo.',
     }
   }, [activeTab, activeSub])
 
