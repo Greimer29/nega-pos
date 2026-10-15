@@ -4,6 +4,7 @@ import Material from '#models/material'
 import ProductInventoryMovement from '#models/product_inventory_movement'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
 import db from '@adonisjs/lucid/services/db'
+import { APP_TIMEZONE, datetimeRangeUtcSql, nowInAppZone } from '#utils/app_timezone'
 import { DateTime } from 'luxon'
 
 export type InventorySortBy = 'id' | 'name' | 'sale_price' | 'quantity'
@@ -66,21 +67,27 @@ function qtyString(value: number) {
   return value.toFixed(3)
 }
 
-function resolvePeriod(filters: InventoryMovementsFilters) {
+function resolvePeriod(filters: InventoryMovementsFilters): {
+  fromDate: string
+  toDate: string
+  fromSql: string
+  toExclusiveSql: string
+} {
+  let fromDate: string
+  let toDate: string
+
   if (filters.month) {
-    const start = DateTime.fromISO(`${filters.month}-01`, { zone: 'utc' }).startOf('day')
-    const end = start.endOf('month')
-    return { from: start, to: end }
+    const start = DateTime.fromISO(`${filters.month}-01`, { zone: APP_TIMEZONE })
+    fromDate = start.startOf('month').toISODate()!
+    toDate = start.endOf('month').toISODate()!
+  } else {
+    const now = nowInAppZone()
+    fromDate = filters.from ?? now.startOf('month').toISODate()!
+    toDate = filters.to ?? now.toISODate()!
   }
 
-  const from = filters.from
-    ? DateTime.fromISO(filters.from, { zone: 'utc' }).startOf('day')
-    : DateTime.now().toUTC().startOf('month')
-  const to = filters.to
-    ? DateTime.fromISO(filters.to, { zone: 'utc' }).endOf('day')
-    : DateTime.now().toUTC().endOf('day')
-
-  return { from, to }
+  const { fromSql, toExclusiveSql } = datetimeRangeUtcSql(fromDate, toDate)
+  return { fromDate, toDate, fromSql, toExclusiveSql }
 }
 
 export default class InventoryReportService {
@@ -139,7 +146,7 @@ export default class InventoryReportService {
     }
 
     const stock = await this.stockService.calcularStockDisponible(product)
-    const { from, to } = resolvePeriod(filters)
+    const { fromDate, toDate, fromSql, toExclusiveSql } = resolvePeriod(filters)
     const page = filters.page ?? 1
     const perPage = filters.per_page ?? 30
     const sizes = product.sizes ?? []
@@ -153,8 +160,8 @@ export default class InventoryReportService {
 
     const query = ProductInventoryMovement.query()
       .where('catalog_product_id', productId)
-      .where('created_at', '>=', from.toSQL()!)
-      .where('created_at', '<=', to.toSQL()!)
+      .where('created_at', '>=', fromSql)
+      .where('created_at', '<', toExclusiveSql)
       .preload('sale')
       .preload('order')
       .preload('createdBy')
@@ -214,8 +221,8 @@ export default class InventoryReportService {
         firstPage: 1,
       },
       period: {
-        from: from.toISODate(),
-        to: to.toISODate(),
+        from: fromDate,
+        to: toDate,
       },
     }
   }

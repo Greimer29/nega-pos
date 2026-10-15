@@ -187,6 +187,64 @@ test.group('Reports API', (group) => {
     assert.equal(body.data.summary.salesUsd, '24.0000')
   })
 
+  test('GET account-statement day filter uses America/Caracas calendar for evening sold_at', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const product = await CatalogProduct.create({
+      name: 'Prod reporte zona horaria',
+      category: 'General',
+      salePriceUsd: '12.0000',
+      costUsd: '4.0000',
+      active: true,
+    })
+
+    // 21:00 Caracas del 14 = 01:00 UTC del 15 — debe contar en el día 14, no en el 15.
+    const soldAt = DateTime.fromISO('2026-10-14T21:00:00', { zone: 'America/Caracas' })
+    await seedTestSale({
+      soldAt,
+      confirmedAt: soldAt,
+      totalUsd: '12.0000',
+      lines: [
+        {
+          catalogProductId: Number(product.id),
+          description: product.name,
+          quantity: '1',
+          unitPriceUsd: '12.0000',
+          subtotalUsd: '12.0000',
+        },
+      ],
+    })
+
+    const emptyDay = await client
+      .get('/api/v1/reports/account-statement')
+      .qs({ from: '2026-10-15', to: '2026-10-15', types: 'sales', display_currency: 'USD' })
+      .loginAs(user)
+
+    emptyDay.assertStatus(200)
+    assert.equal(emptyDay.body().data.summary.salesUsd, '0.0000')
+    assert.lengthOf(emptyDay.body().data.movements, 0)
+
+    const shopDay = await client
+      .get('/api/v1/reports/account-statement')
+      .qs({ from: '2026-10-14', to: '2026-10-14', types: 'sales', display_currency: 'USD' })
+      .loginAs(user)
+
+    shopDay.assertStatus(200)
+    assert.equal(shopDay.body().data.summary.salesUsd, '12.0000')
+    assert.lengthOf(shopDay.body().data.movements, 1)
+    assert.equal(shopDay.body().data.movements[0].date, '2026-10-14')
+
+    const results = await client
+      .get('/api/v1/reports/income-statement')
+      .qs({ from: '2026-10-14', to: '2026-10-14', display_currency: 'USD' })
+      .loginAs(user)
+
+    results.assertStatus(200)
+    assert.equal(results.body().data.summary.salesRevenueUsd, '12.0000')
+  })
+
   test('GET /api/v1/reports/account-statement uses USD for catalog sales with returns', async ({
     client,
     assert,

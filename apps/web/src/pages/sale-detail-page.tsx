@@ -24,7 +24,7 @@ import {
   reprintSaleDocument,
 } from '@/features/printing/services/printing-service'
 import { getSale } from '@/features/ventas/services/sales-service'
-import { formatFecha } from '@/lib/format-date'
+import { formatFechaInstante } from '@/lib/format-date'
 
 const ORDER_TRANSITIONS: Record<SaleOrderStatus, SaleOrderStatus[]> = {
   PENDING: ['IN_PROCESS', 'DELIVERED'],
@@ -225,7 +225,7 @@ export function SaleDetailPage() {
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <div>
             <p className="text-muted-foreground text-xs">Fecha</p>
-            <p className="text-sm">{formatFecha(sale.sold_at ?? sale.confirmed_at)}</p>
+            <p className="text-sm">{formatFechaInstante(sale.sold_at ?? sale.confirmed_at)}</p>
           </div>
           <div>
             <p className="text-muted-foreground text-xs">Modalidad</p>
