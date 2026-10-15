@@ -44,6 +44,25 @@ export type MachineExpense = {
   }
 }
 
+export type MachinePayment = {
+  id: number
+  machineId: number
+  accountId: number | null
+  amountUsd: string
+  currencyCode?: string | null
+  entryRate?: string | null
+  amountNative?: string | null
+  date: string
+  note: string | null
+  createdAt: string
+  updatedAt: string
+  account?: {
+    id: number
+    name: string
+    isActive: boolean
+  }
+}
+
 export type Machine = {
   id: number
   name: string
@@ -53,6 +72,13 @@ export type Machine = {
   serialNumber: string | null
   acquisitionDate: string | null
   acquisitionCost: string | null
+  acquisitionAmountNative?: string | null
+  entryCurrencyCode?: string | null
+  entryRate?: string | null
+  isCredit: boolean
+  amountPaidUsd: string
+  balanceUsd: string
+  creditDueDate: string | null
   status: MachineStatus
   location: string | null
   notes: string | null
@@ -61,6 +87,7 @@ export type Machine = {
   updatedAt: string
   totalSpent?: string
   expenses?: MachineExpense[]
+  payments?: MachinePayment[]
 }
 
 export type MachineListParams = {
@@ -100,7 +127,12 @@ export type MachineInput = {
   model?: string
   serialNumber?: string
   date_adquisicion?: string
+  /** Monto en moneda de ingreso. */
   costo_adquisicion?: number
+  currency_code?: string
+  entry_rate?: number
+  is_credit?: boolean
+  credit_due_date?: string | null
   status?: MachineStatus
   location?: string
   notes?: string
@@ -123,5 +155,20 @@ export type MachineExpenseInput = {
 export type MachineExpenseResponse = {
   data: {
     expense: MachineExpense
+  }
+}
+
+export type MachinePaymentInput = {
+  amount: number
+  currency_code?: string
+  entry_rate?: number
+  date: string
+  account_id?: number | null
+  note?: string
+}
+
+export type MachinePaymentResponse = {
+  data: {
+    payment: MachinePayment
   }
 }

@@ -30,6 +30,7 @@ async function resetDatabase() {
   await db.from('expenses').delete()
   await db.from('incomes').delete()
   await db.from('machine_expenses').delete()
+  await db.from('machine_payments').delete()
   await db.from('customer_payments').delete()
   await db.from('supplier_payments').delete()
   await db.from('sale_lines').delete()

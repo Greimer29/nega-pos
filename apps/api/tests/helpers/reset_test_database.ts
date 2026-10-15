@@ -25,6 +25,7 @@ export async function resetTestDatabase() {
   await db.from('expenses').delete()
   await db.from('incomes').delete()
   await db.from('machine_expenses').delete()
+  await db.from('machine_payments').delete()
   await db.from('orders').delete()
   await db.from('catalog_products').delete()
   await db.from('materials').delete()

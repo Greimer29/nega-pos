@@ -29,6 +29,18 @@ export const movementTheme: Record<
     badge: 'bg-teal-50 text-teal-900 border border-teal-200',
     label: 'Pago',
   },
+  machine_payment: {
+    bar: '#0f766e',
+    chart: '#14b8a6',
+    badge: 'bg-cyan-50 text-cyan-900 border border-cyan-200',
+    label: 'Abono máq.',
+  },
+  machine_credit: {
+    bar: '#b45309',
+    chart: '#d97706',
+    badge: 'bg-amber-50 text-amber-900 border border-amber-200',
+    label: 'CxP máq.',
+  },
   expense: {
     bar: '#64748b',
     chart: '#64748b',

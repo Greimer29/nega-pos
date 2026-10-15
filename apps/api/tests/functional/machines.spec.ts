@@ -317,6 +317,175 @@ test.group('Machines API', (group) => {
     assert.equal(body.data.meta.total, 2)
   })
 
+  test('POST /api/v1/machines with is_credit creates payable balance', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+
+    const response = await client.post('/api/v1/machines').loginAs(user).json({
+      name: 'Overlock crédito',
+      type: 'OVERLOCK',
+      costo_adquisicion: 1200,
+      is_credit: true,
+      credit_due_date: '2026-12-31',
+      status: 'OPERATIONAL',
+    })
+
+    response.assertStatus(200)
+    const machine = response.body().data.machine as {
+      isCredit: boolean
+      acquisitionCost: string
+      amountPaidUsd: string
+      balanceUsd: string
+      creditDueDate: string | null
+    }
+
+    assert.isTrue(machine.isCredit)
+    assert.equal(Number(machine.acquisitionCost), 1200)
+    assert.equal(machine.amountPaidUsd, '0.0000')
+    assert.equal(machine.balanceUsd, '1200.0000')
+    assert.equal(machine.creditDueDate, '2026-12-31')
+  })
+
+  test('POST /api/v1/machines credit accepts foreign currency and entry_rate', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+
+    // 4000 VES @ 100 VES/base → 40 base
+    const response = await client.post('/api/v1/machines').loginAs(user).json({
+      name: 'Máquina VES',
+      type: 'OVERLOCK',
+      costo_adquisicion: 4000,
+      currency_code: 'VES',
+      entry_rate: 100,
+      is_credit: true,
+      status: 'OPERATIONAL',
+    })
+
+    response.assertStatus(200)
+    const machine = response.body().data.machine as {
+      isCredit: boolean
+      acquisitionCost: string
+      balanceUsd: string
+      acquisitionAmountNative: string | null
+      entryCurrencyCode: string | null
+      entryRate: string | null
+    }
+
+    assert.isTrue(machine.isCredit)
+    assert.equal(Number(machine.acquisitionCost), 40)
+    assert.equal(machine.balanceUsd, '40.0000')
+    assert.equal(machine.acquisitionAmountNative, '4000.0000')
+    assert.equal(machine.entryCurrencyCode, 'VES')
+    assert.equal(Number(machine.entryRate), 100)
+  })
+
+  test('POST /api/v1/machines credit without cost returns 422', async ({ client }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+
+    const response = await client.post('/api/v1/machines').loginAs(user).json({
+      name: 'Sin costo',
+      type: 'OVERLOCK',
+      is_credit: true,
+      status: 'OPERATIONAL',
+    })
+
+    response.assertStatus(422)
+  })
+
+  test('POST /api/v1/machines/:id/payments reduces balance', async ({ client, assert }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const machine = await Machine.create({
+      name: 'Máquina abono',
+      type: 'OVERLOCK',
+      status: 'OPERATIONAL',
+      active: true,
+      acquisitionCost: '500.00',
+      isCredit: true,
+      amountPaidUsd: '0.0000',
+      balanceUsd: '500.0000',
+    })
+
+    const response = await client
+      .post(`/api/v1/machines/${machine.id}/payments`)
+      .loginAs(user)
+      .json({
+        amount_usd: 200,
+        date: '2026-06-15',
+        note: 'Primer abono',
+      })
+
+    response.assertStatus(200)
+    assert.equal(response.body().data.payment.amountUsd, '200.0000')
+
+    await machine.refresh()
+    assert.equal(machine.amountPaidUsd, '200.0000')
+    assert.equal(machine.balanceUsd, '300.0000')
+
+    const detail = await client.get(`/api/v1/machines/${machine.id}`).loginAs(user)
+    detail.assertStatus(200)
+    const payments = detail.body().data.machine.payments as Array<{ amountUsd: string }>
+    assert.lengthOf(payments, 1)
+    assert.equal(payments[0].amountUsd, '200.0000')
+  })
+
+  test('account-statement includes machine credit in pending payables', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    await Machine.create({
+      name: 'CxP máquina reporte',
+      type: 'OVERLOCK',
+      status: 'OPERATIONAL',
+      active: true,
+      acquisitionCost: '800.00',
+      isCredit: true,
+      amountPaidUsd: '0.0000',
+      balanceUsd: '800.0000',
+      acquisitionDate: DateTime.fromISO('2026-06-01'),
+    })
+
+    const response = await client
+      .get('/api/v1/reports/account-statement')
+      .qs({ month: '2026-06', types: 'purchases', display_currency: 'USD' })
+      .loginAs(user)
+
+    response.assertStatus(200)
+    const summary = response.body().data.summary as { pendingPayablesUsd: string }
+    assert.equal(Number(summary.pendingPayablesUsd), 800)
+
+    const movements = response.body().data.movements as Array<{ type: string; label: string }>
+    assert.isTrue(movements.some((m) => m.type === 'machine_credit'))
+  })
+
+  test('POST /api/v1/machines/:id/payments rejects amount over balance', async ({ client }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const machine = await Machine.create({
+      name: 'Máquina saldo bajo',
+      type: 'OVERLOCK',
+      status: 'OPERATIONAL',
+      active: true,
+      acquisitionCost: '100.00',
+      isCredit: true,
+      amountPaidUsd: '0.0000',
+      balanceUsd: '100.0000',
+    })
+
+    const response = await client
+      .post(`/api/v1/machines/${machine.id}/payments`)
+      .loginAs(user)
+      .json({
+        amount_usd: 150,
+        date: '2026-06-15',
+      })
+
+    response.assertStatus(422)
+  })
+
   test('DELETE /api/v1/machines/:id soft deletes when has expenses', async ({ client, assert }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
     const machine = await Machine.create({

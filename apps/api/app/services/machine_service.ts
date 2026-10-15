@@ -1,8 +1,11 @@
+import MaquinaCreditoCostoRequeridoException from '#exceptions/maquina_credito_costo_requerido_exception'
 import MachineNoEncontradaException from '#exceptions/maquina_no_encontrada_exception'
 import Expense from '#models/expense'
 import MachineExpense from '#models/machine_expense'
 import Machine from '#models/machine'
+import MachinePayment from '#models/machine_payment'
 import CurrencyService from '#services/currency_service'
+import { resolveMonetaryEntryAmount } from '#utils/monetary_entry'
 import { sumMachineExpenseRowsUsd } from '#utils/machine_expense_totals'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
@@ -15,7 +18,12 @@ export type MachineInput = {
   model?: string
   serialNumber?: string
   date_adquisicion?: string
+  /** Monto de adquisición en moneda de ingreso (nativo). */
   costo_adquisicion?: number
+  currency_code?: string
+  entry_rate?: number
+  is_credit?: boolean
+  credit_due_date?: string | null
   status?: string
   location?: string
   notes?: string
@@ -41,9 +49,12 @@ export type MachineDetalle = {
   totalSpent: string
   expenses: Expense[]
   legacyExpenses: MachineExpense[]
+  payments: MachinePayment[]
 }
 
 export default class MachineService {
+  private currencyService = new CurrencyService()
+
   async listar(filters: ListMachinesFilters = {}): Promise<ModelPaginatorContract<Machine>> {
     const page = filters.page ?? 1
     const perPage = filters.perPage ?? 20
@@ -102,18 +113,103 @@ export default class MachineService {
       .orderBy('id', 'desc')
       .limit(20)
 
-    return { machine, totalSpent, expenses, legacyExpenses }
+    const payments = await MachinePayment.query()
+      .where('machineId', Number(machine.id))
+      .preload('account')
+      .orderBy('date', 'desc')
+      .orderBy('id', 'desc')
+
+    return { machine, totalSpent, expenses, legacyExpenses, payments }
   }
 
   async crear(input: MachineInput): Promise<Machine> {
+    const isCredit = Boolean(input.is_credit)
+    const costNative = input.costo_adquisicion
+
+    if (isCredit && (costNative === undefined || costNative <= 0)) {
+      throw new MaquinaCreditoCostoRequeridoException()
+    }
+
+    const monetary =
+      costNative !== undefined && costNative > 0
+        ? await resolveMonetaryEntryAmount({
+            amountNative: costNative,
+            currencyCode: input.currency_code,
+            entryRate: input.entry_rate,
+            currencyService: this.currencyService,
+          })
+        : null
+
+    const costUsd = monetary?.amountUsd ?? null
+
     return Machine.create({
       ...this.prepareInput(input),
       active: input.active ?? true,
+      acquisitionCost: costUsd !== null ? Number(costUsd).toFixed(2) : null,
+      acquisitionAmountNative: monetary?.amountNative ?? null,
+      entryCurrencyCode: monetary?.currencyCode ?? null,
+      entryRate: monetary?.entryRate ?? null,
+      isCredit,
+      amountPaidUsd: isCredit ? '0.0000' : (costUsd ?? '0.0000'),
+      balanceUsd: isCredit ? costUsd! : '0.0000',
+      creditDueDate:
+        isCredit && input.credit_due_date ? DateTime.fromISO(input.credit_due_date) : null,
     })
   }
 
   async actualizar(id: number, input: MachineInput): Promise<Machine> {
     const machine = await this.obtener(id)
+
+    // Activar crédito en edición solo si aún no es crédito y no hay abonos.
+    if (input.is_credit && !machine.isCredit) {
+      const costNative =
+        input.costo_adquisicion !== undefined
+          ? Number(input.costo_adquisicion)
+          : Number(machine.acquisitionAmountNative ?? machine.acquisitionCost ?? 0)
+      if (!(costNative > 0)) {
+        throw new MaquinaCreditoCostoRequeridoException()
+      }
+      const tienePagos = await MachinePayment.query().where('machineId', Number(machine.id)).first()
+      if (!tienePagos) {
+        const monetary = await resolveMonetaryEntryAmount({
+          amountNative: costNative,
+          currencyCode: input.currency_code ?? machine.entryCurrencyCode,
+          entryRate:
+            input.entry_rate ?? (machine.entryRate ? Number(machine.entryRate) : undefined),
+          currencyService: this.currencyService,
+        })
+        machine.merge(this.prepareInput(input))
+        machine.isCredit = true
+        machine.amountPaidUsd = '0.0000'
+        machine.balanceUsd = monetary.amountUsd
+        machine.acquisitionCost = Number(monetary.amountUsd).toFixed(2)
+        machine.acquisitionAmountNative = monetary.amountNative
+        machine.entryCurrencyCode = monetary.currencyCode
+        machine.entryRate = monetary.entryRate
+        machine.creditDueDate = input.credit_due_date
+          ? DateTime.fromISO(input.credit_due_date)
+          : null
+        await machine.save()
+        return machine
+      }
+    }
+
+    if (!machine.isCredit && input.costo_adquisicion !== undefined) {
+      const monetary = await resolveMonetaryEntryAmount({
+        amountNative: Number(input.costo_adquisicion),
+        currencyCode: input.currency_code,
+        entryRate: input.entry_rate,
+        currencyService: this.currencyService,
+      })
+      machine.merge(this.prepareInput(input))
+      machine.acquisitionCost = Number(monetary.amountUsd).toFixed(2)
+      machine.acquisitionAmountNative = monetary.amountNative
+      machine.entryCurrencyCode = monetary.currencyCode
+      machine.entryRate = monetary.entryRate
+      await machine.save()
+      return machine
+    }
+
     machine.merge(this.prepareInput(input))
     await machine.save()
     return machine
@@ -128,8 +224,10 @@ export default class MachineService {
     const tieneGastosLegacy = await MachineExpense.query()
       .where('machineId', Number(machine.id))
       .first()
+    const tienePagos = await MachinePayment.query().where('machineId', Number(machine.id)).first()
+    const tieneCreditoPendiente = machine.isCredit && Number(machine.balanceUsd) > 0
 
-    if (tieneGastosUnificados || tieneGastosLegacy) {
+    if (tieneGastosUnificados || tieneGastosLegacy || tienePagos || tieneCreditoPendiente) {
       machine.active = false
       await machine.save()
       return { id: Number(machine.id), modo: 'soft' }
@@ -166,8 +264,6 @@ export default class MachineService {
       model: input.model?.trim() || null,
       serialNumber: input.serialNumber?.trim() || null,
       acquisitionDate: input.date_adquisicion ? DateTime.fromISO(input.date_adquisicion) : null,
-      acquisitionCost:
-        input.costo_adquisicion !== undefined ? input.costo_adquisicion.toFixed(2) : null,
       status: input.status ?? 'OPERATIONAL',
       location: input.location?.trim() || null,
       notes: input.notes?.trim() || null,

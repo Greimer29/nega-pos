@@ -443,12 +443,19 @@ export class MachineExpenseSchema extends BaseModel {
 
 export class MachineSchema extends BaseModel {
   static $columns = [
+    'acquisitionAmountNative',
     'acquisitionCost',
     'acquisitionDate',
     'active',
+    'amountPaidUsd',
+    'balanceUsd',
     'brand',
     'createdAt',
+    'creditDueDate',
+    'entryCurrencyCode',
+    'entryRate',
     'id',
+    'isCredit',
     'location',
     'model',
     'name',
@@ -460,17 +467,31 @@ export class MachineSchema extends BaseModel {
   ] as const
   $columns = MachineSchema.$columns
   @column()
+  declare acquisitionAmountNative: string | null
+  @column()
   declare acquisitionCost: string | null
   @column.date()
   declare acquisitionDate: DateTime | null
   @column()
   declare active: boolean
   @column()
+  declare amountPaidUsd: string
+  @column()
+  declare balanceUsd: string
+  @column()
   declare brand: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
+  @column.date()
+  declare creditDueDate: DateTime | null
+  @column()
+  declare entryCurrencyCode: string | null
+  @column()
+  declare entryRate: string | null
   @column({ isPrimary: true })
   declare id: bigint | number
+  @column()
+  declare isCredit: boolean
   @column()
   declare location: string | null
   @column()
