@@ -1,4 +1,5 @@
 import type { PurchaseEstado } from '@/features/purchases/constants'
+import { todayLocalIsoDate } from '@/lib/format-date'
 
 export type PurchaseStatusTone = 'draft' | 'pending' | 'overdue' | 'done'
 
@@ -25,7 +26,7 @@ export function purchaseStatusToneClass(tone: PurchaseStatusTone) {
   return TONE_CLASS[tone]
 }
 
-function isOverdue(creditDueDate: string | null | undefined, today = new Date().toISOString().slice(0, 10)) {
+function isOverdue(creditDueDate: string | null | undefined, today = todayLocalIsoDate()) {
   return Boolean(creditDueDate && creditDueDate < today)
 }
 
@@ -36,7 +37,7 @@ export function resolvePurchaseStatusBadges(
     balanceUsd?: string | number | null
     creditDueDate?: string | null
   },
-  today = new Date().toISOString().slice(0, 10)
+  today = todayLocalIsoDate()
 ): PurchaseStatusBadge[] {
   if (purchase.status === 'DRAFT') {
     return [{ tone: 'draft', label: 'Borrador' }]

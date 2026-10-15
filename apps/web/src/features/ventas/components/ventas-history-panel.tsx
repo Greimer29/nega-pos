@@ -17,6 +17,7 @@ import type { SaleOrderStatus } from '@/features/ventas/types'
 import { invoiceDiscountLabel } from '@/features/ventas/utils/invoice-discount'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
 import { OfflinePendingSalesCard } from '@/features/offline/offline-pending-sales-card'
+import { todayLocalIsoDate } from '@/lib/format-date'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
 
@@ -41,12 +42,12 @@ const DEFAULT_VENTAS_HISTORY_FILTERS: VentasHistoryFilters = {
 }
 
 function startOfMonthIso() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  const today = todayLocalIsoDate()
+  return `${today.slice(0, 7)}-01`
 }
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return todayLocalIsoDate()
 }
 
 function resolveDateRange(

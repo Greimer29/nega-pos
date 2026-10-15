@@ -1,4 +1,4 @@
-import { DateTime } from 'luxon'
+import { todayIsoDate } from '#utils/app_timezone'
 
 export type CreditPurchaseReportContext = {
   isCredit: boolean
@@ -18,7 +18,7 @@ export function creditPurchaseReportEffectiveDate(ctx: CreditPurchaseReportConte
 
 export function creditPurchaseReportStatus(
   ctx: CreditPurchaseReportContext,
-  asOfDate: string = DateTime.now().toISODate()!
+  asOfDate: string = todayIsoDate()
 ): CreditPurchaseReportStatus | null {
   if (!ctx.isCredit) {
     return null
@@ -61,7 +61,7 @@ export function creditPurchaseVisibleInReport(
 
 export function creditPurchaseIsOverdue(
   creditDueDate: string | null,
-  asOfDate: string = DateTime.now().toISODate()!
+  asOfDate: string = todayIsoDate()
 ): boolean {
   if (!creditDueDate) {
     return false

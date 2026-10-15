@@ -36,6 +36,7 @@ import {
 } from '@/features/purchases/utils/purchase-entry-currency'
 import type { Expense } from '@/features/purchases/types'
 import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
+import { todayLocalIsoDate } from '@/lib/format-date'
 
 const schema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida'),
@@ -71,7 +72,7 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      date: new Date().toISOString().slice(0, 10),
+      date: todayLocalIsoDate(),
       description: '',
       amount: '',
     },
@@ -97,7 +98,7 @@ export function ExpenseFormDialog({ open, onOpenChange, expense }: ExpenseFormDi
               amount: Number(expense.amount),
             }
           : {
-              date: new Date().toISOString().slice(0, 10),
+              date: todayLocalIsoDate(),
               description: '',
               amount: '',
             }

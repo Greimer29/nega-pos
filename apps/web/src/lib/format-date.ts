@@ -43,22 +43,39 @@ export function formatFechaInstante(iso: string | null | undefined) {
   })
 }
 
-/** Hoy en calendario local del navegador (`YYYY-MM-DD`), sin UTC de `toISOString`. */
+/**
+ * Hoy en calendario de tienda (`YYYY-MM-DD`, America/Caracas).
+ * No usar `toISOString().slice(0, 10)`: en VE (UTC-4) tras las 20:00 ya es el día
+ * siguiente en UTC y se graba la fecha wrong en columnas DATE.
+ */
 export function todayLocalIsoDate(): string {
-  const d = new Date()
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
 }
 
-/** Suma días al calendario local y devuelve `YYYY-MM-DD`. */
-export function addLocalDaysIsoDate(days: number, from = new Date()): string {
-  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + days)
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+/** Día calendario de tienda de un instante (`YYYY-MM-DD`). */
+export function toAppIsoDate(instant: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(instant)
+}
+
+/** Suma días a un `YYYY-MM-DD` (o al hoy de tienda) sin pasar por UTC de `toISOString`. */
+export function addLocalDaysIsoDate(days: number, from: Date | string = new Date()): string {
+  const baseIso = typeof from === 'string' ? from.slice(0, 10) : toAppIsoDate(from)
+  const [year, month, day] = baseIso.split('-').map(Number)
+  const utcNoon = new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0))
+  const y = utcNoon.getUTCFullYear()
+  const m = String(utcNoon.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(utcNoon.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 /**

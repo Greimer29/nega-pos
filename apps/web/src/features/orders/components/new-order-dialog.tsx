@@ -20,6 +20,7 @@ import { useCustomersQuery } from '@/features/customers/hooks/use-customers'
 import { MODALIDAD_LABELS } from '@/features/orders/constants'
 import { useCreateOrderMutation } from '@/features/orders/hooks/use-orders'
 import { notifyApiError } from '@/features/notifications/query-error-state'
+import { todayLocalIsoDate } from '@/lib/format-date'
 
 const schema = z.object({
   customer_id: z.coerce.number().min(1, 'Seleccioná un cliente'),
@@ -59,7 +60,7 @@ export function NuevoOrderDialog({ open, onOpenChange }: NuevoOrderDialogProps) 
       modalidad: 'CORPORATE',
       description: '',
       quantity_total: 1,
-      date_order: new Date().toISOString().slice(0, 10),
+      date_order: todayLocalIsoDate(),
       date_entrega_estimada: '',
       total_price: '',
       notes: '',
