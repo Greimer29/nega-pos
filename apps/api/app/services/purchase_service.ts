@@ -11,6 +11,7 @@ import ProductInventoryService from '#services/product_inventory_service'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
 import ProductoCatalogoStockFormulaException from '#exceptions/producto_catalogo_stock_formula_exception'
 import ServicioCatalogoOperacionInvalidaException from '#exceptions/servicio_catalogo_operacion_invalida_exception'
+import MachineNoEncontradaException from '#exceptions/maquina_no_encontrada_exception'
 import MaterialNoEncontradoException from '#exceptions/material_no_encontrado_exception'
 import NumeroFacturaRequeridoException from '#exceptions/numero_factura_requerido_exception'
 import StockInsuficienteDevolucionException from '#exceptions/stock_insuficiente_devolucion_exception'
@@ -18,6 +19,7 @@ import Purchase from '#models/purchase'
 import PurchaseItem from '#models/purchase_item'
 import Material from '#models/material'
 import CatalogProduct from '#models/catalog_product'
+import Machine from '#models/machine'
 import CompraCreditoSinVencimientoException from '#exceptions/compra_credito_sin_vencimiento_exception'
 import InventoryMovement from '#models/inventory_movement'
 import ProductInventoryMovement from '#models/product_inventory_movement'
@@ -26,6 +28,7 @@ import SupplierService from '#services/supplier_service'
 import AccountService from '#services/account_service'
 import CurrencyService from '#services/currency_service'
 import MaterialService from '#services/material_service'
+import MachineService from '#services/machine_service'
 import FormulaService from '#services/formula_service'
 import OrderService from '#services/order_service'
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
@@ -54,9 +57,22 @@ export type PurchaseInput = {
   credit_due_date?: string
 }
 
+export type NewMachineInput = {
+  name: string
+  type: string
+  brand?: string
+  model?: string
+  serialNumber?: string
+  location?: string
+  notes?: string
+  status?: string
+}
+
 export type PurchaseItemInput = {
   material_id?: number
   catalog_product_id?: number
+  machine_id?: number
+  new_machine?: NewMachineInput
   quantity: number
   unit_price_usd: number
   unit_price_bs?: number
@@ -110,6 +126,7 @@ export default class PurchaseService {
   private accountService = new AccountService()
   private currencyService = new CurrencyService()
   private materialService = new MaterialService()
+  private machineService = new MachineService()
   private formulaService = new FormulaService()
   private orderService = new OrderService()
   private productInventoryService = new ProductInventoryService()
@@ -187,6 +204,7 @@ export default class PurchaseService {
       .where('purchaseId', Number(purchase.id))
       .preload('material')
       .preload('catalogProduct')
+      .preload('machine')
       .orderBy('id', 'asc')
 
     return { purchase, items }
@@ -262,8 +280,12 @@ export default class PurchaseService {
     }
 
     if (purchase.status === 'DRAFT') {
-      await purchase.delete()
-      return { id: Number(purchase.id), eliminado: true }
+      return db.transaction(async (trx) => {
+        await this.eliminarMaquinasDePurchase(id, trx)
+        purchase.useTransaction(trx)
+        await purchase.delete()
+        return { id: Number(purchase.id), eliminado: true as const }
+      })
     }
 
     // VOIDED: desenganchar movimientos de inventario (RESTRICT) y borrar el registro.
@@ -280,22 +302,24 @@ export default class PurchaseService {
           .update({ purchaseItemId: null })
       }
 
+      await this.eliminarMaquinasDePurchase(id, trx)
       purchase.useTransaction(trx)
       await purchase.delete()
       return { id: Number(purchase.id), eliminado: true }
     })
   }
 
-  async agregarItem(purchaseId: number, input: PurchaseItemInput): Promise<PurchaseItem> {
+  async agregarItem(purchaseId: number, input: PurchaseItemInput): Promise<PurchaseItem[]> {
     return db.transaction(async (trx) => {
       const purchase = await this.obtenerConLock(purchaseId, trx)
       this.assertBorrador(purchase)
-      await this.assertItemReferenciaValida(input)
 
-      const item = await this.crearItem(purchase, input, trx)
+      const items = await this.crearItemsDesdeInput(purchase, input, trx)
       await this.recalcularTotales(purchase, trx)
-      await this.preloadItemRelaciones(item)
-      return item
+      for (const item of items) {
+        await this.preloadItemRelaciones(item)
+      }
+      return items
     })
   }
 
@@ -313,21 +337,32 @@ export default class PurchaseService {
         await this.assertMaterialExiste(input.material_id)
         item.materialId = input.material_id
         item.catalogProductId = null
+        item.machineId = null
       }
 
       if (input.catalog_product_id !== undefined) {
         await this.assertCatalogProductExiste(input.catalog_product_id)
         item.catalogProductId = input.catalog_product_id
         item.materialId = null
+        item.machineId = null
       }
 
-      const quantity = input.quantity ?? Number(item.quantity)
+      if (input.machine_id !== undefined) {
+        await this.assertMachineExiste(input.machine_id)
+        item.machineId = input.machine_id
+        item.materialId = null
+        item.catalogProductId = null
+      }
+
+      const quantity =
+        item.machineId || input.machine_id ? 1 : (input.quantity ?? Number(item.quantity))
       const unitPriceUsd = input.unit_price_usd ?? Number(item.unitPriceUsd ?? 0)
       const priced = this.calcularPreciosItem(purchase, quantity, unitPriceUsd, input.unit_price_bs)
       const wholesale = await this.resolveItemWholesale(
         {
           material_id: item.materialId ? Number(item.materialId) : undefined,
           catalog_product_id: item.catalogProductId ? Number(item.catalogProductId) : undefined,
+          machine_id: item.machineId ? Number(item.machineId) : input.machine_id,
           is_wholesale: input.is_wholesale ?? Boolean(item.isWholesale),
         },
         trx
@@ -354,6 +389,8 @@ export default class PurchaseService {
       const purchase = await this.obtenerConLock(purchaseId, trx)
       this.assertBorrador(purchase)
       const item = await this.obtenerItem(purchaseId, itemId, trx)
+
+      await this.eliminarMaquinaDeItem(item, trx)
 
       item.useTransaction(trx)
       await item.delete()
@@ -424,10 +461,17 @@ export default class PurchaseService {
       }
 
       if (input.items && input.items.length > 0) {
+        const existingItems = await PurchaseItem.query({ client: trx }).where(
+          'purchaseId',
+          Number(purchase.id)
+        )
+        for (const existing of existingItems) {
+          await this.eliminarMaquinaDeItem(existing, trx)
+        }
         await PurchaseItem.query({ client: trx }).where('purchaseId', Number(purchase.id)).delete()
 
         for (const itemInput of input.items) {
-          await this.crearItem(purchase, itemInput, trx)
+          await this.crearItemsDesdeInput(purchase, itemInput, trx)
         }
       }
 
@@ -452,6 +496,11 @@ export default class PurchaseService {
         const subtotalUsd = item.subtotalUsd ?? '0'
 
         totalUsd += Number(subtotalUsd)
+
+        if (item.machineId) {
+          await this.applyMachineAcquisitionCost(item, trx)
+          continue
+        }
 
         if (!affectsInventory) {
           continue
@@ -669,6 +718,11 @@ export default class PurchaseService {
       }
 
       for (const item of items) {
+        if (item.machineId) {
+          await this.clearMachineAcquisitionCost(Number(item.machineId), trx)
+          continue
+        }
+
         const qty = lineInventoryQuantity(
           Number(item.quantity),
           Boolean(item.isWholesale),
@@ -756,16 +810,82 @@ export default class PurchaseService {
     return { bytes, contentType, filename }
   }
 
-  private async crearItem(
+  private async crearItemsDesdeInput(
+    purchase: Purchase,
+    input: PurchaseItemInput,
+    trx: TransactionClientContract
+  ): Promise<PurchaseItem[]> {
+    await this.assertItemReferenciaValida(input)
+
+    if (input.new_machine) {
+      const qty = Math.max(1, Math.round(Number(input.quantity)))
+      const baseName = input.new_machine.name.trim()
+      const items: PurchaseItem[] = []
+
+      for (let i = 1; i <= qty; i++) {
+        const name = qty === 1 ? baseName : `${baseName} #${i}`
+        const machine = await this.machineService.crear(
+          {
+            name,
+            type: input.new_machine.type,
+            brand: input.new_machine.brand,
+            model: input.new_machine.model,
+            serialNumber: input.new_machine.serialNumber,
+            location: input.new_machine.location,
+            notes: input.new_machine.notes,
+            status: input.new_machine.status,
+            date_adquisicion: purchase.date.toISODate() ?? undefined,
+          },
+          trx
+        )
+
+        const item = await this.crearItemLinea(
+          purchase,
+          {
+            ...input,
+            quantity: 1,
+            machine_id: Number(machine.id),
+            new_machine: undefined,
+            material_id: undefined,
+            catalog_product_id: undefined,
+          },
+          trx
+        )
+
+        machine.sourcePurchaseItemId = Number(item.id)
+        machine.useTransaction(trx)
+        await machine.save()
+
+        items.push(item)
+      }
+
+      return items
+    }
+
+    if (input.machine_id) {
+      if (Number(input.quantity) !== 1) {
+        throw new PurchaseItemReferenciaInvalidaException(
+          'Al seleccionar una máquina existente la cantidad debe ser 1'
+        )
+      }
+      await this.assertMachineDisponibleEnCompra(input.machine_id, Number(purchase.id), trx)
+      const item = await this.crearItemLinea(purchase, input, trx)
+      return [item]
+    }
+
+    const item = await this.crearItemLinea(purchase, input, trx)
+    return [item]
+  }
+
+  private async crearItemLinea(
     purchase: Purchase,
     input: PurchaseItemInput,
     trx: TransactionClientContract
   ): Promise<PurchaseItem> {
-    await this.assertItemReferenciaValida(input)
-
+    const qty = input.machine_id || input.new_machine ? 1 : input.quantity
     const priced = this.calcularPreciosItem(
       purchase,
-      input.quantity,
+      qty,
       input.unit_price_usd,
       input.unit_price_bs
     )
@@ -776,7 +896,8 @@ export default class PurchaseService {
         purchaseId: Number(purchase.id),
         materialId: input.material_id ?? null,
         catalogProductId: input.catalog_product_id ?? null,
-        quantity: this.formatCantidad(input.quantity),
+        machineId: input.machine_id ?? null,
+        quantity: this.formatCantidad(qty),
         unitPriceUsd: priced.unitPriceUsd,
         unitPriceBs: priced.unitPriceBs,
         subtotalUsd: priced.subtotalUsd,
@@ -789,9 +910,16 @@ export default class PurchaseService {
   }
 
   private async resolveItemWholesale(
-    input: Pick<PurchaseItemInput, 'material_id' | 'catalog_product_id' | 'is_wholesale'>,
+    input: Pick<
+      PurchaseItemInput,
+      'material_id' | 'catalog_product_id' | 'machine_id' | 'new_machine' | 'is_wholesale'
+    >,
     _trx: TransactionClientContract
   ) {
+    if (input.machine_id || input.new_machine) {
+      return { isWholesale: false, unitsPerPack: null as string | null }
+    }
+
     const isWholesale = Boolean(input.is_wholesale)
     if (input.catalog_product_id) {
       const product = await CatalogProduct.find(input.catalog_product_id)
@@ -806,6 +934,82 @@ export default class PurchaseService {
       throw new MaterialNoEncontradoException()
     }
     return resolveWholesaleLineSnapshot(isWholesale, material)
+  }
+
+  private async applyMachineAcquisitionCost(item: PurchaseItem, trx: TransactionClientContract) {
+    if (!item.machineId) return
+
+    const machine = await Machine.query({ client: trx })
+      .where('id', Number(item.machineId))
+      .forUpdate()
+      .first()
+
+    if (!machine) {
+      throw new MachineNoEncontradaException()
+    }
+
+    const costUsd = Number(item.unitPriceUsd ?? 0).toFixed(2)
+    machine.acquisitionCost = costUsd
+    machine.acquisitionAmountNative = null
+    machine.entryCurrencyCode = null
+    machine.entryRate = null
+    machine.isCredit = false
+    machine.amountPaidUsd = Number(item.unitPriceUsd ?? 0).toFixed(4)
+    machine.balanceUsd = '0.0000'
+    machine.creditDueDate = null
+    if (!machine.acquisitionDate) {
+      const purchase = await Purchase.query({ client: trx })
+        .where('id', Number(item.purchaseId))
+        .first()
+      if (purchase) {
+        machine.acquisitionDate = purchase.date
+      }
+    }
+    machine.useTransaction(trx)
+    await machine.save()
+  }
+
+  private async clearMachineAcquisitionCost(machineId: number, trx: TransactionClientContract) {
+    const machine = await Machine.query({ client: trx }).where('id', machineId).forUpdate().first()
+    if (!machine) return
+
+    machine.acquisitionCost = null
+    machine.acquisitionAmountNative = null
+    machine.entryCurrencyCode = null
+    machine.entryRate = null
+    machine.amountPaidUsd = '0.0000'
+    machine.balanceUsd = '0.0000'
+    machine.isCredit = false
+    machine.creditDueDate = null
+    machine.useTransaction(trx)
+    await machine.save()
+  }
+
+  private async eliminarMaquinasDePurchase(purchaseId: number, trx: TransactionClientContract) {
+    const items = await PurchaseItem.query({ client: trx }).where('purchaseId', purchaseId)
+    for (const item of items) {
+      await this.eliminarMaquinaDeItem(item, trx)
+    }
+  }
+
+  private async eliminarMaquinaDeItem(item: PurchaseItem, trx: TransactionClientContract) {
+    const sourced = await Machine.query({ client: trx })
+      .where('sourcePurchaseItemId', Number(item.id))
+      .first()
+
+    if (!sourced) {
+      return
+    }
+
+    // Liberar RESTRICT en purchase_items.machine_id antes de borrar la máquina.
+    if (item.machineId && Number(item.machineId) === Number(sourced.id)) {
+      item.machineId = null
+      item.useTransaction(trx)
+      await item.save()
+    }
+
+    sourced.useTransaction(trx)
+    await sourced.delete()
   }
 
   private applyConfirmedPurchaseCost(
@@ -984,11 +1188,36 @@ export default class PurchaseService {
     }
   }
 
+  private async assertMachineExiste(machineId: number) {
+    const machine = await Machine.find(machineId)
+    if (!machine) {
+      throw new MachineNoEncontradaException()
+    }
+  }
+
+  private async assertMachineDisponibleEnCompra(
+    machineId: number,
+    purchaseId: number,
+    trx: TransactionClientContract
+  ) {
+    await this.assertMachineExiste(machineId)
+    const already = await PurchaseItem.query({ client: trx })
+      .where('purchaseId', purchaseId)
+      .where('machineId', machineId)
+      .first()
+    if (already) {
+      throw new PurchaseItemReferenciaInvalidaException('Esa máquina ya está en esta compra')
+    }
+  }
+
   private async assertItemReferenciaValida(input: PurchaseItemInput) {
     const hasMaterial = input.material_id !== undefined && input.material_id !== null
     const hasProduct = input.catalog_product_id !== undefined && input.catalog_product_id !== null
+    const hasMachine = input.machine_id !== undefined && input.machine_id !== null
+    const hasNewMachine = input.new_machine !== undefined && input.new_machine !== null
 
-    if (hasMaterial === hasProduct) {
+    const refs = [hasMaterial, hasProduct, hasMachine, hasNewMachine].filter(Boolean).length
+    if (refs !== 1) {
       throw new PurchaseItemReferenciaInvalidaException()
     }
 
@@ -999,6 +1228,10 @@ export default class PurchaseService {
     if (hasProduct) {
       await this.assertCatalogProductExiste(input.catalog_product_id!)
     }
+
+    if (hasMachine) {
+      await this.assertMachineExiste(input.machine_id!)
+    }
   }
 
   private async preloadItemRelaciones(item: PurchaseItem) {
@@ -1007,6 +1240,9 @@ export default class PurchaseService {
     }
     if (item.catalogProductId) {
       await item.load('catalogProduct')
+    }
+    if (item.machineId) {
+      await item.load('machine')
     }
   }
 

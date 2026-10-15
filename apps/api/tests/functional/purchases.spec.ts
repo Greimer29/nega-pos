@@ -299,6 +299,57 @@ test.group('Purchases API (borrador)', (group) => {
     assert.equal(purchase.totalBs, '0.00')
   })
 
+  test('POST /api/v1/purchases/:id/items creates machines from new_machine qty', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const supplier = await seedSupplier()
+
+    const purchase = await Purchase.create({
+      supplierId: supplier.id,
+      date: DateTime.fromISO('2026-05-20'),
+      totalBs: '0.00',
+      totalUsd: '0.0000',
+      status: 'DRAFT',
+    })
+
+    const response = await client
+      .post(`/api/v1/purchases/${purchase.id}/items`)
+      .loginAs(user)
+      .json({
+        new_machine: {
+          name: 'Overlock',
+          type: 'OVERLOCK',
+        },
+        quantity: 3,
+        unit_price_usd: 500,
+      })
+
+    response.assertStatus(200)
+    const body = response.body() as {
+      data: {
+        item: { itemType: string; machineId: number | null; quantity: string }
+        items: Array<{
+          itemType: string
+          machineId: number | null
+          quantity: string
+          machine?: { name: string }
+        }>
+      }
+    }
+
+    assert.lengthOf(body.data.items, 3)
+    assert.equal(body.data.item.itemType, 'machine')
+    assert.equal(body.data.items[0].quantity, '1.00')
+    assert.equal(body.data.items[0].machine?.name, 'Overlock #1')
+    assert.equal(body.data.items[1].machine?.name, 'Overlock #2')
+    assert.equal(body.data.items[2].machine?.name, 'Overlock #3')
+
+    await purchase.refresh()
+    assert.equal(purchase.totalUsd, '1500.0000')
+  })
+
   test('DELETE /api/v1/purchases/:id removes DRAFT purchase', async ({ client, assert }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
     const supplier = await seedSupplier()

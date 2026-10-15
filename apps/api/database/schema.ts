@@ -470,6 +470,7 @@ export class MachineSchema extends BaseModel {
     'name',
     'notes',
     'serialNumber',
+    'sourcePurchaseItemId',
     'status',
     'type',
     'updatedAt',
@@ -511,6 +512,8 @@ export class MachineSchema extends BaseModel {
   declare notes: string | null
   @column()
   declare serialNumber: string | null
+  @column()
+  declare sourcePurchaseItemId: bigint | number | null
   @column()
   declare status: string
   @column()
@@ -822,6 +825,7 @@ export class PurchaseItemSchema extends BaseModel {
     'createdAt',
     'id',
     'isWholesale',
+    'machineId',
     'materialId',
     'purchaseId',
     'quantity',
@@ -841,6 +845,8 @@ export class PurchaseItemSchema extends BaseModel {
   declare id: bigint | number
   @column()
   declare isWholesale: boolean
+  @column()
+  declare machineId: bigint | number | null
   @column()
   declare materialId: bigint | number | null
   @column()

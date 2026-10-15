@@ -1,15 +1,9 @@
 import ExpenseService from '#services/expense_service'
-import MachinePaymentService from '#services/machine_payment_service'
 import MachineService from '#services/machine_service'
 import { serializeExpense } from '#transformers/expense_transformer'
-import {
-  serializeMachineExpense,
-  serializeMachine,
-  serializeMachinePayment,
-} from '#transformers/machine_transformer'
+import { serializeMachineExpense, serializeMachine } from '#transformers/machine_transformer'
 import {
   createMachineExpenseValidator,
-  createMachinePaymentValidator,
   createMachineValidator,
   listGastosPorMachineValidator,
   listMachinesValidator,
@@ -21,7 +15,6 @@ import { broadcastCompanyEvent } from '#services/company_realtime_service'
 export default class MachinesControleler {
   private service = new MachineService()
   private expenseService = new ExpenseService()
-  private paymentService = new MachinePaymentService()
 
   /**
    * GET /api/v1/machines
@@ -61,7 +54,6 @@ export default class MachinesControleler {
       machine: serializeMachine(detalle.machine, {
         totalSpent: detalle.totalSpent,
         expenses,
-        payments: detalle.payments.map((payment) => serializeMachinePayment(payment)),
       }),
     })
   }
@@ -159,39 +151,6 @@ export default class MachinesControleler {
     broadcastCompanyEvent('expense.changed')
     return serialize({
       expense: await serializeExpense(expense),
-    })
-  }
-
-  /**
-   * GET /api/v1/machines/:id/payments
-   */
-  async indexPayments({ params, serialize }: HttpContext) {
-    const payments = await this.paymentService.listar(Number(params.id))
-    return serialize({
-      payments: payments.map((payment) => serializeMachinePayment(payment)),
-    })
-  }
-
-  /**
-   * POST /api/v1/machines/:id/payments
-   * Abono a la CxP de una máquina a crédito (sale de caja; no afecta el turno).
-   */
-  async storePayment({ params, request, serialize }: HttpContext) {
-    const payload = await request.validateUsing(createMachinePaymentValidator)
-    const payment = await this.paymentService.registrar(Number(params.id), {
-      amount: payload.amount,
-      amount_usd: payload.amount_usd,
-      currency_code: payload.currency_code,
-      entry_rate: payload.entry_rate,
-      date: payload.date,
-      account_id: payload.account_id,
-      note: payload.note,
-    })
-    await payment.load('account')
-
-    broadcastCompanyEvent('machine.changed')
-    return serialize({
-      payment: serializeMachinePayment(payment),
     })
   }
 }

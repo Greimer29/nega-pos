@@ -26,12 +26,23 @@ export type PurchaseItemProduct = {
   wholesaleSalePriceUsd?: string | null
 }
 
+export type PurchaseItemMachine = {
+  id: number
+  name: string
+  type: string
+  brand?: string | null
+  model?: string | null
+  status?: string
+  active?: boolean
+}
+
 export type PurchaseItem = {
   id: number
   purchaseId: number
   materialId: number | null
   catalogProductId: number | null
-  itemType: 'material' | 'product'
+  machineId: number | null
+  itemType: 'material' | 'product' | 'machine'
   quantity: string
   unitPriceUsd: string | null
   unitPriceBs: string
@@ -41,6 +52,7 @@ export type PurchaseItem = {
   unitsPerPack?: string | null
   material?: PurchaseItemMaterial
   catalogProduct?: PurchaseItemProduct
+  machine?: PurchaseItemMachine
 }
 
 export type Purchase = {
@@ -78,11 +90,13 @@ export type PurchaseSummary = {
 
 export type LocalPurchaseItem = {
   localId: string
-  itemType: 'material' | 'product'
+  itemType: 'material' | 'product' | 'machine'
   materialId?: number
   catalogProductId?: number
+  machineId?: number
   material?: PurchaseItemMaterial
   catalogProduct?: PurchaseItemProduct
+  machine?: PurchaseItemMachine
   quantity: number
   unitPriceUsd: number
   isWholesale?: boolean
@@ -127,9 +141,22 @@ export type PurchaseInput = {
   credit_due_date?: string
 }
 
+export type PurchaseNewMachineInput = {
+  name: string
+  type: string
+  brand?: string
+  model?: string
+  serialNumber?: string
+  location?: string
+  notes?: string
+  status?: string
+}
+
 export type PurchaseItemInput = {
   material_id?: number
   catalog_product_id?: number
+  machine_id?: number
+  new_machine?: PurchaseNewMachineInput
   quantity: number
   unit_price_usd: number
   unit_price_bs?: number

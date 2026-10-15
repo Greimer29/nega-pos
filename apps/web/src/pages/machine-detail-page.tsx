@@ -1,4 +1,4 @@
-import { ArrowLeft, HandCoins, Loader2, Pencil, Plus } from 'lucide-react'
+import { ArrowLeft, Loader2, Pencil, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AccountListFiltersPanel } from '@/components/filters/account-list-filters-panel'
@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { MachineExpenseFormDialog } from '@/features/machines/components/machine-expense-form-dialog'
 import { MachineFormDialog } from '@/features/machines/components/machine-form-dialog'
-import { MachinePaymentFormDialog } from '@/features/machines/components/machine-payment-form-dialog'
 import {
   MACHINE_EXPENSE_CATEGORY_LABELS,
   MACHINE_STATUS_LABELS,
@@ -18,7 +17,7 @@ import {
 } from '@/features/machines/constants'
 import { useMachineQuery } from '@/features/machines/hooks/use-machines'
 import type { MachineExpenseCategory } from '@/features/machines/constants'
-import { DisplayMoney, DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
+import { DisplayMoney } from '@/features/currencies/components/display-money'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
@@ -57,7 +56,6 @@ export function MachineDetailPage() {
   const { id: machineId, isValid: isValidMachineId } = parsePositiveIntRouteParam(id)
   const [editOpen, setEditOpen] = useState(false)
   const [expenseOpen, setExpenseOpen] = useState(false)
-  const [paymentOpen, setPaymentOpen] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [filters, setFilters] = useSessionPersistedState(
     sessionFilterKey(
@@ -119,13 +117,6 @@ export function MachineDetailPage() {
     if (filters.accountId != null) return expense.accountId === filters.accountId
     return true
   })
-  const payments = machine.payments ?? []
-  const balanceUsd = Number(machine.balanceUsd ?? 0)
-  const costUsd = Number(machine.acquisitionCost ?? 0)
-  const paidUsd = Number(machine.amountPaidUsd ?? 0)
-  const paidPercent =
-    machine.isCredit && costUsd > 0 ? Math.min(100, Math.max(0, (paidUsd / costUsd) * 100)) : 0
-
   return (
     <div className="flex flex-col gap-6">
       <div className={pageHeaderClass}>
@@ -141,18 +132,6 @@ export function MachineDetailPage() {
             <span className="bg-muted text-muted-foreground inline-flex rounded-full px-2 py-0.5 text-xs font-medium">
               {formatMachineTypeLabel(machine.type)}
             </span>
-            {machine.isCredit ? (
-              <span
-                className={cn(
-                  'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-                  balanceUsd > 0
-                    ? 'bg-amber-50 text-amber-900'
-                    : 'bg-emerald-50 text-emerald-800'
-                )}
-              >
-                {balanceUsd > 0 ? 'Crédito pendiente' : 'Crédito saldado'}
-              </span>
-            ) : null}
           </div>
           <p className="text-muted-foreground text-sm">
             Estado: {MACHINE_STATUS_LABELS[machine.status]} · Activa: {machine.active ? 'Sí' : 'No'}
@@ -160,12 +139,6 @@ export function MachineDetailPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {machine.isCredit && balanceUsd > 0 ? (
-            <Button onClick={() => setPaymentOpen(true)}>
-              <HandCoins />
-              Abonar
-            </Button>
-          ) : null}
           <Button variant="outline" onClick={() => setExpenseOpen(true)}>
             <Plus />
             Registrar gasto
@@ -224,96 +197,6 @@ export function MachineDetailPage() {
           </CardContent>
         </Card>
       </div>
-
-      {machine.isCredit ? (
-        <Card>
-          <CardHeader className="flex flex-row items-start justify-between gap-3">
-            <div>
-              <CardTitle className="text-base">Cuenta por pagar</CardTitle>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Costo completo a crédito
-                {machine.creditDueDate
-                  ? ` · vence ${formatDate(machine.creditDueDate)}`
-                  : ''}
-                .
-              </p>
-            </div>
-            {balanceUsd > 0 ? (
-              <Button size="sm" onClick={() => setPaymentOpen(true)}>
-                <HandCoins />
-                Abonar
-              </Button>
-            ) : null}
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <p className="text-muted-foreground text-xs uppercase tracking-wide">Costo</p>
-                <DisplayMoneyFromUsd amountUsd={costUsd} className="mt-1 text-lg font-semibold" />
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs uppercase tracking-wide">Abonado</p>
-                <DisplayMoneyFromUsd amountUsd={paidUsd} className="mt-1 text-lg font-semibold" />
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs uppercase tracking-wide">Se debe</p>
-                <DisplayMoneyFromUsd
-                  amountUsd={balanceUsd}
-                  className={cn(
-                    'mt-1 text-lg font-semibold',
-                    balanceUsd > 0 ? 'text-amber-700' : 'text-emerald-700'
-                  )}
-                />
-              </div>
-            </div>
-            <div>
-              <div className="mb-1 flex justify-between text-xs text-neutral-500">
-                <span>Progreso de pago</span>
-                <span className="tabular-nums">{paidPercent.toFixed(0)}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-neutral-100">
-                <div
-                  className="h-full rounded-full bg-neutral-900 transition-all"
-                  style={{ width: `${paidPercent}%` }}
-                />
-              </div>
-            </div>
-
-            {payments.length === 0 ? (
-              <p className="text-muted-foreground text-sm">Aún no hay abonos registrados.</p>
-            ) : (
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full min-w-[560px] text-sm">
-                  <thead>
-                    <tr className="bg-muted/50 border-b text-left">
-                      <th className="px-4 py-3 font-medium">Fecha</th>
-                      <th className="px-4 py-3 font-medium">Cuenta</th>
-                      <th className="px-4 py-3 font-medium">Monto</th>
-                      <th className="px-4 py-3 font-medium">Nota</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payments.map((payment) => (
-                      <tr key={payment.id} className="border-b last:border-b-0">
-                        <td className="px-4 py-3">{formatDate(payment.date)}</td>
-                        <td className="text-muted-foreground px-4 py-3">
-                          {payment.account?.name ?? '—'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <DisplayMoneyFromUsd amountUsd={payment.amountUsd} />
-                        </td>
-                        <td className="text-muted-foreground px-4 py-3">
-                          {payment.note ?? '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
@@ -407,16 +290,6 @@ export function MachineDetailPage() {
         onOpenChange={setExpenseOpen}
         machineId={machineId}
       />
-
-      {machine.isCredit ? (
-        <MachinePaymentFormDialog
-          open={paymentOpen}
-          onOpenChange={setPaymentOpen}
-          machineId={machineId}
-          machineName={machine.name}
-          maxAmountUsd={balanceUsd}
-        />
-      ) : null}
     </div>
   )
 }

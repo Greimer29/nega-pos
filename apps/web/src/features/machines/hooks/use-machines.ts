@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createMachine,
   createMachineExpense,
-  createMachinePayment,
   deleteMachine,
   getMachine,
   listMachines,
@@ -12,16 +11,19 @@ import type {
   MachineExpenseInput,
   MachineInput,
   MachineListParams,
-  MachinePaymentInput,
 } from '@/features/machines/types'
 import { invalidateDashboardAndReports, invalidateMachineExpensesFinancials } from '@/lib/query-invalidation'
 
 export const machinesQueryKey = ['machines'] as const
 
-export function useMachinesQuery(params: MachineListParams) {
+export function useMachinesQuery(
+  params: MachineListParams,
+  options: { enabled?: boolean } = {}
+) {
   return useQuery({
     queryKey: [...machinesQueryKey, params],
     queryFn: () => listMachines(params),
+    enabled: options.enabled ?? true,
   })
 }
 
@@ -77,22 +79,6 @@ export function useCreateMachineExpenseMutation() {
     onSuccess: (_, variables) => {
       void queryClient.invalidateQueries({ queryKey: [...machinesQueryKey, 'detail', variables.machineId] })
       invalidateMachineExpensesFinancials(queryClient)
-    },
-  })
-}
-
-export function useCreateMachinePaymentMutation() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ machineId, payload }: { machineId: number; payload: MachinePaymentInput }) =>
-      createMachinePayment(machineId, payload),
-    onSuccess: (_, variables) => {
-      void queryClient.invalidateQueries({ queryKey: machinesQueryKey })
-      void queryClient.invalidateQueries({
-        queryKey: [...machinesQueryKey, 'detail', variables.machineId],
-      })
-      invalidateDashboardAndReports(queryClient)
     },
   })
 }

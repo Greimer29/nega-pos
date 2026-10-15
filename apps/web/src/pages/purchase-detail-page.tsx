@@ -59,7 +59,11 @@ import { useExchangeRateQuery } from '@/features/purchases/hooks/use-settings'
 import { downloadFactura } from '@/features/purchases/services/purchase-service'
 import type { LocalPurchaseItem, PurchaseItem, PurchaseItemMaterial } from '@/features/purchases/types'
 import { CatalogProductSearchPicker } from '@/components/search-picker/catalog-product-search-picker'
+import { MachineSearchPicker } from '@/components/search-picker/machine-search-picker'
 import { MaterialSearchPicker } from '@/components/search-picker/material-search-picker'
+import { PurchaseMachineFormDialog } from '@/features/purchases/components/purchase-machine-form-dialog'
+import { formatMachineTypeLabel } from '@/features/machines/constants'
+import type { Machine } from '@/features/machines/types'
 import { UNIT_ABREV } from '@/features/materials/constants'
 import { MaterialFormDialog } from '@/features/materials/components/material-form-dialog'
 import type { Material } from '@/features/materials/types'
@@ -99,6 +103,22 @@ function materialToSummary(material: Material): PurchaseItemMaterial {
 }
 
 function purchaseItemToLocal(item: PurchaseItem): LocalPurchaseItem {
+  if (item.itemType === 'machine' || item.machineId) {
+    return {
+      localId: `db-${item.id}`,
+      itemType: 'machine',
+      machineId: item.machineId ?? undefined,
+      machine: item.machine ?? {
+        id: item.machineId ?? 0,
+        name: 'Máquina',
+        type: 'OTHER',
+      },
+      quantity: Number(item.quantity),
+      unitPriceUsd: Number(item.unitPriceUsd ?? 0),
+      isWholesale: false,
+    }
+  }
+
   if (item.itemType === 'product' || item.catalogProductId) {
     return {
       localId: `db-${item.id}`,
@@ -134,6 +154,9 @@ function purchaseItemToLocal(item: PurchaseItem): LocalPurchaseItem {
 }
 
 function localItemCode(item: LocalPurchaseItem) {
+  if (item.itemType === 'machine') {
+    return formatMachineTypeLabel(item.machine?.type ?? 'OTHER')
+  }
   if (item.itemType === 'product') {
     return catalogProductCode(item.catalogProduct?.id ?? item.catalogProductId ?? 0)
   }
@@ -141,10 +164,12 @@ function localItemCode(item: LocalPurchaseItem) {
 }
 
 function localItemName(item: LocalPurchaseItem) {
+  if (item.itemType === 'machine') return item.machine?.name ?? 'Máquina'
   return item.itemType === 'product' ? item.catalogProduct?.name ?? 'Producto' : item.material?.name ?? 'Material'
 }
 
 function localItemCanWholesale(item: LocalPurchaseItem) {
+  if (item.itemType === 'machine') return false
   if (item.itemType === 'product') {
     return Boolean(item.catalogProduct?.wholesaleEnabled)
   }
@@ -152,6 +177,7 @@ function localItemCanWholesale(item: LocalPurchaseItem) {
 }
 
 function localItemUnit(item: LocalPurchaseItem) {
+  if (item.itemType === 'machine') return 'Und'
   if (item.isWholesale) {
     return 'Paq.'
   }
@@ -162,6 +188,7 @@ function localItemUnit(item: LocalPurchaseItem) {
 }
 
 function localItemUnitCode(item: LocalPurchaseItem) {
+  if (item.itemType === 'machine') return 'UND'
   if (item.itemType === 'product') {
     return item.catalogProduct?.saleUnit ?? 'UND'
   }
@@ -236,10 +263,11 @@ export function PurchaseDetallePage() {
   const entryCurrencyRef = useRef<PurchaseEntryCurrency>('XAU')
   const usdRateRef = useRef('')
 
-  const [itemAddMode, setItemAddMode] = useState<'material' | 'product'>('material')
+  const [itemAddMode, setItemAddMode] = useState<'material' | 'product' | 'machine'>('material')
 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [machineDialogOpen, setMachineDialogOpen] = useState(false)
   const [materialDialogOpen, setMaterialDialogOpen] = useState(false)
   const [productDialogOpen, setProductDialogOpen] = useState(false)
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null)
@@ -486,7 +514,7 @@ export function PurchaseDetallePage() {
           purchaseId,
           payload: buildItemPayload(draftItem),
         })
-        setLocalItems((prev) => [...prev, purchaseItemToLocal(created)])
+        setLocalItems((prev) => [...prev, ...created.items.map(purchaseItemToLocal)])
       }
       markDirty()
     } catch (err) {
@@ -544,8 +572,78 @@ export function PurchaseDetallePage() {
           purchaseId,
           payload: buildItemPayload(draftItem),
         })
-        setLocalItems((prev) => [...prev, purchaseItemToLocal(created)])
+        setLocalItems((prev) => [...prev, ...created.items.map(purchaseItemToLocal)])
       }
+      markDirty()
+    } catch (err) {
+      notifyApiError(err)
+    }
+  }
+
+  async function addMachineToItems(machine: Machine) {
+    const already = localItems.some((i) => i.itemType === 'machine' && i.machineId === machine.id)
+    if (already) {
+      toast.error('Esta máquina ya está en la compra')
+      return
+    }
+
+    try {
+      const draftItem: LocalPurchaseItem = {
+        localId: 'pending',
+        itemType: 'machine',
+        machineId: machine.id,
+        machine: {
+          id: machine.id,
+          name: machine.name,
+          type: machine.type,
+          brand: machine.brand,
+          model: machine.model,
+          status: machine.status,
+          active: machine.active,
+        },
+        quantity: 1,
+        unitPriceUsd: machine.acquisitionCost ? Number(machine.acquisitionCost) : 0,
+        isWholesale: false,
+      }
+      const created = await createItemMutation.mutateAsync({
+        purchaseId,
+        payload: buildItemPayload(draftItem),
+      })
+      setLocalItems((prev) => [...prev, ...created.items.map(purchaseItemToLocal)])
+      markDirty()
+    } catch (err) {
+      notifyApiError(err)
+    }
+  }
+
+  async function addNewMachinesToPurchase(result: {
+    new_machine: {
+      name: string
+      type: string
+      brand?: string
+      model?: string
+      status?: string
+    }
+    quantity: number
+    unit_price_usd: number
+  }) {
+    try {
+      const unitPriceUsd = entryInNative && isValidPurchaseRate(rateNum)
+        ? nativeToUsd(result.unit_price_usd, rateNum)
+        : result.unit_price_usd
+
+      const payload = {
+        new_machine: result.new_machine,
+        quantity: result.quantity,
+        unit_price_usd: unitPriceUsd,
+        ...(entryInNative && isValidPurchaseRate(rateNum)
+          ? { unit_price_bs: result.unit_price_usd }
+          : {}),
+      }
+
+      const created = await createItemMutation.mutateAsync({ purchaseId, payload })
+      setLocalItems((prev) => [...prev, ...created.items.map(purchaseItemToLocal)])
+      setMachineDialogOpen(false)
       markDirty()
     } catch (err) {
       notifyApiError(err)
@@ -555,6 +653,10 @@ export function PurchaseDetallePage() {
   async function addItemByBarcode(rawCode: string) {
     const code = rawCode.trim()
     if (!code || !isBorrador || !canEditPurchase) return
+    if (itemAddMode === 'machine') {
+      toast.error('El escaneo no aplica a máquinas')
+      return
+    }
 
     try {
       if (itemAddMode === 'material') {
@@ -1191,6 +1293,18 @@ export function PurchaseDetallePage() {
                     >
                       Productos
                     </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        'rounded-md px-3 py-1.5 text-xs font-medium',
+                        itemAddMode === 'machine'
+                          ? 'bg-background shadow-sm'
+                          : 'text-muted-foreground'
+                      )}
+                      onClick={() => setItemAddMode('machine')}
+                    >
+                      Máquinas
+                    </button>
                   </div>
 
                   <div className="flex min-w-[260px] flex-1 items-end gap-2 sm:max-w-lg">
@@ -1202,19 +1316,31 @@ export function PurchaseDetallePage() {
                           placeholder="Buscar material por código, referencia o nombre…"
                           onSelect={(material) => void addMaterialToItems(material)}
                         />
-                      ) : (
+                      ) : itemAddMode === 'product' ? (
                         <CatalogProductSearchPicker
                           variant="dropdown"
                           label=""
                           placeholder="Buscar producto por nombre o referencia…"
                           onSelect={(product) => void addProductToItems(product)}
                         />
+                      ) : (
+                        <MachineSearchPicker
+                          variant="dropdown"
+                          label=""
+                          placeholder="Buscar máquina existente…"
+                          excludeIds={localItems
+                            .filter((i) => i.itemType === 'machine' && i.machineId)
+                            .map((i) => i.machineId!)}
+                          onSelect={(machine) => void addMachineToItems(machine)}
+                        />
                       )}
                     </div>
-                    <BarcodeScanButton
-                      className="shrink-0"
-                      onScan={(code) => void addItemByBarcode(code)}
-                    />
+                    {itemAddMode !== 'machine' ? (
+                      <BarcodeScanButton
+                        className="shrink-0"
+                        onScan={(code) => void addItemByBarcode(code)}
+                      />
+                    ) : null}
                   </div>
 
                   {itemAddMode === 'material' ? (
@@ -1229,7 +1355,7 @@ export function PurchaseDetallePage() {
                       <Plus />
                       Nuevo material
                     </Button>
-                  ) : (
+                  ) : itemAddMode === 'product' ? (
                     <Button
                       size="sm"
                       variant="outline"
@@ -1240,6 +1366,11 @@ export function PurchaseDetallePage() {
                     >
                       <Plus />
                       Nuevo producto
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => setMachineDialogOpen(true)}>
+                      <Plus />
+                      Nueva máquina
                     </Button>
                   )}
                 </div>
@@ -1291,26 +1422,30 @@ export function PurchaseDetallePage() {
                               )}
                             </td>
                             <td className="px-3 py-2">
-                              {(() => {
-                                const unit = localItemUnitCode(item)
-                                const decimals = inventoryQuantityDecimals(unit)
-                                return (
-                                  <DecimalInput
-                                    min="0"
-                                    decimals={decimals}
-                                    className="h-8 w-24"
-                                    value={item.quantity}
-                                    onChange={(e) =>
-                                      updateLocalItem(item.localId, {
-                                        quantity: normalizeInventoryQuantity(
-                                          parseDecimalInput(e.target.value, decimals) ?? 0,
-                                          unit
-                                        ),
-                                      })
-                                    }
-                                  />
-                                )
-                              })()}
+                              {item.itemType === 'machine' ? (
+                                <span className="tabular-nums">{item.quantity}</span>
+                              ) : (
+                                (() => {
+                                  const unit = localItemUnitCode(item)
+                                  const decimals = inventoryQuantityDecimals(unit)
+                                  return (
+                                    <DecimalInput
+                                      min="0"
+                                      decimals={decimals}
+                                      className="h-8 w-24"
+                                      value={item.quantity}
+                                      onChange={(e) =>
+                                        updateLocalItem(item.localId, {
+                                          quantity: normalizeInventoryQuantity(
+                                            parseDecimalInput(e.target.value, decimals) ?? 0,
+                                            unit
+                                          ),
+                                        })
+                                      }
+                                    />
+                                  )
+                                })()
+                              )}
                             </td>
                             <td className="px-3 py-2">{localItemUnit(item)}</td>
                             <td className="px-3 py-2">
@@ -1395,25 +1530,31 @@ export function PurchaseDetallePage() {
                       : (purchase.items ?? []).map((item) => (
                           <tr key={item.id} className="border-b last:border-b-0">
                             <td className="px-3 py-2">
-                              {item.itemType === 'product'
-                                ? catalogProductCode(item.catalogProduct?.id ?? item.catalogProductId ?? 0)
-                                : (item.material?.code ?? '—')}
+                              {item.itemType === 'machine'
+                                ? formatMachineTypeLabel(item.machine?.type ?? 'OTHER')
+                                : item.itemType === 'product'
+                                  ? catalogProductCode(item.catalogProduct?.id ?? item.catalogProductId ?? 0)
+                                  : (item.material?.code ?? '—')}
                             </td>
                             <td className="px-3 py-2">
-                              {item.itemType === 'product'
-                                ? item.catalogProduct?.name ?? '—'
-                                : (item.material?.name ?? '—')}
+                              {item.itemType === 'machine'
+                                ? item.machine?.name ?? '—'
+                                : item.itemType === 'product'
+                                  ? item.catalogProduct?.name ?? '—'
+                                  : (item.material?.name ?? '—')}
                             </td>
                             <td className="px-3 py-2">{item.isWholesale ? 'Paq.' : '—'}</td>
                             <td className="px-3 py-2 tabular-nums">{item.quantity}</td>
                             <td className="px-3 py-2">
-                              {item.isWholesale
-                                ? 'Paq.'
-                                : item.itemType === 'product'
-                                  ? productSaleUnitAbrev(item.catalogProduct?.saleUnit ?? 'UND')
-                                  : item.material
-                                    ? UNIT_ABREV[item.material.unit]
-                                    : '—'}
+                              {item.itemType === 'machine'
+                                ? 'Und'
+                                : item.isWholesale
+                                  ? 'Paq.'
+                                  : item.itemType === 'product'
+                                    ? productSaleUnitAbrev(item.catalogProduct?.saleUnit ?? 'UND')
+                                    : item.material
+                                      ? UNIT_ABREV[item.material.unit]
+                                      : '—'}
                             </td>
                             <td className="px-3 py-2">
                               <PrecioEnMonedaIngreso
@@ -1510,6 +1651,13 @@ export function PurchaseDetallePage() {
                 .then((product) => syncProductInItems(product))
                 .catch((err) => notifyApiError(err, 'No se pudo actualizar el producto en la compra'))
             }}
+          />
+          <PurchaseMachineFormDialog
+            open={machineDialogOpen}
+            onOpenChange={setMachineDialogOpen}
+            submitting={createItemMutation.isPending}
+            priceLabel={unitPriceColumnLabel(displayEntryCurrency, entrySymbol)}
+            onSubmit={addNewMachinesToPurchase}
           />
           <ConfirmarPurchaseDialog
             open={confirmDialogOpen}

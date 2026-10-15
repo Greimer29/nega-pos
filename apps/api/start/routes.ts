@@ -220,8 +220,6 @@ router
         router.delete('machines/:id', [controllers.Machines, 'destroy'])
         router.get('machines/:id/expenses', [controllers.Machines, 'indexExpenses'])
         router.post('machines/:id/expenses', [controllers.Machines, 'storeExpense'])
-        router.get('machines/:id/payments', [controllers.Machines, 'indexPayments'])
-        router.post('machines/:id/payments', [controllers.Machines, 'storePayment'])
 
         router.get('machine-expenses', [controllers.MachineExpenses, 'index'])
         router.put('machine-expenses/:id', [controllers.MachineExpenses, 'update'])

@@ -131,8 +131,6 @@ export type MachineInput = {
   costo_adquisicion?: number
   currency_code?: string
   entry_rate?: number
-  is_credit?: boolean
-  credit_due_date?: string | null
   status?: MachineStatus
   location?: string
   notes?: string

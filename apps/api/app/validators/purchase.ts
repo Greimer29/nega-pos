@@ -36,9 +36,22 @@ export const listPurchasesValidator = vine.create({
   unassigned: vine.boolean().optional(),
 })
 
+const newMachineFields = {
+  name: vine.string().trim().minLength(1).maxLength(100),
+  type: vine.string().trim().minLength(1).maxLength(80),
+  brand: vine.string().trim().maxLength(80).optional(),
+  model: vine.string().trim().maxLength(80).optional(),
+  serialNumber: vine.string().trim().maxLength(80).optional(),
+  location: vine.string().trim().maxLength(100).optional(),
+  notes: vine.string().trim().optional(),
+  status: vine.enum(['OPERATIONAL', 'UNDER_REPAIR', 'OUT_OF_SERVICE'] as const).optional(),
+}
+
 const purchaseItemFields = {
   material_id: vine.number().min(1).optional(),
   catalog_product_id: vine.number().min(1).optional(),
+  machine_id: vine.number().min(1).optional(),
+  new_machine: vine.object(newMachineFields).optional(),
   quantity: vine.number().positive(),
   unit_price_usd: vine.number().min(0),
   is_wholesale: vine.boolean().optional(),
@@ -52,6 +65,7 @@ export const createPurchaseItemValidator = vine.create({
 export const updatePurchaseItemValidator = vine.create({
   material_id: vine.number().min(1).optional(),
   catalog_product_id: vine.number().min(1).optional(),
+  machine_id: vine.number().min(1).optional(),
   quantity: vine.number().positive().optional(),
   unit_price_usd: vine.number().min(0).optional(),
   unit_price_bs: vine.number().min(0).optional(),

@@ -2,6 +2,7 @@ import type Purchase from '#models/purchase'
 import type PurchaseItem from '#models/purchase_item'
 import type Material from '#models/material'
 import type CatalogProduct from '#models/catalog_product'
+import type Machine from '#models/machine'
 import { serializeAccountResumen } from '#transformers/account_transformer'
 import { BaseTransformer } from '@adonisjs/core/transformers'
 
@@ -36,13 +37,32 @@ function serializeCatalogProductResumen(product: CatalogProduct) {
   }
 }
 
+function serializeMachineResumen(machine: Machine) {
+  return {
+    id: Number(machine.id),
+    name: machine.name,
+    type: machine.type,
+    brand: machine.brand,
+    model: machine.model,
+    status: machine.status,
+    active: Boolean(machine.active),
+  }
+}
+
+function resolveItemType(item: PurchaseItem): 'machine' | 'material' | 'product' {
+  if (item.machineId) return 'machine'
+  if (item.catalogProductId) return 'product'
+  return 'material'
+}
+
 function serializePurchaseItem(item: PurchaseItem) {
   return {
     id: Number(item.id),
     purchaseId: Number(item.purchaseId),
     materialId: item.materialId ? Number(item.materialId) : null,
     catalogProductId: item.catalogProductId ? Number(item.catalogProductId) : null,
-    itemType: item.catalogProductId ? 'product' : 'material',
+    machineId: item.machineId ? Number(item.machineId) : null,
+    itemType: resolveItemType(item),
     isWholesale: Boolean(item.isWholesale),
     unitsPerPack: item.unitsPerPack,
     quantity: item.quantity,
@@ -56,6 +76,7 @@ function serializePurchaseItem(item: PurchaseItem) {
     ...(item.catalogProduct
       ? { catalogProduct: serializeCatalogProductResumen(item.catalogProduct) }
       : {}),
+    ...(item.machine ? { machine: serializeMachineResumen(item.machine) } : {}),
   }
 }
 
