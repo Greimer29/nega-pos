@@ -102,12 +102,17 @@ export async function downloadFactura(purchaseId: number) {
 type PurchaseItemResponse = {
   data: {
     item: PurchaseItem
+    items?: PurchaseItem[]
   }
 }
 
 export async function createPurchaseItem(purchaseId: number, payload: PurchaseItemInput) {
   const { data } = await api.post<PurchaseItemResponse>(`/purchases/${purchaseId}/items`, payload)
-  return data.data.item
+  const items = data.data.items ?? (data.data.item ? [data.data.item] : [])
+  return {
+    item: data.data.item ?? items[0],
+    items,
+  }
 }
 
 export async function updatePurchaseItem(

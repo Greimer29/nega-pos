@@ -1,4 +1,4 @@
-# Documentación oficial técnica — Nega POS
+﻿# Documentación oficial técnica — Nega POS
 
 Referencia técnica **única y vigente** para desarrolladores. Derivada exclusivamente del código fuente del repositorio (`apps/`, migraciones, rutas, configuración). Última revisión contra el código: julio 2026.
 
@@ -404,7 +404,7 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda b
 
 **Moneda base:** configurable **por empresa** (`GET/PUT /api/v1/currencies/base`, permiso `settings.edit`). Al provisionar un tenant nuevo la base por defecto es **USD**; la empresa puede crear monedas/métodos de pago y cambiar la base. Semántica de tasas: *unidades de moneda por 1 unidad de base* (`base = nativo / tasa`, `nativo = base * tasa`). Las columnas `*_usd` conservan el nombre pero almacenan montos en la moneda base. (Cutover histórico a XAU aplica solo a BD con data transaccional previa.)
 
-**Tasa por documento (gastos, ingresos, compras, cobro contado, abonos cliente/proveedor/máquina):** el monto se ingresa en una moneda activa; la tasa default es `currencies.rate_per_usd`. Si el usuario la cambia, queda solo en ese registro (`entry_rate` en gastos/ingresos/abonos, `usd_rate` en compras/ventas) y **no** modifica el catálogo ni Configuración.
+**Tasa por documento (gastos, ingresos, compras, cobro contado, abonos cliente/proveedor):** el monto se ingresa en una moneda activa; la tasa default es `currencies.rate_per_usd`. Si el usuario la cambia, queda solo en ese registro (`entry_rate` en gastos/ingresos/abonos, `usd_rate` en compras/ventas) y **no** modifica el catálogo ni Configuración.
 
 #### Catálogo
 
@@ -435,7 +435,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`. Precios (`cos
 | Tabla | Campos clave |
 |-------|--------------|
 | `purchases` | `supplier_id`, `account_id`, fechas, `invoice_number`, `status` (DRAFT/CONFIRMED/VOIDED), `is_credit`, `affects_inventory` (default true; false = factura financiera sin stock), totales USD/BS, saldos |
-| `purchase_items` | `material_id?`, `catalog_product_id?`, cantidades y precios, `is_wholesale` (default false), `units_per_pack?` (snapshot). Si `is_wholesale`, la cantidad de la línea es en paquetes y el inventario registra `cantidad × units_per_pack`. |
+| `purchase_items` | `material_id?`, `catalog_product_id?`, `machine_id?` (FK a `machines`; compra de patrimonio), cantidades y precios, `is_wholesale` (default false), `units_per_pack?` (snapshot). Exactamente una referencia por línea. Si `is_wholesale`, la cantidad de la línea es en paquetes y el inventario registra `cantidad × units_per_pack`. |
 
 #### Pedidos
 
@@ -465,8 +465,8 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`. Precios (`cos
 
 | Tabla | Campos clave |
 |-------|--------------|
-| `machines` | `name`, `type`, `brand`, `model`, `acquisition_cost`, `active`, `is_credit`, `amount_paid_usd`, `balance_usd`, `credit_due_date?` — si `is_credit`, el costo completo queda como CxP hasta abonar |
-| `machine_payments` | Abonos a máquinas a crédito: `machine_id`, `account_id?`, `amount_usd`, `currency_code?`, `entry_rate?`, `amount_native?`, `date`, `note?`. Bajan `balance_usd` / suben `amount_paid_usd`. Salen de caja del negocio (flujo); no afectan el turno. |
+| `machines` | `name`, `type`, `brand`, `model`, `acquisition_cost` (entra a patrimonio al confirmar compra), `source_purchase_item_id?` (ítem de compra que creó la máquina), `active`. Columnas legacy `is_credit` / `amount_paid_usd` / `balance_usd` / `credit_due_date` se mantienen por compatibilidad de BD pero **ya no** se usan como CxP (el crédito de adquisición va por compra a proveedor). |
+| `machine_payments` | **Legacy (solo lectura de históricos):** abonos antiguos a crédito directo de máquina. La API ya no expone alta/listado de abonos; la CxP nueva es solo vía compras a proveedor. |
 | `machine_expenses` | **Legacy (solo lectura de históricos):** `machine_id`, `category` (REPAIR/SUPPLY/MAINTENANCE/OTHER), `amount`, `receipt_file`. Los **altas nuevas** de gasto de máquina se registran en `expenses` con `machine_id`. |
 
 ### Relaciones principales
@@ -477,7 +477,7 @@ customers ──< orders ──< order_lines ──> catalog_products
 customers ──< sales ──< sale_lines ──> catalog_products | materials
                 └──< sale_payments ──> payment_methods
 sales_shifts ──< sales
-suppliers ──< purchases ──< purchase_items ──> materials | catalog_products
+suppliers ──< purchases ──< purchase_items ──> materials | catalog_products | machines
 formulas ──< formula_materials ──> materials
 catalog_products ──> formulas (opcional)
 catalog_products ──< catalog_product_sizes (opcional; stock por talla)
@@ -492,14 +492,16 @@ catalog_products ──< product_inventory_movements
 ### Compras (`purchase_service.ts`)
 
 1. **Crear borrador** (`status: DRAFT`) con proveedor y cuenta opcional.
-2. **Agregar ítems** — material y/o producto de catálogo (`PRODUCT`; productos con fórmula y servicios no admiten compra directa de stock). En borrador, el botón **Escanear** (Android) o un código ya conocido busca por `barcode` exacto del tab activo (materiales o productos); si no hay match → toast «Código no encontrado»; si el ítem ya está en la lista → suma 1. Compras v1 no desglosan por talla. Si el ítem tiene `wholesale_enabled`, la línea muestra un check **Mayorista** (sin diálogo). Con el check activo la cantidad es en paquetes y `is_wholesale` + `units_per_pack` quedan snapshot en la línea.
+2. **Agregar ítems** — material, producto de catálogo (`PRODUCT`; productos con fórmula y servicios no admiten compra directa de stock) **o máquina** (`machine_id` existente o `new_machine` en el payload). Con `new_machine` y cantidad N se crean N máquinas (`Name #1`…`#N`) y N líneas de qty 1. En borrador, el botón **Escanear** (Android) o un código ya conocido busca por `barcode` exacto del tab activo (materiales o productos; no aplica a máquinas); si no hay match → toast «Código no encontrado»; si el ítem ya está en la lista → suma 1. Compras v1 no desglosan por talla. Si el ítem tiene `wholesale_enabled`, la línea muestra un check **Mayorista** (sin diálogo). Con el check activo la cantidad es en paquetes y `is_wholesale` + `units_per_pack` quedan snapshot en la línea.
 3. **Confirmar** (`POST .../confirm`):
    - Requiere `invoice_number` y al menos un ítem (salvo `affects_inventory = false`).
    - Si `affects_inventory` es true (default): por cada ítem material → movimiento `PURCHASE_IN` + actualización de `last_purchase_price_usd`; por cada ítem producto sin fórmula → `PURCHASE_IN` en `product_inventory_movements` + `cost_usd`. Si la línea es mayorista, el movimiento usa `cantidad × units_per_pack` y el costo unitario queda `precio_paquete / units_per_pack` (también actualiza `wholesale_cost_usd`). **No actualiza** `sale_price_usd`.
+   - Ítems de máquina: al confirmar se setea `machines.acquisition_cost` = precio unitario de la línea (entra a patrimonio). No mueven inventario.
    - **Multimoneda:** los `unit_price_usd` de ítem ya van en **moneda base** (el front convierte `nativo ÷ tasa` al editar). La tasa del documento (`usd_rate`) se guarda solo si la moneda de ingreso ≠ base; al confirmar no se anula por estar en `USD` (antes un hardcode borraba la tasa cuando la base era p. ej. XAU y el ingreso era USD).
-   - Si `affects_inventory` es false: no mueve stock (factura financiera / deuda sin mercadería).
-   - `status → CONFIRMED`; si es crédito, registra saldo en proveedor.
+   - Si `affects_inventory` es false: no mueve stock (factura financiera / deuda sin mercadería); las máquinas igual reciben `acquisition_cost`.
+   - `status → CONFIRMED`; si es crédito, registra saldo en proveedor (única vía de CxP de adquisición de máquinas).
    - Tras confirmar compra con stock, pedidos en `DRAFT` pendientes de material pueden pasar automáticamente a `IN_PRODUCTION` si hay stock suficiente.
+   - Al devolver una compra confirmada se limpia `acquisition_cost` de las máquinas vinculadas.
 
 ### Factura desde ficha de proveedor (`supplier_invoice_service.ts`)
 
@@ -515,7 +517,7 @@ catalog_products ──< product_inventory_movements
 
 - **Contado** (`is_credit: false`): crea una `sale` `COMPLETED` con `payment_type=CASH`, sin líneas, `amount_paid_usd = total_usd`, `payment_method_code` obligatorio. No toca inventario ni exige turno abierto (`sales_shift_id` null). Aparece en el historial del estado de cuenta y suma a ventas/caja vía `total_usd`.
 - **Crédito** (`is_credit: true`): crea una `sale` `COMPLETED` con `payment_type=CREDIT`, sin líneas, `balance_usd = total`, requiere cliente con `credit_days > 0`. Vencimiento = `credit_due_date` del payload o fecha + días de crédito. El **Abono** (`POST /customers/:id/payments`) acepta `amount` nativo + `currency_code`/`entry_rate` (o `amount_usd` legacy), convierte a moneda base y baja ese saldo como en ventas a crédito del POS. Nota opcional en `sales.notes`.
-- UI: botón **Factura** / **Abono** en estado de cuenta / ficha del cliente; las ventas sin líneas se etiquetan «Sin ítems». Al abrir el diálogo, la **moneda de ingreso** arranca en la **moneda base** de la empresa (no en la del método de pago); el usuario puede cambiarla con el toggle. Mismo criterio que gastos, ingresos, compras, facturas de proveedor y abonos a máquina.
+- UI: botón **Factura** / **Abono** en estado de cuenta / ficha del cliente; las ventas sin líneas se etiquetan «Sin ítems». Al abrir el diálogo, la **moneda de ingreso** arranca en la **moneda base** de la empresa (no en la del método de pago); el usuario puede cambiarla con el toggle. Mismo criterio que gastos, ingresos, compras y facturas de proveedor.
 
 ### Catálogo, fórmulas y tallas
 
@@ -566,7 +568,7 @@ catalog_products ──< product_inventory_movements
 ### Reportes (`report_service.ts` / `inventory_report_service.ts`)
 
 - **Calendario de tienda:** los filtros por día/rango sobre columnas DATETIME (`sold_at`, `confirmed_at`, `created_at` de movimientos) usan el día calendario en `America/Caracas` (00:00:00 → 23:59:59.999 local), convertido a UTC para comparar contra valores guardados con `TZ=UTC`. Las columnas DATE (compras, gastos, ingresos, abonos) siguen filtrándose por `YYYY-MM-DD` sin conversión. Helpers: `#utils/app_timezone` (`datetimeRangeUtcSql`, `dayStartUtcSql`, `toAppIsoDate`).
-- **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **aportes de capital** (`incomes`), compras de contado, abonos a proveedores, **gastos** (`expenses`, incluidos los vinculados a máquina), **gastos máquina legacy** (`machine_expenses`) y abonos de clientes en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). Resumen: `netUsd` = movimiento del período (`ventas + ingresos − compras_contado/abonos_proveedor/abonos_máquina − gastos − machine_expenses` legacy); `openingBalanceUsd` = mismo flujo acumulado **antes** de `period.from`; `closingBalanceUsd` = apertura + movimiento. La UI hero muestra **Saldo de caja** (cierre) y el movimiento del período aparte. Cards: **Cobros por ventas**, **Pagos a proveedores** (incluye abonos a máquinas a crédito), **Gastos operativos**. CxP/CxC informativas (compras a crédito + máquinas a crédito con saldo; no entran al flujo hasta el abono).
+- **Estado de cuenta consolidado** (`GET /reports/account-statement`): agrega ventas, **aportes de capital** (`incomes`), compras de contado, abonos a proveedores, **gastos** (`expenses`, incluidos los vinculados a máquina), **gastos máquina legacy** (`machine_expenses`) y abonos de clientes en un rango de fechas, con filtros por cuenta, moneda de visualización y tipos (`sales`, `incomes`, `purchases`, `expenses`, `machine_expenses`). Resumen: `netUsd` = movimiento del período (`ventas + ingresos − compras_contado/abonos_proveedor − gastos − machine_expenses` legacy); `openingBalanceUsd` = mismo flujo acumulado **antes** de `period.from`; `closingBalanceUsd` = apertura + movimiento. La UI hero muestra **Saldo de caja** (cierre) y el movimiento del período aparte. Cards: **Cobros por ventas**, **Pagos a proveedores**, **Gastos operativos**. CxP/CxC informativas (compras a crédito con saldo; no entran al flujo hasta el abono).
 - **Estado de resultados** (`GET /reports/income-statement`): informe a **devengo** del período (`month`|`from`/`to`, `display_currency`). KPI principal: **Utilidad operativa** (`operatingIncomeUsd` = ingresos por ventas − CMV − gastos operativos). Cards: **Ingresos por ventas** (`salesRevenueUsd`: `sales.total_usd` de facturas `COMPLETED` por `sold_at`, contado y crédito), **Costo de mercancía vendida** (`cogsUsd`: qty neta × `COALESCE(sale_lines.cost_usd, catalog/material)`), **Utilidad bruta**, **Gastos operativos** (`expenses` + `machine_expenses` legacy), **Margen bruto** / **Margen operativo** (%). Excluye aportes de capital, compras de inventario, abonos y CxC/CxP. UI: `/reportes?sub=resultados`.
 - **Situación patrimonial** (`GET /reports/balance-position`): snapshot a la fecha (`display_currency`). KPI: **Patrimonio estimado** (`estimatedEquityUsd` = activo − pasivo). Activo: inventario valorizado a costo (productos sin fórmula + materiales vía movimientos), CxC abiertas, máquinas (`acquisition_cost`). Pasivo: CxP abiertas. Chip informativo: aportes de capital acumulados (`incomes`). No incluye saldos de caja bancaria formales. UI: `/reportes?sub=patrimonio`.
 - **Resumen financiero** (`GET /reports/financial-summary`): síntesis del período (`month`|`from`/`to`, `display_currency`) que agrega estado de resultados + flujo de caja + situación patrimonial y emite un **diagnóstico** (`diagnosis.headline` / `detail` / `tone`: positive|caution|negative) contrastando utilidad operativa vs flujo neto. UI: `/reportes?sub=resumen` (hero diagnóstico + bloques Resultado / Caja / Situación / Puentes).
@@ -833,10 +835,8 @@ Entradas de dinero (aporte de capital, etc.) asociadas opcionalmente a una cuent
 | DELETE | `/api/v1/machines/:id` | `machines.edit` | `Machines.destroy` |
 | GET | `/api/v1/machines/:id/expenses` | `machines.view` | `Machines.indexExpenses` |
 | POST | `/api/v1/machines/:id/expenses` | `machines.edit` | `Machines.storeExpense` |
-| GET | `/api/v1/machines/:id/payments` | `machines.view` | `Machines.indexPayments` |
-| POST | `/api/v1/machines/:id/payments` | `machines.edit` | `Machines.storePayment` |
 
-`POST /machines` acepta `is_credit` + `costo_adquisicion` (> 0 si crédito; monto en moneda de ingreso), `currency_code?`, `entry_rate?` (misma semántica que gastos/compras), `credit_due_date?`. En crédito: `balance_usd` / `acquisition_cost` = canónico en base; se guardan `acquisition_amount_native`, `entry_currency_code`, `entry_rate`. `POST .../payments` registra abonos (`amount` nativo + `currency_code`/`entry_rate`, o `amount_usd` legacy) y reduce el saldo. Los saldos de máquinas a crédito suman a CxP de reportes/patrimonio; los abonos salen en flujo de caja (`machine_payment`). No impactan ventas ni cierre del turno. UI: toggle Crédito + moneda/tasa en alta; ficha con costo / abonado / se debe + historial de abonos.
+`POST /machines` acepta `costo_adquisicion` (monto en moneda de ingreso), `currency_code?`, `entry_rate?` (misma semántica que gastos/compras). **No** hay crédito directo ni endpoints de abonos: la adquisición a crédito se registra comprando la máquina en una compra a proveedor (`POST /purchases/:id/items` con `machine_id` o `new_machine`). Al confirmar la compra se setea `acquisition_cost` (patrimonio). UI: alta/edición sin toggle de crédito; ficha sin abonos.
 
 `POST /machines/:id/expenses` crea un registro en **`expenses`** con `machine_id` (no escribe en `machine_expenses`). `GET` lista gastos unificados + legacy etiquetados.
 

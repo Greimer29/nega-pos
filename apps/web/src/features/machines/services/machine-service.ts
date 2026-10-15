@@ -6,8 +6,6 @@ import type {
   MachineInput,
   MachineListParams,
   MachineListResponse,
-  MachinePaymentInput,
-  MachinePaymentResponse,
   MachineResponse,
 } from '@/features/machines/types'
 
@@ -49,9 +47,4 @@ export async function deleteMachine(id: number) {
 export async function createMachineExpense(machineId: number, payload: MachineExpenseInput) {
   const { data } = await api.post<MachineExpenseResponse>(`/machines/${machineId}/expenses`, payload)
   return data.data.expense
-}
-
-export async function createMachinePayment(machineId: number, payload: MachinePaymentInput) {
-  const { data } = await api.post<MachinePaymentResponse>(`/machines/${machineId}/payments`, payload)
-  return data.data.payment
 }

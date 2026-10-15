@@ -99,9 +99,10 @@ export function formatItemNativeDisplay(
 }
 
 type PurchaseItemPersistFields = {
-  itemType: 'material' | 'product'
+  itemType: 'material' | 'product' | 'machine'
   materialId?: number
   catalogProductId?: number
+  machineId?: number
   quantity: number
   unitPriceUsd: number
   isWholesale?: boolean
@@ -122,12 +123,18 @@ export function buildPurchaseItemPayload(
           unit_price_usd: item.unitPriceUsd,
           is_wholesale: Boolean(item.isWholesale),
         }
-      : {
-          material_id: item.materialId,
-          quantity: item.quantity,
-          unit_price_usd: item.unitPriceUsd,
-          is_wholesale: Boolean(item.isWholesale),
-        }
+      : item.itemType === 'machine'
+        ? {
+            machine_id: item.machineId,
+            quantity: item.quantity,
+            unit_price_usd: item.unitPriceUsd,
+          }
+        : {
+            material_id: item.materialId,
+            quantity: item.quantity,
+            unit_price_usd: item.unitPriceUsd,
+            is_wholesale: Boolean(item.isWholesale),
+          }
 
   if (
     isPurchaseEntryInNative(entryCurrency, baseCurrencyCode) &&

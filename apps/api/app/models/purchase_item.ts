@@ -2,6 +2,7 @@ import { PurchaseItemSchema } from '#database/schema'
 import Purchase from '#models/purchase'
 import Material from '#models/material'
 import CatalogProduct from '#models/catalog_product'
+import Machine from '#models/machine'
 import InventoryMovement from '#models/inventory_movement'
 import { belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
@@ -17,6 +18,9 @@ export default class PurchaseItem extends PurchaseItemSchema {
 
   @belongsTo(() => CatalogProduct)
   declare catalogProduct: BelongsTo<typeof CatalogProduct>
+
+  @belongsTo(() => Machine)
+  declare machine: BelongsTo<typeof Machine>
 
   @hasMany(() => InventoryMovement)
   declare movimientos: HasMany<typeof InventoryMovement>

@@ -12,9 +12,7 @@ import { nativeAmountFromBase } from '#utils/monetary_entry'
 import CustomerPayment from '#models/customer_payment'
 import Expense from '#models/expense'
 import Income from '#models/income'
-import Machine from '#models/machine'
 import MachineExpense from '#models/machine_expense'
-import MachinePayment from '#models/machine_payment'
 import Sale from '#models/sale'
 import Purchase from '#models/purchase'
 import SupplierPayment from '#models/supplier_payment'
@@ -35,8 +33,6 @@ export type AccountStatementMovementType =
   | 'customer_payment'
   | 'purchase'
   | 'supplier_payment'
-  | 'machine_payment'
-  | 'machine_credit'
   | 'expense'
   | 'machine_expense'
   | 'income'
@@ -995,92 +991,6 @@ export default class ReportService {
           })
         )
       }
-
-      const machinePaymentQuery = MachinePayment.query()
-        .where('date', '>=', period.from)
-        .where('date', '<=', period.to)
-        .preload('machine')
-        .preload('account')
-        .orderBy('date', 'desc')
-        .orderBy('id', 'desc')
-
-      this.applyAccountFilter(machinePaymentQuery, filters)
-
-      const machinePayments = await machinePaymentQuery
-
-      for (const payment of machinePayments) {
-        const usd = Number(payment.amountUsd)
-        if (usd <= 0) {
-          continue
-        }
-
-        purchasesUsd += usd
-        const machineName = payment.machine?.name ?? 'Máquina'
-
-        movements.push(
-          this.buildMovement({
-            id: Number(payment.id),
-            type: 'machine_payment',
-            date: payment.date.toISODate()!,
-            label: `Abono máquina — ${machineName}`,
-            account: payment.account
-              ? { id: Number(payment.account.id), name: payment.account.name }
-              : null,
-            native: usd,
-            currencyCode: 'USD',
-            usd,
-            displayCurrency,
-            rates,
-            referenceId: Number(payment.id),
-            isIncome: false,
-          })
-        )
-      }
-
-      // CxP de máquinas a crédito (saldo abierto): informativa, no suma al movimiento de caja.
-      const creditMachines = await Machine.query()
-        .where('isCredit', true)
-        .where('balanceUsd', '>', 0)
-        .orderBy('creditDueDate', 'asc')
-        .orderBy('id', 'asc')
-
-      for (const machine of creditMachines) {
-        const balanceUsd = Number(machine.balanceUsd)
-        if (balanceUsd <= 0) {
-          continue
-        }
-
-        pendingPayablesUsd += balanceUsd
-        const dueDate = machine.creditDueDate?.toISODate() ?? null
-        const overdue = Boolean(dueDate && dueDate <= period.to)
-        if (overdue) {
-          overduePayablesUsd += balanceUsd
-        }
-
-        const reportDate = dueDate && dueDate <= period.to ? dueDate : period.to
-
-        movements.push(
-          this.buildMovement({
-            id: Number(machine.id),
-            type: 'machine_credit',
-            date: reportDate,
-            label: `Máquina a crédito — ${machine.name}`,
-            account: null,
-            native: balanceUsd,
-            currencyCode: 'USD',
-            usd: 0,
-            displayCurrency,
-            rates,
-            referenceId: Number(machine.id),
-            isIncome: false,
-            isCreditPurchase: true,
-            creditDueDate: dueDate,
-            creditBalanceUsd: balanceUsd,
-            creditOverdue: overdue,
-            creditReportStatus: overdue ? 'overdue' : 'pending',
-          })
-        )
-      }
     }
 
     if (types.has('expenses')) {
@@ -1431,14 +1341,6 @@ export default class ReportService {
       supplierPaymentQuery = this.applyAccountFilterToKnex(supplierPaymentQuery, filters)
       const supplierPayments = await supplierPaymentQuery.first()
       outflows += Number(supplierPayments?.total_usd ?? 0)
-
-      let machinePaymentQuery = db
-        .from('machine_payments')
-        .where('date', '<', beforeDate)
-        .select(db.raw('COALESCE(SUM(amount_usd), 0) as total_usd'))
-      machinePaymentQuery = this.applyAccountFilterToKnex(machinePaymentQuery, filters)
-      const machinePayments = await machinePaymentQuery.first()
-      outflows += Number(machinePayments?.total_usd ?? 0)
     }
 
     if (types.has('expenses')) {

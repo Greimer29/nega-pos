@@ -17,7 +17,6 @@ export default class MachineTransformer extends BaseTransformer<Machine> {
     extra: {
       totalSpent?: string
       expenses?: Array<ReturnType<typeof serializeMachineExpense> | Record<string, unknown>>
-      payments?: Array<ReturnType<typeof serializeMachinePayment>>
     } = {}
   ) {
     return {
@@ -36,6 +35,9 @@ export default class MachineTransformer extends BaseTransformer<Machine> {
       amountPaidUsd: this.resource.amountPaidUsd ?? '0.0000',
       balanceUsd: this.resource.balanceUsd ?? '0.0000',
       creditDueDate: this.resource.creditDueDate?.toISODate() ?? null,
+      sourcePurchaseItemId: this.resource.sourcePurchaseItemId
+        ? Number(this.resource.sourcePurchaseItemId)
+        : null,
       status: this.resource.status,
       location: this.resource.location,
       notes: this.resource.notes,
@@ -44,7 +46,6 @@ export default class MachineTransformer extends BaseTransformer<Machine> {
       updatedAt: this.resource.updatedAt,
       ...(extra.totalSpent !== undefined ? { totalSpent: extra.totalSpent } : {}),
       ...(extra.expenses !== undefined ? { expenses: extra.expenses } : {}),
-      ...(extra.payments !== undefined ? { payments: extra.payments } : {}),
     }
   }
 }
@@ -54,7 +55,6 @@ export function serializeMachine(
   extra: {
     totalSpent?: string
     expenses?: Array<ReturnType<typeof serializeMachineExpense> | Record<string, unknown>>
-    payments?: Array<ReturnType<typeof serializeMachinePayment>>
   } = {}
 ) {
   return new MachineTransformer(machine).toObject(extra)

@@ -131,11 +131,17 @@ export default class PurchasesControleler {
    */
   async storeItem({ params, request, serialize }: HttpContext) {
     const payload = await request.validateUsing(createPurchaseItemValidator)
-    const item = await this.service.agregarItem(Number(params.id), payload)
+    const items = await this.service.agregarItem(Number(params.id), payload)
+    const serialized = serializePurchaseItems(items)
 
     broadcastCompanyEvent('purchase.changed')
+    if (items.some((item) => item.machineId)) {
+      broadcastCompanyEvent('machine.changed')
+    }
+
     return serialize({
-      item: serializePurchaseItems([item])[0],
+      item: serialized[0],
+      items: serialized,
     })
   }
 
@@ -163,6 +169,7 @@ export default class PurchasesControleler {
     const result = await this.service.eliminarItem(Number(params.id), Number(params.itemId))
 
     broadcastCompanyEvent('purchase.changed')
+    broadcastCompanyEvent('machine.changed')
     return serialize({
       id: result.id,
       eliminado: result.eliminado,

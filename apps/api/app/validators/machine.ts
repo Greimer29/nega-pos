@@ -20,8 +20,6 @@ export const createMachineValidator = vine.create({
   ...machineFields,
   currency_code: vine.string().trim().toUpperCase().fixedLength(3).optional(),
   entry_rate: vine.number().positive().optional(),
-  is_credit: vine.boolean().optional(),
-  credit_due_date: isoDate.nullable().optional(),
 })
 
 export const updateMachineValidator = vine.create({
@@ -29,18 +27,6 @@ export const updateMachineValidator = vine.create({
   currency_code: vine.string().trim().toUpperCase().fixedLength(3).optional(),
   entry_rate: vine.number().positive().optional(),
   active: vine.boolean().optional(),
-  is_credit: vine.boolean().optional(),
-  credit_due_date: isoDate.nullable().optional(),
-})
-
-export const createMachinePaymentValidator = vine.create({
-  amount: vine.number().positive().optional(),
-  amount_usd: vine.number().positive().optional(),
-  currency_code: vine.string().trim().toUpperCase().fixedLength(3).optional(),
-  entry_rate: vine.number().positive().optional(),
-  date: isoDate,
-  account_id: vine.number().min(1).nullable().optional(),
-  note: vine.string().trim().maxLength(255).optional(),
 })
 
 export const listMachinesValidator = vine.create({
