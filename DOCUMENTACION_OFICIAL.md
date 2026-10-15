@@ -21,6 +21,7 @@ Referencia técnica **única y vigente** para desarrolladores. Derivada exclusiv
 11. [App desktop e impresión](#11-app-desktop-e-impresión)
 12. [Pruebas](#12-pruebas)
 13. [Comandos de desarrollo](#13-comandos-de-desarrollo)
+14. [Plan — Módulo Nómina](#14-plan--módulo-nómina)
 
 ---
 
@@ -42,6 +43,7 @@ Referencia técnica **única y vigente** para desarrolladores. Derivada exclusiv
 | **Dashboard** | KPIs diarios, cierre, productos vendidos, gastos |
 | **Impresión** | Tickets térmicos (factura, nota de despacho, comanda) vía Electron IPC |
 | **Configuración** | Tasa de cambio, margen, datos generales del negocio, usuarios y permisos |
+| **Nómina** | *(en construcción — ver §14)* Empleados, cortes, pagos, adelantos, mercancía y reportes de personal |
 
 ---
 
@@ -1124,6 +1126,74 @@ node ace generate:key
 
 - **Local (`docker-compose`):** init SQL crea `nega_pos_central` + grants; entrypoint con `RUN_MIGRATIONS_ON_START=true` corre `migration:run_central` si multi-tenant; `db:bootstrap` crea platform admin. Para alinear tenants locales: `node ace migration:run_tenants --force`.
 - **Railway:** `preDeployCommand` = `migration:run_central --force` **y** `migration:run_tenants --force` (todas las empresas con `db_name`); si alguna falla, exit ≠ 0 y no se promociona la API. Alta de empresa: provision sigue creando BD + migrate + seed. Guía: `docs/RAILWAY_DEPLOY.md`.
+
+---
+
+## 14. Plan — Módulo Nómina
+
+> Estado: **plan aprobado / implementación por fases** (rama `feat/nomina`). Esta sección se actualizará a especificación vigente a medida que se mergee código.
+
+### Decisiones de producto (cerradas)
+
+1. **Mercancía a empleado:** se valora al **precio de venta** del producto/material (mismo que al facturar). No es venta del turno: baja inventario + deducción/deuda al empleado.
+2. **Frecuencia de pago:** configurable por empleado / política: `WEEKLY` | `BIWEEKLY` | `MONTHLY`.
+3. **Impuestos:** switch de configuración; **por defecto OFF**. Si se activa, se aplican reglas de impuestos (detalle en fase posterior).
+4. **Vínculo con usuario del sistema:** opcional. Switch «vincular a cuenta»; si está activo, pide correo/usuario a vincular. Si no se vincula, el empleado opera con normalidad sin login.
+5. **Entrega por fases** (ver abajo).
+
+### Criterio financiero
+
+| Concepto | Tratamiento | Impacta | No impacta |
+|----------|-------------|---------|------------|
+| Sueldo ganado (corte) | Gasto de personal + pasivo sueldos por pagar | Estado de resultados / patrimonio | Turno / ventas del día |
+| Pago de nómina (caja) | Salida de efectivo | Flujo de caja / saldo de caja | `net_cash` / entradas del turno |
+| Adelanto | CxC empleado (activo); no es gasto | Caja − al entregar; se recupera en corte | Turno; no duplicar como OpEx |
+| Deuda empleado → empresa | Abono reduce CxC | Caja + y/o descuento en neto | Ventas |
+| Saldo a favor del empleado (pagaron de menos) | Pasivo arrastrable al siguiente corte | Próxima planilla | Ingreso |
+| Mercancía | Inventario OUT + deuda/deducción a precio de venta | Stock; neto del empleado | Ventas del turno / `SALE_OUT` |
+
+### Navegación y submódulos
+
+Ítem **Nómina** en el menú principal. Hub con subáreas:
+
+- Empleados  
+- Cortes / planilla  
+- Pagos  
+- Adelantos  
+- Deudas / saldos  
+- Mercancía  
+- Configuración  
+- Reportes de nómina  
+
+### Permisos previstos
+
+`payroll.view`, `payroll.edit`, `payroll.pay`, `payroll.config` (catálogo API + espejo web).
+
+### Modelo de datos previsto (alto nivel)
+
+- `employees` — ficha, sueldo, frecuencia, moneda, flags (adelantos, mercancía, impuestos, vínculo usuario), `user_id?`  
+- `payroll_settings` — defaults globales (impuestos OFF, valuación mercancía = precio venta, etc.)  
+- `payroll_periods` — corte (`DRAFT` / `CLOSED` / `PAID`)  
+- `payroll_lines` — bruto, deducciones, neto, pagado, arrastres  
+- `payroll_payments` — desembolsos (`account_id`, moneda, `entry_rate`)  
+- `employee_advances` — adelantos y saldo  
+- Ledger / saldos empleado — a favor o en contra entre cortes  
+- `employee_issuances` (+ ítems) — mercancía; movimiento inventario dedicado (p. ej. `EMPLOYEE_ISSUE`), no `SALE_OUT`  
+
+### Fases de implementación
+
+| Fase | Alcance |
+|------|---------|
+| **1 — Foundation** | Nav/hub, permisos, `employees`, `payroll_settings`, config (frecuencia, impuestos OFF, vínculo usuario opcional) |
+| **2 — Cortes y pagos** | Generar planilla, pago parcial/total, arrastre de saldos, impacto caja + gasto de personal (fuera del turno) |
+| **3 — Adelantos y deudas** | Adelantos, abonos en pago o en cualquier momento del corte |
+| **4 — Mercancía** | Retiro a precio de venta, inventario, deducción/deuda |
+| **5 — Reportes + KPI** | Reporte aparte de nómina; card/KPI en flujo/resumen si hay montos relevantes |
+
+### Fuera de alcance v1 (salvo activación explícita)
+
+- Motor fiscal completo (solo switch + gancho cuando impuestos = ON).  
+- Portal del empleado / app self-service (el vínculo a `users` es administrativo, no implica portal).  
 
 ---
 
