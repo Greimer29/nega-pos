@@ -7,6 +7,8 @@ export const MOVEMENT_TYPE_LABELS = {
   customer_payment: 'Abono cliente',
   purchase: 'Compra',
   supplier_payment: 'Pago proveedor',
+  machine_payment: 'Abono máquina',
+  machine_credit: 'Máquina a crédito',
   expense: 'Gasto empresa',
   machine_expense: 'Gasto máquina (histórico)',
   income: 'Aporte de capital',

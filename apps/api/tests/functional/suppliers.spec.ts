@@ -1,9 +1,11 @@
 import Account from '#models/account'
+import Currency from '#models/currency'
 import Purchase from '#models/purchase'
 import Supplier from '#models/supplier'
 import User from '#models/user'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
+import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
 
@@ -423,6 +425,62 @@ test.group('Suppliers API', (group) => {
     await purchase.refresh()
     assert.equal(Number(purchase.balanceUsd), 0)
     assert.equal(Number(purchase.accountId), Number(account.id))
+  })
+
+  test('POST /api/v1/suppliers/:id/payments accepts VES with entry_rate without changing catalog', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    await db.from('currencies').where('code', 'VES').update({ rate_per_usd: '100.0000' })
+
+    const supplier = await Supplier.create({
+      name: 'Proveedor Abono VES',
+      active: true,
+    })
+
+    const purchase = await Purchase.create({
+      supplierId: supplier.id,
+      date: DateTime.now().minus({ days: 2 }),
+      invoiceNumber: 'F-VES-ABONO',
+      totalUsd: '10.0000',
+      totalBs: '0.00',
+      status: 'CONFIRMED',
+      isCredit: true,
+      creditDueDate: DateTime.fromISO('2026-06-20'),
+      balanceUsd: '10.0000',
+      amountPaidUsd: '0.0000',
+    })
+
+    const response = await client
+      .post(`/api/v1/suppliers/${supplier.id}/payments`)
+      .loginAs(user)
+      .json({
+        purchase_id: purchase.id,
+        amount: 400,
+        currency_code: 'VES',
+        entry_rate: 40,
+        date: '2026-06-20',
+      })
+
+    response.assertStatus(200)
+    const payment = response.body().data.payment as {
+      amountUsd: string
+      currencyCode: string
+      entryRate: string
+      amountNative: string
+    }
+    assert.equal(payment.amountUsd, '10.0000')
+    assert.equal(payment.currencyCode, 'VES')
+    assert.equal(payment.entryRate, '40.000000')
+    assert.equal(payment.amountNative, '400.0000')
+
+    await purchase.refresh()
+    assert.equal(purchase.balanceUsd, '0.0000')
+    assert.equal(purchase.amountPaidUsd, '10.0000')
+
+    const ves = await Currency.findByOrFail('code', 'VES')
+    assert.equal(ves.ratePerUsd, '100.0000')
   })
 
   test('POST /api/v1/suppliers/:id/invoices contado creates paid purchase without expense', async ({

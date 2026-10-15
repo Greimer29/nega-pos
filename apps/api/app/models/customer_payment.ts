@@ -27,6 +27,15 @@ export default class CustomerPayment extends BaseModel {
   @column()
   declare amountUsd: string
 
+  @column()
+  declare currencyCode: string | null
+
+  @column()
+  declare entryRate: string | null
+
+  @column()
+  declare amountNative: string | null
+
   @column.date()
   declare date: DateTime
 

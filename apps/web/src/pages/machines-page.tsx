@@ -1,4 +1,4 @@
-import { Eye, Loader2, Pencil, Plus, Search, Trash2, Activity, Tag } from 'lucide-react'
+import { Eye, HandCoins, Loader2, Pencil, Plus, Search, Trash2, Activity, Tag } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FiltersDrawer } from '@/components/filters/filters-drawer'
@@ -23,6 +23,7 @@ import {
 import type { Machine } from '@/features/machines/types'
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
+import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { cn } from '@/lib/utils'
 import { pageHeaderClass, toolbarActionsClass, toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
@@ -231,13 +232,14 @@ export function MachinesPage() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-md border">
-              <table className="w-full min-w-[760px] text-sm">
+              <table className="w-full min-w-[860px] text-sm">
                 <thead>
                   <tr className="bg-muted/50 border-b text-left">
                     <th className="px-4 py-3 font-medium">Nombre</th>
                     <th className="px-4 py-3 font-medium">Tipo</th>
                     <th className="px-4 py-3 font-medium">Marca / Modelo</th>
                     <th className="px-4 py-3 font-medium">Estado</th>
+                    <th className="px-4 py-3 font-medium">Crédito / saldo</th>
                     <th className="px-4 py-3 font-medium">Activo</th>
                     <th className="px-4 py-3 text-right font-medium">Acciones</th>
                   </tr>
@@ -267,6 +269,27 @@ export function MachinesPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
+                        {machine.isCredit ? (
+                          <div className="space-y-0.5">
+                            <span
+                              className={cn(
+                                'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
+                                Number(machine.balanceUsd) > 0
+                                  ? 'bg-amber-50 text-amber-900'
+                                  : 'bg-emerald-50 text-emerald-800'
+                              )}
+                            >
+                              {Number(machine.balanceUsd) > 0 ? 'Se debe' : 'Saldado'}
+                            </span>
+                            <div className="text-xs">
+                              <DisplayMoneyFromUsd amountUsd={machine.balanceUsd} size="sm" />
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
                         <span
                           className={cn(
                             'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
@@ -280,6 +303,17 @@ export function MachinesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
+                          {machine.isCredit && Number(machine.balanceUsd) > 0 ? (
+                            <Button variant="ghost" size="icon" asChild>
+                              <Link
+                                to={`/machines/${machine.id}`}
+                                aria-label={`Abonar ${machine.name}`}
+                                title="Abonar crédito"
+                              >
+                                <HandCoins />
+                              </Link>
+                            </Button>
+                          ) : null}
                           <Button variant="ghost" size="icon" asChild>
                             <Link to={`/machines/${machine.id}`} aria-label={`Ver ${machine.name}`}>
                               <Eye />

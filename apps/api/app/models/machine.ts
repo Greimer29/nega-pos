@@ -1,6 +1,7 @@
 import { MachineSchema } from '#database/schema'
 import Expense from '#models/expense'
 import MachineExpense from '#models/machine_expense'
+import MachinePayment from '#models/machine_payment'
 import { hasMany } from '@adonisjs/lucid/orm'
 import type { HasMany } from '@adonisjs/lucid/types/relations'
 
@@ -12,4 +13,7 @@ export default class Machine extends MachineSchema {
 
   @hasMany(() => MachineExpense)
   declare expenses: HasMany<typeof MachineExpense>
+
+  @hasMany(() => MachinePayment)
+  declare payments: HasMany<typeof MachinePayment>
 }

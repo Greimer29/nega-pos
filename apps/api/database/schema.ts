@@ -179,10 +179,13 @@ export class CurrencySchema extends BaseModel {
 export class CustomerPaymentSchema extends BaseModel {
   static $columns = [
     'accountId',
+    'amountNative',
     'amountUsd',
     'createdAt',
+    'currencyCode',
     'customerId',
     'date',
+    'entryRate',
     'id',
     'note',
     'orderId',
@@ -193,13 +196,19 @@ export class CustomerPaymentSchema extends BaseModel {
   @column()
   declare accountId: bigint | number | null
   @column()
+  declare amountNative: string | null
+  @column()
   declare amountUsd: string
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column()
+  declare currencyCode: string | null
+  @column()
   declare customerId: bigint | number
   @column.date()
   declare date: DateTime
+  @column()
+  declare entryRate: string | null
   @column({ isPrimary: true })
   declare id: bigint | number
   @column()
@@ -443,12 +452,19 @@ export class MachineExpenseSchema extends BaseModel {
 
 export class MachineSchema extends BaseModel {
   static $columns = [
+    'acquisitionAmountNative',
     'acquisitionCost',
     'acquisitionDate',
     'active',
+    'amountPaidUsd',
+    'balanceUsd',
     'brand',
     'createdAt',
+    'creditDueDate',
+    'entryCurrencyCode',
+    'entryRate',
     'id',
+    'isCredit',
     'location',
     'model',
     'name',
@@ -460,17 +476,31 @@ export class MachineSchema extends BaseModel {
   ] as const
   $columns = MachineSchema.$columns
   @column()
+  declare acquisitionAmountNative: string | null
+  @column()
   declare acquisitionCost: string | null
   @column.date()
   declare acquisitionDate: DateTime | null
   @column()
   declare active: boolean
   @column()
+  declare amountPaidUsd: string
+  @column()
+  declare balanceUsd: string
+  @column()
   declare brand: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
+  @column.date()
+  declare creditDueDate: DateTime | null
+  @column()
+  declare entryCurrencyCode: string | null
+  @column()
+  declare entryRate: string | null
   @column({ isPrimary: true })
   declare id: bigint | number
+  @column()
+  declare isCredit: boolean
   @column()
   declare location: string | null
   @column()
@@ -1137,9 +1167,12 @@ export class SalesShiftSchema extends BaseModel {
 export class SupplierPaymentSchema extends BaseModel {
   static $columns = [
     'accountId',
+    'amountNative',
     'amountUsd',
     'createdAt',
+    'currencyCode',
     'date',
+    'entryRate',
     'id',
     'note',
     'purchaseId',
@@ -1150,11 +1183,17 @@ export class SupplierPaymentSchema extends BaseModel {
   @column()
   declare accountId: bigint | number | null
   @column()
+  declare amountNative: string | null
+  @column()
   declare amountUsd: string
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
+  @column()
+  declare currencyCode: string | null
   @column.date()
   declare date: DateTime
+  @column()
+  declare entryRate: string | null
   @column({ isPrimary: true })
   declare id: bigint | number
   @column()
