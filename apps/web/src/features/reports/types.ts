@@ -3,6 +3,8 @@ export type AccountStatementMovementType =
   | 'customer_payment'
   | 'purchase'
   | 'supplier_payment'
+  | 'machine_payment'
+  | 'machine_credit'
   | 'expense'
   | 'machine_expense'
   | 'income'

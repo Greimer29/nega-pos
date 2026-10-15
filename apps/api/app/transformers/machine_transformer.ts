@@ -1,5 +1,6 @@
 import type MachineExpense from '#models/machine_expense'
 import type Machine from '#models/machine'
+import type MachinePayment from '#models/machine_payment'
 import type Supplier from '#models/supplier'
 import { serializeAccountResumen } from '#transformers/account_transformer'
 import { BaseTransformer } from '@adonisjs/core/transformers'
@@ -16,6 +17,7 @@ export default class MachineTransformer extends BaseTransformer<Machine> {
     extra: {
       totalSpent?: string
       expenses?: Array<ReturnType<typeof serializeMachineExpense> | Record<string, unknown>>
+      payments?: Array<ReturnType<typeof serializeMachinePayment>>
     } = {}
   ) {
     return {
@@ -27,6 +29,13 @@ export default class MachineTransformer extends BaseTransformer<Machine> {
       serialNumber: this.resource.serialNumber,
       acquisitionDate: this.resource.acquisitionDate?.toISODate() ?? null,
       acquisitionCost: this.resource.acquisitionCost,
+      acquisitionAmountNative: this.resource.acquisitionAmountNative,
+      entryCurrencyCode: this.resource.entryCurrencyCode,
+      entryRate: this.resource.entryRate,
+      isCredit: Boolean(this.resource.isCredit),
+      amountPaidUsd: this.resource.amountPaidUsd ?? '0.0000',
+      balanceUsd: this.resource.balanceUsd ?? '0.0000',
+      creditDueDate: this.resource.creditDueDate?.toISODate() ?? null,
       status: this.resource.status,
       location: this.resource.location,
       notes: this.resource.notes,
@@ -35,6 +44,7 @@ export default class MachineTransformer extends BaseTransformer<Machine> {
       updatedAt: this.resource.updatedAt,
       ...(extra.totalSpent !== undefined ? { totalSpent: extra.totalSpent } : {}),
       ...(extra.expenses !== undefined ? { expenses: extra.expenses } : {}),
+      ...(extra.payments !== undefined ? { payments: extra.payments } : {}),
     }
   }
 }
@@ -44,9 +54,27 @@ export function serializeMachine(
   extra: {
     totalSpent?: string
     expenses?: Array<ReturnType<typeof serializeMachineExpense> | Record<string, unknown>>
+    payments?: Array<ReturnType<typeof serializeMachinePayment>>
   } = {}
 ) {
   return new MachineTransformer(machine).toObject(extra)
+}
+
+export function serializeMachinePayment(payment: MachinePayment) {
+  return {
+    id: Number(payment.id),
+    machineId: Number(payment.machineId),
+    accountId: payment.accountId ? Number(payment.accountId) : null,
+    amountUsd: payment.amountUsd,
+    currencyCode: payment.currencyCode,
+    entryRate: payment.entryRate,
+    amountNative: payment.amountNative,
+    date: payment.date.toISODate(),
+    note: payment.note,
+    createdAt: payment.createdAt,
+    updatedAt: payment.updatedAt,
+    ...(payment.account ? { account: serializeAccountResumen(payment.account) } : {}),
+  }
 }
 
 export function serializeMachineExpense(expense: MachineExpense) {

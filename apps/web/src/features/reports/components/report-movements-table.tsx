@@ -31,6 +31,10 @@ function movementLink(movement: AccountStatementMovement): string | null {
       return movement.customerId ? `/customers/${movement.customerId}` : null
     case 'supplier_payment':
       return movement.supplierId ? `/suppliers/${movement.supplierId}` : null
+    case 'machine_payment':
+      return `/machines`
+    case 'machine_credit':
+      return `/machines/${movement.referenceId}`
     case 'purchase':
       return `/purchases/${movement.referenceId}`
     case 'machine_expense':
@@ -58,14 +62,15 @@ function paymentSortValue(movement: AccountStatementMovement): string {
     return 'cash'
   }
   if (movement.type === 'customer_payment') return 'abono'
-  if (movement.type === 'supplier_payment') return 'pago'
+  if (movement.type === 'supplier_payment' || movement.type === 'machine_payment') return 'pago'
   return ''
 }
 
 function amountSortValue(movement: AccountStatementMovement): number {
   const isCreditBalance =
     (movement.type === 'sale' && movement.isCreditSale) ||
-    (movement.type === 'purchase' && movement.isCreditPurchase)
+    (movement.type === 'purchase' && movement.isCreditPurchase) ||
+    movement.type === 'machine_credit'
   if (isCreditBalance) {
     return Number(movement.creditBalanceUsd ?? movement.amountUsd)
   }
@@ -154,6 +159,23 @@ function PaymentTypeCell({ movement }: { movement: AccountStatementMovement }) {
       <span className="inline-flex items-center rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-medium text-teal-900">
         Pago
       </span>
+    )
+  }
+
+  if (movement.type === 'machine_payment') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-cyan-50 px-2.5 py-0.5 text-xs font-medium text-cyan-900">
+        Abono máquina
+      </span>
+    )
+  }
+
+  if (movement.type === 'machine_credit') {
+    return (
+      <CreditPurchaseBadge
+        creditDueDate={movement.creditDueDate ?? null}
+        reportStatus={movement.creditReportStatus}
+      />
     )
   }
 

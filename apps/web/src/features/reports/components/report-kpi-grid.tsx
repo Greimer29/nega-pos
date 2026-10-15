@@ -37,7 +37,7 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
   const pendingPayablesDetail =
     overduePayablesUsd > 0
       ? `${formatUsd(summary.overduePayablesUsd)} vencidas. Saldo con proveedores; no forma parte del flujo de caja hasta el abono.`
-      : 'Saldo pendiente con proveedores. No forma parte del flujo de caja hasta el abono.'
+      : 'Saldo pendiente con proveedores y máquinas a crédito. No forma parte del flujo de caja hasta el abono.'
   const overdueReceivablesUsd = Number(summary.overdueReceivablesUsd ?? 0)
   const pendingReceivablesDetail =
     overdueReceivablesUsd > 0
@@ -87,7 +87,7 @@ export function ReportKpiGrid({ summary, filterSearch }: ReportKpiGridProps) {
       icon={ShoppingCart}
       label="Pagos a proveedores"
       value={formatUsd(summary.purchasesUsd)}
-      detail="Incluye compras de contado y abonos. El inventario permanece en la empresa; no es un gasto operativo."
+      detail="Incluye compras de contado, abonos a proveedores y abonos a máquinas a crédito. No es un gasto operativo del turno."
       tone="purchase"
       href={reportCategoryHref('compras', filterSearch)}
     />
