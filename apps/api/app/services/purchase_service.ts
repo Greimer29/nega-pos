@@ -42,6 +42,7 @@ import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import { nowInAppZone } from '#utils/app_timezone'
 import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
 
 export type PurchaseInput = {
@@ -1135,7 +1136,7 @@ export default class PurchaseService {
     if (!supplier.creditDays || supplier.creditDays <= 0) {
       return null
     }
-    return DateTime.now().plus({ days: supplier.creditDays }).toISODate()
+    return nowInAppZone().plus({ days: supplier.creditDays }).toISODate()
   }
 
   private assertBorrador(purchase: Purchase) {

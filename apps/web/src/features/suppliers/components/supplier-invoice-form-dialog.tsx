@@ -33,6 +33,7 @@ import {
 } from '@/features/purchases/utils/purchase-entry-currency'
 import { useCreateSupplierInvoiceMutation } from '@/features/suppliers/hooks/use-suppliers'
 import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
+import { addLocalDaysIsoDate, todayLocalIsoDate } from '@/lib/format-date'
 import { cn } from '@/lib/utils'
 
 const schema = z.object({
@@ -78,7 +79,7 @@ export function SupplierInvoiceFormDialog({
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      date: new Date().toISOString().slice(0, 10),
+      date: todayLocalIsoDate(),
       amount: '',
       invoice_number: '',
       note: '',
@@ -94,12 +95,10 @@ export function SupplierInvoiceFormDialog({
     setAccountId(null)
     setCurrencyCode(baseCurrencyCode)
     setEntryRate(catalogRateForCurrency(currencies, baseCurrencyCode))
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayLocalIsoDate()
     let due = ''
     if (defaultCreditDays && defaultCreditDays > 0) {
-      const d = new Date()
-      d.setDate(d.getDate() + defaultCreditDays)
-      due = d.toISOString().slice(0, 10)
+      due = addLocalDaysIsoDate(defaultCreditDays, today)
     }
     reset({
       date: today,

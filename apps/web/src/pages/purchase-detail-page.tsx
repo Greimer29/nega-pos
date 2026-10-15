@@ -82,6 +82,7 @@ import {
   lookupProductByBarcode,
 } from '@/lib/barcode-scan'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
+import { addLocalDaysIsoDate, todayLocalIsoDate } from '@/lib/format-date'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { parseDecimalInput } from '@/lib/numeric-input'
 import {
@@ -196,9 +197,7 @@ function localItemUnitCode(item: LocalPurchaseItem) {
 }
 
 function addDaysIso(baseIso: string, days: number) {
-  const date = new Date(`${baseIso}T12:00:00`)
-  date.setDate(date.getDate() + days)
-  return date.toISOString().slice(0, 10)
+  return addLocalDaysIsoDate(days, baseIso)
 }
 
 function parseDbItemId(localId: string): number | null {
@@ -1153,7 +1152,7 @@ export function PurchaseDetallePage() {
                               markDirty()
                               if (checked) {
                                 const days = supplier?.creditDays ?? 30
-                                const base = purchase?.date ?? new Date().toISOString().slice(0, 10)
+                                const base = purchase?.date ?? todayLocalIsoDate()
                                 setCreditDueDate(addDaysIso(base, days))
                               } else {
                                 setCreditDueDate('')

@@ -9,9 +9,9 @@ import { normalizePhoneToE164 } from '#utils/phone'
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
+import { todayIsoDate } from '#utils/app_timezone'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import db from '@adonisjs/lucid/services/db'
-import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
 
 const IMAGE_MIME: Record<string, string> = {
@@ -90,7 +90,7 @@ export default class CustomerService {
     }
 
     const ids = customers.map((customer) => Number(customer.id))
-    const hoy = DateTime.now().toISODate()!
+    const hoy = todayIsoDate()
 
     const rows = await db
       .from('sales')

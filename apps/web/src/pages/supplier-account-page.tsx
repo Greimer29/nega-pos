@@ -13,6 +13,7 @@ import { SupplierInvoiceFormDialog } from '@/features/suppliers/components/suppl
 import { useSupplierAccountStatementQuery } from '@/features/suppliers/hooks/use-suppliers'
 import { computeSupplierAccountSummary } from '@/features/suppliers/utils/supplier-account-summary'
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
+import { todayLocalIsoDate } from '@/lib/format-date'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { cn } from '@/lib/utils'
 import { pageHeaderClass } from '@/components/layout/responsive-toolbar'
@@ -40,7 +41,7 @@ function purchaseStatusBadge(status: string) {
 function creditEstado(creditDueDate: string | null, balanceUsd: string) {
   if (Number(balanceUsd) <= 0) return { label: 'Pagada', className: 'bg-emerald-100 text-emerald-800' }
   if (!creditDueDate) return { label: 'Vigente', className: 'bg-amber-100 text-amber-800' }
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocalIsoDate()
   if (creditDueDate < today) return { label: 'Vencida', className: 'bg-red-100 text-red-800' }
   return { label: 'Vigente', className: 'bg-amber-100 text-amber-800' }
 }

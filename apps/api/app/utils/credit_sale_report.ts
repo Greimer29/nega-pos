@@ -1,11 +1,11 @@
-import { DateTime } from 'luxon'
+import { todayIsoDate } from '#utils/app_timezone'
 
 export type CreditSaleReportStatus = 'pending' | 'overdue' | 'settled'
 
 export function creditSaleReportStatus(
   balanceUsd: number,
   creditDueDate: string | null,
-  asOfDate: string = DateTime.now().toISODate()!
+  asOfDate: string = todayIsoDate()
 ): CreditSaleReportStatus | null {
   if (!creditDueDate) {
     return null

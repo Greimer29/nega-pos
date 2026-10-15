@@ -21,6 +21,7 @@ import { SupplierFormDialog } from '@/features/suppliers/components/supplier-for
 import { useSuppliersQuery } from '@/features/suppliers/hooks/use-suppliers'
 import type { Supplier } from '@/features/suppliers/types'
 import { notifyApiError } from '@/features/notifications/query-error-state'
+import { todayLocalIsoDate } from '@/lib/format-date'
 
 const schema = z.object({
   supplier_id: z.union([z.literal(''), z.coerce.number().min(1)]).optional(),
@@ -54,7 +55,7 @@ export function NuevaPurchaseDialog({ open, onOpenChange }: NuevaPurchaseDialogP
     resolver: zodResolver(schema),
     defaultValues: {
       supplier_id: '',
-      date: new Date().toISOString().slice(0, 10),
+      date: todayLocalIsoDate(),
     },
   })
 

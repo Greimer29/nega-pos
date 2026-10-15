@@ -1,4 +1,5 @@
 import { formatFecha } from '@/features/purchases/constants'
+import { todayLocalIsoDate } from '@/lib/format-date'
 import { cn } from '@/lib/utils'
 
 type CreditPurchaseBadgeProps = {
@@ -30,7 +31,7 @@ function resolveStatus(
     return 'settled'
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocalIsoDate()
   return creditDueDate < today ? 'overdue' : 'pending'
 }
 

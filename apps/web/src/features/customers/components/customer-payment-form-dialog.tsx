@@ -30,6 +30,7 @@ import {
   isValidPurchaseRate,
   nativeToBase,
 } from '@/features/purchases/utils/purchase-entry-currency'
+import { todayLocalIsoDate } from '@/lib/format-date'
 
 type CustomerPaymentFormDialogProps = {
   open: boolean
@@ -50,7 +51,7 @@ export function CustomerPaymentFormDialog({
   maxAmountUsd,
   onSuccess,
 }: CustomerPaymentFormDialogProps) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocalIsoDate()
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(today)
   const [accountId, setAccountId] = useState<number | null>(null)
