@@ -1,10 +1,13 @@
 import PagoClienteExcedeSaldoException from '#exceptions/pago_cliente_excede_saldo_exception'
+import PagoClienteMontoInvalidoException from '#exceptions/pago_cliente_monto_invalido_exception'
 import ClienteNoEncontradoException from '#exceptions/cliente_no_encontrado_exception'
 import VentaNoEncontradaException from '#exceptions/venta_no_encontrada_exception'
 import Customer from '#models/customer'
 import CustomerPayment from '#models/customer_payment'
 import Sale from '#models/sale'
 import AccountService from '#services/account_service'
+import CurrencyService from '#services/currency_service'
+import { resolveMonetaryEntryAmount } from '#utils/monetary_entry'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 
@@ -13,7 +16,11 @@ export type CustomerPaymentInput = {
   sale_id?: number | null
   order_id?: number | null
   account_id?: number | null
-  amount_usd: number
+  /** Monto en moneda de ingreso. Preferido; si falta se usa amount_usd (base). */
+  amount?: number
+  amount_usd?: number
+  currency_code?: string
+  entry_rate?: number
   date: string
   note?: string
 }
@@ -27,6 +34,7 @@ export type CustomerAccountStatement = {
 
 export default class CustomerPaymentService {
   private accountService = new AccountService()
+  private currencyService = new CurrencyService()
 
   async registrar(input: CustomerPaymentInput): Promise<CustomerPayment> {
     const customer = await Customer.find(input.customer_id)
@@ -38,8 +46,21 @@ export default class CustomerPaymentService {
       await this.accountService.assertActiva(input.account_id)
     }
 
+    const amountNative = input.amount ?? input.amount_usd
+    if (amountNative === undefined || !(amountNative > 0)) {
+      throw new PagoClienteMontoInvalidoException()
+    }
+
+    const monetary = await resolveMonetaryEntryAmount({
+      amountNative,
+      currencyCode: input.currency_code,
+      entryRate: input.entry_rate,
+      currencyService: this.currencyService,
+    })
+    const amountUsd = Number(monetary.amountUsd)
+
     return db.transaction(async (trx) => {
-      let remaining = input.amount_usd
+      let remaining = amountUsd
 
       if (input.sale_id) {
         const sale = await Sale.query({ client: trx })
@@ -84,7 +105,7 @@ export default class CustomerPaymentService {
         throw new PagoClienteExcedeSaldoException()
       }
 
-      const appliedAmount = input.amount_usd - remaining
+      const appliedAmount = amountUsd - remaining
 
       return CustomerPayment.create(
         {
@@ -93,6 +114,9 @@ export default class CustomerPaymentService {
           orderId: input.order_id ?? null,
           accountId: input.account_id ?? null,
           amountUsd: appliedAmount.toFixed(4),
+          currencyCode: monetary.currencyCode,
+          entryRate: monetary.entryRate,
+          amountNative: monetary.amountNative,
           date: DateTime.fromISO(input.date),
           note: input.note?.trim() || null,
         },

@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,9 +14,22 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { AccountSelect } from '@/features/accounts/components/account-select'
-import { useBaseCurrencyQuery } from '@/features/currencies/hooks/use-currencies'
+import {
+  EntryCurrencyRateFields,
+  catalogRateForCurrency,
+} from '@/features/currencies/components/entry-currency-rate-fields'
+import {
+  useActiveCurrenciesQuery,
+  useBaseCurrencyQuery,
+} from '@/features/currencies/hooks/use-currencies'
+import { currencySymbol } from '@/features/currencies/utils/convert-currency'
 import { useCreateSupplierPaymentMutation } from '@/features/suppliers/hooks/use-suppliers'
 import { notifyApiError, notifyFormError } from '@/features/notifications/query-error-state'
+import {
+  isPurchaseEntryInNative,
+  isValidPurchaseRate,
+  nativeToBase,
+} from '@/features/purchases/utils/purchase-entry-currency'
 
 type PurchasePaymentFormDialogProps = {
   open: boolean
@@ -42,18 +55,51 @@ export function PurchasePaymentFormDialog({
   const [note, setNote] = useState('')
 
   const paymentMutation = useCreateSupplierPaymentMutation()
-  const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
+  const { data: baseCurrencyCode = 'USD' } = useBaseCurrencyQuery()
+  const { data: currencies = [] } = useActiveCurrenciesQuery()
+  const [currencyCode, setCurrencyCode] = useState(baseCurrencyCode)
+  const [entryRate, setEntryRate] = useState('')
+
+  const entryInNative = isPurchaseEntryInNative(currencyCode, baseCurrencyCode)
+  const rateNum = Number(entryRate)
+  const amountNum = Number(amount)
+  const basePreview = useMemo(() => {
+    if (!entryInNative || !isValidPurchaseRate(rateNum) || !(amountNum > 0)) return null
+    return nativeToBase(amountNum, rateNum)
+  }, [entryInNative, rateNum, amountNum])
+  const symbol = currencySymbol(currencyCode)
+
+  useEffect(() => {
+    if (open) {
+      setAmount('')
+      setDate(today)
+      setAccountId(null)
+      setNote('')
+      setCurrencyCode(baseCurrencyCode)
+      setEntryRate(catalogRateForCurrency(currencies, baseCurrencyCode))
+    }
+  }, [open, today, baseCurrencyCode, currencies])
+
+  function handleCurrencyChange(code: string) {
+    setCurrencyCode(code)
+    setEntryRate(catalogRateForCurrency(currencies, code))
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
 
-    const amountNum = Number(amount)
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
       notifyFormError('Ingresá un monto válido.')
       return
     }
 
-    if (maxAmountUsd !== undefined && amountNum > maxAmountUsd + 0.0001) {
+    if (entryInNative && !isValidPurchaseRate(rateNum)) {
+      notifyFormError('Indicá una tasa válida para la moneda elegida.')
+      return
+    }
+
+    const amountUsd = entryInNative ? nativeToBase(amountNum, rateNum) : amountNum
+    if (maxAmountUsd !== undefined && amountUsd > maxAmountUsd + 0.0001) {
       notifyFormError(
         `El monto no puede superar el saldo pendiente (${maxAmountUsd.toFixed(4)} ${baseCurrencyCode}).`
       )
@@ -66,9 +112,11 @@ export function PurchasePaymentFormDialog({
         payload: {
           purchase_id: purchaseId ?? null,
           account_id: accountId,
-          amount_usd: amountNum,
+          amount: amountNum,
           date,
           note: note.trim() || undefined,
+          currency_code: currencyCode,
+          ...(entryInNative ? { entry_rate: rateNum } : {}),
         },
       })
       setAmount('')
@@ -89,12 +137,29 @@ export function PurchasePaymentFormDialog({
             {purchaseId
               ? 'El abono se aplicará a esta compra.'
               : 'El abono se aplicará a las compras a crédito más antiguas.'}
+            {maxAmountUsd !== undefined
+              ? ` Saldo máx.: ${maxAmountUsd.toFixed(2)} ${baseCurrencyCode}.`
+              : null}
           </DialogDescription>
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
+          <EntryCurrencyRateFields
+            currencyCode={currencyCode}
+            onCurrencyChange={handleCurrencyChange}
+            rate={entryRate}
+            onRateChange={setEntryRate}
+            preview={
+              basePreview != null ? (
+                <p className="text-muted-foreground text-xs">
+                  Equivale a {basePreview.toFixed(4)} {baseCurrencyCode}.
+                </p>
+              ) : null
+            }
+          />
+
           <div className="space-y-2">
-            <Label htmlFor="payment-amount">Monto ({baseCurrencyCode}) *</Label>
+            <Label htmlFor="payment-amount">Monto ({symbol}) *</Label>
             <MoneyInput
               id="payment-amount"
               min="0"
@@ -102,7 +167,7 @@ export function PurchasePaymentFormDialog({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder={
-                maxAmountUsd !== undefined
+                maxAmountUsd !== undefined && !entryInNative
                   ? `Máx. ${maxAmountUsd.toFixed(2)}`
                   : undefined
               }
@@ -123,7 +188,12 @@ export function PurchasePaymentFormDialog({
 
           <div className="space-y-2">
             <Label htmlFor="payment-note">Nota</Label>
-            <Textarea id="payment-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+            <Textarea
+              id="payment-note"
+              rows={2}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
           </div>
 
           <DialogFooter>

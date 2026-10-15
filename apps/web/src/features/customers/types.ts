@@ -81,7 +81,11 @@ export type CustomerPaymentInput = {
   sale_id?: number | null
   order_id?: number | null
   account_id?: number | null
-  amount_usd: number
+  /** Monto en moneda de ingreso. Preferido frente a amount_usd. */
+  amount?: number
+  amount_usd?: number
+  currency_code?: string
+  entry_rate?: number
   date: string
   note?: string
 }
@@ -103,6 +107,9 @@ export type CustomerPayment = {
   saleId: number | null
   orderId: number | null
   amountUsd: string
+  currencyCode?: string | null
+  entryRate?: string | null
+  amountNative?: string | null
   date: string
   note: string | null
 }

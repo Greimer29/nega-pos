@@ -179,10 +179,13 @@ export class CurrencySchema extends BaseModel {
 export class CustomerPaymentSchema extends BaseModel {
   static $columns = [
     'accountId',
+    'amountNative',
     'amountUsd',
     'createdAt',
+    'currencyCode',
     'customerId',
     'date',
+    'entryRate',
     'id',
     'note',
     'orderId',
@@ -193,13 +196,19 @@ export class CustomerPaymentSchema extends BaseModel {
   @column()
   declare accountId: bigint | number | null
   @column()
+  declare amountNative: string | null
+  @column()
   declare amountUsd: string
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column()
+  declare currencyCode: string | null
+  @column()
   declare customerId: bigint | number
   @column.date()
   declare date: DateTime
+  @column()
+  declare entryRate: string | null
   @column({ isPrimary: true })
   declare id: bigint | number
   @column()
@@ -1158,9 +1167,12 @@ export class SalesShiftSchema extends BaseModel {
 export class SupplierPaymentSchema extends BaseModel {
   static $columns = [
     'accountId',
+    'amountNative',
     'amountUsd',
     'createdAt',
+    'currencyCode',
     'date',
+    'entryRate',
     'id',
     'note',
     'purchaseId',
@@ -1171,11 +1183,17 @@ export class SupplierPaymentSchema extends BaseModel {
   @column()
   declare accountId: bigint | number | null
   @column()
+  declare amountNative: string | null
+  @column()
   declare amountUsd: string
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
+  @column()
+  declare currencyCode: string | null
   @column.date()
   declare date: DateTime
+  @column()
+  declare entryRate: string | null
   @column({ isPrimary: true })
   declare id: bigint | number
   @column()

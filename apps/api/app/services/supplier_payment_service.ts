@@ -1,4 +1,5 @@
 import PagoProveedorExcedeSaldoException from '#exceptions/pago_proveedor_excede_saldo_exception'
+import PagoProveedorMontoInvalidoException from '#exceptions/pago_proveedor_monto_invalido_exception'
 import SupplierNoEncontradoException from '#exceptions/proveedor_no_encontrado_exception'
 import PurchaseNoEncontradaException from '#exceptions/compra_no_encontrada_exception'
 import Expense from '#models/expense'
@@ -6,6 +7,8 @@ import Supplier from '#models/supplier'
 import SupplierPayment from '#models/supplier_payment'
 import Purchase from '#models/purchase'
 import AccountService from '#services/account_service'
+import CurrencyService from '#services/currency_service'
+import { resolveMonetaryEntryAmount } from '#utils/monetary_entry'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 
@@ -13,7 +16,11 @@ export type SupplierPaymentInput = {
   supplier_id: number
   purchase_id?: number | null
   account_id?: number | null
-  amount_usd: number
+  /** Monto en moneda de ingreso. Preferido; si falta se usa amount_usd (base). */
+  amount?: number
+  amount_usd?: number
+  currency_code?: string
+  entry_rate?: number
   date: string
   note?: string
 }
@@ -28,6 +35,7 @@ export type SupplierAccountStatement = {
 
 export default class SupplierPaymentService {
   private accountService = new AccountService()
+  private currencyService = new CurrencyService()
 
   async registrar(input: SupplierPaymentInput): Promise<SupplierPayment> {
     const supplier = await Supplier.find(input.supplier_id)
@@ -39,8 +47,21 @@ export default class SupplierPaymentService {
       await this.accountService.assertActiva(input.account_id)
     }
 
+    const amountNative = input.amount ?? input.amount_usd
+    if (amountNative === undefined || !(amountNative > 0)) {
+      throw new PagoProveedorMontoInvalidoException()
+    }
+
+    const monetary = await resolveMonetaryEntryAmount({
+      amountNative,
+      currencyCode: input.currency_code,
+      entryRate: input.entry_rate,
+      currencyService: this.currencyService,
+    })
+    const amountUsd = Number(monetary.amountUsd)
+
     return db.transaction(async (trx) => {
-      let remaining = input.amount_usd
+      let remaining = amountUsd
 
       if (input.purchase_id) {
         const purchase = await Purchase.query({ client: trx })
@@ -94,7 +115,7 @@ export default class SupplierPaymentService {
         throw new PagoProveedorExcedeSaldoException()
       }
 
-      const appliedAmount = input.amount_usd - remaining
+      const appliedAmount = amountUsd - remaining
 
       return SupplierPayment.create(
         {
@@ -102,6 +123,9 @@ export default class SupplierPaymentService {
           purchaseId: input.purchase_id ?? null,
           accountId: input.account_id ?? null,
           amountUsd: appliedAmount.toFixed(4),
+          currencyCode: monetary.currencyCode,
+          entryRate: monetary.entryRate,
+          amountNative: monetary.amountNative,
           date: DateTime.fromISO(input.date),
           note: input.note?.trim() || null,
         },

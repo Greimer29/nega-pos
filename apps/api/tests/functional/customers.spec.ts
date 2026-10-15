@@ -1,9 +1,11 @@
+import Currency from '#models/currency'
 import Customer from '#models/customer'
 import Order from '#models/order'
 import User from '#models/user'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
 import { resetTestSaleCodes, seedTestSale } from '#tests/helpers/seed_test_sale'
+import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
 
@@ -565,6 +567,62 @@ test.group('Customers API', (group) => {
     await sale.refresh()
     assert.equal(sale.balanceUsd, '10.0000')
     assert.equal(sale.amountPaidUsd, '0.0000')
+  })
+
+  test('POST /api/v1/customers/:id/payments accepts VES with entry_rate without changing catalog', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    await db.from('currencies').where('code', 'VES').update({ rate_per_usd: '100.0000' })
+
+    const customer = await Customer.create({
+      name: 'Cliente Abono VES',
+      type: 'CORPORATE',
+      creditDays: 30,
+      active: true,
+    })
+
+    const sale = await seedTestSale({
+      customerId: Number(customer.id),
+      paymentType: 'CREDIT',
+      totalUsd: '10.0000',
+      balanceUsd: '10.0000',
+      creditDueDate: DateTime.fromISO('2026-06-20'),
+      soldAt: DateTime.now().minus({ days: 2 }),
+      confirmedAt: DateTime.now().minus({ days: 2 }),
+      lines: [{ quantity: '1', unitPriceUsd: '10.0000' }],
+    })
+
+    const response = await client
+      .post(`/api/v1/customers/${customer.id}/payments`)
+      .loginAs(user)
+      .json({
+        sale_id: sale.id,
+        amount: 400,
+        currency_code: 'VES',
+        entry_rate: 40,
+        date: '2026-06-20',
+      })
+
+    response.assertStatus(200)
+    const payment = response.body().data.payment as {
+      amountUsd: string
+      currencyCode: string
+      entryRate: string
+      amountNative: string
+    }
+    assert.equal(payment.amountUsd, '10.0000')
+    assert.equal(payment.currencyCode, 'VES')
+    assert.equal(payment.entryRate, '40.000000')
+    assert.equal(payment.amountNative, '400.0000')
+
+    await sale.refresh()
+    assert.equal(sale.balanceUsd, '0.0000')
+    assert.equal(sale.amountPaidUsd, '10.0000')
+
+    const ves = await Currency.findByOrFail('code', 'VES')
+    assert.equal(ves.ratePerUsd, '100.0000')
   })
 
   test('GET /api/v1/customers/:id/image requires authentication', async ({ client }) => {
