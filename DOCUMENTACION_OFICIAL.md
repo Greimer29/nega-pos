@@ -397,14 +397,14 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda b
 | `currencies` | `code` (PK), `name`, `rate_per_usd` (unidades por 1 unidad de moneda base), `is_active` |
 | `payment_methods` | `code`, `name`, `is_active`, `sort_order` |
 | `app_settings` | `key` (PK); incluye `base_currency_code` (**por empresa**; en alta nueva default `USD`), tasa VES, margen, `business_profile`, `print_config` |
-| `customer_payments` | `customer_id`, `order_id?`, `sale_id?`, `amount_usd` (monto en moneda base), `payment_method_code`, `account_id` |
-| `supplier_payments` | `supplier_id`, `purchase_id?`, `amount_usd` (monto en moneda base), … |
+| `customer_payments` | `customer_id`, `order_id?`, `sale_id?`, `account_id?`, `amount_usd` (canónico en moneda base), `currency_code?`, `entry_rate?`, `amount_native?` |
+| `supplier_payments` | `supplier_id`, `purchase_id?`, `account_id?`, `amount_usd` (canónico en moneda base), `currency_code?`, `entry_rate?`, `amount_native?` |
 | `expenses` | `account_id`, `supplier_id?`, `machine_id?` (FK opcional a `machines`; gasto vinculado a máquina), `date`, `description`, `invoice_number?`, `amount_usd` (monto canónico en moneda base), `currency_code` (moneda de ingreso), `entry_rate` (unidades de moneda de ingreso por 1 de base; `null` si es base) |
 | `incomes` | `account_id`, `date`, `description`, `amount_usd` (monto canónico en moneda base), `currency_code`, `entry_rate` — aportes / entradas de dinero |
 
 **Moneda base:** configurable **por empresa** (`GET/PUT /api/v1/currencies/base`, permiso `settings.edit`). Al provisionar un tenant nuevo la base por defecto es **USD**; la empresa puede crear monedas/métodos de pago y cambiar la base. Semántica de tasas: *unidades de moneda por 1 unidad de base* (`base = nativo / tasa`, `nativo = base * tasa`). Las columnas `*_usd` conservan el nombre pero almacenan montos en la moneda base. (Cutover histórico a XAU aplica solo a BD con data transaccional previa.)
 
-**Tasa por documento (gastos, ingresos, compras, cobro contado):** el monto se ingresa en una moneda activa; la tasa default es `currencies.rate_per_usd`. Si el usuario la cambia, queda solo en ese registro (`entry_rate` en gastos/ingresos, `usd_rate` en compras/ventas) y **no** modifica el catálogo ni Configuración.
+**Tasa por documento (gastos, ingresos, compras, cobro contado, abonos cliente/proveedor/máquina):** el monto se ingresa en una moneda activa; la tasa default es `currencies.rate_per_usd`. Si el usuario la cambia, queda solo en ese registro (`entry_rate` en gastos/ingresos/abonos, `usd_rate` en compras/ventas) y **no** modifica el catálogo ni Configuración.
 
 #### Catálogo
 
@@ -466,7 +466,7 @@ Unidades de venta: `UND`, `PAR`, `CAJ`, `ROL`, `SET`, `MTS`, `KG`. Precios (`cos
 | Tabla | Campos clave |
 |-------|--------------|
 | `machines` | `name`, `type`, `brand`, `model`, `acquisition_cost`, `active`, `is_credit`, `amount_paid_usd`, `balance_usd`, `credit_due_date?` — si `is_credit`, el costo completo queda como CxP hasta abonar |
-| `machine_payments` | Abonos a máquinas a crédito: `machine_id`, `account_id?`, `amount_usd`, `date`, `note?`. Bajan `balance_usd` / suben `amount_paid_usd`. Salen de caja del negocio (flujo); no afectan el turno. |
+| `machine_payments` | Abonos a máquinas a crédito: `machine_id`, `account_id?`, `amount_usd`, `currency_code?`, `entry_rate?`, `amount_native?`, `date`, `note?`. Bajan `balance_usd` / suben `amount_paid_usd`. Salen de caja del negocio (flujo); no afectan el turno. |
 | `machine_expenses` | **Legacy (solo lectura de históricos):** `machine_id`, `category` (REPAIR/SUPPLY/MAINTENANCE/OTHER), `amount`, `receipt_file`. Los **altas nuevas** de gasto de máquina se registran en `expenses` con `machine_id`. |
 
 ### Relaciones principales
@@ -506,7 +506,7 @@ catalog_products ──< product_inventory_movements
 `POST /api/v1/suppliers/:id/invoices` (permiso `suppliers.payments`):
 
 - **Contado** (`is_credit: false`): crea un `purchase` `CONFIRMED` con `affects_inventory: false`, `is_credit: false`, `account_id` obligatorio, `amount_paid_usd = total`, `balance_usd = 0`. No toca inventario ni crea `expense`. Sale de caja del negocio (flujo / compras); **no** resta de ventas ni gastos del día.
-- **Crédito** (`is_credit: true`): crea un `purchase` ya `CONFIRMED` con `affects_inventory: false`, sin ítems, `balance_usd = total`, `account_id` null al alta. El **Abono** baja ese saldo y, si el abono trae `account_id`, **copia esa cuenta a la compra**. No toca inventario. En Reportes/Dashboard es **CxP** hasta el abono; el abono tampoco resta de ventas/gastos del día.
+- **Crédito** (`is_credit: true`): crea un `purchase` ya `CONFIRMED` con `affects_inventory: false`, sin ítems, `balance_usd = total`, `account_id` null al alta. El **Abono** (`POST /suppliers/:id/payments`) acepta `amount` nativo + `currency_code`/`entry_rate` (o `amount_usd` legacy), convierte a moneda base y baja ese saldo; si trae `account_id`, **copia esa cuenta a la compra**. No toca inventario. En Reportes/Dashboard es **CxP** hasta el abono; el abono tampoco resta de ventas/gastos del día.
 - **Gastos del día / cierre / ganancia:** solo `expenses` **sin** `supplier_id` (+ `machine_expenses` legacy). Facturas históricas guardadas como gasto con `supplier_id` se excluyen del día.
 
 ### Factura desde ficha de cliente (`customer_invoice_service.ts`)
@@ -514,8 +514,8 @@ catalog_products ──< product_inventory_movements
 `POST /api/v1/customers/:id/invoices` (permiso `customers.payments`):
 
 - **Contado** (`is_credit: false`): crea una `sale` `COMPLETED` con `payment_type=CASH`, sin líneas, `amount_paid_usd = total_usd`, `payment_method_code` obligatorio. No toca inventario ni exige turno abierto (`sales_shift_id` null). Aparece en el historial del estado de cuenta y suma a ventas/caja vía `total_usd`.
-- **Crédito** (`is_credit: true`): crea una `sale` `COMPLETED` con `payment_type=CREDIT`, sin líneas, `balance_usd = total`, requiere cliente con `credit_days > 0`. Vencimiento = `credit_due_date` del payload o fecha + días de crédito. El **Abono** baja ese saldo como en ventas a crédito del POS. Nota opcional en `sales.notes`.
-- UI: botón **Factura** en estado de cuenta / ficha del cliente; las ventas sin líneas se etiquetan «Sin ítems». Al abrir el diálogo, la **moneda de ingreso** arranca en la **moneda base** de la empresa (no en la del método de pago); el usuario puede cambiarla con el toggle. Mismo criterio que gastos, ingresos, compras y facturas de proveedor.
+- **Crédito** (`is_credit: true`): crea una `sale` `COMPLETED` con `payment_type=CREDIT`, sin líneas, `balance_usd = total`, requiere cliente con `credit_days > 0`. Vencimiento = `credit_due_date` del payload o fecha + días de crédito. El **Abono** (`POST /customers/:id/payments`) acepta `amount` nativo + `currency_code`/`entry_rate` (o `amount_usd` legacy), convierte a moneda base y baja ese saldo como en ventas a crédito del POS. Nota opcional en `sales.notes`.
+- UI: botón **Factura** / **Abono** en estado de cuenta / ficha del cliente; las ventas sin líneas se etiquetan «Sin ítems». Al abrir el diálogo, la **moneda de ingreso** arranca en la **moneda base** de la empresa (no en la del método de pago); el usuario puede cambiarla con el toggle. Mismo criterio que gastos, ingresos, compras, facturas de proveedor y abonos a máquina.
 
 ### Catálogo, fórmulas y tallas
 

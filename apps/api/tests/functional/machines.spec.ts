@@ -486,6 +486,54 @@ test.group('Machines API', (group) => {
     response.assertStatus(422)
   })
 
+  test('POST /api/v1/machines/:id/payments accepts VES with entry_rate without changing catalog', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    await db.from('currencies').where('code', 'VES').update({ rate_per_usd: '100.0000' })
+
+    const machine = await Machine.create({
+      name: 'Máquina abono VES',
+      type: 'OVERLOCK',
+      status: 'OPERATIONAL',
+      active: true,
+      acquisitionCost: '10.00',
+      isCredit: true,
+      amountPaidUsd: '0.0000',
+      balanceUsd: '10.0000',
+    })
+
+    const response = await client
+      .post(`/api/v1/machines/${machine.id}/payments`)
+      .loginAs(user)
+      .json({
+        amount: 400,
+        currency_code: 'VES',
+        entry_rate: 40,
+        date: '2026-06-15',
+      })
+
+    response.assertStatus(200)
+    const payment = response.body().data.payment as {
+      amountUsd: string
+      currencyCode: string
+      entryRate: string
+      amountNative: string
+    }
+    assert.equal(payment.amountUsd, '10.0000')
+    assert.equal(payment.currencyCode, 'VES')
+    assert.equal(payment.entryRate, '40.000000')
+    assert.equal(payment.amountNative, '400.0000')
+
+    await machine.refresh()
+    assert.equal(machine.balanceUsd, '0.0000')
+    assert.equal(machine.amountPaidUsd, '10.0000')
+
+    const ves = await Currency.findByOrFail('code', 'VES')
+    assert.equal(ves.ratePerUsd, '100.0000')
+  })
+
   test('DELETE /api/v1/machines/:id soft deletes when has expenses', async ({ client, assert }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
     const machine = await Machine.create({
