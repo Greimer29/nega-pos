@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { addLocalDaysIsoDate, formatFecha, todayLocalIsoDate } from './format-date'
+import {
+  addLocalDaysIsoDate,
+  formatFecha,
+  formatFechaInstante,
+  todayLocalIsoDate,
+} from './format-date'
 
 describe('formatFecha', () => {
   it('formats date-only ISO strings', () => {
@@ -14,6 +19,13 @@ describe('formatFecha', () => {
   it('does not shift UTC midnight to the previous local day', () => {
     // Antes: new Date(...).toLocaleDateString en Caracas mostraba 03/10.
     expect(formatFecha('2026-10-04T00:00:00.000Z')).toBe('04/10/2026')
+  })
+})
+
+describe('formatFechaInstante', () => {
+  it('uses America/Caracas calendar day for evening UTC timestamps', () => {
+    // 21:00 Caracas del 14 = 01:00 UTC del 15
+    expect(formatFechaInstante('2026-10-15T01:00:00.000Z')).toBe('14/10/2026')
   })
 })
 

@@ -7,7 +7,13 @@ import SalesShift from '#models/sales_shift'
 import TurnoNoEncontradoException from '#exceptions/turno_no_encontrado_exception'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
-import { currentMonthRange, nowInAppZone, todayIsoDate } from '#utils/app_timezone'
+import {
+  currentMonthRange,
+  datetimeRangeUtcSql,
+  nowInAppZone,
+  todayIsoDate,
+  toAppIsoDate,
+} from '#utils/app_timezone'
 import {
   creditPurchaseCountsTowardPeriodTotal,
   creditPurchaseReportAmountUsd,
@@ -631,7 +637,8 @@ export default class DashboardService {
     if (options.salesShiftId) {
       lineQuery.where('sales.sales_shift_id', options.salesShiftId)
     } else if (options.date) {
-      lineQuery.whereRaw('DATE(sales.sold_at) = ?', [options.date])
+      const { fromSql, toExclusiveSql } = datetimeRangeUtcSql(options.date, options.date)
+      lineQuery.where('sales.sold_at', '>=', fromSql).where('sales.sold_at', '<', toExclusiveSql)
     } else {
       return []
     }
@@ -1031,11 +1038,12 @@ export default class DashboardService {
     let prevTotal = 0
 
     for (const bucket of buckets) {
+      const { fromSql, toExclusiveSql } = datetimeRangeUtcSql(bucket.desde, bucket.hasta)
       const row = await db
         .from('sales')
         .whereIn('sales.status', [...SALE_STATUSES])
-        .whereRaw('DATE(sales.sold_at) >= ?', [bucket.desde])
-        .whereRaw('DATE(sales.sold_at) <= ?', [bucket.hasta])
+        .where('sales.sold_at', '>=', fromSql)
+        .where('sales.sold_at', '<', toExclusiveSql)
         .select(db.raw('COALESCE(SUM(sales.total_usd), 0) as total_usd'))
         .first()
 
@@ -1125,7 +1133,7 @@ export default class DashboardService {
       }
       salesShiftId = Number(shift.id)
       shiftForExpenses = shift
-      date = shift.openedAt.toISO()!.slice(0, 10)
+      date = toAppIsoDate(shift.openedAt)
     } else {
       date = input?.date?.trim() || todayIsoDate()
     }
@@ -1139,7 +1147,10 @@ export default class DashboardService {
     if (salesShiftId) {
       salesQuery.where('sales.sales_shift_id', salesShiftId)
     } else {
-      salesQuery.whereRaw('DATE(sales.confirmed_at) = ?', [date])
+      const { fromSql, toExclusiveSql } = datetimeRangeUtcSql(date, date)
+      salesQuery
+        .where('sales.confirmed_at', '>=', fromSql)
+        .where('sales.confirmed_at', '<', toExclusiveSql)
     }
 
     const sales = await salesQuery

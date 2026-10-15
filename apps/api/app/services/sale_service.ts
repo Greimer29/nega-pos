@@ -47,6 +47,7 @@ import {
 } from '#constants/inventory_units'
 import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
+import { datetimeRangeUtcSql, dayStartUtcSql } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
 import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
@@ -228,11 +229,12 @@ export default class SaleService {
     }
 
     if (filters.date_from) {
-      query.where('soldAt', '>=', filters.date_from)
+      query.where('soldAt', '>=', dayStartUtcSql(filters.date_from))
     }
 
     if (filters.date_to) {
-      query.where('soldAt', '<=', `${filters.date_to} 23:59:59`)
+      const { toExclusiveSql } = datetimeRangeUtcSql(filters.date_to, filters.date_to)
+      query.where('soldAt', '<', toExclusiveSql)
     }
 
     return query.paginate(page, perPage)

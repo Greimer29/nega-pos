@@ -72,7 +72,12 @@ function resolveDateRange(
 
 function formatSaleDate(value: string | null | undefined) {
   if (!value) return '—'
-  return new Date(value).toLocaleDateString('es-VE')
+  return new Date(value).toLocaleDateString('es-VE', {
+    timeZone: 'America/Caracas',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
 }
 
 function SaleStatusBadge({

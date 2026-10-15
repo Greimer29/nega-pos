@@ -43,6 +43,7 @@ import {
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
+import { datetimeRangeUtcSql, dayStartUtcSql } from '#utils/app_timezone'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
@@ -190,16 +191,18 @@ export default class OrderService {
     }
 
     if (filters.date_from) {
+      const fromSql = dayStartUtcSql(filters.date_from)
       query.where((builder) => {
-        builder.where('confirmedAt', '>=', `${filters.date_from} 00:00:00`).orWhere((sub) => {
+        builder.where('confirmedAt', '>=', fromSql).orWhere((sub) => {
           sub.whereNull('confirmedAt').where('orderDate', '>=', filters.date_from!)
         })
       })
     }
 
     if (filters.date_to) {
+      const { toExclusiveSql } = datetimeRangeUtcSql(filters.date_to, filters.date_to)
       query.where((builder) => {
-        builder.where('confirmedAt', '<=', `${filters.date_to} 23:59:59`).orWhere((sub) => {
+        builder.where('confirmedAt', '<', toExclusiveSql).orWhere((sub) => {
           sub.whereNull('confirmedAt').where('orderDate', '<=', filters.date_to!)
         })
       })

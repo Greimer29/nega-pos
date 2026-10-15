@@ -19,6 +19,14 @@ import Sale from '#models/sale'
 import Purchase from '#models/purchase'
 import SupplierPayment from '#models/supplier_payment'
 import db from '@adonisjs/lucid/services/db'
+import {
+  APP_TIMEZONE,
+  datetimeRangeUtcSql,
+  dayStartUtcSql,
+  nowInAppZone,
+  todayIsoDate,
+  toAppIsoDate,
+} from '#utils/app_timezone'
 
 import { DateTime } from 'luxon'
 
@@ -458,7 +466,7 @@ export default class ReportService {
       this.formatDisplay(this.currencyService.fromUsd(usd, displayCurrency, rates), displayCurrency)
 
     return {
-      asOf: DateTime.now().toISODate()!,
+      asOf: todayIsoDate(),
       summary: {
         displayCurrency,
         inventoryUsd: inventoryUsd.toFixed(4),
@@ -493,14 +501,16 @@ export default class ReportService {
       )
     }
 
-    const soldFrom = `${period.from} 00:00:00`
-    const soldTo = `${period.to} 23:59:59`
+    const { fromSql: soldFrom, toExclusiveSql: soldToExclusive } = datetimeRangeUtcSql(
+      period.from,
+      period.to
+    )
 
     const revenueRow = await db
       .from('sales')
       .whereIn('status', [...SALE_STATUSES])
       .where('sold_at', '>=', soldFrom)
-      .where('sold_at', '<=', soldTo)
+      .where('sold_at', '<', soldToExclusive)
       .select(db.raw('COALESCE(SUM(total_usd), 0) as revenue'))
       .first()
 
@@ -511,7 +521,7 @@ export default class ReportService {
       .leftJoin('materials', 'materials.id', 'sale_lines.material_id')
       .whereIn('sales.status', [...SALE_STATUSES])
       .where('sales.sold_at', '>=', soldFrom)
-      .where('sales.sold_at', '<=', soldTo)
+      .where('sales.sold_at', '<', soldToExclusive)
       .select(
         db.raw(
           `COALESCE(SUM(
@@ -615,10 +625,14 @@ export default class ReportService {
     let overduePayablesUsd = 0
 
     if (types.has('sales')) {
+      const { fromSql: soldFrom, toExclusiveSql: soldToExclusive } = datetimeRangeUtcSql(
+        period.from,
+        period.to
+      )
       const sales = await Sale.query()
         .whereIn('status', [...SALE_STATUSES])
-        .where('soldAt', '>=', `${period.from} 00:00:00`)
-        .where('soldAt', '<=', `${period.to} 23:59:59`)
+        .where('soldAt', '>=', soldFrom)
+        .where('soldAt', '<', soldToExclusive)
         .preload('saleLines')
         .preload('customer')
         .orderBy('soldAt', 'desc')
@@ -631,7 +645,11 @@ export default class ReportService {
           continue
         }
 
-        const saleDate = sale.soldAt?.toISODate() ?? sale.confirmedAt?.toISODate() ?? period.to
+        const saleDate = sale.soldAt
+          ? toAppIsoDate(sale.soldAt)
+          : sale.confirmedAt
+            ? toAppIsoDate(sale.confirmedAt)
+            : period.to
         const saleLabel = sale.guestName ?? sale.customer?.name ?? 'Cliente'
 
         const isCredit = sale.paymentType === 'CREDIT'
@@ -1371,7 +1389,7 @@ export default class ReportService {
         .from('sales')
         .where('status', 'COMPLETED')
         .where('payment_type', 'CASH')
-        .where('sold_at', '<', `${beforeDate} 00:00:00`)
+        .where('sold_at', '<', dayStartUtcSql(beforeDate))
         .select(db.raw('COALESCE(SUM(total_usd), 0) as total_usd'))
         .first()
       inflows += Number(cashSales?.total_usd ?? 0)
@@ -1537,14 +1555,7 @@ export default class ReportService {
       .select(db.raw('COALESCE(SUM(balance_usd), 0) as total'))
       .first()
 
-    const machinesRow = await db
-      .from('machines')
-      .where('is_credit', true)
-      .where('balance_usd', '>', 0)
-      .select(db.raw('COALESCE(SUM(balance_usd), 0) as total'))
-      .first()
-
-    return Number(purchasesRow?.total ?? 0) + Number(machinesRow?.total ?? 0)
+    return Number(purchasesRow?.total ?? 0)
   }
 
   private async computeMachinesValueUsd(): Promise<number> {
@@ -1572,7 +1583,7 @@ export default class ReportService {
       .where('paymentType', 'CREDIT')
       .where('balanceUsd', '>', 0)
 
-    const asOfDate = DateTime.now().toISODate()!
+    const asOfDate = todayIsoDate()
     let pendingReceivablesUsd = 0
     let overdueReceivablesUsd = 0
 
@@ -1752,20 +1763,18 @@ export default class ReportService {
 
   private resolvePeriod(filters: AccountStatementFilters) {
     if (filters.month) {
-      const start = DateTime.fromISO(`${filters.month}-01`)
+      const start = DateTime.fromISO(`${filters.month}-01`, { zone: APP_TIMEZONE })
 
       return {
         from: start.startOf('month').toISODate()!,
-
         to: start.endOf('month').toISODate()!,
       }
     }
 
-    const now = DateTime.now()
+    const now = nowInAppZone()
 
     return {
       from: filters.from ?? now.startOf('month').toISODate()!,
-
       to: filters.to ?? now.endOf('month').toISODate()!,
     }
   }

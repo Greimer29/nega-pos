@@ -1,7 +1,10 @@
+/** Zona calendario de tienda (Venezuela, sin DST). */
+export const APP_TIMEZONE = 'America/Caracas'
+
 /**
  * Formatea una fecha ISO (`YYYY-MM-DD` o datetime con `T`) a `DD/MM/YYYY`.
  * Usa la parte calendario del string (no convierte zona), para no correr el día
- * al formatear medianoche UTC en America/Caracas.
+ * al formatear medianoche UTC en America/Caracas (columnas DATE).
  */
 export function formatFecha(iso: string | null | undefined) {
   if (!iso) {
@@ -16,6 +19,28 @@ export function formatFecha(iso: string | null | undefined) {
   }
 
   return `${day}/${month}/${year}`
+}
+
+/**
+ * Fecha calendario de un instante (`sold_at`, `confirmed_at`, etc.) en zona de tienda.
+ * No usar para columnas DATE serializadas como medianoche UTC.
+ */
+export function formatFechaInstante(iso: string | null | undefined) {
+  if (!iso) {
+    return '—'
+  }
+
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) {
+    return '—'
+  }
+
+  return date.toLocaleDateString('es-VE', {
+    timeZone: APP_TIMEZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
 }
 
 /** Hoy en calendario local del navegador (`YYYY-MM-DD`), sin UTC de `toISOString`. */
@@ -37,7 +62,7 @@ export function addLocalDaysIsoDate(days: number, from = new Date()): string {
 }
 
 /**
- * Fecha y hora en locale venezolano.
+ * Fecha y hora en locale venezolano (zona de tienda).
  */
 export function formatFechaHora(iso: string | null | undefined) {
   if (!iso) {
@@ -52,5 +77,6 @@ export function formatFechaHora(iso: string | null | undefined) {
   return date.toLocaleString('es-VE', {
     dateStyle: 'short',
     timeStyle: 'short',
+    timeZone: APP_TIMEZONE,
   })
 }

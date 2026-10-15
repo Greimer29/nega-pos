@@ -8,6 +8,7 @@ import CurrencyService from '#services/currency_service'
 import { resolveMonetaryEntryAmount } from '#utils/monetary_entry'
 import { sumMachineExpenseRowsUsd } from '#utils/machine_expense_totals'
 import db from '@adonisjs/lucid/services/db'
+import { nowInAppZone } from '#utils/app_timezone'
 import { DateTime } from 'luxon'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import type { ExpenseValidatorPayload } from '#validators/expense'
@@ -208,7 +209,7 @@ export default class ExpenseService {
 
     const count = expenses.length
 
-    const now = DateTime.now()
+    const now = nowInAppZone()
     const weekStart = now.startOf('week').toISODate()!
     const weekEnd = now.endOf('week').toISODate()!
 

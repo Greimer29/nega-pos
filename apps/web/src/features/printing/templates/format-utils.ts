@@ -45,26 +45,31 @@ export function formatNativeMoney(sale: Sale, usdAmount: string | number): strin
   return formatMoneyNative(toNativeAmount(sale, Number(usdAmount)), resolveSaleCurrencyCode(sale))
 }
 
+const APP_TIMEZONE = 'America/Caracas'
+
 export function formatSaleDate(value: string | null | undefined): string {
   if (!value) return '—'
   return new Date(value).toLocaleString('es-VE', {
     dateStyle: 'short',
     timeStyle: 'short',
+    timeZone: APP_TIMEZONE,
   })
 }
 
 export function formatSaleDateOnly(value: string | null | undefined): string {
   if (!value) return '—'
-  const date = new Date(value)
-  const day = String(date.getDate()).padStart(2, '0')
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const year = date.getFullYear()
-  return `${day}/${month}/${year}`
+  return new Date(value).toLocaleDateString('es-VE', {
+    timeZone: APP_TIMEZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
 }
 
 export function formatSaleTimeOnly(value: string | null | undefined): string {
   if (!value) return '—'
   return new Date(value).toLocaleTimeString('es-VE', {
+    timeZone: APP_TIMEZONE,
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',

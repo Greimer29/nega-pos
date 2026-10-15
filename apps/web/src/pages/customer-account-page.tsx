@@ -14,7 +14,7 @@ import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
 import { cn } from '@/lib/utils'
 import { pageHeaderClass } from '@/components/layout/responsive-toolbar'
-import { formatFecha, todayLocalIsoDate } from '@/lib/format-date'
+import { formatFecha, formatFechaInstante, todayLocalIsoDate } from '@/lib/format-date'
 
 function creditEstado(creditDueDate: string | null, balanceUsd: string) {
   if (Number(balanceUsd) <= 0) return { label: 'Pagada', className: 'bg-emerald-100 text-emerald-800' }
@@ -176,7 +176,7 @@ export function CustomerAccountPage() {
                           </div>
                         </td>
                         <td className="text-muted-foreground px-4 py-3">
-                          {sale.soldAt ? formatFecha(sale.soldAt) : '—'}
+                          {sale.soldAt ? formatFechaInstante(sale.soldAt) : '—'}
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-xs">{sale.status}</span>

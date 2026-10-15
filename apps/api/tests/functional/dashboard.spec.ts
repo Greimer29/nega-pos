@@ -696,8 +696,9 @@ test.group('Dashboard API', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const hoy = DateTime.now().toISODate()!
-    const mes = DateTime.now().toFormat('yyyy-MM')
+    const hoy = todayIsoDate()
+    const mes = hoy.slice(0, 7)
+    const soldAt = DateTime.fromISO(`${hoy}T12:00:00`, { zone: 'America/Caracas' })
     const customer = await Customer.create({ name: 'Cliente coherencia', active: true })
     const product = await CatalogProduct.create({
       name: 'Producto coherencia reporte',
@@ -711,8 +712,8 @@ test.group('Dashboard API', (group) => {
 
     await seedDashboardSale({
       customerId: Number(customer.id),
-      soldAt: DateTime.fromISO(hoy),
-      confirmedAt: DateTime.now().minus({ days: 3 }),
+      soldAt,
+      confirmedAt: soldAt.minus({ days: 3 }),
       totalUsd: '60.0000',
       lines: [
         {
@@ -758,7 +759,8 @@ test.group('Dashboard API', (group) => {
     assert,
   }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
-    const hoy = DateTime.now().toISODate()!
+    const hoy = todayIsoDate()
+    const soldAt = DateTime.fromISO(`${hoy}T12:00:00`, { zone: 'America/Caracas' })
     const customer = await Customer.create({
       name: 'Cliente mixto coherencia',
       creditDays: 30,
@@ -776,7 +778,7 @@ test.group('Dashboard API', (group) => {
 
     await seedDashboardSale({
       customerId: Number(customer.id),
-      soldAt: DateTime.fromISO(hoy),
+      soldAt,
       totalUsd: '60.0000',
       lines: [
         {
@@ -792,11 +794,11 @@ test.group('Dashboard API', (group) => {
 
     await seedDashboardSale({
       customerId: Number(customer.id),
-      soldAt: DateTime.fromISO(hoy),
+      soldAt,
       paymentType: 'CREDIT',
       amountPaidUsd: '0.0000',
       balanceUsd: '40.0000',
-      creditDueDate: DateTime.now().plus({ days: 30 }),
+      creditDueDate: soldAt.plus({ days: 30 }),
       totalUsd: '40.0000',
       lines: [
         {
