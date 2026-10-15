@@ -632,10 +632,11 @@ test.group('Reports API', (group) => {
       costUsd: '40.0000',
       active: true,
     })
+    const soldAt = DateTime.fromISO('2026-06-01T12:00:00', { zone: 'America/Caracas' })
     await seedTestSale({
       customerId: Number(customer.id),
-      soldAt: DateTime.fromISO('2026-06-01'),
-      confirmedAt: DateTime.fromISO('2026-06-01'),
+      soldAt,
+      confirmedAt: soldAt,
       paymentType: 'CREDIT',
       amountPaidUsd: '0.0000',
       balanceUsd: '100.0000',
@@ -697,10 +698,11 @@ test.group('Reports API', (group) => {
       costUsd: '40.0000',
       active: true,
     })
+    const soldAt = DateTime.fromISO('2026-06-01T12:00:00', { zone: 'America/Caracas' })
     const sale = await seedTestSale({
       customerId: Number(customer.id),
-      soldAt: DateTime.fromISO('2026-06-01'),
-      confirmedAt: DateTime.fromISO('2026-06-01'),
+      soldAt,
+      confirmedAt: soldAt,
       paymentType: 'CREDIT',
       amountPaidUsd: '40.0000',
       balanceUsd: '60.0000',
