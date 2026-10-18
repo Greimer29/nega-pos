@@ -3,8 +3,6 @@ import CustomerNoEncontradoException from '#exceptions/cliente_no_encontrado_exc
 import DevolucionCantidadInvalidaException from '#exceptions/devolucion_cantidad_invalida_exception'
 import LineaVentaInvalidaException from '#exceptions/linea_venta_invalida_exception'
 import MaterialNoEncontradoException from '#exceptions/material_no_encontrado_exception'
-import MetodoPagoRequeridoException from '#exceptions/metodo_pago_requerido_exception'
-import PagosVentaInvalidosException from '#exceptions/pagos_venta_invalidos_exception'
 import OrderNoDevolvableException from '#exceptions/pedido_no_devolvable_exception'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
 import StockInsuficienteException from '#exceptions/stock_insuficiente_exception'
@@ -48,6 +46,7 @@ import {
 import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
 import { calculateSaleReturnAmounts } from '#utils/sale_return_amounts'
+import { prepareSalePaymentLines, type SalePaymentLineInput } from '#utils/sale_payment_lines'
 import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
 import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
@@ -100,12 +99,7 @@ export type UpdateSaleInput = {
   lines?: SaleLineInput[]
 }
 
-export type ConfirmSalePaymentInput = {
-  payment_method_code: string
-  amount_usd: number
-  currency_code?: string | null
-  usd_rate?: number | null
-}
+export type ConfirmSalePaymentInput = SalePaymentLineInput
 
 export type ConfirmSaleInput = {
   payment_type?: SalePaymentType
@@ -1260,32 +1254,7 @@ export default class SaleService {
       return
     }
 
-    const paymentLines: ConfirmSalePaymentInput[] =
-      input.payments && input.payments.length > 0
-        ? input.payments
-        : input.payment_method_code
-          ? [
-              {
-                payment_method_code: input.payment_method_code,
-                amount_usd: totalUsd,
-                currency_code: input.currency_code,
-                usd_rate: input.usd_rate,
-              },
-            ]
-          : []
-
-    if (paymentLines.length === 0) {
-      throw new MetodoPagoRequeridoException()
-    }
-
-    const allocated = paymentLines.reduce((sum, line) => sum + Number(line.amount_usd), 0)
-    if (!Number.isFinite(allocated) || Math.abs(allocated - totalUsd) > 0.00015) {
-      throw new PagosVentaInvalidosException(
-        `La suma de los pagos (${allocated.toFixed(4)}) no coincide con el total (${totalUsd.toFixed(4)})`
-      )
-    }
-
-    const seen = new Set<string>()
+    const paymentLines = prepareSalePaymentLines(input, totalUsd)
     const baseCode = await this.currencyService.getBaseCurrencyCode()
     const resolved: Array<{
       paymentMethodCode: string
@@ -1296,19 +1265,8 @@ export default class SaleService {
     }> = []
 
     for (const line of paymentLines) {
-      const code = line.payment_method_code.trim()
-      if (!code) {
-        throw new MetodoPagoRequeridoException()
-      }
-      if (seen.has(code)) {
-        throw new PagosVentaInvalidosException('No se puede repetir el mismo método de pago')
-      }
-      seen.add(code)
-
+      const code = line.payment_method_code
       const amountUsd = Number(line.amount_usd)
-      if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
-        throw new PagosVentaInvalidosException('Cada método de pago debe tener un monto mayor a 0')
-      }
 
       const method = await this.paymentMethodService.assertActivo(code)
       const currencyCode = (line.currency_code?.trim() || method.currencyCode).toUpperCase()
