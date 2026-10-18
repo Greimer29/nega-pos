@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FileText, FolderOpen, Loader2, Plus, Search, ShoppingCart } from 'lucide-react'
+import { Loader2, Search, ShoppingCart } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { BarcodeScanButton } from '@/components/barcode-scan-button'
 import { FiltersDrawer } from '@/components/filters/filters-drawer'
@@ -7,7 +7,6 @@ import { FiltersIconButton } from '@/components/filters/filters-icon-button'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { wholesaleUnitsPerPack } from '@/lib/wholesale'
 import { VentasCatalogFiltersPanel } from '@/features/ventas/components/ventas-catalog-filters-panel'
@@ -38,9 +37,9 @@ import {
 import {
   catalogImageTone,
   catalogProductCode,
-  VentasOrderCart,
   type VentasCartLine,
 } from '@/features/ventas/components/ventas-order-cart'
+import { VentasCheckoutPanel } from '@/features/ventas/components/ventas-checkout-panel'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { materialImageUrl, UNIT_ABREV } from '@/features/materials/constants'
 import { useMaterialsQuery } from '@/features/materials/hooks/use-materials'
@@ -110,6 +109,12 @@ import {
   clampInvoiceDiscountUsd,
   invoiceTotalAfterDiscount,
 } from '@/features/ventas/utils/invoice-discount'
+import {
+  buildSaleDraftPayload,
+  buildSaleLines,
+  finalizeSaleConfirmation,
+  persistSaleDraft,
+} from '@/features/ventas/utils/sales-checkout'
 import {
   cartLineUnitPrice,
   normalizeDraftCartLine,
@@ -987,68 +992,25 @@ function VentasCreateView() {
     clearVentasCartDraft()
   }
 
-  function buildSaleLines() {
-    return cart.map((item) => {
-      if (item.kind === 'material') {
-        return {
-          material_id: item.material.id,
-          quantity: item.quantity,
-          unit_price_usd: cartLineUnitPrice(item),
-          ...(item.isWholesale ? { is_wholesale: true } : {}),
-        }
-      }
-
-      return {
-        catalog_product_id: item.product.id,
-        quantity: item.quantity,
-        unit_price_usd: cartLineUnitPrice(item),
-        ...(item.isWholesale ? { is_wholesale: true } : {}),
-        ...(item.detail?.trim() ? { description: item.detail.trim() } : {}),
-        ...(item.catalogProductSizeId
-          ? {
-              catalog_product_size_id: item.catalogProductSizeId,
-              size: item.size ?? undefined,
-            }
-          : {}),
-        ...(item.kitchenNote?.trim() ? { kitchen_note: item.kitchenNote.trim() } : {}),
-        ...(item.formulaMaterials && item.formulaMaterials.length > 0
-          ? {
-              formula_materials: item.formulaMaterials.map((material) => ({
-                material_id: material.material_id,
-                quantity_per_unit: material.quantity_per_unit,
-              })),
-            }
-          : {}),
-      }
-    })
-  }
-
   async function persistDraftSale(): Promise<number> {
-    const clientPayload = buildClientPayload()
-    if (cart.length === 0) {
-      throw new Error('Agregá al menos un producto al carrito.')
-    }
+    const payload = buildSaleDraftPayload({
+      cart,
+      client: buildClientPayload(),
+      paymentType,
+      billingMode: billingMethod,
+      discountUsd: invoiceDiscount,
+    })
 
-    const payload = {
-      ...clientPayload,
-      payment_type: paymentType,
-      billing_mode: billingMethod,
-      discount_usd: invoiceDiscount,
-      lines: buildSaleLines(),
-    }
-
-    if (sourceSaleId) {
-      await updateSaleMutation.mutateAsync({ id: sourceSaleId, payload })
-      return sourceSaleId
-    }
-
-    const sale = await createSaleMutation.mutateAsync(payload)
-    if (!isValidEntityId(sale.id)) {
-      throw new Error('No se pudo guardar el borrador: la API no devolvió un ID válido.')
-    }
-    setSourceSaleId(sale.id)
-    setSourceSaleLabel(`Borrador #${sale.id}`)
-    return sale.id
+    return persistSaleDraft({
+      sourceSaleId,
+      payload,
+      updateSale: (id, salePayload) => updateSaleMutation.mutateAsync({ id, payload: salePayload }),
+      createSale: (salePayload) => createSaleMutation.mutateAsync(salePayload),
+      onCreated: (saleId) => {
+        setSourceSaleId(saleId)
+        setSourceSaleLabel(`Borrador #${saleId}`)
+      },
+    })
   }
 
   async function saveBudget() {
@@ -1066,31 +1028,26 @@ function VentasCreateView() {
   }
 
   async function finalizeConfirm(saleId: number, payload: ConfirmSaleInput = {}) {
-    const sale = await confirmSaleMutation.mutateAsync({
-      id: saleId,
+    await finalizeSaleConfirmation({
+      saleId,
+      paymentType,
+      billingMode: billingMethod,
       payload: {
-        payment_type: paymentType,
-        billing_mode: billingMethod,
         ...payload,
       },
+      confirmSale: (id, confirmPayload) =>
+        confirmSaleMutation.mutateAsync({ id, payload: confirmPayload }),
+      clearDraft: clearVentasCartDraft,
+      getSale,
+      printSale: printSaleDocumentsOnConfirm,
+      formatPrintErrors,
+      getPrintErrorMessage: getApiErrorMessage,
+      onNavigate: (confirmedSaleId, printNotice) => {
+        void navigate(`/ventas/${confirmedSaleId}`, {
+          state: printNotice ? { printNotice } : undefined,
+        })
+      },
     })
-
-    clearVentasCartDraft()
-
-    try {
-      const fullSale = await getSale(sale.id)
-      const printResult = await printSaleDocumentsOnConfirm(fullSale)
-      void navigate(`/ventas/${sale.id}`, {
-        state:
-          printResult.errors.length > 0
-            ? { printNotice: formatPrintErrors(printResult.errors) }
-            : undefined,
-      })
-    } catch (printError) {
-      void navigate(`/ventas/${sale.id}`, {
-        state: { printNotice: getApiErrorMessage(printError) },
-      })
-    }
   }
 
   async function printOfflineTicket(localRef: string, totalUsd: number) {
@@ -1129,7 +1086,7 @@ function VentasCreateView() {
       throw new Error('La venta sin conexión no está habilitada para esta empresa.')
     }
 
-    const lines = buildSaleLines()
+    const lines = buildSaleLines(cart)
     const { localRef } = await persistOfflineSale({
       customerId: customerId === '' ? null : Number(customerId),
       guestName: clientName.trim() || null,
@@ -1243,158 +1200,41 @@ function VentasCreateView() {
 
   function renderBillingCart(options?: { onClose?: () => void }) {
     return (
-      <VentasOrderCart
-        className="h-full min-h-0 w-full"
+      <VentasCheckoutPanel
         orderLabel={orderLabel}
         lines={cartLines}
         subtotalUsd={cartTotal}
         discountUsd={invoiceDiscount}
         totalUsd={payableTotal}
+        billingMethod={billingMethod}
+        paymentType={paymentType}
+        customerName={clientName}
+        customerLinked={Boolean(customerId)}
+        customerCreditDays={customerCreditDays}
+        canCreditSale={canCreditSale}
+        canConfirmSale={canConfirmSale}
+        isSubmitting={isSubmitting}
+        stockBlocked={stockBlocked}
+        successMessage={successMessage}
+        shiftOpen={shiftOpen}
+        shiftLoading={shiftLoading}
+        confirmButtonLabel={confirmButtonLabel}
         onClear={clearLocalCart}
         onRemoveLine={removeFromCart}
         onUpdateQuantity={updateCartQty}
         onUpdateUnitPrice={updateCartUnitPrice}
         onUpdateInvoiceDiscount={setInvoiceDiscountUsd}
-        emptyMessage="Agregá productos desde el catálogo."
-        billingMethod={billingMethod}
         onBillingMethodChange={setBillingMethod}
+        onPaymentTypeChange={setPaymentType}
+        onCustomerNameChange={handleClientNameChange}
+        onScanBarcode={(code) => void addToCartByBarcode(code)}
+        onLoadDraft={() => setLoadDraftOpen(true)}
+        onRegisterCustomer={() => setCustomerDialogOpen(true)}
+        onFindCustomer={() => setCustomerPickOpen(true)}
+        onSaveBudget={() => void saveBudget()}
+        onConfirm={() => void confirmOrder()}
         onClose={options?.onClose}
-        headerAction={
-          <div className="flex items-center gap-1">
-            <BarcodeScanButton
-              className="size-8"
-              title="Escanear para agregar al carrito"
-              onScan={(code) => void addToCartByBarcode(code)}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              title="Cargar factura"
-              aria-label="Cargar factura"
-              onClick={() => setLoadDraftOpen(true)}
-            >
-              <FolderOpen className="size-4" />
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-3 pt-1">
-          <div className="space-y-2">
-            <Label className="text-xs">Cliente</Label>
-            <div className="flex gap-2">
-              <Input
-                className="min-w-0 flex-1"
-                placeholder="Generico"
-                value={clientName}
-                onChange={(e) => handleClientNameChange(e.target.value)}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="shrink-0"
-                title="Registrar cliente"
-                aria-label="Registrar cliente"
-                onClick={() => setCustomerDialogOpen(true)}
-              >
-                <Plus className="size-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="shrink-0"
-                title="Buscar cliente registrado"
-                aria-label="Buscar cliente registrado"
-                onClick={() => setCustomerPickOpen(true)}
-              >
-                <Search className="size-4" />
-              </Button>
-            </div>
-            {customerId ? (
-              <p className="text-muted-foreground text-xs">Cliente registrado vinculado</p>
-            ) : null}
-          </div>
-
-          <div className="flex items-start justify-between gap-2">
-            <div className="space-y-2">
-              <Label className="text-xs">Forma de pago</Label>
-              <div className="bg-muted inline-flex rounded-lg p-1">
-                <button
-                  type="button"
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs font-medium',
-                    paymentType === 'CASH' ? 'bg-background shadow-sm' : 'text-muted-foreground'
-                  )}
-                  onClick={() => setPaymentType('CASH')}
-                >
-                  Contado
-                </button>
-                <button
-                  type="button"
-                  disabled={!customerId || !canCreditSale}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs font-medium',
-                    paymentType === 'CREDIT' ? 'bg-background shadow-sm' : 'text-muted-foreground',
-                    (!customerId || !canCreditSale) && 'cursor-not-allowed opacity-50'
-                  )}
-                  onClick={() => setPaymentType('CREDIT')}
-                >
-                  Crédito
-                </button>
-              </div>
-              {paymentType === 'CREDIT' && customerId ? (
-                <p className="text-muted-foreground text-xs">
-                  Plazo: {customerCreditDays ?? 0} días
-                </p>
-              ) : null}
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground shrink-0"
-              title="Generar presupuesto"
-              aria-label="Generar presupuesto"
-              disabled={isSubmitting || cart.length === 0}
-              onClick={() => void saveBudget()}
-            >
-              {isSubmitting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <FileText className="size-4" />
-              )}
-            </Button>
-          </div>
-
-          {stockBlocked ? (
-            <p className="text-destructive text-xs">
-              Hay productos sin stock o por debajo del mínimo en el carrito.
-            </p>
-          ) : null}
-
-          {successMessage ? <p className="text-emerald-700 text-sm">{successMessage}</p> : null}
-
-          {canConfirmSale ? (
-            <Button
-              className="w-full"
-              disabled={
-                isSubmitting || cart.length === 0 || stockBlocked || !shiftOpen || shiftLoading
-              }
-              onClick={() => void confirmOrder()}
-            >
-              {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
-              {!shiftLoading && !shiftOpen ? 'Abrí un turno para vender' : confirmButtonLabel}
-            </Button>
-          ) : (
-            <p className="text-muted-foreground text-center text-sm">
-              No tenés permiso para confirmar ventas.
-            </p>
-          )}
-        </div>
-      </VentasOrderCart>
+      />
     )
   }
 
