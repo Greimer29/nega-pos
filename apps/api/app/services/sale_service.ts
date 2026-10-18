@@ -47,6 +47,7 @@ import {
 } from '#constants/inventory_units'
 import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
+import { calculateSaleReturnAmounts } from '#utils/sale_return_amounts'
 import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
 import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
@@ -1494,34 +1495,22 @@ export default class SaleService {
 
   private async actualizarMontosTrasDevolucion(sale: Sale, trx: TransactionClientContract) {
     const lines = await SaleLine.query({ client: trx }).where('saleId', Number(sale.id))
-    let remainingGross = 0
+    const amounts = calculateSaleReturnAmounts({
+      lines: lines.map((line) => ({
+        quantity: Number(line.quantity),
+        returnedQuantity: Number(line.returnedQuantity ?? 0),
+        unitPriceUsd: Number(line.unitPriceUsd),
+      })),
+      discountUsd: sale.discountUsd,
+      totalUsd: sale.totalUsd,
+      paymentType: sale.paymentType === 'CREDIT' ? 'CREDIT' : 'CASH',
+      amountPaidUsd: sale.amountPaidUsd,
+    })
 
-    for (const line of lines) {
-      const activeQty = Number(line.quantity) - Number(line.returnedQuantity ?? 0)
-      remainingGross += Math.max(0, activeQty) * Number(line.unitPriceUsd)
-    }
-
-    // Before this update, total+discount is the gross still “active” on the invoice.
-    const previousDiscount = Number(sale.discountUsd ?? 0)
-    const previousTotal = Number(sale.totalUsd ?? 0)
-    const previousRemainingGross = previousTotal + previousDiscount
-
-    const discountUsd =
-      remainingGross <= 0 || previousRemainingGross <= 0
-        ? 0
-        : Math.min(remainingGross, (previousDiscount * remainingGross) / previousRemainingGross)
-    const totalUsd = Math.max(0, remainingGross - discountUsd)
-
-    sale.discountUsd = discountUsd.toFixed(4)
-    sale.totalUsd = totalUsd.toFixed(4)
-
-    if (sale.paymentType === 'CREDIT') {
-      const paid = Number(sale.amountPaidUsd)
-      sale.balanceUsd = Math.max(0, totalUsd - paid).toFixed(4)
-    } else {
-      sale.amountPaidUsd = sale.totalUsd
-      sale.balanceUsd = '0.0000'
-    }
+    sale.discountUsd = amounts.discountUsd
+    sale.totalUsd = amounts.totalUsd
+    sale.amountPaidUsd = amounts.amountPaidUsd
+    sale.balanceUsd = amounts.balanceUsd
 
     sale.useTransaction(trx)
     await sale.save()
