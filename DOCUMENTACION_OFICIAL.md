@@ -1,8 +1,6 @@
 ﻿# Documentación oficial técnica — Nega POS
 
-Referencia técnica **única y vigente** para desarrolladores. Derivada exclusivamente del código fuente del repositorio (`apps/`, migraciones, rutas, configuración). Última revisión contra el código: julio 2026.
-
-> **Nota:** La carpeta `docs/` está descontinuada. No usar esos archivos como referencia; usar solo este documento y el código.
+Referencia técnica **única y vigente** para desarrolladores. Derivada exclusivamente del código fuente del repositorio (`apps/`, migraciones, rutas, configuración). Última revisión contra el código: 17 de octubre de 2026.
 
 ---
 
@@ -137,7 +135,7 @@ No se empujan filas completas por SSE. Vite y Electron proxyan `/__transmit` hac
 |---------|---------|
 | Electron | ^34.2.0 |
 | electron-builder | ^25.1.8 |
-| Versión app | 1.0.5 |
+| Versión app | 1.5.2 (paquetes desktop y mobile) |
 
 ### Base de datos
 
@@ -151,7 +149,7 @@ No se empujan filas completas por SSE. Vite y Electron proxyan `/__transmit` hac
 ```
 nega-pos/
 ├── apps/
-│   ├── api/                 # Backend AdonisJS 6/7
+│   ├── api/                 # Backend AdonisJS 7
 │   │   ├── app/
 │   │   │   ├── controllers/ # Controladores HTTP
 │   │   │   ├── models/      # Modelos Lucid (27 entidades)
@@ -256,8 +254,6 @@ Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca produc
 ### Despliegue Railway (solo API + MySQL)
 
 **Railway despliega únicamente la API y MySQL de producción.** No es el target de `pnpm dev:web`.
-
-Guía operativa histórica: `docs/RAILWAY_DEPLOY.md` (carpeta `docs/` descontinuada como fuente de verdad; preferir esta sección).
 
 | En Railway (prod) | En esta PC (dev) |
 |-------------------|------------------|
@@ -488,6 +484,20 @@ catalog_products ──< product_inventory_movements
 ---
 
 ## 8. Flujos de negocio (técnico)
+
+### Flujo operativo actual por empresa
+
+Este es el recorrido de extremo a extremo que refleja el código vigente; las reglas específicas y excepciones están detalladas en las subsecciones siguientes.
+
+1. **Provisionar y acceder:** el administrador de plataforma crea la empresa desde `/platform`. La API crea su base tenant, ejecuta migraciones y siembra la configuración mínima. El usuario inicia sesión con su email global y queda asociado a esa empresa durante la sesión; las operaciones del POS se ejecutan en su base tenant.
+2. **Preparar la operación:** el administrador configura moneda base, cuentas, monedas y métodos de pago; registra usuarios, categorías, productos/servicios, materiales y fórmulas. El stock inicial se carga mediante compras o ajustes/importación con sus movimientos de inventario.
+3. **Atender ventas:** abrir un turno de caja (solo uno `OPEN` por empresa) y crear una factura en el POS. Se pueden combinar métodos de pago en una factura de contado; para crédito se usa el saldo del cliente. Al confirmar, la factura queda `COMPLETED`, se guardan pagos y se descuenta inventario de productos/materiales, pero no de servicios. `FAST` queda entregada; `ORDER` queda pendiente de preparación/entrega. Las devoluciones pueden ser parciales o totales y revierten el stock correspondiente.
+4. **Gestionar producción:** la entidad `orders` es un flujo separado de la factura POS, aunque ambas usan estados de pedido. Una orden de producción puede pasar de borrador a confirmada y luego a producción; la entrada a producción consume materiales según fórmulas o materiales asociados. También se puede entregar directamente desde borrador. Se puede cancelar en borrador sin movimientos que revertir, o desde confirmada/en producción revirtiendo los movimientos aplicables.
+5. **Reponer y registrar finanzas:** crear compras a proveedor como borrador, añadir materiales/productos/máquinas y confirmar con los datos requeridos. La confirmación actualiza stock cuando `affects_inventory` está activo; una compra a crédito crea saldo por pagar. Gastos e ingresos operativos se registran por separado. La adquisición de máquinas a crédito se registra como compra al proveedor, no como crédito directo de máquina.
+6. **Cerrar y revisar:** cerrar el turno y revisar el cierre diario; después consultar flujo de caja, resultados, patrimonio e inventario. El cierre del turno se agrupa por `sales_shift_id`; los reportes financieros aplican sus propias reglas de período y calendario de tienda (`America/Caracas`).
+7. **Operar sin conexión (si está habilitado):** desktop/móvil guardan un snapshot del catálogo y encolan ventas, devoluciones, transiciones y cierre de turno localmente. Al reconectar, se envían ventas antes que devoluciones, transiciones y cierre. La sincronización de una venta es idempotente por `offline_client_id` y acepta el registro aunque el turno ya esté cerrado o falte stock; el caso de stock insuficiente queda marcado para revisión. El catálogo local se refresca cuando la cola termina sin fallos.
+
+En multi-caja, las mutaciones relevantes emiten eventos SSE por empresa para invalidar/refrescar las consultas activas en los demás clientes; los eventos no sustituyen los datos consultados a la API.
 
 ### Compras (`purchase_service.ts`)
 
@@ -1129,7 +1139,7 @@ node ace generate:key
 ### Docker API + migraciones
 
 - **Local (`docker-compose`):** init SQL crea `nega_pos_central` + grants; entrypoint con `RUN_MIGRATIONS_ON_START=true` corre `migration:run_central` si multi-tenant; `db:bootstrap` crea platform admin. Para alinear tenants locales: `node ace migration:run_tenants --force`.
-- **Railway:** `preDeployCommand` = `migration:run_central --force` **y** `migration:run_tenants --force` (todas las empresas con `db_name`); si alguna falla, exit ≠ 0 y no se promociona la API. Alta de empresa: provision sigue creando BD + migrate + seed. Guía: `docs/RAILWAY_DEPLOY.md`.
+- **Railway:** `preDeployCommand` = `migration:run_central --force` **y** `migration:run_tenants --force` (todas las empresas con `db_name`); si alguna falla, exit ≠ 0 y no se promociona la API. Alta de empresa: provision sigue creando BD + migrate + seed.
 
 ---
 

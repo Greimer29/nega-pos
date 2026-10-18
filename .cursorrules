@@ -8,12 +8,10 @@ La documentación vigente del proyecto es **única**:
 
 Antes de ejecutar CUALQUIER tarea, lee las secciones relevantes de ese archivo (arquitectura, modelo de datos, API, permisos, flujos).
 
-La carpeta **`docs/` está descontinuada** — no la uses como referencia, no la cites ni la actualices salvo que el humano lo pida explícitamente.
-
 ## Reglas críticas (no negociables)
 
 - **No expandas alcance** por tu cuenta. Si la tarea es ambigua o implica módulos no mencionados, detente y pregunta.
-- Usa sintaxis de **AdonisJS 6/7** (el proyecto usa `@adonisjs/core` ^7). Si dudas, consulta https://docs.adonisjs.com.
+- Usa **AdonisJS 7** (el proyecto usa `@adonisjs/core` ^7). Si dudas, consulta https://docs.adonisjs.com.
 - Validación en backend con **Vine**, no Zod. Zod solo en frontend.
 - Nunca instales paquetes nuevos sin aprobación explícita.
 - Nunca hagas force push a `main`.
