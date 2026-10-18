@@ -168,6 +168,11 @@ type ResolvedLine = {
   formulaMaterials: ResolvedSaleLineFormulaMaterial[] | null
 }
 
+type ResolvedLineResult = {
+  line: ResolvedLine
+  subtotalUsd: number
+}
+
 const ORDER_STATUS_TRANSITIONS: Record<SaleOrderStatus, SaleOrderStatus[]> = {
   PENDING: ['IN_PROCESS', 'DELIVERED'],
   IN_PROCESS: ['DELIVERED'],
@@ -849,127 +854,136 @@ export default class SaleService {
     for (const line of lines) {
       const hasCatalog = line.catalog_product_id !== undefined && line.catalog_product_id !== null
       const hasMaterial = line.material_id !== undefined && line.material_id !== null
-
       if (hasCatalog === hasMaterial) {
         throw new LineaVentaInvalidaException()
       }
 
-      const unitPrice = line.unit_price_usd
-
-      if (hasCatalog) {
-        const product = await CatalogProduct.query({ client: trx })
-          .where('id', line.catalog_product_id!)
-          .preload('formula', (f) => f.preload('materials'))
-          .preload('sizes')
-          .first()
-
-        if (!product) {
-          throw new ProductoCatalogoNoEncontradoException()
-        }
-
-        const isService = isCatalogService(product)
-        const unit = product.saleUnit ?? 'UND'
-        const quantity = normalizeInventoryQuantity(line.quantity, unit)
-
-        if (isService && line.formula_materials !== undefined) {
-          throw new LineaVentaInvalidaException(
-            'Los materiales personalizados no aplican a servicios'
-          )
-        }
-
-        if (!isService) {
-          await assertFormulaMaterialsAllowed(product, line.formula_materials)
-        }
-        const formulaMaterials = isService
-          ? null
-          : normalizeFormulaMaterialsInput(line.formula_materials)
-        const resolvedSize = isService
-          ? { sizeId: null, sizeLabel: null }
-          : await this.sizeService.resolveForLine(
-              product,
-              {
-                catalog_product_size_id: line.catalog_product_size_id,
-                size: line.size,
-              },
-              trx
-            )
-
-        if (line.is_wholesale && resolvedSize.sizeId) {
-          throw new ConfiguracionMayoristaInvalidaException(
-            'Un producto con tallas no admite modo mayorista'
-          )
-        }
-
-        const wholesale = resolveWholesaleLineSnapshot(Boolean(line.is_wholesale), product)
-        const lineCost = resolveProductSaleLineCost({
-          isWholesale: wholesale.isWholesale,
-          unitsPerPack: wholesale.unitsPerPack,
-          unitCostUsd: product.costUsd,
-          wholesaleCostUsd: product.wholesaleCostUsd,
-        })
-
-        const amounts = calculateSaleLineAmounts(quantity, unitPrice)
-        totalUsd += amounts.subtotal
-
-        const detail = line.description?.trim()
-        resolvedLines.push({
-          catalogProductId: line.catalog_product_id!,
-          materialId: null,
-          catalogProductSizeId: resolvedSize.sizeId,
-          size: resolvedSize.sizeLabel,
-          description: detail && detail.length > 0 ? detail : product.name,
-          quantity: formatInventoryQuantityForStorage(quantity, unit),
-          unitPriceUsd: amounts.unitPriceUsd,
-          subtotalUsd: amounts.subtotalUsd,
-          costUsd: lineCost,
-          kitchenNote: normalizeSaleLineKitchenNote(line.kitchen_note),
-          isWholesale: wholesale.isWholesale,
-          unitsPerPack: wholesale.unitsPerPack,
-          formulaMaterials,
-        })
-      } else if (hasMaterial) {
-        if (line.formula_materials !== undefined) {
-          throw new LineaVentaInvalidaException(
-            'Los materiales personalizados solo aplican a productos de catálogo con fórmula'
-          )
-        }
-
-        const material = await Material.find(line.material_id!)
-        if (!material) {
-          throw new MaterialNoEncontradoException()
-        }
-
-        const unit = material.unit ?? 'UND'
-        const quantity = normalizeInventoryQuantity(line.quantity, unit)
-        const amounts = calculateSaleLineAmounts(quantity, unitPrice)
-        totalUsd += amounts.subtotal
-        const wholesale = resolveWholesaleLineSnapshot(Boolean(line.is_wholesale), material)
-        const lineCost = resolveMaterialSaleLineCost({
-          isWholesale: wholesale.isWholesale,
-          unitsPerPack: wholesale.unitsPerPack,
-          unitCostUsd: material.lastPurchasePriceUsd,
-          wholesaleCostUsd: material.wholesaleCostUsd,
-        })
-
-        resolvedLines.push({
-          catalogProductId: null,
-          materialId: line.material_id!,
-          catalogProductSizeId: null,
-          size: null,
-          description: material.name,
-          quantity: formatInventoryQuantityForStorage(quantity, unit),
-          unitPriceUsd: amounts.unitPriceUsd,
-          subtotalUsd: amounts.subtotalUsd,
-          costUsd: lineCost,
-          kitchenNote: normalizeSaleLineKitchenNote(line.kitchen_note),
-          isWholesale: wholesale.isWholesale,
-          unitsPerPack: wholesale.unitsPerPack,
-          formulaMaterials: null,
-        })
-      }
+      const resolved = hasCatalog
+        ? await this.resolveCatalogLine(line, trx)
+        : await this.resolveMaterialLine(line)
+      totalUsd += resolved.subtotalUsd
+      resolvedLines.push(resolved.line)
     }
 
     return { totalUsd, resolvedLines }
+  }
+
+  private async resolveCatalogLine(
+    line: SaleLineInput,
+    trx: TransactionClientContract
+  ): Promise<ResolvedLineResult> {
+    const product = await CatalogProduct.query({ client: trx })
+      .where('id', line.catalog_product_id!)
+      .preload('formula', (f) => f.preload('materials'))
+      .preload('sizes')
+      .first()
+
+    if (!product) {
+      throw new ProductoCatalogoNoEncontradoException()
+    }
+
+    const isService = isCatalogService(product)
+    const unit = product.saleUnit ?? 'UND'
+    const quantity = normalizeInventoryQuantity(line.quantity, unit)
+
+    if (isService && line.formula_materials !== undefined) {
+      throw new LineaVentaInvalidaException('Los materiales personalizados no aplican a servicios')
+    }
+
+    if (!isService) {
+      await assertFormulaMaterialsAllowed(product, line.formula_materials)
+    }
+    const formulaMaterials = isService
+      ? null
+      : normalizeFormulaMaterialsInput(line.formula_materials)
+    const resolvedSize = isService
+      ? { sizeId: null, sizeLabel: null }
+      : await this.sizeService.resolveForLine(
+          product,
+          {
+            catalog_product_size_id: line.catalog_product_size_id,
+            size: line.size,
+          },
+          trx
+        )
+
+    if (line.is_wholesale && resolvedSize.sizeId) {
+      throw new ConfiguracionMayoristaInvalidaException(
+        'Un producto con tallas no admite modo mayorista'
+      )
+    }
+
+    const wholesale = resolveWholesaleLineSnapshot(Boolean(line.is_wholesale), product)
+    const lineCost = resolveProductSaleLineCost({
+      isWholesale: wholesale.isWholesale,
+      unitsPerPack: wholesale.unitsPerPack,
+      unitCostUsd: product.costUsd,
+      wholesaleCostUsd: product.wholesaleCostUsd,
+    })
+    const amounts = calculateSaleLineAmounts(quantity, line.unit_price_usd)
+    const detail = line.description?.trim()
+
+    return {
+      subtotalUsd: amounts.subtotal,
+      line: {
+        catalogProductId: line.catalog_product_id!,
+        materialId: null,
+        catalogProductSizeId: resolvedSize.sizeId,
+        size: resolvedSize.sizeLabel,
+        description: detail && detail.length > 0 ? detail : product.name,
+        quantity: formatInventoryQuantityForStorage(quantity, unit),
+        unitPriceUsd: amounts.unitPriceUsd,
+        subtotalUsd: amounts.subtotalUsd,
+        costUsd: lineCost,
+        kitchenNote: normalizeSaleLineKitchenNote(line.kitchen_note),
+        isWholesale: wholesale.isWholesale,
+        unitsPerPack: wholesale.unitsPerPack,
+        formulaMaterials,
+      },
+    }
+  }
+
+  private async resolveMaterialLine(line: SaleLineInput): Promise<ResolvedLineResult> {
+    if (line.formula_materials !== undefined) {
+      throw new LineaVentaInvalidaException(
+        'Los materiales personalizados solo aplican a productos de catálogo con fórmula'
+      )
+    }
+
+    const material = await Material.find(line.material_id!)
+    if (!material) {
+      throw new MaterialNoEncontradoException()
+    }
+
+    const unit = material.unit ?? 'UND'
+    const quantity = normalizeInventoryQuantity(line.quantity, unit)
+    const amounts = calculateSaleLineAmounts(quantity, line.unit_price_usd)
+    const wholesale = resolveWholesaleLineSnapshot(Boolean(line.is_wholesale), material)
+    const lineCost = resolveMaterialSaleLineCost({
+      isWholesale: wholesale.isWholesale,
+      unitsPerPack: wholesale.unitsPerPack,
+      unitCostUsd: material.lastPurchasePriceUsd,
+      wholesaleCostUsd: material.wholesaleCostUsd,
+    })
+
+    return {
+      subtotalUsd: amounts.subtotal,
+      line: {
+        catalogProductId: null,
+        materialId: line.material_id!,
+        catalogProductSizeId: null,
+        size: null,
+        description: material.name,
+        quantity: formatInventoryQuantityForStorage(quantity, unit),
+        unitPriceUsd: amounts.unitPriceUsd,
+        subtotalUsd: amounts.subtotalUsd,
+        costUsd: lineCost,
+        kitchenNote: normalizeSaleLineKitchenNote(line.kitchen_note),
+        isWholesale: wholesale.isWholesale,
+        unitsPerPack: wholesale.unitsPerPack,
+        formulaMaterials: null,
+      },
+    }
   }
 
   private async persistLines(
