@@ -6,7 +6,7 @@
 #   2. nega-pos-api    (this service)
 #
 # Do NOT deploy apps/web, desktop or mobile on Railway — they run 100% local.
-# Guide: docs/RAILWAY_DEPLOY.md  |  Env: apps/api/.env.railway.example
+# Technical reference: DOCUMENTACION_OFICIAL.md  |  Env: apps/api/.env.railway.example
 # =============================================================================
 
 [build]

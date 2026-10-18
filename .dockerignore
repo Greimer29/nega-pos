@@ -11,4 +11,3 @@
 apps/api/tests
 apps/api/bin/test.ts
 *.md
-!docs/RAILWAY_DEPLOY.md

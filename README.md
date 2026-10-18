@@ -5,8 +5,6 @@ Sistema de punto de venta y gestión comercial (inventario, ventas, compras, cli
 **Documentación técnica:** [`DOCUMENTACION_OFICIAL.md`](./DOCUMENTACION_OFICIAL.md)  
 **Reglas para el agente:** [`.cursorrules`](./.cursorrules)
 
-> La carpeta `docs/` está descontinuada; no usar como referencia.
-
 ## Requisitos
 
 - Node.js >= 20
@@ -76,4 +74,4 @@ Login local por defecto: `admin@negapos.local` / valor de `ADMIN_PASSWORD` en `a
 
 Solo **API + MySQL** en Railway. Web, desktop y mobile son **100 % locales**.
 
-Guía: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md) · Config: `apps/api/railway.toml`, `apps/api/.env.railway.example`
+Configuración: [`DOCUMENTACION_OFICIAL.md`](./DOCUMENTACION_OFICIAL.md) (despliegue Railway), `apps/api/railway.toml` y `apps/api/.env.railway.example`.

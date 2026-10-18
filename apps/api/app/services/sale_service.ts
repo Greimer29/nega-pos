@@ -47,7 +47,7 @@ import {
 } from '#constants/inventory_units'
 import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
-import { datetimeRangeUtcSql, dayStartUtcSql } from '#utils/app_timezone'
+import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
 import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
@@ -1374,7 +1374,7 @@ export default class SaleService {
       }
       sale.balanceUsd = totalUsd.toFixed(4)
       sale.amountPaidUsd = '0.0000'
-      sale.creditDueDate = DateTime.now().plus({ days: customer.creditDays })
+      sale.creditDueDate = nowInAppZone().plus({ days: customer.creditDays }).startOf('day')
     } else {
       sale.balanceUsd = '0.0000'
       sale.amountPaidUsd = totalUsd.toFixed(4)

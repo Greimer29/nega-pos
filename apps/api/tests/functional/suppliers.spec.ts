@@ -3,6 +3,7 @@ import Currency from '#models/currency'
 import Purchase from '#models/purchase'
 import Supplier from '#models/supplier'
 import User from '#models/user'
+import { nowInAppZone } from '#utils/app_timezone'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
 import db from '@adonisjs/lucid/services/db'
@@ -237,7 +238,7 @@ test.group('Suppliers API', (group) => {
       totalBs: '3240.00',
       status: 'CONFIRMED',
       isCredit: true,
-      creditDueDate: DateTime.now().minus({ days: 1 }),
+      creditDueDate: nowInAppZone().minus({ days: 1 }).startOf('day'),
       balanceUsd: '90.0000',
       amountPaidUsd: '0.0000',
     })

@@ -43,7 +43,7 @@ import {
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
-import { datetimeRangeUtcSql, dayStartUtcSql } from '#utils/app_timezone'
+import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
@@ -1437,7 +1437,7 @@ export default class OrderService {
       }
       order.balanceUsd = totalUsd.toFixed(4)
       order.amountPaidUsd = '0.0000'
-      order.creditDueDate = DateTime.now().plus({ days: customer.creditDays })
+      order.creditDueDate = nowInAppZone().plus({ days: customer.creditDays }).startOf('day')
     } else {
       order.balanceUsd = '0.0000'
       order.amountPaidUsd = totalUsd.toFixed(4)
