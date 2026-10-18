@@ -43,18 +43,24 @@ export function formatFechaInstante(iso: string | null | undefined) {
   })
 }
 
+/** Fecha larga de un instante en calendario de tienda (hasta 23:59:59, no UTC). */
+export function formatHoyLargo(instant: Date = new Date()): string {
+  return instant.toLocaleDateString('es-VE', {
+    timeZone: APP_TIMEZONE,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
 /**
  * Hoy en calendario de tienda (`YYYY-MM-DD`, America/Caracas).
  * No usar `toISOString().slice(0, 10)`: en VE (UTC-4) tras las 20:00 ya es el día
- * siguiente en UTC y se graba la fecha wrong en columnas DATE.
+ * siguiente en UTC.
  */
 export function todayLocalIsoDate(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: APP_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
+  return toAppIsoDate(new Date())
 }
 
 /** Día calendario de tienda de un instante (`YYYY-MM-DD`). */
@@ -67,7 +73,7 @@ export function toAppIsoDate(instant: Date = new Date()): string {
   }).format(instant)
 }
 
-/** Suma días a un `YYYY-MM-DD` (o al hoy de tienda) sin pasar por UTC de `toISOString`. */
+/** Suma días a un `YYYY-MM-DD` (o al hoy de tienda) sin pasar por UTC. */
 export function addLocalDaysIsoDate(days: number, from: Date | string = new Date()): string {
   const baseIso = typeof from === 'string' ? from.slice(0, 10) : toAppIsoDate(from)
   const [year, month, day] = baseIso.split('-').map(Number)

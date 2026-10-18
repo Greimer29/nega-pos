@@ -19,6 +19,7 @@ import {
 } from '@/features/dashboard/utils/dashboard-chart-support'
 import { notifyApiError, QueryErrorState } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
+import { formatHoyLargo } from '@/lib/format-date'
 import { sessionFilterKey, useSessionPersistedState } from '@/lib/session-persisted-state'
 import { pageHeaderClass } from '@/components/layout/responsive-toolbar'
 
@@ -31,12 +32,7 @@ const DEFAULT_DASHBOARD_CHART: DashboardChartState = {
 }
 
 function todayLabel() {
-  return new Date().toLocaleDateString('es-VE', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
+  return formatHoyLargo()
 }
 
 export function DashboardPage() {
