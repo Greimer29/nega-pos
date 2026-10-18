@@ -54,6 +54,7 @@ import {
   resolveMaterialSaleLineCost,
   resolveProductSaleLineCost,
 } from '#utils/sale_line_cost'
+import { calculateSaleLineAmounts, normalizeSaleLineKitchenNote } from '#utils/sale_line_values'
 import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
 import {
@@ -165,14 +166,6 @@ type ResolvedLine = {
   isWholesale: boolean
   unitsPerPack: string | null
   formulaMaterials: ResolvedSaleLineFormulaMaterial[] | null
-}
-
-function normalizeKitchenNote(value: string | null | undefined): string | null {
-  if (value === undefined || value === null) {
-    return null
-  }
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : null
 }
 
 const ORDER_STATUS_TRANSITIONS: Record<SaleOrderStatus, SaleOrderStatus[]> = {
@@ -367,7 +360,9 @@ export default class SaleService {
       } else if (input.discount_usd !== undefined) {
         const lines = await SaleLine.query({ client: trx }).where('saleId', Number(sale.id))
         const subtotalUsd = lines.reduce(
-          (sum, line) => sum + Number(line.quantity) * Number(line.unitPriceUsd),
+          (sum, line) =>
+            sum +
+            calculateSaleLineAmounts(Number(line.quantity), Number(line.unitPriceUsd)).subtotal,
           0
         )
         const { discountUsd, totalUsd } = applyInvoiceDiscount(subtotalUsd, input.discount_usd)
@@ -913,8 +908,8 @@ export default class SaleService {
           wholesaleCostUsd: product.wholesaleCostUsd,
         })
 
-        const subtotal = quantity * unitPrice
-        totalUsd += subtotal
+        const amounts = calculateSaleLineAmounts(quantity, unitPrice)
+        totalUsd += amounts.subtotal
 
         const detail = line.description?.trim()
         resolvedLines.push({
@@ -924,10 +919,10 @@ export default class SaleService {
           size: resolvedSize.sizeLabel,
           description: detail && detail.length > 0 ? detail : product.name,
           quantity: formatInventoryQuantityForStorage(quantity, unit),
-          unitPriceUsd: unitPrice.toFixed(4),
-          subtotalUsd: subtotal.toFixed(4),
+          unitPriceUsd: amounts.unitPriceUsd,
+          subtotalUsd: amounts.subtotalUsd,
           costUsd: lineCost,
-          kitchenNote: normalizeKitchenNote(line.kitchen_note),
+          kitchenNote: normalizeSaleLineKitchenNote(line.kitchen_note),
           isWholesale: wholesale.isWholesale,
           unitsPerPack: wholesale.unitsPerPack,
           formulaMaterials,
@@ -946,8 +941,8 @@ export default class SaleService {
 
         const unit = material.unit ?? 'UND'
         const quantity = normalizeInventoryQuantity(line.quantity, unit)
-        const subtotal = quantity * unitPrice
-        totalUsd += subtotal
+        const amounts = calculateSaleLineAmounts(quantity, unitPrice)
+        totalUsd += amounts.subtotal
         const wholesale = resolveWholesaleLineSnapshot(Boolean(line.is_wholesale), material)
         const lineCost = resolveMaterialSaleLineCost({
           isWholesale: wholesale.isWholesale,
@@ -963,10 +958,10 @@ export default class SaleService {
           size: null,
           description: material.name,
           quantity: formatInventoryQuantityForStorage(quantity, unit),
-          unitPriceUsd: unitPrice.toFixed(4),
-          subtotalUsd: subtotal.toFixed(4),
+          unitPriceUsd: amounts.unitPriceUsd,
+          subtotalUsd: amounts.subtotalUsd,
           costUsd: lineCost,
-          kitchenNote: normalizeKitchenNote(line.kitchen_note),
+          kitchenNote: normalizeSaleLineKitchenNote(line.kitchen_note),
           isWholesale: wholesale.isWholesale,
           unitsPerPack: wholesale.unitsPerPack,
           formulaMaterials: null,
