@@ -575,6 +575,7 @@ En multi-caja, las mutaciones relevantes emiten eventos SSE por empresa para inv
 3. **Transición de pedido de venta** (`billing_mode ORDER`): `PENDING → IN_PROCESS → DELIVERED` (solo ventas completadas).
 4. **Devolución** (`POST .../return`): parcial o total; revierte stock de productos/materiales (no de servicios) y actualiza `RETURNED`. **Facturas sin ítems** (monto desde ficha de cliente): la devolución anula `total_usd` / `balance_usd` / `amount_paid_usd`, marca `RETURNED` y no mueve inventario. En UI el diálogo muestra confirmación de monto en lugar de selección de productos.
    - El recálculo de descuento proporcional, total y saldo tras una devolución vive en `utils/sale_return_amounts.ts`; `sale_service.ts` conserva la consulta de líneas y el guardado dentro de la transacción.
+   - `utils/sale_return_stock.ts` limita la reposición de productos a la cantidad vendida que aún no se haya revertido; las consultas y el registro del movimiento siguen dentro de `sale_service.ts`.
 5. **Eliminar borrador** (`DELETE /sales/:id`): solo `DRAFT`. Borra el documento en espera y sus líneas (no hay stock que revertir). En el POS: **Cargar factura** → papelera en cada ítem (icono). La papelera del carrito **vacía líneas locales** y no borra el documento guardado. Una factura confirmada no se elimina por esta vía.
 
 ### Reportes (`report_service.ts` / `inventory_report_service.ts`)
