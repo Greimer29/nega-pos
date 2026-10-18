@@ -47,6 +47,7 @@ import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
 import { calculateSaleReturnAmounts } from '#utils/sale_return_amounts'
 import { prepareSalePaymentLines, type SalePaymentLineInput } from '#utils/sale_payment_lines'
+import { resolveSaleReturnRequests, type SaleReturnLineInput } from '#utils/sale_return_requests'
 import { calculateProductReturnStockQuantity } from '#utils/sale_return_stock'
 import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
@@ -110,11 +111,6 @@ export type ConfirmSaleInput = {
   usd_rate?: number | null
   sold_by_user_id?: number | null
   payments?: ConfirmSalePaymentInput[]
-}
-
-export type SaleReturnLineInput = {
-  line_id: number
-  quantity: number
 }
 
 export type OfflineSyncSaleInput = {
@@ -728,7 +724,7 @@ export default class SaleService {
         return sale
       }
 
-      const returnRequests = this.resolveReturnRequests(sale.saleLines, lines)
+      const returnRequests = resolveSaleReturnRequests(sale.saleLines, lines)
 
       if (returnRequests.length === 0) {
         throw new OrderNoDevolvableException()
@@ -1343,25 +1339,6 @@ export default class SaleService {
 
     sale.useTransaction(trx)
     await sale.save()
-  }
-
-  private resolveReturnRequests(
-    lines: SaleLine[],
-    input?: SaleReturnLineInput[]
-  ): { lineId: number; quantity: number }[] {
-    if (!input || input.length === 0) {
-      return lines
-        .map((line) => {
-          const remaining = Number(line.quantity) - Number(line.returnedQuantity ?? 0)
-          return remaining > 0 ? { lineId: Number(line.id), quantity: remaining } : null
-        })
-        .filter((item): item is { lineId: number; quantity: number } => item !== null)
-    }
-
-    return input.map((item) => ({
-      lineId: item.line_id,
-      quantity: item.quantity,
-    }))
   }
 
   private async revertirStockProductoParcial(
