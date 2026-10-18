@@ -49,6 +49,11 @@ import { calculateSaleReturnAmounts } from '#utils/sale_return_amounts'
 import { prepareSalePaymentLines, type SalePaymentLineInput } from '#utils/sale_payment_lines'
 import { resolveSaleReturnRequests, type SaleReturnLineInput } from '#utils/sale_return_requests'
 import { calculateProductReturnStockQuantity } from '#utils/sale_return_stock'
+import {
+  freezeFormulaSaleLineCost,
+  resolveMaterialSaleLineCost,
+  resolveProductSaleLineCost,
+} from '#utils/sale_line_cost'
 import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
 import {
@@ -901,11 +906,12 @@ export default class SaleService {
         }
 
         const wholesale = resolveWholesaleLineSnapshot(Boolean(line.is_wholesale), product)
-        const packUnits = wholesale.unitsPerPack ? Number(wholesale.unitsPerPack) : 0
-        const lineCost = wholesale.isWholesale
-          ? (product.wholesaleCostUsd ??
-            (packUnits > 0 ? (Number(product.costUsd) * packUnits).toFixed(4) : product.costUsd))
-          : product.costUsd
+        const lineCost = resolveProductSaleLineCost({
+          isWholesale: wholesale.isWholesale,
+          unitsPerPack: wholesale.unitsPerPack,
+          unitCostUsd: product.costUsd,
+          wholesaleCostUsd: product.wholesaleCostUsd,
+        })
 
         const subtotal = quantity * unitPrice
         totalUsd += subtotal
@@ -942,15 +948,13 @@ export default class SaleService {
         const quantity = normalizeInventoryQuantity(line.quantity, unit)
         const subtotal = quantity * unitPrice
         totalUsd += subtotal
-
         const wholesale = resolveWholesaleLineSnapshot(Boolean(line.is_wholesale), material)
-        const packUnits = wholesale.unitsPerPack ? Number(wholesale.unitsPerPack) : 0
-        const lineCost = wholesale.isWholesale
-          ? (material.wholesaleCostUsd ??
-            (packUnits > 0 && material.lastPurchasePriceUsd
-              ? (Number(material.lastPurchasePriceUsd) * packUnits).toFixed(4)
-              : material.lastPurchasePriceUsd))
-          : material.lastPurchasePriceUsd
+        const lineCost = resolveMaterialSaleLineCost({
+          isWholesale: wholesale.isWholesale,
+          unitsPerPack: wholesale.unitsPerPack,
+          unitCostUsd: material.lastPurchasePriceUsd,
+          wholesaleCostUsd: material.wholesaleCostUsd,
+        })
 
         resolvedLines.push({
           catalogProductId: null,
@@ -1028,14 +1032,7 @@ export default class SaleService {
           const effectiveMaterials = resolveEffectiveFormulaMaterials(line, product)
           if (effectiveMaterials.length > 0) {
             const unitCost = Number(sumEffectiveMaterialCostUsd(effectiveMaterials))
-            // CMV = cost_usd × quantity de la línea. En mayorista quantity es paquetes,
-            // así que el costo congelado debe ser el del paquete (und × und/paq).
-            if (line.isWholesale && line.unitsPerPack) {
-              const packUnits = Number(line.unitsPerPack)
-              line.costUsd = (unitCost * packUnits).toFixed(4)
-            } else {
-              line.costUsd = unitCost.toFixed(4)
-            }
+            line.costUsd = freezeFormulaSaleLineCost(unitCost, line.isWholesale, line.unitsPerPack)
           } else if (product.costUsd) {
             line.costUsd = product.costUsd
           }
