@@ -47,6 +47,7 @@ import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
 import { calculateSaleReturnAmounts } from '#utils/sale_return_amounts'
 import { prepareSalePaymentLines, type SalePaymentLineInput } from '#utils/sale_payment_lines'
+import { calculateProductReturnStockQuantity } from '#utils/sale_return_stock'
 import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
 import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
@@ -1375,23 +1376,16 @@ export default class SaleService {
       .where('catalogProductId', catalogProductId)
       .where('type', 'SALE_OUT')
 
-    let soldTotal = 0
-    for (const salida of salidas) {
-      soldTotal += Math.abs(Number(salida.quantity))
-    }
-
     const reversiones = await ProductInventoryMovement.query({ client: trx })
       .where('saleId', saleId)
       .where('catalogProductId', catalogProductId)
       .where('type', 'REVERSAL_ADJUSTMENT')
 
-    let revertedTotal = 0
-    for (const reversion of reversiones) {
-      revertedTotal += Math.abs(Number(reversion.quantity))
-    }
-
-    const remaining = soldTotal - revertedTotal
-    const toRevert = Math.min(quantity, remaining)
+    const toRevert = calculateProductReturnStockQuantity(
+      salidas.map((movement) => movement.quantity),
+      reversiones.map((movement) => movement.quantity),
+      quantity
+    )
 
     if (toRevert <= 0) {
       return
