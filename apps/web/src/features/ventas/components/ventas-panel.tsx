@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Search, ShoppingCart } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { BarcodeScanButton } from '@/components/barcode-scan-button'
-import { FiltersDrawer } from '@/components/filters/filters-drawer'
-import { FiltersIconButton } from '@/components/filters/filters-icon-button'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { wholesaleUnitsPerPack } from '@/lib/wholesale'
 import { VentasCatalogFiltersPanel } from '@/features/ventas/components/ventas-catalog-filters-panel'
@@ -20,15 +14,9 @@ import {
   useNextSaleCodeQuery,
   useUpdateSaleMutation,
 } from '@/features/ventas/hooks/use-sales'
-import { CatalogLayoutToggle } from '@/features/ventas/components/catalog-layout-toggle'
 import { CatalogFormDialog } from '@/features/ventas/components/catalog-form-dialog'
-import {
-  CatalogProductCard,
-  catalogProductGridClassName,
-} from '@/features/ventas/components/catalog-product-card'
-import { CatalogProductTable } from '@/features/ventas/components/catalog-product-table'
-import { MaterialCatalogTable } from '@/features/materials/components/material-catalog-table'
-import { VentasMaterialCard } from '@/features/ventas/components/ventas-material-card'
+import { VentasCatalogResults } from '@/features/ventas/components/ventas-catalog-results'
+import { VentasCatalogToolbar } from '@/features/ventas/components/ventas-catalog-toolbar'
 import { VentasCustomerPickDialog } from '@/features/ventas/components/ventas-customer-pick-dialog'
 import {
   VentasLoadDraftDialog,
@@ -69,11 +57,7 @@ import {
   printSaleDocumentsOnConfirm,
 } from '@/features/printing/services/printing-service'
 import { getSale } from '@/features/ventas/services/sales-service'
-import {
-  notifyApiError,
-  QueryErrorState,
-  EmptyListState,
-} from '@/features/notifications/query-error-state'
+import { notifyApiError } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { isValidEntityId } from '@/lib/route-id'
@@ -1244,386 +1228,79 @@ function VentasCreateView() {
         <div className="hidden min-h-0 xl:col-span-1 xl:flex">{renderBillingCart()}</div>
 
         <Card className="flex h-full min-h-0 flex-col overflow-hidden border-violet-100/80 bg-gradient-to-b from-violet-50/40 to-white xl:col-span-2">
-          <CardHeader className="shrink-0">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 space-y-1.5">
-                <CardTitle className="text-base">
-                  {catalogSource === 'products'
-                    ? 'Catálogo de productos'
-                    : catalogSource === 'services'
-                      ? 'Servicios'
-                      : 'Materiales'}
-                </CardTitle>
-                <CardDescription>
-                  {catalogSource === 'products'
-                    ? catalogMeta
-                      ? `${catalogMeta.total} producto${catalogMeta.total === 1 ? '' : 's'}`
-                      : 'Filtrá y agregá productos a la venta'
-                    : catalogSource === 'services'
-                      ? servicesMeta
-                        ? `${servicesMeta.total} servicio${servicesMeta.total === 1 ? '' : 's'}`
-                        : 'Filtrá y agregá servicios a la venta'
-                      : materialsMeta
-                        ? `${materialsMeta.total} material${materialsMeta.total === 1 ? '' : 'es'}`
-                        : 'Filtrá y agregá materiales a la venta'}
-                </CardDescription>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {offlineEnabled ? (
-                  <span
-                    className={cn(
-                      'rounded-full px-2.5 py-1 text-[11px] font-semibold',
-                      connectivity === 'online'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : connectivity === 'offline'
-                          ? 'bg-amber-100 text-amber-900'
-                          : 'bg-neutral-100 text-neutral-600'
-                    )}
-                    title={
-                      canSellOffline
-                        ? 'Cobro local habilitado con copia en disco'
-                        : connectivity === 'offline'
-                          ? 'Sin copia local o sin permiso de cobro offline'
-                          : 'Conexión con la API disponible'
-                    }
-                  >
-                    {connectivity === 'online'
-                      ? 'En línea'
-                      : connectivity === 'offline'
-                        ? 'Sin conexión'
-                        : 'Comprobando…'}
-                  </span>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="relative shrink-0 xl:hidden"
-                  title="Abrir carrito"
-                  aria-label="Abrir carrito"
-                  onClick={() => setCartOpen(true)}
-                >
-                  <ShoppingCart className="size-4" />
-                  {cartItemCount > 0 ? (
-                    <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-semibold text-white">
-                      {cartItemCount > 99 ? '99+' : cartItemCount}
-                    </span>
-                  ) : null}
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
+          <VentasCatalogToolbar
+            source={catalogSource}
+            description={
+              catalogSource === 'products'
+                ? catalogMeta
+                  ? `${catalogMeta.total} producto${catalogMeta.total === 1 ? '' : 's'}`
+                  : 'Filtrá y agregá productos a la venta'
+                : catalogSource === 'services'
+                  ? servicesMeta
+                    ? `${servicesMeta.total} servicio${servicesMeta.total === 1 ? '' : 's'}`
+                    : 'Filtrá y agregá servicios a la venta'
+                  : materialsMeta
+                    ? `${materialsMeta.total} material${materialsMeta.total === 1 ? '' : 'es'}`
+                    : 'Filtrá y agregá materiales a la venta'
+            }
+            offlineEnabled={offlineEnabled}
+            connectivity={connectivity}
+            canSellOffline={canSellOffline}
+            cartItemCount={cartItemCount}
+            layout={layout}
+            searchInput={searchInput}
+            activeFilterCount={activeFilterCount}
+            filtersOpen={filtersOpen}
+            filterPanel={renderFiltersPanel()}
+            onSourceChange={(source) =>
+              setCatalogFilters((prev) => ({
+                ...prev,
+                source,
+                sortBy: defaultSortForSource(source),
+                page: 1,
+              }))
+            }
+            onSearchChange={setSearchInput}
+            onSearchEnter={(search) => {
+              if (catalogSource === 'services') return
+              const code = search.trim()
+              if (code) void filterCatalogByBarcode(code)
+            }}
+            onToggleLayout={toggleLayout}
+            onOpenFilters={() => setFiltersOpen(true)}
+            onFiltersOpenChange={setFiltersOpen}
+            onScanBarcode={(code) => void filterCatalogByBarcode(code)}
+            onOpenCart={() => setCartOpen(true)}
+          />
           <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-3 pt-0 sm:px-6">
-            <div className="flex shrink-0 flex-col gap-3">
-              <div className="flex flex-col gap-3">
-                <div className="bg-muted inline-flex w-fit rounded-lg p-1">
-                  <button
-                    type="button"
-                    className={cn(
-                      'rounded-md px-3 py-1.5 text-xs font-medium',
-                      catalogSource === 'products'
-                        ? 'bg-background shadow-sm'
-                        : 'text-muted-foreground'
-                    )}
-                    onClick={() => {
-                      setCatalogFilters((prev) => ({
-                        ...prev,
-                        source: 'products',
-                        sortBy: defaultSortForSource('products'),
-                        page: 1,
-                      }))
-                    }}
-                  >
-                    Productos
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      'rounded-md px-3 py-1.5 text-xs font-medium',
-                      catalogSource === 'materials'
-                        ? 'bg-background shadow-sm'
-                        : 'text-muted-foreground'
-                    )}
-                    onClick={() => {
-                      setCatalogFilters((prev) => ({
-                        ...prev,
-                        source: 'materials',
-                        sortBy: defaultSortForSource('materials'),
-                        page: 1,
-                      }))
-                    }}
-                  >
-                    Materiales
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      'rounded-md px-3 py-1.5 text-xs font-medium',
-                      catalogSource === 'services'
-                        ? 'bg-background shadow-sm'
-                        : 'text-muted-foreground'
-                    )}
-                    onClick={() => {
-                      setCatalogFilters((prev) => ({
-                        ...prev,
-                        source: 'services',
-                        sortBy: defaultSortForSource('services'),
-                        page: 1,
-                      }))
-                    }}
-                  >
-                    Servicios
-                  </button>
-                </div>
-                <div className="flex min-w-0 w-full items-center gap-2">
-                  <div className="relative min-w-0 flex-1">
-                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" />
-                    <Input
-                      placeholder={
-                        catalogSource === 'products'
-                          ? 'Buscar producto o referencia…'
-                          : catalogSource === 'services'
-                            ? 'Buscar servicio…'
-                            : 'Buscar material, código o referencia…'
-                      }
-                      value={searchInput}
-                      onChange={(e) => setSearchInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key !== 'Enter') return
-                        e.preventDefault()
-                        if (catalogSource === 'services') return
-                        const code = searchInput.trim()
-                        if (code) void filterCatalogByBarcode(code)
-                      }}
-                      className="bg-white pl-9"
-                    />
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <CatalogLayoutToggle layout={layout} onToggle={toggleLayout} />
-                    <FiltersIconButton
-                      count={activeFilterCount}
-                      expanded={filtersOpen}
-                      controls="ventas-catalog-filters"
-                      onClick={() => setFiltersOpen(true)}
-                    />
-                    {catalogSource !== 'services' ? (
-                      <BarcodeScanButton
-                        className="bg-white"
-                        onScan={(code) => void filterCatalogByBarcode(code)}
-                      />
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <FiltersDrawer
-              open={filtersOpen}
-              onOpenChange={setFiltersOpen}
-              id="ventas-catalog-filters"
-              title="Filtros del catálogo"
-              description="Categoría, orden, talla y rango de precio del catálogo de ventas."
-            >
-              {renderFiltersPanel()}
-            </FiltersDrawer>
-
-            <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto pr-1">
-              {catalogSource === 'products' ? (
-                loadingCatalog ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="text-muted-foreground size-6 animate-spin" />
-                  </div>
-                ) : catalogError ? (
-                  <QueryErrorState
-                    isError
-                    error={catalogQueryError}
-                    title="No se pudo cargar el catálogo"
-                  />
-                ) : products.length === 0 ? (
-                  <EmptyListState
-                    className="py-8"
-                    title="Todavía no hay productos en el catálogo"
-                    description="Es normal en una empresa nueva. Creá productos desde Productos o acá con Nuevo."
-                  />
-                ) : layout === 'table' ? (
-                  <CatalogProductTable
-                    products={products}
-                    showActions
-                    onEdit={openEditProduct}
-                    onAddToCart={addToCart}
-                  />
-                ) : (
-                  <div className={cn(catalogProductGridClassName, 'pb-1')}>
-                    {products.map((product) => (
-                      <CatalogProductCard
-                        key={product.id}
-                        product={product}
-                        showActions
-                        onEdit={openEditProduct}
-                        onAddToCart={addToCart}
-                      />
-                    ))}
-                  </div>
-                )
-              ) : catalogSource === 'services' ? (
-                loadingServices ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="text-muted-foreground size-6 animate-spin" />
-                  </div>
-                ) : servicesError ? (
-                  <QueryErrorState
-                    isError
-                    error={servicesQueryError}
-                    title="No se pudieron cargar los servicios"
-                  />
-                ) : services.length === 0 ? (
-                  <EmptyListState
-                    className="py-8"
-                    title="Todavía no hay servicios"
-                    description="Creá servicios en Productos → Servicios para venderlos acá sin descontar stock."
-                  />
-                ) : layout === 'table' ? (
-                  <CatalogProductTable products={services} onAddToCart={addToCart} />
-                ) : (
-                  <div className={cn(catalogProductGridClassName, 'pb-1')}>
-                    {services.map((service) => (
-                      <CatalogProductCard
-                        key={service.id}
-                        product={service}
-                        onAddToCart={addToCart}
-                      />
-                    ))}
-                  </div>
-                )
-              ) : loadingMaterials ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="text-muted-foreground size-6 animate-spin" />
-                </div>
-              ) : materialsError ? (
-                <QueryErrorState
-                  isError
-                  error={materialsQueryError}
-                  title="No se pudieron cargar los materiales"
-                />
-              ) : materials.length === 0 ? (
-                <p className="text-muted-foreground py-8 text-center text-sm">
-                  No hay materiales activos.
-                </p>
-              ) : layout === 'table' ? (
-                <MaterialCatalogTable materials={materials} onAddToCart={addMaterialToCart} />
-              ) : (
-                <div className={cn(catalogProductGridClassName, 'pb-1')}>
-                  {materials.map((material) => (
-                    <VentasMaterialCard
-                      key={material.id}
-                      material={material}
-                      onAddToCart={addMaterialToCart}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {catalogSource === 'products' && catalogMeta && catalogMeta.lastPage > 1 ? (
-              <div className="flex shrink-0 items-center justify-between gap-4 border-t pt-3">
-                <p className="text-muted-foreground text-sm">
-                  Página {catalogMeta.currentPage} de {catalogMeta.lastPage}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={catalogMeta.currentPage <= 1 || loadingCatalog}
-                    onClick={() =>
-                      setCatalogFilters((prev) => ({
-                        ...prev,
-                        page: Math.max(1, prev.page - 1),
-                      }))
-                    }
-                  >
-                    Anterior
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={catalogMeta.currentPage >= catalogMeta.lastPage || loadingCatalog}
-                    onClick={() => setCatalogFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
-                  >
-                    Siguiente
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-
-            {catalogSource === 'services' && servicesMeta && servicesMeta.lastPage > 1 ? (
-              <div className="flex shrink-0 items-center justify-between gap-4 border-t pt-3">
-                <p className="text-muted-foreground text-sm">
-                  Página {servicesMeta.currentPage} de {servicesMeta.lastPage}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={servicesMeta.currentPage <= 1 || loadingServices}
-                    onClick={() =>
-                      setCatalogFilters((prev) => ({
-                        ...prev,
-                        page: Math.max(1, prev.page - 1),
-                      }))
-                    }
-                  >
-                    Anterior
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={servicesMeta.currentPage >= servicesMeta.lastPage || loadingServices}
-                    onClick={() => setCatalogFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
-                  >
-                    Siguiente
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-
-            {catalogSource === 'materials' && materialsMeta && materialsMeta.lastPage > 1 ? (
-              <div className="flex shrink-0 items-center justify-between gap-4 border-t pt-3">
-                <p className="text-muted-foreground text-sm">
-                  Página {materialsMeta.currentPage} de {materialsMeta.lastPage}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={materialsMeta.currentPage <= 1 || loadingMaterials}
-                    onClick={() =>
-                      setCatalogFilters((prev) => ({
-                        ...prev,
-                        page: Math.max(1, prev.page - 1),
-                      }))
-                    }
-                  >
-                    Anterior
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={
-                      materialsMeta.currentPage >= materialsMeta.lastPage || loadingMaterials
-                    }
-                    onClick={() => setCatalogFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
-                  >
-                    Siguiente
-                  </Button>
-                </div>
-              </div>
-            ) : null}
+            <VentasCatalogResults
+              source={catalogSource}
+              layout={layout}
+              products={products}
+              services={services}
+              materials={materials}
+              productsMeta={catalogMeta}
+              servicesMeta={servicesMeta}
+              materialsMeta={materialsMeta}
+              loadingProducts={loadingCatalog}
+              productsError={catalogError}
+              productsQueryError={catalogQueryError}
+              loadingServices={loadingServices}
+              servicesError={servicesError}
+              servicesQueryError={servicesQueryError}
+              loadingMaterials={loadingMaterials}
+              materialsError={materialsError}
+              materialsQueryError={materialsQueryError}
+              onEditProduct={openEditProduct}
+              onAddProduct={addToCart}
+              onAddMaterial={addMaterialToCart}
+              onPageChange={(page) =>
+                setCatalogFilters((prev) => ({
+                  ...prev,
+                  page,
+                }))
+              }
+            />
           </CardContent>
         </Card>
       </div>

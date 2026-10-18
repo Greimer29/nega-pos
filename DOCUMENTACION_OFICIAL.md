@@ -1,6 +1,6 @@
 ﻿# Documentación oficial técnica — Nega POS
 
-Referencia técnica **única y vigente** para desarrolladores. Derivada exclusivamente del código fuente del repositorio (`apps/`, migraciones, rutas, configuración). Última revisión contra el código: 17 de octubre de 2026.
+Referencia técnica **única y vigente** para desarrolladores. Derivada exclusivamente del código fuente del repositorio (`apps/`, migraciones, rutas, configuración). Última revisión contra el código: 18 de octubre de 2026.
 
 ---
 
@@ -1032,6 +1032,14 @@ Cada feature encapsula servicios API (axios), hooks TanStack Query, componentes 
 | `payment-methods` | payment-methods |
 | `branding` | tema desde settings general |
 
+En el POS de ventas, `ventas-panel.tsx` coordina estado y flujo entre los componentes especializados:
+
+- `ventas-catalog-toolbar.tsx`: selector de productos/materiales/servicios, búsqueda, filtros, vista tabla/tarjetas, conectividad y acceso móvil al carrito.
+- `ventas-catalog-results.tsx`: estados de carga/error/vacío, resultados en tabla o tarjetas y paginación.
+- `ventas-checkout-panel.tsx`: presentación del carrito y checkout.
+
+La lógica reutilizable sin UI vive en `utils/`: `ventas-catalog.ts` prepara filtros y datos del catálogo; `ventas-cart-lines.ts` normaliza líneas y resuelve precios; `sales-checkout.ts` construye payloads, persiste borradores y coordina la confirmación online. El flujo offline permanece en el coordinador porque depende del estado local y la copia del catálogo.
+
 ### Estado y borradores locales
 
 - **TanStack Query**: caché servidor, invalidación tras mutaciones.
@@ -1089,6 +1097,7 @@ node ace test
 - Base de datos de tests: **`nega_pos_test`** (nunca `nega_pos` de desarrollo).
 - `SESSION_DRIVER=memory` en tests.
 - Suites funcionales en `apps/api/tests/functional/` (ventas, compras, pedidos, dashboard, inventario integrado, etc.).
+- La CI de GitHub ejecuta lint, typecheck, builds, suites funcionales y unitarias de API, y pruebas Vitest de web.
 
 ### Web (Vitest)
 
