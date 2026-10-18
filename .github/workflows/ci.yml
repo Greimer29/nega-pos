@@ -93,3 +93,11 @@ jobs:
         run: pnpm --filter api exec node ace test --suite=functional
         env:
           DB_DATABASE: nega_pos_test
+
+      - name: Run API unit tests
+        run: pnpm --filter api exec node ace test --suite=unit
+        env:
+          DB_DATABASE: nega_pos_test
+
+      - name: Run Web tests
+        run: pnpm --filter web test

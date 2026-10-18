@@ -35,6 +35,7 @@ describe('purchase-entry-currency', () => {
       quantity: 2,
       unit_price_usd: 0.1,
       unit_price_bs: 10,
+      is_wholesale: false,
     })
   })
 
@@ -56,6 +57,7 @@ describe('purchase-entry-currency', () => {
       catalog_product_id: 5,
       quantity: 1,
       unit_price_usd: 0.125,
+      is_wholesale: false,
     })
   })
 
@@ -71,10 +73,10 @@ describe('purchase-entry-currency', () => {
     expect(isPurchaseEntryInNative('VES', 'XAU')).toBe(true)
   })
 
-  it('uses 4 decimals for XAU entry amounts', () => {
+  it('uses 4 decimals for entry amounts', () => {
     expect(purchaseEntryDecimals('XAU')).toBe(4)
-    expect(purchaseEntryDecimals('USD')).toBe(2)
-    expect(purchaseEntryDecimals('VES')).toBe(2)
+    expect(purchaseEntryDecimals('USD')).toBe(4)
+    expect(purchaseEntryDecimals('VES')).toBe(4)
     expect(usdToNative(0.1234, 1, 'XAU')).toBe(0.1234)
   })
 })

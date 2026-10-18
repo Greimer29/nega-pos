@@ -10,10 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { wholesaleUnitsPerPack } from '@/lib/wholesale'
-import {
-  VentasCatalogFiltersPanel,
-  type VentasCatalogSortOption,
-} from '@/features/ventas/components/ventas-catalog-filters-panel'
+import { VentasCatalogFiltersPanel } from '@/features/ventas/components/ventas-catalog-filters-panel'
 import { CustomerFormDialog } from '@/features/customers/components/customer-form-dialog'
 import type { Customer } from '@/features/customers/types'
 import { useAuth } from '@/features/auth/hooks/use-auth'
@@ -113,109 +110,18 @@ import {
   clampInvoiceDiscountUsd,
   invoiceTotalAfterDiscount,
 } from '@/features/ventas/utils/invoice-discount'
-
-type CartLine =
-  | {
-      id: string
-      kind: 'catalog'
-      product: CatalogProduct
-      quantity: number
-      formulaMaterials?: SaleLineFormulaMaterial[] | null
-      unitPriceUsd?: number
-      kitchenNote?: string | null
-      detail?: string | null
-      catalogProductSizeId?: number | null
-      size?: string | null
-      isWholesale?: boolean
-    }
-  | {
-      id: string
-      kind: 'material'
-      material: Material
-      quantity: number
-      unitPriceUsd?: number
-      isWholesale?: boolean
-    }
-
-type CatalogSource = 'products' | 'materials' | 'services'
-
-type VentasCatalogFilters = {
-  source: CatalogSource
-  search: string
-  barcode: string
-  category: string
-  size: string
-  sortBy: VentasCatalogSortOption
-  minPrice: string
-  maxPrice: string
-  page: number
-}
-
-const DEFAULT_VENTAS_CATALOG_FILTERS: VentasCatalogFilters = {
-  source: 'products',
-  search: '',
-  barcode: '',
-  category: '',
-  size: '',
-  sortBy: 'most_sold',
-  minPrice: '',
-  maxPrice: '',
-  page: 1,
-}
-
-function defaultSortForSource(source: CatalogSource): VentasCatalogSortOption {
-  return source === 'products' ? 'most_sold' : 'name'
-}
-
-function cartLineUnitPrice(line: CartLine): number {
-  if (line.unitPriceUsd != null) {
-    return line.unitPriceUsd
-  }
-  if (line.isWholesale) {
-    if (line.kind === 'material') {
-      const pack = Number(line.material.wholesaleSalePriceUsd)
-      if (Number.isFinite(pack) && pack > 0) return pack
-      return materialSaleUnitPriceUsd(line.material)
-    }
-    const pack = Number(line.product.wholesale_sale_price_usd)
-    if (Number.isFinite(pack) && pack > 0) return pack
-  }
-  if (line.kind === 'material') {
-    return materialSaleUnitPriceUsd(line.material)
-  }
-  return Number(line.product.sale_price_usd)
-}
-
-function normalizeDraftCartLine(
-  line: NonNullable<ReturnType<typeof loadVentasCartDraft>>['cart'][number]
-): CartLine | null {
-  if (line.kind === 'material' && line.material) {
-    return {
-      id: line.id ?? createCartLineId(),
-      kind: 'material',
-      material: line.material,
-      quantity: line.quantity,
-      unitPriceUsd: line.unitPriceUsd,
-      isWholesale: line.isWholesale,
-    }
-  }
-  if (line.product) {
-    return {
-      id: line.id ?? createCartLineId(),
-      kind: 'catalog',
-      product: line.product,
-      quantity: line.quantity,
-      formulaMaterials: line.formulaMaterials ?? null,
-      unitPriceUsd: line.unitPriceUsd,
-      kitchenNote: line.kitchenNote ?? null,
-      detail: line.detail ?? null,
-      catalogProductSizeId: line.catalogProductSizeId ?? null,
-      size: line.size ?? null,
-      isWholesale: line.isWholesale,
-    }
-  }
-  return null
-}
+import {
+  cartLineUnitPrice,
+  normalizeDraftCartLine,
+  type CartLine,
+} from '@/features/ventas/utils/ventas-cart-lines'
+import {
+  DEFAULT_VENTAS_CATALOG_FILTERS,
+  defaultSortForSource,
+  filterCatalogByPrice,
+  getCatalogPriceBounds,
+  getCatalogSizeOptions,
+} from '@/features/ventas/utils/ventas-catalog'
 
 const CATALOG_PER_PAGE = 30
 
@@ -557,57 +463,42 @@ function VentasCreateView() {
   }, [syncMessage, clearSyncMessage])
 
   const priceBounds = useMemo(() => {
-    const prices =
-      catalogSource === 'products'
-        ? productsRaw.map((item) => Number(item.sale_price_usd))
-        : catalogSource === 'services'
-          ? servicesRaw.map((item) => Number(item.sale_price_usd))
-          : materialsRaw.map((item) => Number(materialSaleUnitPriceUsd(item)))
-    const finite = prices.filter((value) => Number.isFinite(value) && value >= 0)
-    if (finite.length === 0) return { min: 0, max: 100 }
-    return { min: Math.min(...finite), max: Math.max(...finite) }
+    if (catalogSource === 'materials') {
+      return getCatalogPriceBounds(materialsRaw, materialSaleUnitPriceUsd)
+    }
+    return getCatalogPriceBounds(catalogSource === 'products' ? productsRaw : servicesRaw, (item) =>
+      Number(item.sale_price_usd)
+    )
   }, [catalogSource, productsRaw, servicesRaw, materialsRaw])
 
   const products = useMemo(() => {
-    const min = Number(catalogFilters.minPrice)
-    const max = Number(catalogFilters.maxPrice)
-    return productsRaw.filter((item) => {
-      const price = Number(item.sale_price_usd)
-      if (Number.isFinite(min) && catalogFilters.minPrice.trim() && price < min) return false
-      if (Number.isFinite(max) && catalogFilters.maxPrice.trim() && price > max) return false
-      return true
-    })
+    return filterCatalogByPrice(
+      productsRaw,
+      catalogFilters.minPrice,
+      catalogFilters.maxPrice,
+      (item) => Number(item.sale_price_usd)
+    )
   }, [productsRaw, catalogFilters.minPrice, catalogFilters.maxPrice])
 
   const services = useMemo(() => {
-    const min = Number(catalogFilters.minPrice)
-    const max = Number(catalogFilters.maxPrice)
-    return servicesRaw.filter((item) => {
-      const price = Number(item.sale_price_usd)
-      if (Number.isFinite(min) && catalogFilters.minPrice.trim() && price < min) return false
-      if (Number.isFinite(max) && catalogFilters.maxPrice.trim() && price > max) return false
-      return true
-    })
+    return filterCatalogByPrice(
+      servicesRaw,
+      catalogFilters.minPrice,
+      catalogFilters.maxPrice,
+      (item) => Number(item.sale_price_usd)
+    )
   }, [servicesRaw, catalogFilters.minPrice, catalogFilters.maxPrice])
 
   const materials = useMemo(() => {
-    const min = Number(catalogFilters.minPrice)
-    const max = Number(catalogFilters.maxPrice)
-    return materialsRaw.filter((item) => {
-      const price = materialSaleUnitPriceUsd(item)
-      if (Number.isFinite(min) && catalogFilters.minPrice.trim() && price < min) return false
-      if (Number.isFinite(max) && catalogFilters.maxPrice.trim() && price > max) return false
-      return true
-    })
+    return filterCatalogByPrice(
+      materialsRaw,
+      catalogFilters.minPrice,
+      catalogFilters.maxPrice,
+      materialSaleUnitPriceUsd
+    )
   }, [materialsRaw, catalogFilters.minPrice, catalogFilters.maxPrice])
 
-  const sizeOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(productsRaw.flatMap((product) => (product.sizes ?? []).map((size) => size.size)))
-      ).sort((a, b) => a.localeCompare(b, 'es', { numeric: true })),
-    [productsRaw]
-  )
+  const sizeOptions = useMemo(() => getCatalogSizeOptions(productsRaw), [productsRaw])
 
   const defaultSort = defaultSortForSource(catalogSource)
   const activeFilterCount =
