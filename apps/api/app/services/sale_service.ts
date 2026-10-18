@@ -51,7 +51,11 @@ import { resolveSaleReturnRequests, type SaleReturnLineInput } from '#utils/sale
 import { calculateProductReturnStockQuantity } from '#utils/sale_return_stock'
 import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
-import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
+import {
+  formulaMaterialInventoryQuantity,
+  lineInventoryQuantity,
+  resolveWholesaleLineSnapshot,
+} from '#utils/wholesale'
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
@@ -762,7 +766,11 @@ export default class SaleService {
             continue
           }
 
-          const inventoryReturnQty = this.inventoryQuantityForLine(line, returnQty)
+          const inventoryReturnQty = lineInventoryQuantity(
+            returnQty,
+            Boolean(line.isWholesale),
+            line.unitsPerPack
+          )
           await this.revertirStockProductoParcial(
             Number(sale.id),
             Number(line.catalogProductId),
@@ -781,7 +789,11 @@ export default class SaleService {
         }
 
         if (line.materialId) {
-          const inventoryReturnQty = this.inventoryQuantityForLine(line, returnQty)
+          const inventoryReturnQty = lineInventoryQuantity(
+            returnQty,
+            Boolean(line.isWholesale),
+            line.unitsPerPack
+          )
           await InventoryMovement.create(
             {
               materialId: Number(line.materialId),
@@ -1050,13 +1062,6 @@ export default class SaleService {
     }
   }
 
-  private inventoryQuantityForLine(
-    line: Pick<SaleLine, 'quantity' | 'isWholesale' | 'unitsPerPack'>,
-    quantity = Number(line.quantity)
-  ) {
-    return lineInventoryQuantity(quantity, Boolean(line.isWholesale), line.unitsPerPack)
-  }
-
   private async descontarStock(
     sale: Sale,
     trx: TransactionClientContract,
@@ -1067,7 +1072,11 @@ export default class SaleService {
     const allowInsufficient = Boolean(options?.allowInsufficient)
 
     for (const line of sale.saleLines) {
-      const quantity = this.inventoryQuantityForLine(line)
+      const quantity = lineInventoryQuantity(
+        Number(line.quantity),
+        Boolean(line.isWholesale),
+        line.unitsPerPack
+      )
 
       if (line.catalogProductId) {
         const product =
@@ -1128,15 +1137,18 @@ export default class SaleService {
 
         if (product.formulaId) {
           const formulaMaterials = resolveEffectiveFormulaMaterials(line, product)
-          // Mayorista: quantity son paquetes → consumir paquetes × und/paq × qty fórmula.
-          const inventoryQty = this.inventoryQuantityForLine(line)
           const wholesaleNote =
             line.isWholesale && line.unitsPerPack
               ? ` · mayorista (${line.quantity} paq × ${line.unitsPerPack} und)`
               : ''
           for (const formulaItem of formulaMaterials) {
             const materialId = formulaItem.materialId
-            const consumo = inventoryQty * formulaItem.quantityPerUnit
+            const consumo = formulaMaterialInventoryQuantity(
+              Number(line.quantity),
+              Boolean(line.isWholesale),
+              line.unitsPerPack,
+              formulaItem.quantityPerUnit
+            )
             if (consumo <= 0) {
               continue
             }

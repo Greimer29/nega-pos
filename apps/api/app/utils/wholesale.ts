@@ -74,6 +74,15 @@ export function lineInventoryQuantity(
   return lineQuantity * pack
 }
 
+export function formulaMaterialInventoryQuantity(
+  lineQuantity: number,
+  isWholesale: boolean,
+  unitsPerPack: number | string | null | undefined,
+  formulaQuantityPerUnit: number
+): number {
+  return lineInventoryQuantity(lineQuantity, isWholesale, unitsPerPack) * formulaQuantityPerUnit
+}
+
 export function normalizeWholesaleConfig(
   input: WholesaleConfigInput,
   options: { allowEnabled: boolean; rejectReason?: string } = { allowEnabled: true }
