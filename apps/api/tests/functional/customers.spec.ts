@@ -6,6 +6,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
 import { resetTestSaleCodes, seedTestSale } from '#tests/helpers/seed_test_sale'
 import db from '@adonisjs/lucid/services/db'
+import { nowInAppZone } from '#utils/app_timezone'
 import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
 
@@ -317,7 +318,7 @@ test.group('Customers API', (group) => {
       totalUsd: '90.0000',
       balanceUsd: '90.0000',
       amountPaidUsd: '0.0000',
-      creditDueDate: DateTime.now().minus({ days: 1 }),
+      creditDueDate: nowInAppZone().minus({ days: 1 }).startOf('day'),
       lines: [{ quantity: '1', unitPriceUsd: '90.0000' }],
     })
 
