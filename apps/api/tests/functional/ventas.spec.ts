@@ -16,6 +16,7 @@ import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
 import { seedOpenSalesShift } from '#tests/helpers/seed_test_sale'
 import { seedReferenceData } from '#tests/helpers/seed_reference_data'
+import { nowInAppZone } from '#utils/app_timezone'
 
 const TEST_EMAIL = 'test-ventas@negapos.local'
 const TEST_PASSWORD = 'password123'
@@ -1383,6 +1384,9 @@ test.group('Ventas API — catálogo y ventas', (group) => {
   test('POST sale CREDIT leaves balance_usd pending', async ({ client, assert }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
     const customer = await seedCustomer()
+    const expectedCreditDueDate = nowInAppZone()
+      .plus({ days: customer.creditDays ?? 0 })
+      .toISODate()
     const catalog = await CatalogProduct.create({
       name: 'Producto crédito',
       category: 'Uniforme',
@@ -1414,6 +1418,7 @@ test.group('Ventas API — catálogo y ventas', (group) => {
     assert.equal(response.body().data.sale.payment_type, 'CREDIT')
     assert.equal(response.body().data.sale.balance_usd, '50.0000')
     assert.equal(response.body().data.sale.amount_paid_usd, '0.0000')
+    assert.equal(response.body().data.sale.credit_due_date, expectedCreditDueDate)
   })
 
   test('POST /sales/:id/confirm rejects cash sale without payment method', async ({ client }) => {
