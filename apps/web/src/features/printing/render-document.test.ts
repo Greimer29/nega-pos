@@ -15,9 +15,9 @@ describe('renderSaleDocument', () => {
     expect(rendered.html).toContain('0000000001')
     expect(rendered.html).toContain('Camisa escolar')
     expect(rendered.html).toContain('Tela al corte')
-    expect(rendered.html).toContain('2 x 10,00 UND')
+    expect(rendered.html).toContain('2 × 10,00 UND')
     expect(rendered.html).toContain('USD 20,00')
-    expect(rendered.html).toContain('1,50 x 5,00 MTS')
+    expect(rendered.html).toContain('1,50 × 5,00 MTS')
     expect(rendered.html).toContain('USD 5,00')
     expect(rendered.html).toContain('RECIBO')
     expect(rendered.html).toContain('TOTAL')
@@ -88,7 +88,7 @@ describe('renderSaleDocument', () => {
     expect(rendered.html).toContain('DESCUENTO')
     expect(rendered.html).toContain('USD 5,00')
     expect(rendered.html).toContain('USD 20,00')
-    expect(rendered.html).toContain('2 x 10,00 UND')
+    expect(rendered.html).toContain('2 × 10,00 UND')
   })
 
   it('renders credit invoice with credit row', () => {

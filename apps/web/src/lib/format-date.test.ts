@@ -34,7 +34,7 @@ describe('todayLocalIsoDate / addLocalDaysIsoDate', () => {
     expect(todayLocalIsoDate()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
-  it('adds calendar days in local time', () => {
-    expect(addLocalDaysIsoDate(15, new Date(2026, 9, 4))).toBe('2026-10-19')
+  it('adds calendar days from an explicit store-calendar date', () => {
+    expect(addLocalDaysIsoDate(15, new Date('2026-10-04T12:00:00-04:00'))).toBe('2026-10-19')
   })
 })
