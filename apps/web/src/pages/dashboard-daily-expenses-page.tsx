@@ -6,14 +6,10 @@ import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-mo
 import { DailyExpenseList } from '@/features/dashboard/components/daily-expense-list'
 import { useDailyExpensesQuery } from '@/features/dashboard/hooks/use-dashboard'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
+import { formatHoyLargo } from '@/lib/format-date'
 
 function todayLabel() {
-  return new Date().toLocaleDateString('es-VE', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
+  return formatHoyLargo()
 }
 
 export function DashboardDailyExpensesPage() {

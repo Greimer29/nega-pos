@@ -6,14 +6,10 @@ import { DailySoldProductCard } from '@/features/dashboard/components/daily-sold
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { useDailyProductSalesQuery } from '@/features/dashboard/hooks/use-dashboard'
 import { QueryErrorState } from '@/features/notifications/query-error-state'
+import { formatHoyLargo } from '@/lib/format-date'
 
 function todayLabel() {
-  return new Date().toLocaleDateString('es-VE', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
+  return formatHoyLargo()
 }
 
 export function DashboardDailyProductsPage() {
