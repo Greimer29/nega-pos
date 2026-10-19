@@ -4,13 +4,11 @@ import LineaVentaInvalidaException from '#exceptions/linea_venta_invalida_except
 import MaterialNoEncontradoException from '#exceptions/material_no_encontrado_exception'
 import OrderNoDevolvableException from '#exceptions/pedido_no_devolvable_exception'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
-import StockInsuficienteException from '#exceptions/stock_insuficiente_exception'
 import TransicionInvalidaException from '#exceptions/transicion_invalida_exception'
 import VentaNoEditableException from '#exceptions/venta_no_editable_exception'
 import VentaNoEncontradaException from '#exceptions/venta_no_encontrada_exception'
 import { isCatalogService } from '#constants/catalog_item_kind'
 import CatalogProduct from '#models/catalog_product'
-import CatalogProductSize from '#models/catalog_product_size'
 import Customer from '#models/customer'
 import InventoryMovement from '#models/inventory_movement'
 import Material from '#models/material'
@@ -18,21 +16,19 @@ import ProductInventoryMovement from '#models/product_inventory_movement'
 import Sale from '#models/sale'
 import SaleLine from '#models/sale_line'
 import SalesShift from '#models/sales_shift'
-import CatalogProductStockService from '#services/catalog_product_stock_service'
 import CatalogProductSizeService from '#services/catalog_product_size_service'
-import MaterialService from '#services/material_service'
-import ProductInventoryService from '#services/product_inventory_service'
 import SaleCodigoService from '#services/sale_code_service'
 import SalesShiftService from '#services/sales_shift_service'
+import ProductInventoryService from '#services/product_inventory_service'
 import SaleLineService, { type ResolvedSaleLine } from '#services/sale_line_service'
 import SalePaymentService from '#services/sale_payment_service'
+import SaleStockService from '#services/sale_stock_service'
 import {
   assertFormulaMaterialsAllowed,
   normalizeFormulaMaterialsInput,
   resolveEffectiveFormulaMaterials,
   type SaleLineFormulaMaterialInput,
 } from '#services/sale_line_formula'
-import { formatCantidadMovimiento } from '#services/order_stock'
 import {
   formatInventoryQuantityForStorage,
   normalizeInventoryQuantity,
@@ -47,11 +43,7 @@ import { resolveMaterialSaleLineCost, resolveProductSaleLineCost } from '#utils/
 import { calculateSaleLineAmounts, normalizeSaleLineKitchenNote } from '#utils/sale_line_values'
 import { datetimeRangeUtcSql, dayStartUtcSql } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
-import {
-  formulaMaterialInventoryQuantity,
-  lineInventoryQuantity,
-  resolveWholesaleLineSnapshot,
-} from '#utils/wholesale'
+import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
@@ -155,13 +147,12 @@ const ORDER_STATUS_TRANSITIONS: Record<SaleOrderStatus, SaleOrderStatus[]> = {
 
 export default class SaleService {
   private codeService = new SaleCodigoService()
-  private materialService = new MaterialService()
   private productInventoryService = new ProductInventoryService()
-  private catalogProductStockService = new CatalogProductStockService()
   private sizeService = new CatalogProductSizeService()
   private salesShiftService = new SalesShiftService()
   private saleLineService = new SaleLineService()
   private salePaymentService = new SalePaymentService()
+  private saleStockService = new SaleStockService()
 
   previewNextCode(): Promise<string> {
     return this.codeService.preview()
@@ -454,7 +445,7 @@ export default class SaleService {
       sale.salesShiftId = shift.id
 
       await this.saleLineService.freezeCosts(sale, trx)
-      await this.descontarStock(sale, trx)
+      await this.saleStockService.deductSaleStock(sale, trx)
       await this.salePaymentService.applySaleBalanceAndDueDate(sale, paymentType, trx)
 
       sale.useTransaction(trx)
@@ -594,7 +585,9 @@ export default class SaleService {
       }
 
       await this.saleLineService.freezeCosts(hydrated, trx)
-      const needsReview = await this.descontarStock(hydrated, trx, { allowInsufficient: true })
+      const needsReview = await this.saleStockService.deductSaleStock(hydrated, trx, {
+        allowInsufficient: true,
+      })
       hydrated.needsStockReview = needsReview
       await this.salePaymentService.applySaleBalanceAndDueDate(hydrated, input.payment_type, trx)
 
@@ -957,191 +950,6 @@ export default class SaleService {
         formulaMaterials: null,
       },
     }
-  }
-
-  private async descontarStock(
-    sale: Sale,
-    trx: TransactionClientContract,
-    options?: { allowInsufficient?: boolean }
-  ): Promise<boolean> {
-    const saleId = Number(sale.id)
-    let needsReview = false
-    const allowInsufficient = Boolean(options?.allowInsufficient)
-
-    for (const line of sale.saleLines) {
-      const quantity = lineInventoryQuantity(
-        Number(line.quantity),
-        Boolean(line.isWholesale),
-        line.unitsPerPack
-      )
-
-      if (line.catalogProductId) {
-        const product =
-          line.catalogProduct ??
-          (await CatalogProduct.query({ client: trx })
-            .where('id', Number(line.catalogProductId))
-            .preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
-            .forUpdate()
-            .first())
-
-        if (!product) {
-          throw new ProductoCatalogoNoEncontradoException()
-        }
-
-        if (isCatalogService(product)) {
-          continue
-        }
-
-        const { quantity: disponible } =
-          await this.catalogProductStockService.calcularStockDisponible(product, { trx })
-
-        if (quantity > disponible) {
-          if (!allowInsufficient) {
-            throw new StockInsuficienteException([
-              {
-                material_id: Number(product.id),
-                name: product.name,
-                stock_actual: disponible,
-                consumo_proyectado: quantity,
-                faltante: quantity - disponible,
-              },
-            ])
-          }
-          needsReview = true
-        }
-
-        if (line.catalogProductSizeId) {
-          const sizeRow = await CatalogProductSize.query({ client: trx })
-            .where('id', Number(line.catalogProductSizeId))
-            .forUpdate()
-            .first()
-          const sizeStock = sizeRow ? Number(sizeRow.stockQuantity) : 0
-          if (quantity > sizeStock) {
-            if (!allowInsufficient) {
-              throw new StockInsuficienteException([
-                {
-                  material_id: Number(product.id),
-                  name: `${product.name}${sizeRow ? ` (${sizeRow.size})` : ''}`,
-                  stock_actual: sizeStock,
-                  consumo_proyectado: quantity,
-                  faltante: quantity - sizeStock,
-                },
-              ])
-            }
-            needsReview = true
-          }
-        }
-
-        if (product.formulaId) {
-          const formulaMaterials = resolveEffectiveFormulaMaterials(line, product)
-          const wholesaleNote =
-            line.isWholesale && line.unitsPerPack
-              ? ` · mayorista (${line.quantity} paq × ${line.unitsPerPack} und)`
-              : ''
-          for (const formulaItem of formulaMaterials) {
-            const materialId = formulaItem.materialId
-            const consumo = formulaMaterialInventoryQuantity(
-              Number(line.quantity),
-              Boolean(line.isWholesale),
-              line.unitsPerPack,
-              formulaItem.quantityPerUnit
-            )
-            if (consumo <= 0) {
-              continue
-            }
-
-            const stockActual = await this.materialService.calcularStock(materialId, trx)
-            if (stockActual < consumo) {
-              if (!allowInsufficient) {
-                const material = formulaItem.material ?? (await Material.findOrFail(materialId))
-                throw new StockInsuficienteException([
-                  {
-                    material_id: materialId,
-                    name: material.name,
-                    stock_actual: stockActual,
-                    consumo_proyectado: consumo,
-                    faltante: consumo - stockActual,
-                  },
-                ])
-              }
-              needsReview = true
-            }
-
-            await InventoryMovement.create(
-              {
-                materialId,
-                type: 'SALE_OUT',
-                quantity: formatCantidadMovimiento(consumo),
-                note: `Factura ${sale.code}${wholesaleNote}`,
-              },
-              { client: trx }
-            )
-          }
-          continue
-        }
-
-        const sizeLabel = line.size?.trim()
-        const sizeNote = sizeLabel ? ` talla ${sizeLabel}` : ''
-        const wholesaleNote =
-          line.isWholesale && line.unitsPerPack
-            ? ` — ${Number(line.quantity)} paq. × ${Number(line.unitsPerPack)} und`
-            : ''
-        const movementNote = `Venta ${sale.code}${sizeNote}${wholesaleNote}`
-
-        if (line.catalogProductSizeId) {
-          await this.sizeService.deductSizeStock(Number(line.catalogProductSizeId), quantity, trx)
-        }
-
-        await this.productInventoryService.registrarMovimiento(
-          {
-            catalogProductId: Number(line.catalogProductId),
-            type: 'SALE_OUT',
-            quantity: -quantity,
-            saleId,
-            note: movementNote,
-            allowNegativeStock: allowInsufficient,
-          },
-          trx
-        )
-      }
-
-      if (line.materialId) {
-        const materialId = Number(line.materialId)
-        const stockActual = await this.materialService.calcularStock(materialId, trx)
-        if (stockActual < quantity) {
-          if (!allowInsufficient) {
-            const material = line.material ?? (await Material.findOrFail(materialId))
-            throw new StockInsuficienteException([
-              {
-                material_id: materialId,
-                name: material.name,
-                stock_actual: stockActual,
-                consumo_proyectado: quantity,
-                faltante: quantity - stockActual,
-              },
-            ])
-          }
-          needsReview = true
-        }
-
-        const wholesaleNote =
-          line.isWholesale && line.unitsPerPack
-            ? ` — ${Number(line.quantity)} paq. × ${Number(line.unitsPerPack)} und`
-            : ''
-
-        await InventoryMovement.create(
-          {
-            materialId,
-            type: 'SALE_OUT',
-            quantity: formatCantidadMovimiento(quantity),
-            note: `Factura ${sale.code}${wholesaleNote}`,
-          },
-          { client: trx }
-        )
-      }
-    }
-
-    return needsReview
   }
 
   private async revertirStockProductoParcial(
