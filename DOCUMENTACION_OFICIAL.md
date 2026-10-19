@@ -566,7 +566,7 @@ En multi-caja, las mutaciones relevantes emiten eventos SSE por empresa para inv
 ### Ventas (`sale_service.ts`)
 
 El servicio reutiliza cálculos de `utils/wholesale.ts` para convertir líneas mayoristas a unidades de inventario y escalar el consumo de materiales de fórmula con esa misma cantidad.
-Las reglas de costo para líneas de producto, material y fórmula están en `utils/sale_line_cost.ts`; la carga de modelos y el guardado del costo congelado permanecen en el servicio.
+Las reglas de costo para líneas de producto, material y fórmula están en `utils/sale_line_cost.ts`; `sale_line_service.ts` persiste las líneas y congela sus costos dentro de la transacción.
 `utils/sale_line_values.ts` centraliza el subtotal y formato monetario de las líneas, además de normalizar sus notas de cocina.
 La resolución de entradas de venta está separada en `resolveCatalogLine` y `resolveMaterialLine`; `resolveLines` valida el tipo de cada entrada, acumula los subtotales sin redondear y coordina el resultado.
 
