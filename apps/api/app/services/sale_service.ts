@@ -1,4 +1,3 @@
-import ClienteSinCreditoException from '#exceptions/cliente_sin_credito_exception'
 import CustomerNoEncontradoException from '#exceptions/cliente_no_encontrado_exception'
 import DevolucionCantidadInvalidaException from '#exceptions/devolucion_cantidad_invalida_exception'
 import LineaVentaInvalidaException from '#exceptions/linea_venta_invalida_exception'
@@ -6,7 +5,6 @@ import MaterialNoEncontradoException from '#exceptions/material_no_encontrado_ex
 import OrderNoDevolvableException from '#exceptions/pedido_no_devolvable_exception'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
 import StockInsuficienteException from '#exceptions/stock_insuficiente_exception'
-import TasaCambioInvalidaException from '#exceptions/tasa_cambio_invalida_exception'
 import TransicionInvalidaException from '#exceptions/transicion_invalida_exception'
 import VentaNoEditableException from '#exceptions/venta_no_editable_exception'
 import VentaNoEncontradaException from '#exceptions/venta_no_encontrada_exception'
@@ -19,17 +17,15 @@ import Material from '#models/material'
 import ProductInventoryMovement from '#models/product_inventory_movement'
 import Sale from '#models/sale'
 import SaleLine from '#models/sale_line'
-import SalePayment from '#models/sale_payment'
 import SalesShift from '#models/sales_shift'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
 import CatalogProductSizeService from '#services/catalog_product_size_service'
-import CurrencyService from '#services/currency_service'
 import MaterialService from '#services/material_service'
-import PaymentMethodService from '#services/payment_method_service'
 import ProductInventoryService from '#services/product_inventory_service'
 import SaleCodigoService from '#services/sale_code_service'
 import SalesShiftService from '#services/sales_shift_service'
 import SaleLineService, { type ResolvedSaleLine } from '#services/sale_line_service'
+import SalePaymentService from '#services/sale_payment_service'
 import {
   assertFormulaMaterialsAllowed,
   normalizeFormulaMaterialsInput,
@@ -44,12 +40,12 @@ import {
 import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
 import { calculateSaleReturnAmounts } from '#utils/sale_return_amounts'
-import { prepareSalePaymentLines, type SalePaymentLineInput } from '#utils/sale_payment_lines'
+import type { SalePaymentLineInput } from '#utils/sale_payment_lines'
 import { resolveSaleReturnRequests, type SaleReturnLineInput } from '#utils/sale_return_requests'
 import { calculateProductReturnStockQuantity } from '#utils/sale_return_stock'
 import { resolveMaterialSaleLineCost, resolveProductSaleLineCost } from '#utils/sale_line_cost'
 import { calculateSaleLineAmounts, normalizeSaleLineKitchenNote } from '#utils/sale_line_values'
-import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
+import { datetimeRangeUtcSql, dayStartUtcSql } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
 import {
   formulaMaterialInventoryQuantity,
@@ -163,10 +159,9 @@ export default class SaleService {
   private productInventoryService = new ProductInventoryService()
   private catalogProductStockService = new CatalogProductStockService()
   private sizeService = new CatalogProductSizeService()
-  private paymentMethodService = new PaymentMethodService()
-  private currencyService = new CurrencyService()
   private salesShiftService = new SalesShiftService()
   private saleLineService = new SaleLineService()
+  private salePaymentService = new SalePaymentService()
 
   previewNextCode(): Promise<string> {
     return this.codeService.preview()
@@ -444,7 +439,7 @@ export default class SaleService {
       sale.billingMode = billingMode
       sale.paymentType = paymentType
 
-      await this.aplicarPagosAlConfirmar(sale, paymentType, input, trx)
+      await this.salePaymentService.applyConfirmationPayments(sale, paymentType, input, trx)
 
       sale.code = await this.codeService.generar(trx)
       sale.status = 'COMPLETED'
@@ -460,7 +455,7 @@ export default class SaleService {
 
       await this.saleLineService.freezeCosts(sale, trx)
       await this.descontarStock(sale, trx)
-      await this.aplicarPagoAlConfirmar(sale, paymentType, trx)
+      await this.salePaymentService.applySaleBalanceAndDueDate(sale, paymentType, trx)
 
       sale.useTransaction(trx)
       await sale.save()
@@ -564,11 +559,10 @@ export default class SaleService {
         .forUpdate()
         .firstOrFail()
 
-      await this.aplicarPagosAlConfirmar(
+      await this.salePaymentService.applyConfirmationPayments(
         hydrated,
         input.payment_type,
         {
-          payment_type: input.payment_type,
           payment_method_code: input.payment_method_code,
           currency_code: input.currency_code,
           usd_rate: input.usd_rate,
@@ -602,7 +596,7 @@ export default class SaleService {
       await this.saleLineService.freezeCosts(hydrated, trx)
       const needsReview = await this.descontarStock(hydrated, trx, { allowInsufficient: true })
       hydrated.needsStockReview = needsReview
-      await this.aplicarPagoAlConfirmar(hydrated, input.payment_type, trx)
+      await this.salePaymentService.applySaleBalanceAndDueDate(hydrated, input.payment_type, trx)
 
       hydrated.useTransaction(trx)
       await hydrated.save()
@@ -1148,112 +1142,6 @@ export default class SaleService {
     }
 
     return needsReview
-  }
-
-  private async aplicarPagosAlConfirmar(
-    sale: Sale,
-    paymentType: SalePaymentType,
-    input: ConfirmSaleInput,
-    trx: TransactionClientContract
-  ) {
-    const totalUsd = Number(sale.totalUsd)
-
-    if (paymentType === 'CREDIT') {
-      sale.paymentMethodCode = null
-      sale.usdRate = null
-      sale.totalBs = null
-      await SalePayment.query({ client: trx }).where('saleId', Number(sale.id)).delete()
-      return
-    }
-
-    const paymentLines = prepareSalePaymentLines(input, totalUsd)
-    const baseCode = await this.currencyService.getBaseCurrencyCode()
-    const resolved: Array<{
-      paymentMethodCode: string
-      amountUsd: string
-      currencyCode: string
-      usdRate: string
-      amountNative: string | null
-    }> = []
-
-    for (const line of paymentLines) {
-      const code = line.payment_method_code
-      const amountUsd = Number(line.amount_usd)
-
-      const method = await this.paymentMethodService.assertActivo(code)
-      const currencyCode = (line.currency_code?.trim() || method.currencyCode).toUpperCase()
-      const currency = await this.currencyService.assertActiva(currencyCode)
-      const overrideRate =
-        line.usd_rate !== undefined && line.usd_rate !== null ? Number(line.usd_rate) : Number.NaN
-      const rate = overrideRate > 0 ? overrideRate : Number(currency.ratePerUsd)
-
-      if (!(rate > 0)) {
-        throw new TasaCambioInvalidaException(`La tasa de cambio de ${currencyCode} no es válida`)
-      }
-
-      resolved.push({
-        paymentMethodCode: method.code,
-        amountUsd: amountUsd.toFixed(4),
-        currencyCode,
-        usdRate: rate.toFixed(4),
-        amountNative: formatSaleNativeTotal(amountUsd, currencyCode, rate, baseCode),
-      })
-    }
-
-    const first = resolved[0]!
-    sale.paymentMethodCode = first.paymentMethodCode
-    sale.usdRate = first.usdRate
-    sale.totalBs = formatSaleNativeTotal(
-      totalUsd,
-      first.currencyCode,
-      Number(first.usdRate),
-      baseCode
-    )
-
-    await SalePayment.query({ client: trx }).where('saleId', Number(sale.id)).delete()
-
-    for (const [index, payment] of resolved.entries()) {
-      await SalePayment.create(
-        {
-          saleId: Number(sale.id),
-          paymentMethodCode: payment.paymentMethodCode,
-          amountUsd: payment.amountUsd,
-          currencyCode: payment.currencyCode,
-          usdRate: payment.usdRate,
-          amountNative: payment.amountNative,
-          sortOrder: index,
-        },
-        { client: trx }
-      )
-    }
-  }
-
-  private async aplicarPagoAlConfirmar(
-    sale: Sale,
-    paymentType: SalePaymentType,
-    trx: TransactionClientContract
-  ) {
-    const totalUsd = Number(sale.totalUsd)
-
-    if (paymentType === 'CREDIT') {
-      if (!sale.customerId) {
-        throw new ClienteSinCreditoException()
-      }
-      const customer = sale.customer ?? (await Customer.find(sale.customerId))
-      if (!customer?.creditDays || customer.creditDays <= 0) {
-        throw new ClienteSinCreditoException()
-      }
-      sale.balanceUsd = totalUsd.toFixed(4)
-      sale.amountPaidUsd = '0.0000'
-      sale.creditDueDate = nowInAppZone().plus({ days: customer.creditDays }).startOf('day')
-    } else {
-      sale.balanceUsd = '0.0000'
-      sale.amountPaidUsd = totalUsd.toFixed(4)
-      sale.creditDueDate = null
-    }
-
-    sale.useTransaction(trx)
-    await sale.save()
   }
 
   private async revertirStockProductoParcial(
