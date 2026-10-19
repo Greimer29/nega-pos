@@ -19,7 +19,6 @@ import Material from '#models/material'
 import ProductInventoryMovement from '#models/product_inventory_movement'
 import Sale from '#models/sale'
 import SaleLine from '#models/sale_line'
-import SaleLineMaterial from '#models/sale_line_material'
 import SalePayment from '#models/sale_payment'
 import SalesShift from '#models/sales_shift'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
@@ -30,12 +29,11 @@ import PaymentMethodService from '#services/payment_method_service'
 import ProductInventoryService from '#services/product_inventory_service'
 import SaleCodigoService from '#services/sale_code_service'
 import SalesShiftService from '#services/sales_shift_service'
+import SaleLineService, { type ResolvedSaleLine } from '#services/sale_line_service'
 import {
   assertFormulaMaterialsAllowed,
   normalizeFormulaMaterialsInput,
   resolveEffectiveFormulaMaterials,
-  sumEffectiveMaterialCostUsd,
-  type ResolvedSaleLineFormulaMaterial,
   type SaleLineFormulaMaterialInput,
 } from '#services/sale_line_formula'
 import { formatCantidadMovimiento } from '#services/order_stock'
@@ -49,11 +47,7 @@ import { calculateSaleReturnAmounts } from '#utils/sale_return_amounts'
 import { prepareSalePaymentLines, type SalePaymentLineInput } from '#utils/sale_payment_lines'
 import { resolveSaleReturnRequests, type SaleReturnLineInput } from '#utils/sale_return_requests'
 import { calculateProductReturnStockQuantity } from '#utils/sale_return_stock'
-import {
-  freezeFormulaSaleLineCost,
-  resolveMaterialSaleLineCost,
-  resolveProductSaleLineCost,
-} from '#utils/sale_line_cost'
+import { resolveMaterialSaleLineCost, resolveProductSaleLineCost } from '#utils/sale_line_cost'
 import { calculateSaleLineAmounts, normalizeSaleLineKitchenNote } from '#utils/sale_line_values'
 import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
@@ -152,24 +146,8 @@ export type ListSalesFilters = {
   date_to?: string
 }
 
-type ResolvedLine = {
-  catalogProductId: number | null
-  materialId: number | null
-  catalogProductSizeId: number | null
-  size: string | null
-  description: string
-  quantity: string
-  unitPriceUsd: string
-  subtotalUsd: string
-  costUsd: string | null
-  kitchenNote: string | null
-  isWholesale: boolean
-  unitsPerPack: string | null
-  formulaMaterials: ResolvedSaleLineFormulaMaterial[] | null
-}
-
 type ResolvedLineResult = {
-  line: ResolvedLine
+  line: ResolvedSaleLine
   subtotalUsd: number
 }
 
@@ -188,6 +166,7 @@ export default class SaleService {
   private paymentMethodService = new PaymentMethodService()
   private currencyService = new CurrencyService()
   private salesShiftService = new SalesShiftService()
+  private saleLineService = new SaleLineService()
 
   previewNextCode(): Promise<string> {
     return this.codeService.preview()
@@ -319,7 +298,7 @@ export default class SaleService {
         { client: trx }
       )
 
-      await this.persistLines(Number(sale.id), resolvedLines, trx)
+      await this.saleLineService.persistLines(Number(sale.id), resolvedLines, trx)
 
       await sale.load('paymentMethod')
       await sale.load('customer')
@@ -355,7 +334,7 @@ export default class SaleService {
 
         await SaleLine.query({ client: trx }).where('saleId', Number(sale.id)).delete()
         const { totalUsd: subtotalUsd, resolvedLines } = await this.resolveLines(input.lines, trx)
-        await this.persistLines(Number(sale.id), resolvedLines, trx)
+        await this.saleLineService.persistLines(Number(sale.id), resolvedLines, trx)
         const { discountUsd, totalUsd } = applyInvoiceDiscount(
           subtotalUsd,
           input.discount_usd !== undefined ? input.discount_usd : Number(sale.discountUsd)
@@ -479,7 +458,7 @@ export default class SaleService {
       const shift = await this.salesShiftService.requireOpen(trx)
       sale.salesShiftId = shift.id
 
-      await this.congelarCostoLineas(sale, trx)
+      await this.saleLineService.freezeCosts(sale, trx)
       await this.descontarStock(sale, trx)
       await this.aplicarPagoAlConfirmar(sale, paymentType, trx)
 
@@ -571,7 +550,7 @@ export default class SaleService {
         { client: trx }
       )
 
-      await this.persistLines(Number(sale.id), resolvedLines, trx)
+      await this.saleLineService.persistLines(Number(sale.id), resolvedLines, trx)
 
       const hydrated = await Sale.query({ client: trx })
         .where('id', Number(sale.id))
@@ -620,7 +599,7 @@ export default class SaleService {
         hydrated.salesShiftId = openShift ? openShift.id : null
       }
 
-      await this.congelarCostoLineas(hydrated, trx)
+      await this.saleLineService.freezeCosts(hydrated, trx)
       const needsReview = await this.descontarStock(hydrated, trx, { allowInsufficient: true })
       hydrated.needsStockReview = needsReview
       await this.aplicarPagoAlConfirmar(hydrated, input.payment_type, trx)
@@ -849,7 +828,7 @@ export default class SaleService {
 
   private async resolveLines(lines: SaleLineInput[], trx: TransactionClientContract) {
     let totalUsd = 0
-    const resolvedLines: ResolvedLine[] = []
+    const resolvedLines: ResolvedSaleLine[] = []
 
     for (const line of lines) {
       const hasCatalog = line.catalog_product_id !== undefined && line.catalog_product_id !== null
@@ -983,88 +962,6 @@ export default class SaleService {
         unitsPerPack: wholesale.unitsPerPack,
         formulaMaterials: null,
       },
-    }
-  }
-
-  private async persistLines(
-    saleId: number,
-    lines: ResolvedLine[],
-    trx: TransactionClientContract
-  ) {
-    for (const line of lines) {
-      const saleLine = await SaleLine.create(
-        {
-          saleId,
-          catalogProductId: line.catalogProductId,
-          catalogProductSizeId: line.catalogProductSizeId,
-          size: line.size,
-          materialId: line.materialId,
-          description: line.description,
-          quantity: line.quantity,
-          unitPriceUsd: line.unitPriceUsd,
-          subtotalUsd: line.subtotalUsd,
-          costUsd: line.costUsd,
-          kitchenNote: line.kitchenNote,
-          isWholesale: line.isWholesale,
-          unitsPerPack: line.unitsPerPack,
-          returnedQuantity: '0.000',
-        },
-        { client: trx }
-      )
-
-      if (line.formulaMaterials && line.formulaMaterials.length > 0) {
-        for (const item of line.formulaMaterials) {
-          await SaleLineMaterial.create(
-            {
-              saleLineId: saleLine.id,
-              materialId: item.materialId,
-              quantityPerUnit: item.quantityPerUnit,
-            },
-            { client: trx }
-          )
-        }
-      }
-    }
-  }
-
-  private async congelarCostoLineas(sale: Sale, trx: TransactionClientContract) {
-    for (const line of sale.saleLines) {
-      if (line.catalogProductId) {
-        const product =
-          line.catalogProduct ??
-          (await CatalogProduct.query({ client: trx })
-            .where('id', Number(line.catalogProductId))
-            .preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
-            .first())
-
-        if (product?.formulaId) {
-          const effectiveMaterials = resolveEffectiveFormulaMaterials(line, product)
-          if (effectiveMaterials.length > 0) {
-            const unitCost = Number(sumEffectiveMaterialCostUsd(effectiveMaterials))
-            line.costUsd = freezeFormulaSaleLineCost(unitCost, line.isWholesale, line.unitsPerPack)
-          } else if (product.costUsd) {
-            line.costUsd = product.costUsd
-          }
-        } else if (product?.costUsd && !line.costUsd) {
-          line.costUsd = product.costUsd
-        }
-      }
-
-      if (line.costUsd) {
-        line.useTransaction(trx)
-        await line.save()
-        continue
-      }
-
-      if (line.materialId && !line.costUsd) {
-        const material = line.material ?? (await Material.find(Number(line.materialId)))
-        if (material?.lastPurchasePriceUsd) {
-          line.costUsd = material.lastPurchasePriceUsd
-        }
-      }
-
-      line.useTransaction(trx)
-      await line.save()
     }
   }
 
