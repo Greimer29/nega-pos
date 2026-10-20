@@ -7,30 +7,26 @@ import PurchaseNoEditableException from '#exceptions/compra_no_editable_exceptio
 import PurchaseNoEncontradaException from '#exceptions/compra_no_encontrada_exception'
 import PurchaseSinItemsException from '#exceptions/compra_sin_items_exception'
 import PurchaseYaConfirmadaException from '#exceptions/compra_ya_confirmada_exception'
-import ProductInventoryService from '#services/product_inventory_service'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
-import ProductoCatalogoStockFormulaException from '#exceptions/producto_catalogo_stock_formula_exception'
 import ServicioCatalogoOperacionInvalidaException from '#exceptions/servicio_catalogo_operacion_invalida_exception'
 import MachineNoEncontradaException from '#exceptions/maquina_no_encontrada_exception'
 import MaterialNoEncontradoException from '#exceptions/material_no_encontrado_exception'
 import NumeroFacturaRequeridoException from '#exceptions/numero_factura_requerido_exception'
-import StockInsuficienteDevolucionException from '#exceptions/stock_insuficiente_devolucion_exception'
 import Purchase from '#models/purchase'
 import PurchaseItem from '#models/purchase_item'
 import Material from '#models/material'
 import CatalogProduct from '#models/catalog_product'
 import Machine from '#models/machine'
-import CompraCreditoSinVencimientoException from '#exceptions/compra_credito_sin_vencimiento_exception'
 import InventoryMovement from '#models/inventory_movement'
 import ProductInventoryMovement from '#models/product_inventory_movement'
 import { isCatalogService } from '#constants/catalog_item_kind'
 import SupplierService from '#services/supplier_service'
 import AccountService from '#services/account_service'
 import CurrencyService from '#services/currency_service'
-import MaterialService from '#services/material_service'
 import MachineService from '#services/machine_service'
-import FormulaService from '#services/formula_service'
 import OrderService from '#services/order_service'
+import PurchaseBalanceService from '#services/purchase_balance_service'
+import PurchaseInventoryService from '#services/purchase_inventory_service'
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import type { CostWarning } from '#types/cost_warning'
 import type { FulfilledPendingOrder } from '#services/order_service'
@@ -42,8 +38,7 @@ import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
-import { nowInAppZone } from '#utils/app_timezone'
-import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
+import { resolveWholesaleLineSnapshot } from '#utils/wholesale'
 
 export type PurchaseInput = {
   supplier_id?: number
@@ -126,11 +121,10 @@ export default class PurchaseService {
   private supplierService = new SupplierService()
   private accountService = new AccountService()
   private currencyService = new CurrencyService()
-  private materialService = new MaterialService()
   private machineService = new MachineService()
-  private formulaService = new FormulaService()
   private orderService = new OrderService()
-  private productInventoryService = new ProductInventoryService()
+  private purchaseBalanceService = new PurchaseBalanceService()
+  private purchaseInventoryService = new PurchaseInventoryService()
 
   async listar(filters: ListPurchasesFilters = {}): Promise<ModelPaginatorContract<Purchase>> {
     const page = filters.page ?? 1
@@ -489,106 +483,16 @@ export default class PurchaseService {
       }
 
       const usdRate = purchase.usdRate ? Number(purchase.usdRate) : null
-      let totalUsd = 0
-      const materialIds = new Set<number>()
+      const { totalUsd, materialIds } = await this.purchaseInventoryService.applyConfirmedItems(
+        purchase,
+        items,
+        affectsInventory,
+        trx
+      )
 
-      for (const item of items) {
-        const unitPriceUsd = item.unitPriceUsd ?? '0'
-        const subtotalUsd = item.subtotalUsd ?? '0'
-
-        totalUsd += Number(subtotalUsd)
-
-        if (item.machineId) {
-          await this.applyMachineAcquisitionCost(item, trx)
-          continue
-        }
-
-        if (!affectsInventory) {
-          continue
-        }
-
-        const inventoryQty = lineInventoryQuantity(
-          Number(item.quantity),
-          Boolean(item.isWholesale),
-          item.unitsPerPack
-        )
-
-        if (item.materialId) {
-          await InventoryMovement.create(
-            {
-              materialId: Number(item.materialId),
-              type: 'PURCHASE_IN',
-              quantity: this.formatCantidad(inventoryQty),
-              purchaseItemId: Number(item.id),
-            },
-            { client: trx }
-          )
-
-          const material = await Material.query({ client: trx })
-            .where('id', Number(item.materialId))
-            .forUpdate()
-            .first()
-
-          if (!material) {
-            throw new MaterialNoEncontradoException()
-          }
-
-          material.lastPurchasePrice = item.unitPriceBs
-          material.lastPurchaseDate = purchase.date
-
-          this.applyConfirmedPurchaseCost(material, item, unitPriceUsd)
-
-          material.useTransaction(trx)
-          await material.save()
-          materialIds.add(Number(item.materialId))
-        }
-
-        if (item.catalogProductId) {
-          const product = await CatalogProduct.query({ client: trx })
-            .where('id', Number(item.catalogProductId))
-            .forUpdate()
-            .first()
-
-          if (!product) {
-            throw new ProductoCatalogoNoEncontradoException()
-          }
-
-          if (product.formulaId) {
-            throw new ProductoCatalogoStockFormulaException()
-          }
-
-          await this.productInventoryService.registrarMovimiento(
-            {
-              catalogProductId: Number(item.catalogProductId),
-              type: 'PURCHASE_IN',
-              quantity: inventoryQty,
-              purchaseItemId: Number(item.id),
-              note: `Compra #${purchase.id}`,
-            },
-            trx
-          )
-
-          // registrarMovimiento guarda stock en otra instancia; refrescar antes del costo.
-          await product.refresh()
-          this.applyConfirmedPurchaseCost(product, item, unitPriceUsd)
-          product.useTransaction(trx)
-          await product.save()
-        }
-      }
-
-      const costWarnings: CostWarning[] = []
-      const seenProductIds = new Set<number>()
-      if (affectsInventory) {
-        for (const materialId of materialIds) {
-          const warnings = await this.formulaService.recalcularCostosPorMaterial(materialId, trx)
-          for (const warning of warnings) {
-            if (!seenProductIds.has(warning.product_id)) {
-              seenProductIds.add(warning.product_id)
-              costWarnings.push(warning)
-            }
-          }
-        }
-      }
+      const costWarnings: CostWarning[] = affectsInventory
+        ? await this.purchaseInventoryService.recalculateFormulaCosts(materialIds, trx)
+        : []
 
       if (items.length > 0) {
         purchase.totalUsd = totalUsd.toFixed(4)
@@ -600,36 +504,13 @@ export default class PurchaseService {
         purchase.totalBs = (resolvedTotalUsd * usdRate).toFixed(2)
       }
 
-      const isCredit = input.is_credit ?? purchase.isCredit
-      if (isCredit) {
-        const dueDate =
-          input.credit_due_date ??
-          purchase.creditDueDate?.toISODate() ??
-          (purchase.supplierId
-            ? await this.defaultCreditDueDate(Number(purchase.supplierId))
-            : null)
-
-        if (!dueDate) {
-          throw new CompraCreditoSinVencimientoException()
-        }
-
-        purchase.isCredit = true
-        purchase.creditDueDate = DateTime.fromISO(dueDate)
-        purchase.balanceUsd = resolvedTotalUsd.toFixed(4)
-        purchase.amountPaidUsd = '0.0000'
-        purchase.accountId = input.account_id === undefined ? purchase.accountId : input.account_id
-      } else {
-        purchase.isCredit = false
-        purchase.creditDueDate = null
-        purchase.balanceUsd = '0.0000'
-        purchase.amountPaidUsd = resolvedTotalUsd.toFixed(4)
-      }
+      await this.purchaseBalanceService.applyConfirmationBalance(purchase, input, resolvedTotalUsd)
 
       purchase.status = 'CONFIRMED'
       purchase.useTransaction(trx)
       await purchase.save()
 
-      return { purchase, costWarnings, materialIds: [...materialIds] }
+      return { purchase, costWarnings, materialIds }
     })
 
     const fulfilledOrders = await this.orderService.intentarProducirPedidosPendientes(
@@ -658,104 +539,8 @@ export default class PurchaseService {
         .preload('catalogProduct')
         .forUpdate()
 
-      const faltantes: Array<{
-        material_id: number
-        material_name: string
-        required: string
-        available: string
-      }> = []
-
-      for (const item of items) {
-        if (item.materialId) {
-          await Material.query({ client: trx })
-            .where('id', Number(item.materialId))
-            .forUpdate()
-            .first()
-
-          const stock = await this.materialService.calcularStock(Number(item.materialId), trx)
-          const required = lineInventoryQuantity(
-            Number(item.quantity),
-            Boolean(item.isWholesale),
-            item.unitsPerPack
-          )
-
-          if (stock < required) {
-            faltantes.push({
-              material_id: Number(item.materialId),
-              material_name: item.material?.name ?? `Material ${item.materialId}`,
-              required: this.formatCantidad(required),
-              available: this.formatCantidad(stock),
-            })
-          }
-        }
-
-        if (item.catalogProductId) {
-          await item.load('catalogProduct')
-          const product = await CatalogProduct.query({ client: trx })
-            .where('id', Number(item.catalogProductId))
-            .forUpdate()
-            .first()
-
-          const stock = product ? Number(product.stockQuantity) : 0
-          const required = lineInventoryQuantity(
-            Number(item.quantity),
-            Boolean(item.isWholesale),
-            item.unitsPerPack
-          )
-
-          if (stock < required) {
-            faltantes.push({
-              material_id: Number(item.catalogProductId),
-              material_name: item.catalogProduct?.name ?? `Producto ${item.catalogProductId}`,
-              required: this.formatCantidad(required),
-              available: this.formatCantidad(stock),
-            })
-          }
-        }
-      }
-
-      if (faltantes.length > 0) {
-        throw new StockInsuficienteDevolucionException(faltantes)
-      }
-
-      for (const item of items) {
-        if (item.machineId) {
-          await this.clearMachineAcquisitionCost(Number(item.machineId), trx)
-          continue
-        }
-
-        const qty = lineInventoryQuantity(
-          Number(item.quantity),
-          Boolean(item.isWholesale),
-          item.unitsPerPack
-        )
-
-        if (item.materialId) {
-          await InventoryMovement.create(
-            {
-              materialId: Number(item.materialId),
-              type: 'REVERSAL_ADJUSTMENT',
-              quantity: (-qty).toFixed(3),
-              purchaseItemId: Number(item.id),
-              note: `Devolución compra #${locked.id}`,
-            },
-            { client: trx }
-          )
-        }
-
-        if (item.catalogProductId) {
-          await this.productInventoryService.registrarMovimiento(
-            {
-              catalogProductId: Number(item.catalogProductId),
-              type: 'REVERSAL_ADJUSTMENT',
-              quantity: -qty,
-              purchaseItemId: Number(item.id),
-              note: `Devolución compra #${locked.id}`,
-            },
-            trx
-          )
-        }
-      }
+      await this.purchaseInventoryService.assertReturnableStock(items, trx)
+      await this.purchaseInventoryService.reverseItems(locked, items, trx)
 
       locked.status = 'VOIDED'
       locked.voidedAt = DateTime.now()
@@ -937,55 +722,6 @@ export default class PurchaseService {
     return resolveWholesaleLineSnapshot(isWholesale, material)
   }
 
-  private async applyMachineAcquisitionCost(item: PurchaseItem, trx: TransactionClientContract) {
-    if (!item.machineId) return
-
-    const machine = await Machine.query({ client: trx })
-      .where('id', Number(item.machineId))
-      .forUpdate()
-      .first()
-
-    if (!machine) {
-      throw new MachineNoEncontradaException()
-    }
-
-    const costUsd = Number(item.unitPriceUsd ?? 0).toFixed(2)
-    machine.acquisitionCost = costUsd
-    machine.acquisitionAmountNative = null
-    machine.entryCurrencyCode = null
-    machine.entryRate = null
-    machine.isCredit = false
-    machine.amountPaidUsd = Number(item.unitPriceUsd ?? 0).toFixed(4)
-    machine.balanceUsd = '0.0000'
-    machine.creditDueDate = null
-    if (!machine.acquisitionDate) {
-      const purchase = await Purchase.query({ client: trx })
-        .where('id', Number(item.purchaseId))
-        .first()
-      if (purchase) {
-        machine.acquisitionDate = purchase.date
-      }
-    }
-    machine.useTransaction(trx)
-    await machine.save()
-  }
-
-  private async clearMachineAcquisitionCost(machineId: number, trx: TransactionClientContract) {
-    const machine = await Machine.query({ client: trx }).where('id', machineId).forUpdate().first()
-    if (!machine) return
-
-    machine.acquisitionCost = null
-    machine.acquisitionAmountNative = null
-    machine.entryCurrencyCode = null
-    machine.entryRate = null
-    machine.amountPaidUsd = '0.0000'
-    machine.balanceUsd = '0.0000'
-    machine.isCredit = false
-    machine.creditDueDate = null
-    machine.useTransaction(trx)
-    await machine.save()
-  }
-
   private async eliminarMaquinasDePurchase(purchaseId: number, trx: TransactionClientContract) {
     const items = await PurchaseItem.query({ client: trx }).where('purchaseId', purchaseId)
     for (const item of items) {
@@ -1011,44 +747,6 @@ export default class PurchaseService {
 
     sourced.useTransaction(trx)
     await sourced.delete()
-  }
-
-  private applyConfirmedPurchaseCost(
-    item: CatalogProduct | Material,
-    line: PurchaseItem,
-    unitPriceUsd: string
-  ) {
-    // No usar `'costUsd' in item`: en Lucid con `declare` el `in` no detecta la columna
-    // y el costo del producto nunca se persistía al confirmar la compra.
-    if (item instanceof CatalogProduct) {
-      if (line.isWholesale) {
-        const packCost = Number(unitPriceUsd)
-        const unitsPerPack = Number(line.unitsPerPack)
-        const unitCost = (packCost / unitsPerPack).toFixed(4)
-        item.wholesaleCostUsd = packCost.toFixed(4)
-        item.costUsd = unitCost
-        return
-      }
-      item.costUsd = unitPriceUsd
-      return
-    }
-
-    if (line.isWholesale) {
-      const packCost = Number(unitPriceUsd)
-      const unitsPerPack = Number(line.unitsPerPack)
-      const unitCost = (packCost / unitsPerPack).toFixed(4)
-      item.wholesaleCostUsd = packCost.toFixed(4)
-      if (item.lastPurchasePriceUsd !== null && item.lastPurchasePriceUsd !== unitCost) {
-        item.previousPurchasePriceUsd = item.lastPurchasePriceUsd
-      }
-      item.lastPurchasePriceUsd = unitCost
-      return
-    }
-
-    if (item.lastPurchasePriceUsd !== null && item.lastPurchasePriceUsd !== unitPriceUsd) {
-      item.previousPurchasePriceUsd = item.lastPurchasePriceUsd
-    }
-    item.lastPurchasePriceUsd = unitPriceUsd
   }
 
   private calcularPreciosItem(
@@ -1129,14 +827,6 @@ export default class PurchaseService {
     const normalized = code.trim().toUpperCase()
     await this.currencyService.assertActiva(normalized)
     return normalized
-  }
-
-  private async defaultCreditDueDate(supplierId: number): Promise<string | null> {
-    const supplier = await this.supplierService.obtener(supplierId)
-    if (!supplier.creditDays || supplier.creditDays <= 0) {
-      return null
-    }
-    return nowInAppZone().plus({ days: supplier.creditDays }).toISODate()
   }
 
   private assertBorrador(purchase: Purchase) {

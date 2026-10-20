@@ -513,6 +513,9 @@ En multi-caja, las mutaciones relevantes emiten eventos SSE por empresa para inv
    - `status → CONFIRMED`; si es crédito, registra saldo en proveedor (única vía de CxP de adquisición de máquinas).
    - Tras confirmar compra con stock, pedidos en `DRAFT` pendientes de material pueden pasar automáticamente a `IN_PRODUCTION` si hay stock suficiente.
    - Al devolver una compra confirmada se limpia `acquisition_cost` de las máquinas vinculadas.
+4. **Devolver** (`POST .../return`): solo `CONFIRMED`. Si algún material o producto ya no tiene stock suficiente responde `422 INSUFFICIENT_STOCK_FOR_RETURN` con el detalle y no mueve nada; si alcanza, registra `REVERSAL_ADJUSTMENT` negativos (`Devolución compra #id`), pasa a `VOIDED` y deja `balance_usd = 0`.
+
+**Organización del código:** `purchase_service.ts` conserva el registro (borrador, ítems, máquinas nuevas, factura adjunta, listado/detalle) y orquesta confirmar/devolver dentro de una transacción. `purchase_inventory_service.ts` aplica entradas y costos por ítem (incluido `acquisition_cost` de máquinas), recalcula costos de productos con fórmula (un aviso por producto) y valida/revierte stock al devolver. `purchase_balance_service.ts` fija el saldo al confirmar: crédito con vencimiento explícito, el actual o `hoy (America/Caracas) + credit_days` del proveedor (sin ninguno → `422`); contado deja `amount_paid_usd = total`.
 
 ### Factura desde ficha de proveedor (`supplier_invoice_service.ts`)
 
