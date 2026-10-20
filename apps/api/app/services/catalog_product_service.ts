@@ -1,37 +1,31 @@
 import FormulaNoEncontradaException from '#exceptions/formula_no_encontrada_exception'
 import ProductoCatalogoEnPedidosActivosException from '#exceptions/producto_catalogo_en_pedidos_activos_exception'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
-import ArchivoImagenNoDisponibleException from '#exceptions/archivo_imagen_no_disponible_exception'
 import ServicioCatalogoOperacionInvalidaException from '#exceptions/servicio_catalogo_operacion_invalida_exception'
 import CatalogProduct from '#models/catalog_product'
 import Formula from '#models/formula'
 import OrderLine from '#models/order_line'
-import PurchaseItem from '#models/purchase_item'
 import CategoryService from '#services/category_service'
 import FormulaService from '#services/formula_service'
+import CatalogProductPricingService from '#services/catalog_product_pricing_service'
 import CatalogProductSizeService from '#services/catalog_product_size_service'
 import ProductCodeService from '#services/product_code_service'
 import ProductInventoryService from '#services/product_inventory_service'
 import type { CatalogItemKind } from '#constants/catalog_item_kind'
 import { isCatalogService } from '#constants/catalog_item_kind'
 import {
-  INVENTORY_UNITS,
   formatInventoryQuantityForStorage,
   normalizeInventoryQuantity,
   type InventoryUnit,
 } from '#constants/inventory_units'
 import type { CostWarning } from '#types/cost_warning'
 import drive from '@adonisjs/drive/services/main'
-import type { MultipartFile } from '@adonisjs/core/bodyparser'
-import { tenantStorageKey } from '#utils/tenant_storage'
 import { assertProductBarcodeAvailable, normalizeBarcode } from '#utils/barcode'
+import { formatUsdNote } from '#utils/price_change_note'
 import { normalizeSupplierCode } from '#utils/supplier_code'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
 import { normalizeWholesaleConfig, type WholesaleConfigInput } from '#utils/wholesale'
 import db from '@adonisjs/lucid/services/db'
-import { DateTime } from 'luxon'
-import { randomUUID } from 'node:crypto'
-import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 
 export type CatalogProductInput = {
   name: string
@@ -56,43 +50,6 @@ export type CatalogProductInput = {
 
 export type CatalogProductUpdateInput = Partial<CatalogProductInput>
 
-export type ListCatalogProductsFilters = {
-  page?: number
-  perPage?: number
-  search?: string
-  barcode?: string
-  category?: string
-  size?: string
-  active?: boolean
-  /** Default PRODUCT so existing product UIs never list services accidentally. */
-  itemKind?: CatalogItemKind
-  sortBy?: 'name' | 'most_sold'
-  sortDir?: 'asc' | 'desc'
-}
-
-export type CatalogProductImageDownload = {
-  bytes: Uint8Array
-  contentType: string
-  filename: string
-}
-
-export type ApplyProfitMarginInput = {
-  catalog_product_ids: number[]
-  profit_margin_percent: number
-  userId?: number | null
-}
-
-export type ApplyProfitMarginSkipped = {
-  id: number
-  name: string
-  reason: 'NO_COST_PRICE' | 'NOT_FOUND'
-}
-
-export type ApplyProfitMarginResult = {
-  updatedCount: number
-  skipped: ApplyProfitMarginSkipped[]
-}
-
 export type CatalogProductUpdateResult = {
   product: CatalogProduct
   costWarnings: CostWarning[]
@@ -102,183 +59,13 @@ export type CatalogProductUpdateOptions = {
   userId?: number | null
 }
 
-export type CatalogProductPurchaseHistoryFilters = {
-  month?: string
-  from?: string
-  to?: string
-}
-
-export type CatalogProductPurchaseHistoryItem = {
-  purchaseItemId: number
-  purchaseId: number
-  date: string
-  supplier: {
-    id: number
-    code: string | null
-    name: string
-  }
-  quantity: string
-  unitPriceUsd: string | null
-  subtotalUsd: string | null
-}
-
-function formatUsdNote(value: string | number) {
-  return Number(value).toFixed(4)
-}
-
-const IMAGE_MIME: Record<string, string> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  webp: 'image/webp',
-}
-
-const MOST_SOLD_SQL = `COALESCE((
-  SELECT SUM(sl.quantity)
-  FROM sale_lines sl
-  WHERE sl.catalog_product_id = catalog_products.id
-), 0) + COALESCE((
-  SELECT SUM(ol.quantity)
-  FROM order_lines ol
-  INNER JOIN orders o ON o.id = ol.order_id
-  WHERE ol.catalog_product_id = catalog_products.id
-    AND o.status NOT IN ('CANCELLED', 'DRAFT')
-), 0)`
-
 export default class CatalogProductService {
   private formulaService = new FormulaService()
   private categoryService = new CategoryService()
   private productCodeService = new ProductCodeService()
   private sizeService = new CatalogProductSizeService()
   private inventoryService = new ProductInventoryService()
-
-  async listar(
-    filters: ListCatalogProductsFilters = {}
-  ): Promise<ModelPaginatorContract<CatalogProduct>> {
-    const page = filters.page ?? 1
-    const perPage = filters.perPage ?? 30
-    const sortBy = filters.sortBy ?? 'name'
-    const sortDir = filters.sortDir ?? 'asc'
-
-    const query = CatalogProduct.query().preload('sizes', (q) => q.orderBy('size', 'asc'))
-
-    const barcode = filters.barcode?.trim()
-    if (barcode) {
-      query.where('barcode', barcode)
-    } else if (filters.search) {
-      const term = `%${filters.search.trim()}%`
-      query.where((builder) => {
-        builder
-          .whereILike('name', term)
-          .orWhereILike('description', term)
-          .orWhereILike('supplier_code', term)
-      })
-    }
-
-    if (filters.category) {
-      query.where('category', filters.category)
-    }
-
-    if (filters.size?.trim()) {
-      const sizeTerm = filters.size.trim()
-      query.whereHas('sizes', (sizesQuery) => {
-        sizesQuery.whereILike('size', sizeTerm).where('stock_quantity', '>', 0)
-      })
-    }
-
-    if (filters.active !== undefined) {
-      query.where('active', filters.active)
-    }
-
-    const itemKind = filters.itemKind ?? 'PRODUCT'
-    query.where('itemKind', itemKind)
-
-    if (sortBy === 'most_sold') {
-      query.orderByRaw(`${MOST_SOLD_SQL} ${sortDir === 'desc' ? 'DESC' : 'ASC'}`)
-    } else {
-      query.orderBy('name', sortDir)
-    }
-
-    query.orderBy('id', 'desc')
-
-    return query.paginate(page, perPage)
-  }
-
-  async obtener(id: number): Promise<CatalogProduct> {
-    const product = await CatalogProduct.query()
-      .where('id', id)
-      .preload('sizes', (q) => q.orderBy('size', 'asc'))
-      .first()
-    if (!product) {
-      throw new ProductoCatalogoNoEncontradoException()
-    }
-    return product
-  }
-
-  async obtenerDetalle(id: number): Promise<CatalogProduct> {
-    const product = await CatalogProduct.query()
-      .where('id', id)
-      .preload('formula', (q) =>
-        q.preload('materials', (mq) => mq.preload('material').orderBy('id', 'asc'))
-      )
-      .preload('sizes', (q) => q.orderBy('size', 'asc'))
-      .first()
-
-    if (!product) {
-      throw new ProductoCatalogoNoEncontradoException()
-    }
-
-    return product
-  }
-
-  async historialCompras(
-    productId: number,
-    filters: CatalogProductPurchaseHistoryFilters = {}
-  ): Promise<CatalogProductPurchaseHistoryItem[]> {
-    await this.obtener(productId)
-
-    const query = PurchaseItem.query()
-      .select('purchase_items.*')
-      .join('purchases', 'purchases.id', 'purchase_items.purchase_id')
-      .where('purchase_items.catalog_product_id', productId)
-      .where('purchases.status', 'CONFIRMED')
-      .orderBy('purchases.date', 'desc')
-      .orderBy('purchase_items.id', 'desc')
-      .preload('purchase', (purchaseQuery) => {
-        purchaseQuery.preload('supplier')
-      })
-
-    const period = resolvePurchaseHistoryPeriod(filters)
-    if (period) {
-      query.where('purchases.date', '>=', period.from)
-      query.where('purchases.date', '<=', period.to)
-    }
-
-    const items = await query
-
-    return items.map((item) => {
-      const supplier = item.purchase.supplier
-      return {
-        purchaseItemId: Number(item.id),
-        purchaseId: Number(item.purchaseId),
-        date: item.purchase.date.toISODate()!,
-        supplier: supplier
-          ? {
-              id: Number(supplier.id),
-              code: supplier.rif?.trim() || null,
-              name: supplier.name,
-            }
-          : {
-              id: 0,
-              code: null,
-              name: 'Sin proveedor',
-            },
-        quantity: item.quantity,
-        unitPriceUsd: item.unitPriceUsd,
-        subtotalUsd: item.subtotalUsd,
-      }
-    })
-  }
+  private pricingService = new CatalogProductPricingService()
 
   async crear(input: CatalogProductInput): Promise<CatalogProduct> {
     const itemKind: CatalogItemKind = input.item_kind ?? 'PRODUCT'
@@ -515,7 +302,7 @@ export default class CatalogProductService {
       })
 
       const effectiveCostUsd = Number(product.costUsd)
-      const warning = this.buildCostWarningIfNeeded(product, effectiveCostUsd)
+      const warning = this.pricingService.buildCostWarningIfNeeded(product, effectiveCostUsd)
       if (warning) {
         costWarnings.push(warning)
       }
@@ -619,178 +406,6 @@ export default class CatalogProductService {
     })
   }
 
-  async recalcularCosto(id: number): Promise<CatalogProductUpdateResult> {
-    const product = await this.obtener(id)
-
-    if (!product.formulaId) {
-      return { product, costWarnings: [] }
-    }
-
-    const costUsd = await this.formulaService.calcularCosto(Number(product.formulaId))
-    product.costUsd = costUsd.toFixed(4)
-    const costWarnings: CostWarning[] = []
-    const warning = this.buildCostWarningIfNeeded(product, costUsd)
-    if (warning) {
-      costWarnings.push(warning)
-    }
-    await product.save()
-    return { product, costWarnings }
-  }
-
-  async aplicarMargenGanancia(input: ApplyProfitMarginInput): Promise<ApplyProfitMarginResult> {
-    const multiplier = 1 + input.profit_margin_percent / 100
-    const skipped: ApplyProfitMarginSkipped[] = []
-    let updatedCount = 0
-
-    await db.transaction(async (trx) => {
-      for (const productId of input.catalog_product_ids) {
-        const product = await CatalogProduct.query({ client: trx })
-          .where('id', productId)
-          .forUpdate()
-          .first()
-
-        if (!product) {
-          skipped.push({ id: productId, name: `#${productId}`, reason: 'NOT_FOUND' })
-          continue
-        }
-
-        const costUsd = product.costUsd
-        if (!costUsd || Number(costUsd) <= 0) {
-          skipped.push({
-            id: Number(product.id),
-            name: product.name,
-            reason: 'NO_COST_PRICE',
-          })
-          continue
-        }
-
-        const previousSalePrice = product.salePriceUsd
-        const newSalePrice = (Number(costUsd) * multiplier).toFixed(4)
-        const currentSalePrice = product.salePriceUsd
-
-        if (currentSalePrice !== null && currentSalePrice !== newSalePrice) {
-          product.previousSalePriceUsd = currentSalePrice
-        } else if (currentSalePrice === null) {
-          product.previousSalePriceUsd = null
-        }
-
-        product.salePriceUsd = newSalePrice
-        product.useTransaction(trx)
-        await product.save()
-
-        if (previousSalePrice !== newSalePrice) {
-          await this.inventoryService.registrarMovimiento(
-            {
-              catalogProductId: Number(product.id),
-              type: 'PRICE_CHANGE',
-              quantity: 0,
-              note: `Edición de precio: venta $${formatUsdNote(previousSalePrice)} → $${formatUsdNote(newSalePrice)} (margen)`,
-              createdByUserId: input.userId ?? null,
-              skipStockUpdate: true,
-            },
-            trx
-          )
-        }
-
-        updatedCount++
-      }
-    })
-
-    return { updatedCount, skipped }
-  }
-
-  async guardarImagen(id: number, file: MultipartFile): Promise<CatalogProduct> {
-    const product = await this.obtener(id)
-    const extension = file.extname?.toLowerCase() ?? 'bin'
-    const key = tenantStorageKey(`catalog-products/${id}/${randomUUID()}.${extension}`)
-
-    if (product.imagePath) {
-      await drive
-        .use()
-        .delete(product.imagePath)
-        .catch(() => undefined)
-    }
-
-    await file.moveToDisk(key)
-    product.imagePath = key
-    await product.save()
-
-    return product
-  }
-
-  async eliminarImagen(id: number): Promise<CatalogProduct> {
-    const product = await this.obtener(id)
-
-    if (product.imagePath) {
-      await drive
-        .use()
-        .delete(product.imagePath)
-        .catch(() => undefined)
-      product.imagePath = null
-      await product.save()
-    }
-
-    return product
-  }
-
-  async obtenerImagen(id: number): Promise<CatalogProductImageDownload> {
-    const product = await this.obtener(id)
-
-    if (!product.imagePath) {
-      throw new ProductoCatalogoNoEncontradoException()
-    }
-
-    const exists = await drive.use().exists(product.imagePath)
-    if (!exists) {
-      product.imagePath = null
-      await product.save()
-      throw new ArchivoImagenNoDisponibleException()
-    }
-
-    const bytes = await drive.use().getBytes(product.imagePath)
-    const extension = product.imagePath.split('.').pop()?.toLowerCase() ?? 'bin'
-    const contentType = IMAGE_MIME[extension] ?? 'application/octet-stream'
-    const filename = `catalog-${id}.${extension}`
-
-    return { bytes, contentType, filename }
-  }
-
-  async resolverCostosUsdEnLote(products: CatalogProduct[]): Promise<Map<number, string>> {
-    const costByProductId = new Map<number, string>()
-    const costByFormulaId = new Map<number, string>()
-
-    for (const product of products) {
-      const productId = Number(product.id)
-
-      if (!product.formulaId) {
-        costByProductId.set(productId, this.normalizeCostUsd(product.costUsd))
-        continue
-      }
-
-      const formulaId = Number(product.formulaId)
-      let formulaCost = costByFormulaId.get(formulaId)
-
-      if (formulaCost === undefined) {
-        try {
-          const formulaCostValue = await this.formulaService.calcularCosto(formulaId)
-          formulaCost = formulaCostValue.toFixed(4)
-        } catch {
-          formulaCost = this.normalizeCostUsd(product.costUsd)
-        }
-        costByFormulaId.set(formulaId, formulaCost)
-      }
-
-      costByProductId.set(productId, formulaCost)
-    }
-
-    return costByProductId
-  }
-
-  async resolverCostoUsd(product: CatalogProduct): Promise<string> {
-    const resolved = await this.resolverCostosUsdEnLote([product])
-    return resolved.get(Number(product.id)) ?? this.normalizeCostUsd(product.costUsd)
-  }
-
   private async calcularCostoFormulaPersistible(product: CatalogProduct): Promise<string> {
     const costUsd = await this.formulaService.calcularCosto(Number(product.formulaId))
     return costUsd.toFixed(4)
@@ -861,24 +476,6 @@ export default class CatalogProductService {
     if (wholesale.derivedUnitCost !== null && !options.hasFormula) {
       product.costUsd = wholesale.derivedUnitCost.toFixed(4)
     }
-  }
-
-  private normalizeCostUsd(value: string | null | undefined): string {
-    const parsed = Number(value ?? 0)
-    return Number.isFinite(parsed) ? parsed.toFixed(4) : '0.0000'
-  }
-
-  private buildCostWarningIfNeeded(product: CatalogProduct, costUsd: number): CostWarning | null {
-    const salePrice = Number(product.salePriceUsd)
-    if (salePrice > 0 && salePrice < costUsd) {
-      return {
-        product_id: Number(product.id),
-        product_name: product.name,
-        sale_price_usd: product.salePriceUsd,
-        cost_usd: costUsd.toFixed(4),
-      }
-    }
-    return null
   }
 
   private async registrarHistorialEdicion(
@@ -971,128 +568,4 @@ export default class CatalogProductService {
       throw new ProductoCatalogoEnPedidosActivosException()
     }
   }
-
-  async importar(
-    itemKind: CatalogItemKind,
-    rows: CatalogImportRow[]
-  ): Promise<CatalogImportResult> {
-    const results: CatalogImportRowResult[] = []
-    let created = 0
-
-    for (const row of rows) {
-      const label = `Fila ${row.row}`
-      try {
-        const name = row.name?.trim() ?? ''
-        if (!name) {
-          results.push({ row: row.row, ok: false, error: `${label}: el nombre es obligatorio` })
-          continue
-        }
-
-        const isService = itemKind === 'SERVICE'
-        const categoryName = (row.category?.trim() || (isService ? 'Servicios' : '')).trim()
-        if (!isService && !categoryName) {
-          results.push({ row: row.row, ok: false, error: `${label}: la categoría es obligatoria` })
-          continue
-        }
-
-        const salePrice = row.sale_price_usd
-        if (salePrice === undefined || salePrice === null || Number.isNaN(Number(salePrice))) {
-          results.push({
-            row: row.row,
-            ok: false,
-            error: `${label}: el precio de venta es obligatorio`,
-          })
-          continue
-        }
-
-        const saleUnit = resolveImportUnit(row.sale_unit)
-        if (row.sale_unit?.trim() && !saleUnit) {
-          results.push({
-            row: row.row,
-            ok: false,
-            error: `${label}: unidad inválida (usá UND, PAR, CAJ, ROL, SET, MTS o KG)`,
-          })
-          continue
-        }
-
-        await this.categoryService.asegurarActiva(categoryName || 'Servicios')
-
-        const product = await this.crear({
-          name,
-          description: row.description?.trim() || undefined,
-          category: categoryName || 'Servicios',
-          item_kind: itemKind,
-          sale_unit: saleUnit ?? 'UND',
-          sale_price_usd: Number(salePrice),
-          cost_usd: row.cost_usd !== undefined ? Number(row.cost_usd) : 0,
-          stock_quantity: isService ? 0 : Number(row.stock_quantity ?? 0),
-          minimum_stock: isService ? 0 : Number(row.minimum_stock ?? 0),
-          barcode: isService ? null : row.barcode,
-          supplier_code: isService ? null : row.supplier_code,
-        })
-
-        created += 1
-        results.push({ row: row.row, ok: true, id: Number(product.id) })
-      } catch (error) {
-        results.push({
-          row: row.row,
-          ok: false,
-          error: `${label}: ${error instanceof Error ? error.message : 'No se pudo crear'}`,
-        })
-      }
-    }
-
-    return { created, failed: results.filter((item) => !item.ok).length, results }
-  }
-}
-
-export type CatalogImportRow = {
-  row: number
-  name?: string
-  category?: string
-  description?: string
-  sale_unit?: string
-  sale_price_usd?: number
-  cost_usd?: number
-  stock_quantity?: number
-  minimum_stock?: number
-  barcode?: string
-  supplier_code?: string
-}
-
-export type CatalogImportRowResult = {
-  row: number
-  ok: boolean
-  id?: number
-  error?: string
-}
-
-export type CatalogImportResult = {
-  created: number
-  failed: number
-  results: CatalogImportRowResult[]
-}
-
-function resolveImportUnit(value?: string): InventoryUnit | null {
-  if (!value?.trim()) return 'UND'
-  const normalized = value.trim().toUpperCase()
-  return INVENTORY_UNITS.includes(normalized as InventoryUnit)
-    ? (normalized as InventoryUnit)
-    : null
-}
-
-function resolvePurchaseHistoryPeriod(filters: CatalogProductPurchaseHistoryFilters) {
-  if (filters.month) {
-    const start = DateTime.fromISO(`${filters.month}-01`).startOf('month')
-    return {
-      from: start.toISODate()!,
-      to: start.endOf('month').toISODate()!,
-    }
-  }
-
-  if (filters.from) {
-    return { from: filters.from, to: filters.to || filters.from }
-  }
-
-  return null
 }
