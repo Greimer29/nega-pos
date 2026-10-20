@@ -7,6 +7,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
 import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
+import { nowInAppZone } from '#utils/app_timezone'
 
 const TEST_EMAIL = 'test-orders@negapos.local'
 const TEST_PASSWORD = 'password123'
@@ -326,6 +327,86 @@ test.group('Orders API', (group) => {
         },
       },
     })
+  })
+
+  test('POST /api/v1/orders/:id/transition sets cash or credit balance on confirm', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const product = await CatalogProduct.create({
+      name: 'Camisa pedido',
+      category: 'UNIFORM',
+      salePriceUsd: '15.0000',
+      stockQuantity: '20.000',
+      active: true,
+    })
+
+    async function seedDraft(code: string, creditDays: number) {
+      const customer = await Customer.create({
+        name: `Cliente ${code}`,
+        type: 'CORPORATE',
+        creditDays,
+        active: true,
+      })
+      const order = await Order.create({
+        code,
+        customerId: customer.id,
+        modality: 'CORPORATE',
+        description: 'Camisas',
+        totalQuantity: 3,
+        orderDate: DateTime.fromISO('2026-05-01'),
+        status: 'DRAFT',
+      })
+      await OrderLine.create({
+        orderId: Number(order.id),
+        catalogProductId: Number(product.id),
+        quantity: '3.000',
+        unitPriceUsd: '15.0000',
+        subtotalUsd: '45.0000',
+      })
+      return order
+    }
+
+    const cashOrder = await seedDraft('PED-202605-0300', 0)
+    const cash = await client
+      .post(`/api/v1/orders/${cashOrder.id}/transition`)
+      .loginAs(user)
+      .json({ new_status: 'CONFIRMED', payment_type: 'CASH' })
+    cash.assertStatus(200)
+    await cashOrder.refresh()
+    assert.equal(cashOrder.paymentType, 'CASH')
+    assert.equal(cashOrder.amountPaidUsd, '45.0000')
+    assert.equal(cashOrder.balanceUsd, '0.0000')
+    assert.isNull(cashOrder.creditDueDate)
+
+    const creditOrder = await seedDraft('PED-202605-0301', 10)
+    const credit = await client
+      .post(`/api/v1/orders/${creditOrder.id}/transition`)
+      .loginAs(user)
+      .json({ new_status: 'CONFIRMED', payment_type: 'CREDIT' })
+    credit.assertStatus(200)
+    await creditOrder.refresh()
+    assert.equal(creditOrder.paymentType, 'CREDIT')
+    assert.equal(creditOrder.amountPaidUsd, '0.0000')
+    assert.equal(creditOrder.balanceUsd, '45.0000')
+    assert.equal(
+      creditOrder.creditDueDate?.toISODate(),
+      nowInAppZone().plus({ days: 10 }).toISODate()
+    )
+
+    const noCreditOrder = await seedDraft('PED-202605-0302', 0)
+    const rejected = await client
+      .post(`/api/v1/orders/${noCreditOrder.id}/transition`)
+      .loginAs(user)
+      .json({ new_status: 'CONFIRMED', payment_type: 'CREDIT' })
+    rejected.assertStatus(422)
+    assert.equal(rejected.body().error.code, 'E_CLIENTE_SIN_CREDITO')
+    await noCreditOrder.refresh()
+    assert.equal(noCreditOrder.status, 'DRAFT')
+
+    await product.refresh()
+    assert.equal(product.stockQuantity, '14.000')
   })
 
   test('POST /api/v1/orders/:id/transition rejects invalid transition', async ({ client }) => {

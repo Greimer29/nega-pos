@@ -562,7 +562,7 @@ En multi-caja, las mutaciones relevantes emiten eventos SSE por empresa para inv
 
 **Efectos por transición:**
 
-- **DRAFT → CONFIRMED**: valida cliente/invitado y descripción; congela costos; descuenta stock de productos de líneas; aplica pago si contado.
+- **DRAFT → CONFIRMED**: valida cliente/invitado y descripción; congela costos; descuenta stock de productos de líneas; aplica pago si contado. El saldo lo fija `order_balance_service.ts` sobre la suma de `subtotal_usd` de las líneas: contado → pagado = total; crédito → saldo = total y vencimiento `hoy (America/Caracas) + credit_days` (cliente sin días de crédito → `422 E_CLIENTE_SIN_CREDITO`).
 - **DRAFT → DELIVERED**: igual que confirmar + pasa a producción (descuento de materiales vía fórmulas/`order_materials`).
 - **CONFIRMED → IN_PRODUCTION**: descuenta materiales (`ORDER_OUT`); puede advertir si falta stock (`force` opcional).
 - **→ CANCELLED** desde CONFIRMED/IN_PRODUCTION: revierte movimientos y stock de productos.

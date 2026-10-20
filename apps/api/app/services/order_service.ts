@@ -24,6 +24,7 @@ import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo
 import PedidoLineaNoEncontradaException from '#exceptions/pedido_linea_no_encontrada_exception'
 import DevolucionCantidadInvalidaException from '#exceptions/devolucion_cantidad_invalida_exception'
 import OrderCodigoService from '#services/order_code_service'
+import OrderBalanceService from '#services/order_balance_service'
 import OrderReturnService from '#services/order_return_service'
 import { resolveSaleReturnRequests } from '#utils/sale_return_requests'
 import {
@@ -43,7 +44,7 @@ import {
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
-import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
+import { datetimeRangeUtcSql, dayStartUtcSql } from '#utils/app_timezone'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
@@ -160,6 +161,7 @@ export default class OrderService {
   private productInventoryService = new ProductInventoryService()
   private catalogProductStockService = new CatalogProductStockService()
   private sizeService = new CatalogProductSizeService()
+  private orderBalanceService = new OrderBalanceService()
   private orderReturnService = new OrderReturnService()
 
   async listar(filters: ListOrdersFilters = {}): Promise<ModelPaginatorContract<Order>> {
@@ -588,7 +590,11 @@ export default class OrderService {
         await this.congelarCostoLineas(order, trx)
         await this.procesarDescuentoStockProductos(order, trx)
         order.confirmedAt = DateTime.now()
-        await this.aplicarPagoAlConfirmar(order, options.payment_type ?? 'CASH', trx)
+        await this.orderBalanceService.applyConfirmationBalance(
+          order,
+          options.payment_type ?? 'CASH',
+          trx
+        )
       }
 
       if (statusActual === 'DRAFT' && nuevoEstado === 'DELIVERED') {
@@ -596,7 +602,11 @@ export default class OrderService {
         await this.congelarCostoLineas(order, trx)
         await this.procesarDescuentoStockProductos(order, trx)
         order.confirmedAt = DateTime.now()
-        await this.aplicarPagoAlConfirmar(order, options.payment_type ?? 'CASH', trx)
+        await this.orderBalanceService.applyConfirmationBalance(
+          order,
+          options.payment_type ?? 'CASH',
+          trx
+        )
         await this.procesarTransicionAProduccion(order, warnings, options.force ?? false, trx)
       }
 
@@ -875,7 +885,7 @@ export default class OrderService {
             locked.confirmedAt = DateTime.now()
             const paymentType: 'CASH' | 'CREDIT' =
               locked.paymentType === 'CREDIT' ? 'CREDIT' : 'CASH'
-            await this.aplicarPagoAlConfirmar(locked, paymentType, trx)
+            await this.orderBalanceService.applyConfirmationBalance(locked, paymentType, trx)
             locked.useTransaction(trx)
             await locked.save()
           }
@@ -1345,34 +1355,6 @@ export default class OrderService {
         },
         trx
       )
-    }
-  }
-
-  private async aplicarPagoAlConfirmar(
-    order: Order,
-    paymentType: 'CASH' | 'CREDIT',
-    trx: TransactionClientContract
-  ) {
-    const lines = await OrderLine.query({ client: trx }).where('orderId', Number(order.id))
-    const totalUsd = lines.reduce((sum, line) => sum + Number(line.subtotalUsd), 0)
-
-    order.paymentType = paymentType
-
-    if (paymentType === 'CREDIT') {
-      if (!order.customerId) {
-        throw new ClienteSinCreditoException()
-      }
-      const customer = order.customer ?? (await Customer.find(order.customerId))
-      if (!customer?.creditDays || customer.creditDays <= 0) {
-        throw new ClienteSinCreditoException()
-      }
-      order.balanceUsd = totalUsd.toFixed(4)
-      order.amountPaidUsd = '0.0000'
-      order.creditDueDate = nowInAppZone().plus({ days: customer.creditDays }).startOf('day')
-    } else {
-      order.balanceUsd = '0.0000'
-      order.amountPaidUsd = totalUsd.toFixed(4)
-      order.creditDueDate = null
     }
   }
 }
