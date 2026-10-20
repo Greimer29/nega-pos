@@ -1,0 +1,632 @@
+{
+  "fullMonthUsd": {
+    "period": {
+      "from": "2026-08-01",
+      "to": "2026-08-31"
+    },
+    "summary": {
+      "displayCurrency": "USD",
+      "salesUsd": "48.0000",
+      "purchasesUsd": "40.0000",
+      "expensesUsd": "0.5000",
+      "machineExpensesUsd": "2.0000",
+      "incomesUsd": "100.0000",
+      "pendingPayablesUsd": "40.0000",
+      "overduePayablesUsd": "40.0000",
+      "pendingReceivablesUsd": "25.0000",
+      "overdueReceivablesUsd": "25.0000",
+      "netUsd": "105.5000",
+      "openingBalanceUsd": "3.7500",
+      "closingBalanceUsd": "109.2500",
+      "sales": "4800.00",
+      "purchases": "4000.00",
+      "expenses": "50.00",
+      "machineExpenses": "200.00",
+      "incomes": "10000.00",
+      "pendingPayables": "4000.00",
+      "overduePayables": "4000.00",
+      "pendingReceivables": "2500.00",
+      "overdueReceivables": "2500.00",
+      "net": "10550.00",
+      "openingBalance": "375.00",
+      "closingBalance": "10925.00",
+      "rates": {
+        "USD": "100.0000",
+        "VES": "100.0000",
+        "XAU": "1.0000"
+      }
+    },
+    "movements": [
+      {
+        "type": "sale",
+        "date": "2026-08-31",
+        "label": "Factura 0000080004 — Venta fin de mes",
+        "account": null,
+        "amountNative": "5.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "500.00",
+        "amountUsd": "5.0000",
+        "isIncome": true,
+        "status": "COMPLETED"
+      },
+      {
+        "type": "purchase",
+        "date": "2026-08-25",
+        "label": "Compra #N — Factura C-SALDADA",
+        "account": {
+          "name": "Banco"
+        },
+        "amountNative": "0.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "0.00",
+        "amountUsd": "0.0000",
+        "isIncome": false,
+        "status": "CONFIRMED",
+        "isCreditPurchase": true,
+        "creditDueDate": "2026-08-25",
+        "purchaseDate": "2026-08-06",
+        "creditBalanceUsd": "0.0000",
+        "creditOverdue": false,
+        "creditReportStatus": "settled"
+      },
+      {
+        "type": "supplier_payment",
+        "date": "2026-08-22",
+        "label": "Pago proveedor — Proveedor estado",
+        "account": {
+          "name": "Banco"
+        },
+        "amountNative": "10.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "1000.00",
+        "amountUsd": "10.0000",
+        "isIncome": false
+      },
+      {
+        "type": "purchase",
+        "date": "2026-08-20",
+        "label": "Compra #N — Factura C-VENCIDA",
+        "account": null,
+        "amountNative": "40.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "0.00",
+        "amountUsd": "0.0000",
+        "isIncome": false,
+        "status": "CONFIRMED",
+        "isCreditPurchase": true,
+        "creditDueDate": "2026-08-20",
+        "purchaseDate": "2026-08-04",
+        "isCreditPurchaseCarryover": true,
+        "creditBalanceUsd": "40.0000",
+        "creditOverdue": true,
+        "creditReportStatus": "overdue"
+      },
+      {
+        "type": "customer_payment",
+        "date": "2026-08-18",
+        "label": "Abono — Cliente estado (0000080005)",
+        "account": {
+          "name": "Caja principal"
+        },
+        "amountNative": "15.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "1500.00",
+        "amountUsd": "15.0000",
+        "isIncome": true
+      },
+      {
+        "type": "sale",
+        "date": "2026-08-15",
+        "label": "Factura 0000080003 — Venta con descuento · descuento −2.00",
+        "account": null,
+        "amountNative": "18.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "1800.00",
+        "amountUsd": "18.0000",
+        "isIncome": true,
+        "status": "COMPLETED"
+      },
+      {
+        "type": "machine_expense",
+        "date": "2026-08-11",
+        "label": "Recta estado — Reparación legacy",
+        "account": {
+          "name": "Banco"
+        },
+        "amountNative": "200.00",
+        "currencyCode": "VES",
+        "amountDisplay": "200.00",
+        "amountUsd": "2.0000",
+        "isIncome": false
+      },
+      {
+        "type": "sale",
+        "date": "2026-08-10",
+        "label": "Factura 0000080006 — Cliente estado",
+        "account": null,
+        "amountNative": "12.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "0.00",
+        "amountUsd": "0.0000",
+        "isIncome": false,
+        "status": "COMPLETED",
+        "isCreditSale": true,
+        "creditDueDate": "2026-09-10",
+        "saleDate": "2026-08-10",
+        "creditBalanceUsd": "0.0000",
+        "creditOverdue": false,
+        "creditReportStatus": "settled"
+      },
+      {
+        "type": "expense",
+        "date": "2026-08-09",
+        "label": "Gasto en bolívares",
+        "account": {
+          "name": "Caja principal"
+        },
+        "amountNative": "50.00",
+        "currencyCode": "VES",
+        "amountDisplay": "50.00",
+        "amountUsd": "0.5000",
+        "isIncome": false
+      },
+      {
+        "type": "sale",
+        "date": "2026-08-05",
+        "label": "Factura 0000080005 — Cliente estado",
+        "account": null,
+        "amountNative": "25.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "2500.00",
+        "amountUsd": "25.0000",
+        "isIncome": false,
+        "status": "COMPLETED",
+        "isCreditSale": true,
+        "creditDueDate": "2026-08-20",
+        "saleDate": "2026-08-05",
+        "creditBalanceUsd": "25.0000",
+        "creditOverdue": true,
+        "creditReportStatus": "overdue"
+      },
+      {
+        "type": "purchase",
+        "date": "2026-08-03",
+        "label": "Compra #N — Factura C-CONTADO",
+        "account": {
+          "name": "Caja principal"
+        },
+        "amountNative": "30.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "3000.00",
+        "amountUsd": "30.0000",
+        "isIncome": false,
+        "status": "CONFIRMED",
+        "isCreditPurchase": false
+      },
+      {
+        "type": "income",
+        "date": "2026-08-02",
+        "label": "Aporte de capital",
+        "account": {
+          "name": "Caja principal"
+        },
+        "amountNative": "100.00",
+        "currencyCode": "XAU",
+        "amountDisplay": "10000.00",
+        "amountUsd": "100.0000",
+        "isIncome": true
+      },
+      {
+        "type": "sale",
+        "date": "2026-08-01",
+        "label": "Factura 0000080002 — Venta agosto madrugada",
+        "account": null,
+        "amountNative": "10.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "1000.00",
+        "amountUsd": "10.0000",
+        "isIncome": true,
+        "status": "COMPLETED"
+      }
+    ]
+  },
+  "cashBoxInVes": {
+    "period": {
+      "from": "2026-08-01",
+      "to": "2026-08-31"
+    },
+    "summary": {
+      "displayCurrency": "VES",
+      "salesUsd": "48.0000",
+      "purchasesUsd": "30.0000",
+      "expensesUsd": "0.5000",
+      "machineExpensesUsd": "0.0000",
+      "incomesUsd": "100.0000",
+      "pendingPayablesUsd": "0.0000",
+      "overduePayablesUsd": "0.0000",
+      "pendingReceivablesUsd": "25.0000",
+      "overdueReceivablesUsd": "25.0000",
+      "netUsd": "117.5000",
+      "openingBalanceUsd": "1.0000",
+      "closingBalanceUsd": "118.5000",
+      "sales": "4800.00",
+      "purchases": "3000.00",
+      "expenses": "50.00",
+      "machineExpenses": "0.00",
+      "incomes": "10000.00",
+      "pendingPayables": "0.00",
+      "overduePayables": "0.00",
+      "pendingReceivables": "2500.00",
+      "overdueReceivables": "2500.00",
+      "net": "11750.00",
+      "openingBalance": "100.00",
+      "closingBalance": "11850.00",
+      "rates": {
+        "USD": "100.0000",
+        "VES": "100.0000",
+        "XAU": "1.0000"
+      }
+    },
+    "movements": [
+      {
+        "type": "sale",
+        "date": "2026-08-31",
+        "label": "Factura 0000080004 — Venta fin de mes",
+        "account": null,
+        "amountNative": "5.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "500.00",
+        "amountUsd": "5.0000",
+        "isIncome": true,
+        "status": "COMPLETED"
+      },
+      {
+        "type": "customer_payment",
+        "date": "2026-08-18",
+        "label": "Abono — Cliente estado (0000080005)",
+        "account": {
+          "name": "Caja principal"
+        },
+        "amountNative": "15.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "1500.00",
+        "amountUsd": "15.0000",
+        "isIncome": true
+      },
+      {
+        "type": "sale",
+        "date": "2026-08-15",
+        "label": "Factura 0000080003 — Venta con descuento · descuento −2.00",
+        "account": null,
+        "amountNative": "18.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "1800.00",
+        "amountUsd": "18.0000",
+        "isIncome": true,
+        "status": "COMPLETED"
+      },
+      {
+        "type": "sale",
+        "date": "2026-08-10",
+        "label": "Factura 0000080006 — Cliente estado",
+        "account": null,
+        "amountNative": "12.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "0.00",
+        "amountUsd": "0.0000",
+        "isIncome": false,
+        "status": "COMPLETED",
+        "isCreditSale": true,
+        "creditDueDate": "2026-09-10",
+        "saleDate": "2026-08-10",
+        "creditBalanceUsd": "0.0000",
+        "creditOverdue": false,
+        "creditReportStatus": "settled"
+      },
+      {
+        "type": "expense",
+        "date": "2026-08-09",
+        "label": "Gasto en bolívares",
+        "account": {
+          "name": "Caja principal"
+        },
+        "amountNative": "50.00",
+        "currencyCode": "VES",
+        "amountDisplay": "50.00",
+        "amountUsd": "0.5000",
+        "isIncome": false
+      },
+      {
+        "type": "sale",
+        "date": "2026-08-05",
+        "label": "Factura 0000080005 — Cliente estado",
+        "account": null,
+        "amountNative": "25.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "2500.00",
+        "amountUsd": "25.0000",
+        "isIncome": false,
+        "status": "COMPLETED",
+        "isCreditSale": true,
+        "creditDueDate": "2026-08-20",
+        "saleDate": "2026-08-05",
+        "creditBalanceUsd": "25.0000",
+        "creditOverdue": true,
+        "creditReportStatus": "overdue"
+      },
+      {
+        "type": "purchase",
+        "date": "2026-08-03",
+        "label": "Compra #N — Factura C-CONTADO",
+        "account": {
+          "name": "Caja principal"
+        },
+        "amountNative": "30.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "3000.00",
+        "amountUsd": "30.0000",
+        "isIncome": false,
+        "status": "CONFIRMED",
+        "isCreditPurchase": false
+      },
+      {
+        "type": "income",
+        "date": "2026-08-02",
+        "label": "Aporte de capital",
+        "account": {
+          "name": "Caja principal"
+        },
+        "amountNative": "100.00",
+        "currencyCode": "XAU",
+        "amountDisplay": "10000.00",
+        "amountUsd": "100.0000",
+        "isIncome": true
+      },
+      {
+        "type": "sale",
+        "date": "2026-08-01",
+        "label": "Factura 0000080002 — Venta agosto madrugada",
+        "account": null,
+        "amountNative": "10.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "1000.00",
+        "amountUsd": "10.0000",
+        "isIncome": true,
+        "status": "COMPLETED"
+      }
+    ]
+  },
+  "unassignedSalesAndExpenses": {
+    "period": {
+      "from": "2026-08-01",
+      "to": "2026-08-31"
+    },
+    "summary": {
+      "displayCurrency": "USD",
+      "salesUsd": "33.0000",
+      "purchasesUsd": "0.0000",
+      "expensesUsd": "0.0000",
+      "machineExpensesUsd": "0.0000",
+      "incomesUsd": "0.0000",
+      "pendingPayablesUsd": "0.0000",
+      "overduePayablesUsd": "0.0000",
+      "pendingReceivablesUsd": "25.0000",
+      "overdueReceivablesUsd": "25.0000",
+      "netUsd": "33.0000",
+      "openingBalanceUsd": "9.7500",
+      "closingBalanceUsd": "42.7500",
+      "sales": "3300.00",
+      "purchases": "0.00",
+      "expenses": "0.00",
+      "machineExpenses": "0.00",
+      "incomes": "0.00",
+      "pendingPayables": "0.00",
+      "overduePayables": "0.00",
+      "pendingReceivables": "2500.00",
+      "overdueReceivables": "2500.00",
+      "net": "3300.00",
+      "openingBalance": "975.00",
+      "closingBalance": "4275.00",
+      "rates": {
+        "USD": "100.0000",
+        "VES": "100.0000",
+        "XAU": "1.0000"
+      }
+    },
+    "movements": [
+      {
+        "type": "sale",
+        "date": "2026-08-31",
+        "label": "Factura 0000080004 — Venta fin de mes",
+        "account": null,
+        "amountNative": "5.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "500.00",
+        "amountUsd": "5.0000",
+        "isIncome": true,
+        "status": "COMPLETED"
+      },
+      {
+        "type": "sale",
+        "date": "2026-08-15",
+        "label": "Factura 0000080003 — Venta con descuento · descuento −2.00",
+        "account": null,
+        "amountNative": "18.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "1800.00",
+        "amountUsd": "18.0000",
+        "isIncome": true,
+        "status": "COMPLETED"
+      },
+      {
+        "type": "sale",
+        "date": "2026-08-10",
+        "label": "Factura 0000080006 — Cliente estado",
+        "account": null,
+        "amountNative": "12.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "0.00",
+        "amountUsd": "0.0000",
+        "isIncome": false,
+        "status": "COMPLETED",
+        "isCreditSale": true,
+        "creditDueDate": "2026-09-10",
+        "saleDate": "2026-08-10",
+        "creditBalanceUsd": "0.0000",
+        "creditOverdue": false,
+        "creditReportStatus": "settled"
+      },
+      {
+        "type": "sale",
+        "date": "2026-08-05",
+        "label": "Factura 0000080005 — Cliente estado",
+        "account": null,
+        "amountNative": "25.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "2500.00",
+        "amountUsd": "25.0000",
+        "isIncome": false,
+        "status": "COMPLETED",
+        "isCreditSale": true,
+        "creditDueDate": "2026-08-20",
+        "saleDate": "2026-08-05",
+        "creditBalanceUsd": "25.0000",
+        "creditOverdue": true,
+        "creditReportStatus": "overdue"
+      },
+      {
+        "type": "sale",
+        "date": "2026-08-01",
+        "label": "Factura 0000080002 — Venta agosto madrugada",
+        "account": null,
+        "amountNative": "10.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "1000.00",
+        "amountUsd": "10.0000",
+        "isIncome": true,
+        "status": "COMPLETED"
+      }
+    ]
+  },
+  "purchasesOnlyHalfMonth": {
+    "period": {
+      "from": "2026-08-01",
+      "to": "2026-08-15"
+    },
+    "summary": {
+      "displayCurrency": "USD",
+      "salesUsd": "0.0000",
+      "purchasesUsd": "30.0000",
+      "expensesUsd": "0.0000",
+      "machineExpensesUsd": "0.0000",
+      "incomesUsd": "0.0000",
+      "pendingPayablesUsd": "0.0000",
+      "overduePayablesUsd": "0.0000",
+      "pendingReceivablesUsd": "25.0000",
+      "overdueReceivablesUsd": "25.0000",
+      "netUsd": "-30.0000",
+      "openingBalanceUsd": "-6.0000",
+      "closingBalanceUsd": "-36.0000",
+      "sales": "0.00",
+      "purchases": "3000.00",
+      "expenses": "0.00",
+      "machineExpenses": "0.00",
+      "incomes": "0.00",
+      "pendingPayables": "0.00",
+      "overduePayables": "0.00",
+      "pendingReceivables": "2500.00",
+      "overdueReceivables": "2500.00",
+      "net": "-3000.00",
+      "openingBalance": "-600.00",
+      "closingBalance": "-3600.00",
+      "rates": {
+        "USD": "100.0000",
+        "VES": "100.0000",
+        "XAU": "1.0000"
+      }
+    },
+    "movements": [
+      {
+        "type": "purchase",
+        "date": "2026-08-03",
+        "label": "Compra #N — Factura C-CONTADO",
+        "account": {
+          "name": "Caja principal"
+        },
+        "amountNative": "30.0000",
+        "currencyCode": "USD",
+        "amountDisplay": "3000.00",
+        "amountUsd": "30.0000",
+        "isIncome": false,
+        "status": "CONFIRMED",
+        "isCreditPurchase": false
+      }
+    ]
+  },
+  "financialSummary": {
+    "period": {
+      "from": "2026-08-01",
+      "to": "2026-08-31"
+    },
+    "asOf": "2026-10-20",
+    "diagnosis": {
+      "tone": "positive",
+      "headline": "Utilidad operativa y flujo de caja positivos",
+      "detail": "El período generó resultado favorable a devengo y también entró más caja de la que salió."
+    },
+    "displayCurrency": "USD",
+    "rates": {
+      "USD": "100.0000",
+      "VES": "100.0000",
+      "XAU": "1.0000"
+    },
+    "resultado": {
+      "salesRevenueUsd": "85.0000",
+      "cogsUsd": "0.0000",
+      "grossProfitUsd": "85.0000",
+      "operatingExpensesUsd": "2.5000",
+      "operatingIncomeUsd": "82.5000",
+      "grossMarginPct": 100,
+      "operatingMarginPct": 97.06,
+      "salesRevenue": "8500.00",
+      "cogs": "0.00",
+      "grossProfit": "8500.00",
+      "operatingExpenses": "250.00",
+      "operatingIncome": "8250.00"
+    },
+    "flujo": {
+      "netUsd": "107.5000",
+      "openingBalanceUsd": "3.7500",
+      "closingBalanceUsd": "111.2500",
+      "salesUsd": "48.0000",
+      "incomesUsd": "100.0000",
+      "purchasesUsd": "40.0000",
+      "expensesUsd": "0.5000",
+      "net": "10750.00",
+      "openingBalance": "375.00",
+      "closingBalance": "11125.00",
+      "sales": "4800.00",
+      "incomes": "10000.00",
+      "purchases": "4000.00",
+      "expenses": "50.00"
+    },
+    "patrimonio": {
+      "inventoryUsd": "0.0000",
+      "receivablesUsd": "25.0000",
+      "machinesUsd": "0.0000",
+      "totalAssetsUsd": "25.0000",
+      "payablesUsd": "60.0000",
+      "totalLiabilitiesUsd": "60.0000",
+      "estimatedEquityUsd": "-35.0000",
+      "capitalContributionsUsd": "100.0000",
+      "inventory": "0.00",
+      "receivables": "2500.00",
+      "machines": "0.00",
+      "totalAssets": "2500.00",
+      "payables": "6000.00",
+      "totalLiabilities": "6000.00",
+      "estimatedEquity": "-3500.00",
+      "capitalContributions": "10000.00"
+    }
+  }
+}
