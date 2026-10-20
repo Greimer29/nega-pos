@@ -1381,6 +1381,75 @@ test.group('Ventas API — catálogo y ventas', (group) => {
     assert.equal(catalog.stockQuantity, '2.000')
   })
 
+  test('POST /sales/:id/transition rejects FAST, backwards and returned sales with 409', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const catalog = await CatalogProduct.create({
+      name: 'Producto transiciones',
+      category: 'Uniforme',
+      salePriceUsd: '15.0000',
+      costUsd: '5.0000',
+      stockQuantity: '10.000',
+      active: true,
+    })
+
+    async function createSale(billingMode: 'FAST' | 'ORDER') {
+      const response = await client
+        .post('/api/v1/sales')
+        .loginAs(user)
+        .json({
+          confirm: true,
+          guest_name: `Pedido ${billingMode}`,
+          payment_method_code: 'cash_usd',
+          billing_mode: billingMode,
+          payment_type: 'CASH',
+          lines: [{ catalog_product_id: Number(catalog.id), quantity: 1, unit_price_usd: 15 }],
+        })
+      response.assertStatus(200)
+      return response.body().data.sale.id as number
+    }
+
+    const fastSaleId = await createSale('FAST')
+    const fastTransition = await client
+      .post(`/api/v1/sales/${fastSaleId}/transition`)
+      .loginAs(user)
+      .json({ order_status: 'IN_PROCESS' })
+    fastTransition.assertStatus(409)
+    assert.equal(fastTransition.body().error.code, 'TRANSICION_INVALIDA')
+
+    const orderSaleId = await createSale('ORDER')
+    await client
+      .post(`/api/v1/sales/${orderSaleId}/transition`)
+      .loginAs(user)
+      .json({ order_status: 'DELIVERED' })
+      .then((response) => response.assertStatus(200))
+
+    const backwards = await client
+      .post(`/api/v1/sales/${orderSaleId}/transition`)
+      .loginAs(user)
+      .json({ order_status: 'IN_PROCESS' })
+    backwards.assertStatus(409)
+    assert.equal(backwards.body().error.code, 'TRANSICION_INVALIDA')
+
+    const returnedSaleId = await createSale('ORDER')
+    await client
+      .post(`/api/v1/sales/${returnedSaleId}/return`)
+      .loginAs(user)
+      .then((response) => response.assertStatus(200))
+
+    const afterReturn = await client
+      .post(`/api/v1/sales/${returnedSaleId}/transition`)
+      .loginAs(user)
+      .json({ order_status: 'IN_PROCESS' })
+    afterReturn.assertStatus(409)
+    assert.equal(afterReturn.body().error.code, 'TRANSICION_INVALIDA')
+
+    const stillPending = await client.get(`/api/v1/sales/${returnedSaleId}`).loginAs(user)
+    assert.equal(stillPending.body().data.sale.order_status, 'PENDING')
+  })
+
   test('POST sale CREDIT leaves balance_usd pending', async ({ client, assert }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
     const customer = await seedCustomer()

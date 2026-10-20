@@ -4,7 +4,6 @@ import LineaVentaInvalidaException from '#exceptions/linea_venta_invalida_except
 import MaterialNoEncontradoException from '#exceptions/material_no_encontrado_exception'
 import OrderNoDevolvableException from '#exceptions/pedido_no_devolvable_exception'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
-import TransicionInvalidaException from '#exceptions/transicion_invalida_exception'
 import VentaNoEditableException from '#exceptions/venta_no_editable_exception'
 import VentaNoEncontradaException from '#exceptions/venta_no_encontrada_exception'
 import { isCatalogService } from '#constants/catalog_item_kind'
@@ -18,6 +17,7 @@ import CatalogProductSizeService from '#services/catalog_product_size_service'
 import SaleCodigoService from '#services/sale_code_service'
 import SalesShiftService from '#services/sales_shift_service'
 import SaleLineService, { type ResolvedSaleLine } from '#services/sale_line_service'
+import { assertSaleOrderTransition, type SaleOrderStatus } from '#services/sale_order_state_machine'
 import SalePaymentService from '#services/sale_payment_service'
 import SaleReturnService from '#services/sale_return_service'
 import SaleStockService from '#services/sale_stock_service'
@@ -46,7 +46,7 @@ import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 export type SaleBillingMode = 'FAST' | 'ORDER'
-export type SaleOrderStatus = 'PENDING' | 'IN_PROCESS' | 'DELIVERED'
+export type { SaleOrderStatus }
 export type SalePaymentType = 'CASH' | 'CREDIT'
 export type SaleStatus = 'DRAFT' | 'COMPLETED' | 'RETURNED'
 
@@ -132,12 +132,6 @@ export type ListSalesFilters = {
 type ResolvedLineResult = {
   line: ResolvedSaleLine
   subtotalUsd: number
-}
-
-const ORDER_STATUS_TRANSITIONS: Record<SaleOrderStatus, SaleOrderStatus[]> = {
-  PENDING: ['IN_PROCESS', 'DELIVERED'],
-  IN_PROCESS: ['DELIVERED'],
-  DELIVERED: [],
 }
 
 export default class SaleService {
@@ -611,20 +605,7 @@ export default class SaleService {
         throw new VentaNoEncontradaException()
       }
 
-      if (sale.status !== 'COMPLETED') {
-        throw new TransicionInvalidaException(sale.status, orderStatus)
-      }
-
-      if (sale.billingMode !== 'ORDER') {
-        throw new TransicionInvalidaException(sale.orderStatus, orderStatus)
-      }
-
-      const current = sale.orderStatus as SaleOrderStatus
-      const allowed = ORDER_STATUS_TRANSITIONS[current] ?? []
-
-      if (!allowed.includes(orderStatus)) {
-        throw new TransicionInvalidaException(current, orderStatus)
-      }
+      assertSaleOrderTransition(sale, orderStatus)
 
       sale.orderStatus = orderStatus
       sale.useTransaction(trx)
