@@ -1,4 +1,5 @@
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
+import SaleQueryService from '#services/sale_query_service'
 import SaleService from '#services/sale_service'
 import OfflineCatalogService from '#services/offline_catalog_service'
 import SalesShiftService from '#services/sales_shift_service'
@@ -20,6 +21,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 
 export default class SalesController {
   private service = new SaleService()
+  private queryService = new SaleQueryService()
   private offlineCatalogService = new OfflineCatalogService()
   private salesShiftService = new SalesShiftService()
 
@@ -33,7 +35,7 @@ export default class SalesController {
 
   async index({ request, serialize }: HttpContext) {
     const filters = await request.validateUsing(listSalesValidator)
-    const paginator = await this.service.listar({
+    const paginator = await this.queryService.listar({
       page: filters.page,
       perPage: filters.per_page,
       customer_id: filters.customer_id,
@@ -51,7 +53,7 @@ export default class SalesController {
   }
 
   async show({ params, serialize }: HttpContext) {
-    const sale = await this.service.obtenerDetalle(parseRouteId(params.id, 'factura'))
+    const sale = await this.queryService.obtenerDetalle(parseRouteId(params.id, 'factura'))
 
     return serialize({
       sale: serializeSale(sale),

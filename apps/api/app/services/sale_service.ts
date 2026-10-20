@@ -19,6 +19,7 @@ import SalesShiftService from '#services/sales_shift_service'
 import SaleLineService, { type ResolvedSaleLine } from '#services/sale_line_service'
 import { assertSaleOrderTransition, type SaleOrderStatus } from '#services/sale_order_state_machine'
 import SalePaymentService from '#services/sale_payment_service'
+import SaleQueryService from '#services/sale_query_service'
 import SaleReturnService from '#services/sale_return_service'
 import SaleStockService from '#services/sale_stock_service'
 import {
@@ -36,13 +37,11 @@ import type { SalePaymentLineInput } from '#utils/sale_payment_lines'
 import { resolveSaleReturnRequests, type SaleReturnLineInput } from '#utils/sale_return_requests'
 import { resolveMaterialSaleLineCost, resolveProductSaleLineCost } from '#utils/sale_line_cost'
 import { calculateSaleLineAmounts, normalizeSaleLineKitchenNote } from '#utils/sale_line_values'
-import { datetimeRangeUtcSql, dayStartUtcSql } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
 import { resolveWholesaleLineSnapshot } from '#utils/wholesale'
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
-import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 export type SaleBillingMode = 'FAST' | 'ORDER'
@@ -118,17 +117,6 @@ export type OfflineSyncSaleInput = {
   sold_by_user_id?: number | null
 }
 
-export type ListSalesFilters = {
-  page?: number
-  perPage?: number
-  customer_id?: number
-  status?: SaleStatus
-  exclude_status?: SaleStatus
-  search?: string
-  date_from?: string
-  date_to?: string
-}
-
 type ResolvedLineResult = {
   line: ResolvedSaleLine
   subtotalUsd: number
@@ -140,83 +128,12 @@ export default class SaleService {
   private salesShiftService = new SalesShiftService()
   private saleLineService = new SaleLineService()
   private salePaymentService = new SalePaymentService()
+  private saleQueryService = new SaleQueryService()
   private saleReturnService = new SaleReturnService()
   private saleStockService = new SaleStockService()
 
   previewNextCode(): Promise<string> {
     return this.codeService.preview()
-  }
-
-  async listar(filters: ListSalesFilters = {}): Promise<ModelPaginatorContract<Sale>> {
-    const page = filters.page ?? 1
-    const perPage = filters.perPage ?? 20
-
-    const query = Sale.query()
-      .preload('customer')
-      .preload('paymentMethod')
-      .orderBy('soldAt', 'desc')
-      .orderBy('id', 'desc')
-
-    if (filters.customer_id) {
-      query.where('customerId', filters.customer_id)
-    }
-
-    if (filters.status) {
-      query.where('status', filters.status)
-    }
-
-    if (filters.exclude_status) {
-      query.whereNot('status', filters.exclude_status)
-    }
-
-    if (filters.search?.trim()) {
-      const term = `%${filters.search.trim()}%`
-      query.where((builder) => {
-        builder
-          .whereILike('code', term)
-          .orWhereILike('guestName', term)
-          .orWhereHas('customer', (customerQuery) => {
-            customerQuery.whereILike('name', term)
-          })
-      })
-    }
-
-    if (filters.date_from) {
-      query.where('soldAt', '>=', dayStartUtcSql(filters.date_from))
-    }
-
-    if (filters.date_to) {
-      const { toExclusiveSql } = datetimeRangeUtcSql(filters.date_to, filters.date_to)
-      query.where('soldAt', '<', toExclusiveSql)
-    }
-
-    return query.paginate(page, perPage)
-  }
-
-  async obtenerDetalle(id: number): Promise<Sale> {
-    const sale = await Sale.query()
-      .where('id', id)
-      .preload('customer')
-      .preload('paymentMethod')
-      .preload('soldBy')
-      .preload('salePayments', (q) => {
-        q.preload('paymentMethod').orderBy('sortOrder', 'asc').orderBy('id', 'asc')
-      })
-      .preload('saleLines', (q) => {
-        q.preload('catalogProduct', (cp) =>
-          cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
-        )
-          .preload('material')
-          .preload('saleLineMaterials', (slm) => slm.preload('material'))
-          .orderBy('id', 'asc')
-      })
-      .first()
-
-    if (!sale) {
-      throw new VentaNoEncontradaException()
-    }
-
-    return sale
   }
 
   async crear(input: CreateSaleInput): Promise<Sale> {
@@ -291,7 +208,7 @@ export default class SaleService {
   }
 
   async actualizar(id: number, input: UpdateSaleInput): Promise<Sale> {
-    const sale = await this.obtenerDetalle(id)
+    const sale = await this.saleQueryService.obtenerDetalle(id)
 
     if (sale.status !== 'DRAFT') {
       throw new VentaNoEditableException()
@@ -371,7 +288,7 @@ export default class SaleService {
   }
 
   async eliminar(id: number): Promise<{ id: number; eliminado: true }> {
-    const sale = await this.obtenerDetalle(id)
+    const sale = await this.saleQueryService.obtenerDetalle(id)
 
     if (sale.status !== 'DRAFT') {
       throw new VentaNoEditableException()
@@ -472,7 +389,10 @@ export default class SaleService {
 
     const existing = await Sale.query().where('offlineClientId', offlineClientId).first()
     if (existing) {
-      return { sale: await this.obtenerDetalle(Number(existing.id)), alreadySynced: true }
+      return {
+        sale: await this.saleQueryService.obtenerDetalle(Number(existing.id)),
+        alreadySynced: true,
+      }
     }
 
     if (input.lines.length === 0) {
@@ -586,7 +506,7 @@ export default class SaleService {
       return { saleId: Number(hydrated.id), alreadySynced: false as const }
     })
 
-    const sale = await this.obtenerDetalle(result.saleId)
+    const sale = await this.saleQueryService.obtenerDetalle(result.saleId)
     if (!result.alreadySynced) {
       broadcastCompanyEvent('sale.changed')
     }
