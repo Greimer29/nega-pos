@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Plus } from 'lucide-react'
 import { CircularImageField } from '@/components/circular-image-field'
 import { BarcodeScanButton } from '@/components/barcode-scan-button'
-import { DecimalInput, MoneyInput } from '@/components/decimal-input'
+import { DecimalInput } from '@/components/decimal-input'
 import { Button } from '@/components/ui/button'
 import { OptionSwitch } from '@/components/ui/switch'
 import {
@@ -36,18 +36,26 @@ import { notifyApiError, notifyFormError } from '@/features/notifications/query-
 import { toast } from '@/features/notifications/toast'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { formatCostWarningsMessage, isBelowCost } from '@/lib/cost-warnings'
-import {
-  formatInventoryQuantity,
-  inventoryQuantityDecimals,
-  normalizeInventoryQuantity,
-} from '@/lib/inventory-units'
-import {
-  calcProfitMarginPercent,
-  calcSalePriceFromMargin,
-  profitMarginIsNegative,
-} from '@/lib/profit-margin'
-import { cn } from '@/lib/utils'
+import { formatInventoryQuantity, inventoryQuantityDecimals } from '@/lib/inventory-units'
+import { calcSalePriceFromMargin, profitMarginIsNegative } from '@/lib/profit-margin'
 import { deriveUnitCostFromPack, MIN_WHOLESALE_UNITS_PER_PACK } from '@/lib/wholesale'
+import {
+  CatalogRetailPriceFields,
+  CatalogWholesalePriceFields,
+} from '@/features/ventas/components/catalog-form/catalog-price-fields'
+import { CatalogFormulaPicker } from '@/features/ventas/components/catalog-form/catalog-formula-picker'
+import { CatalogSizeRowsEditor } from '@/features/ventas/components/catalog-form/catalog-size-rows-editor'
+import {
+  buildCatalogProductPayload,
+  calcFormulaMaterialsCost,
+  deriveRetailCost,
+  formatMarginValue,
+  newSizeRow,
+  sumSizeRowsStock,
+  validateCatalogProductForm,
+  type CatalogProductFormValues,
+  type SizeRow,
+} from '@/features/ventas/utils/catalog-product-form'
 
 type CatalogFormDialogProps = {
   open: boolean
@@ -56,25 +64,6 @@ type CatalogFormDialogProps = {
   onSaved?: () => void
   onCreated?: (product: CatalogProduct) => void
   purchaseFlow?: boolean
-}
-
-function formatMarginValue(cost: number, sale: string) {
-  const margin = calcProfitMarginPercent(sale, cost)
-  return margin !== null ? margin.toFixed(1) : ''
-}
-
-type SizeRow = {
-  key: string
-  size: string
-  stock_quantity: string
-}
-
-function newSizeRow(): SizeRow {
-  return {
-    key: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    size: '',
-    stock_quantity: '0',
-  }
 }
 
 export function CatalogFormDialog({
@@ -132,14 +121,7 @@ export function CatalogFormDialog({
   const { formatFromUsd } = useFormatMoney()
   const stockDecimals = inventoryQuantityDecimals(saleUnit)
   const sizesStockTotal = useMemo(
-    () =>
-      sizeRows.reduce((sum, row) => {
-        if (!row.size.trim()) return sum
-        return (
-          sum +
-          normalizeInventoryQuantity(Math.max(0, Number(row.stock_quantity) || 0), saleUnit)
-        )
-      }, 0),
+    () => sumSizeRowsStock(sizeRows, saleUnit),
     [saleUnit, sizeRows]
   )
 
@@ -194,16 +176,7 @@ export function CatalogFormDialog({
     }
   }
 
-  const formulaCost = useMemo(() => {
-    if (!formulaMaterials?.length) {
-      return 0
-    }
-
-    return formulaMaterials.reduce((total, item) => {
-      const unitCost = Number(item.material?.last_purchase_price_usd ?? 0)
-      return total + unitCost * Number(item.quantity)
-    }, 0)
-  }, [formulaMaterials])
+  const formulaCost = useMemo(() => calcFormulaMaterialsCost(formulaMaterials), [formulaMaterials])
 
   useEffect(() => {
     if (!open) {
@@ -298,11 +271,12 @@ export function CatalogFormDialog({
     }
   }, [hasFormula, formulaCost, formulaMaterials])
 
-  const packUnitsNum = Number(wholesaleUnits)
-  const derivedRetailCost =
-    wholesaleEnabled && Number.isFinite(packUnitsNum) && packUnitsNum >= MIN_WHOLESALE_UNITS_PER_PACK
-      ? deriveUnitCostFromPack(Number(wholesaleCost) || 0, packUnitsNum)
-      : Number(costPrice)
+  const derivedRetailCost = deriveRetailCost(
+    wholesaleEnabled,
+    wholesaleUnits,
+    wholesaleCost,
+    costPrice
+  )
   const effectiveCostUsd = hasFormula ? formulaCost : derivedRetailCost
   const saleBelowCost = isBelowCost(salePrice, effectiveCostUsd)
   const marginValue = Number(marginPercent)
@@ -469,123 +443,41 @@ export function CatalogFormDialog({
     setUseSizes(false)
   }
 
-  function validateSizeRows(): string | null {
-    const seen = new Set<string>()
-    for (const row of sizeRows) {
-      const label = row.size.trim()
-      if (!label) continue
-      if (label.length > 20) {
-        return 'Cada talla puede tener como máximo 20 caracteres.'
-      }
-      const key = label.toLowerCase()
-      if (seen.has(key)) {
-        return `La talla "${label}" está duplicada.`
-      }
-      seen.add(key)
-      if (Number(row.stock_quantity) < 0) {
-        return 'El stock por talla no puede ser negativo.'
-      }
-    }
-    if (seen.size === 0) {
-      return 'Agregá al menos una talla o desactivá «Usar tallas».'
-    }
-    return null
-  }
-
   async function handleSave() {
-    if (!category.trim()) {
-      notifyFormError('Elegí una categoría.')
+    const formValues: CatalogProductFormValues = {
+      name,
+      description,
+      category,
+      barcode,
+      supplierCode,
+      saleUnit,
+      salePrice,
+      costPrice,
+      stockQuantity,
+      minimumStock,
+      useFormula,
+      useSizes,
+      sizeRows,
+      wholesaleEnabled,
+      wholesaleUnits,
+      wholesaleCost,
+      wholesaleSale,
+    }
+
+    const formError = validateCatalogProductForm(formValues, hasFormula)
+    if (formError) {
+      notifyFormError(formError)
       return
-    }
-
-    if (useFormula && useSizes) {
-      notifyFormError('Un producto con fórmula no puede usar tallas.')
-      return
-    }
-
-    if (wholesaleEnabled && useSizes) {
-      notifyFormError('La configuración mayorista no aplica a productos con tallas.')
-      return
-    }
-
-    if (wholesaleEnabled) {
-      const units = Number(wholesaleUnits)
-      if (!Number.isFinite(units) || units < MIN_WHOLESALE_UNITS_PER_PACK) {
-        notifyFormError(
-          `El paquete mayorista debe traer al menos ${MIN_WHOLESALE_UNITS_PER_PACK} unidades.`
-        )
-        return
-      }
-      if (!Number.isFinite(Number(wholesaleCost)) || Number(wholesaleCost) < 0) {
-        notifyFormError('Indicá el precio costo del paquete mayorista.')
-        return
-      }
-      if (!Number.isFinite(Number(wholesaleSale)) || Number(wholesaleSale) < 0) {
-        notifyFormError('Indicá el precio de venta del paquete mayorista.')
-        return
-      }
-    }
-
-    if (useFormula && !hasFormula) {
-      notifyFormError('Elegí o creá una fórmula, o desactivá «Usar fórmula».')
-      return
-    }
-
-    if (Number(minimumStock) < 0) {
-      notifyFormError('El stock mínimo no puede ser negativo.')
-      return
-    }
-
-    if (useSizes) {
-      const sizeError = validateSizeRows()
-      if (sizeError) {
-        notifyFormError(sizeError)
-        return
-      }
     }
 
     const hadSizes =
       Boolean(product?.has_sizes) || (product?.sizes?.length ?? 0) > 0 || Boolean(displayProduct?.has_sizes)
-    const sizesPayload = useSizes
-      ? sizeRows
-          .filter((row) => row.size.trim())
-          .map((row) => ({
-            size: row.size.trim(),
-            stock_quantity: normalizeInventoryQuantity(
-              Math.max(0, Number(row.stock_quantity) || 0),
-              saleUnit
-            ),
-          }))
-      : hadSizes && !hasFormula
-        ? []
-        : undefined
-
-    const payload = {
-      name: name.trim(),
-      description: description.trim() || undefined,
-      category,
-      barcode: barcode.trim() || null,
-      supplier_code: supplierCode.trim() || null,
-      sale_unit: saleUnit,
-      sale_price_usd: Number(salePrice),
-      minimum_stock: normalizeInventoryQuantity(Number(minimumStock) || 0, saleUnit),
-      wholesale_enabled: wholesaleEnabled,
-      wholesale_units_per_pack: wholesaleEnabled ? Number(wholesaleUnits) : null,
-      wholesale_cost_usd: wholesaleEnabled ? Number(wholesaleCost) : null,
-      wholesale_sale_price_usd: wholesaleEnabled ? Number(wholesaleSale) : null,
-      ...(hasFormula
-        ? { formula_id: selectedFormulaId }
-        : {
-            cost_usd: wholesaleEnabled ? derivedRetailCost : Number(costPrice),
-            formula_id: null,
-            stock_quantity: useSizes
-              ? sizesStockTotal
-              : purchaseFlow && !isEditing
-                ? 0
-                : normalizeInventoryQuantity(Number(stockQuantity) || 0, saleUnit),
-            ...(sizesPayload !== undefined ? { sizes: sizesPayload } : {}),
-          }),
-    }
+    const payload = buildCatalogProductPayload(formValues, {
+      selectedFormulaId,
+      hadSizes,
+      isEditing,
+      purchaseFlow,
+    })
 
     try {
       if (isEditing) {
@@ -831,138 +723,26 @@ export function CatalogFormDialog({
                 </p>
               ) : null}
               {useFormula && !useSizes ? (
-                <div className="space-y-3">
-                  {hasFormula ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="border-input bg-muted/30 flex min-w-0 flex-1 items-center rounded-md border px-3 py-2 text-sm">
-                        <span className="truncate font-medium">
-                          {selectedFormula?.name ?? `Fórmula #${selectedFormulaId}`}
-                        </span>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="size-9 shrink-0"
-                        aria-label="Editar fórmula"
-                        onClick={openEditFormulaDialog}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          clearFormula()
-                        }}
-                      >
-                        Cambiar
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {formulas.length > 0 ? (
-                        <div className="space-y-2">
-                          <Label htmlFor="catalog-formula-pick">Elegir fórmula existente</Label>
-                          <select
-                            id="catalog-formula-pick"
-                            className="border-input bg-background flex h-9 w-full rounded-md border px-3 text-sm"
-                            value=""
-                            onChange={(e) => handleSelectExistingFormula(e.target.value)}
-                          >
-                            <option value="">Seleccionar…</option>
-                            {formulas.map((formula) => (
-                              <option key={formula.id} value={formula.id}>
-                                {formula.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground text-xs">
-                          Todavía no hay fórmulas. Creá una nueva.
-                        </p>
-                      )}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={openCreateFormulaDialog}
-                      >
-                        <Plus className="size-4" />
-                        Crear fórmula nueva
-                      </Button>
-                    </div>
-                  )}
-                  {hasFormula ? (
-                    <p className="text-muted-foreground text-xs">
-                      Costo desde fórmula: {formatFromUsd(formulaCost)}
-                    </p>
-                  ) : null}
-                </div>
+                <CatalogFormulaPicker
+                  formulas={formulas}
+                  selectedFormulaId={selectedFormulaId}
+                  selectedFormula={selectedFormula}
+                  formulaCostLabel={formatFromUsd(formulaCost)}
+                  onEdit={openEditFormulaDialog}
+                  onClear={clearFormula}
+                  onSelect={handleSelectExistingFormula}
+                  onCreate={openCreateFormulaDialog}
+                />
               ) : null}
             </div>
 
             <div className="space-y-3">
               {useSizes && !useFormula ? (
-                <div className="space-y-2">
-                  {sizeRows.map((row) => (
-                    <div key={row.key} className="flex items-center gap-2">
-                      <Input
-                        className="h-9 w-24 shrink-0"
-                        placeholder="Talla"
-                        maxLength={20}
-                        value={row.size}
-                        onChange={(e) =>
-                          setSizeRows((rows) =>
-                            rows.map((item) =>
-                              item.key === row.key ? { ...item, size: e.target.value } : item
-                            )
-                          )
-                        }
-                      />
-                      <DecimalInput
-                        className="h-9 min-w-0 flex-1"
-                        min={0}
-                        decimals={stockDecimals}
-                        placeholder="Stock"
-                        value={row.stock_quantity}
-                        onChange={(e) =>
-                          setSizeRows((rows) =>
-                            rows.map((item) =>
-                              item.key === row.key
-                                ? { ...item, stock_quantity: e.target.value }
-                                : item
-                            )
-                          )
-                        }
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-9 shrink-0"
-                        aria-label="Quitar talla"
-                        disabled={sizeRows.length <= 1}
-                        onClick={() =>
-                          setSizeRows((rows) => rows.filter((item) => item.key !== row.key))
-                        }
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSizeRows((rows) => [...rows, newSizeRow()])}
-                  >
-                    <Plus className="size-4" />
-                    Agregar talla
-                  </Button>
-                </div>
+                <CatalogSizeRowsEditor
+                  rows={sizeRows}
+                  stockDecimals={stockDecimals}
+                  onRowsChange={setSizeRows}
+                />
               ) : null}
             </div>
 
@@ -992,103 +772,31 @@ export function CatalogFormDialog({
             </div>
 
             {wholesaleEnabled && pricePanel === 'wholesale' ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="catalog-pack-units">Unidades por paquete</Label>
-                  <DecimalInput
-                    id="catalog-pack-units"
-                    min={MIN_WHOLESALE_UNITS_PER_PACK}
-                    decimals={0}
-                    value={wholesaleUnits}
-                    onChange={(e) => handleWholesaleUnitsChange(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="catalog-pack-cost">Precio costo paquete</Label>
-                  <MoneyInput
-                    id="catalog-pack-cost"
-                    min={0}
-                    value={wholesaleCost}
-                    onChange={(e) => handleWholesaleCostChange(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="catalog-pack-margin">Margen paquete %</Label>
-                  <DecimalInput
-                    id="catalog-pack-margin"
-                    min={0}
-                    decimals={1}
-                    value={wholesaleMargin}
-                    onChange={(e) => handleWholesaleMarginChange(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="catalog-pack-sale">Precio venta paquete</Label>
-                  <MoneyInput
-                    id="catalog-pack-sale"
-                    min={0}
-                    value={wholesaleSale}
-                    onChange={(e) => handleWholesaleSaleChange(e.target.value)}
-                  />
-                </div>
-                <p className="text-muted-foreground sm:col-span-2 text-xs">
-                  Costo unitario detal: {formatFromUsd(derivedRetailCost)} (costo paquete ÷ unidades).
-                </p>
-              </div>
+              <CatalogWholesalePriceFields
+                units={wholesaleUnits}
+                cost={wholesaleCost}
+                margin={wholesaleMargin}
+                sale={wholesaleSale}
+                retailUnitCostLabel={formatFromUsd(derivedRetailCost)}
+                onUnitsChange={handleWholesaleUnitsChange}
+                onCostChange={handleWholesaleCostChange}
+                onMarginChange={handleWholesaleMarginChange}
+                onSaleChange={handleWholesaleSaleChange}
+              />
             ) : (
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label htmlFor="catalog-cost">Precio costo</Label>
-                  <MoneyInput
-                    id="catalog-cost"
-                    min={0}
-                    value={wholesaleEnabled ? derivedRetailCost.toFixed(4) : costPrice}
-                    readOnly={hasFormula || wholesaleEnabled}
-                    className={hasFormula || wholesaleEnabled ? 'bg-muted/40' : undefined}
-                    onChange={(e) => handleCostChange(e.target.value)}
-                  />
-                  {wholesaleEnabled ? (
-                    <p className="text-muted-foreground text-xs">
-                      Se calcula desde el costo del paquete.
-                    </p>
-                  ) : null}
-                </div>
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="catalog-margin"
-                    className={cn(marginIsNegative && 'text-destructive')}
-                  >
-                    Margen %
-                  </Label>
-                  <DecimalInput
-                    id="catalog-margin"
-                    min={0}
-                    decimals={1}
-                    value={marginPercent}
-                    onChange={(e) => handleMarginChange(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="catalog-price" className={cn(saleBelowCost && 'text-destructive')}>
-                    Precio venta
-                  </Label>
-                  <MoneyInput
-                    id="catalog-price"
-                    min={0}
-                    value={salePrice}
-                    className={cn(
-                      saleBelowCost &&
-                        'border-destructive text-destructive focus-visible:ring-destructive/30'
-                    )}
-                    onChange={(e) => handleSaleChange(e.target.value)}
-                  />
-                  {saleBelowCost ? (
-                    <p className="text-destructive text-xs">
-                      Por debajo del costo ({formatFromUsd(effectiveCostUsd)}).
-                    </p>
-                  ) : null}
-                </div>
-              </div>
+              <CatalogRetailPriceFields
+                costValue={wholesaleEnabled ? derivedRetailCost.toFixed(4) : costPrice}
+                costReadOnly={hasFormula || wholesaleEnabled}
+                costFromPack={wholesaleEnabled}
+                margin={marginPercent}
+                marginIsNegative={marginIsNegative}
+                sale={salePrice}
+                saleBelowCost={saleBelowCost}
+                effectiveCostLabel={formatFromUsd(effectiveCostUsd)}
+                onCostChange={handleCostChange}
+                onMarginChange={handleMarginChange}
+                onSaleChange={handleSaleChange}
+              />
             )}
 
             <div className="space-y-2">
