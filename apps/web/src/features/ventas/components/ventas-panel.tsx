@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { wholesaleUnitsPerPack } from '@/lib/wholesale'
 import { VentasCatalogFiltersPanel } from '@/features/ventas/components/ventas-catalog-filters-panel'
 import { CustomerFormDialog } from '@/features/customers/components/customer-form-dialog'
 import type { Customer } from '@/features/customers/types'
@@ -22,17 +21,10 @@ import {
   VentasLoadDraftDialog,
   type LoadedDraft,
 } from '@/features/ventas/components/ventas-load-draft-dialog'
-import {
-  catalogImageTone,
-  catalogProductCode,
-  type VentasCartLine,
-} from '@/features/ventas/components/ventas-order-cart'
 import { VentasCheckoutPanel } from '@/features/ventas/components/ventas-checkout-panel'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
-import { materialImageUrl, UNIT_ABREV } from '@/features/materials/constants'
 import { useMaterialsQuery } from '@/features/materials/hooks/use-materials'
 import type { Material } from '@/features/materials/types'
-import { catalogImageUrl } from '@/features/ventas/constants'
 import type { BillingMethod } from '@/features/ventas/constants'
 import { useCatalogProductsQuery } from '@/features/ventas/hooks/use-catalog'
 import { useCatalogLayout } from '@/features/ventas/hooks/use-catalog-layout'
@@ -61,7 +53,6 @@ import { notifyApiError } from '@/features/notifications/query-error-state'
 import { toast } from '@/features/notifications/toast'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { isValidEntityId } from '@/lib/route-id'
-import { normalizeInventoryQuantity } from '@/lib/inventory-units'
 import {
   lookupInventoryBarcode,
   lookupMaterialByBarcode,
@@ -83,9 +74,6 @@ import { SaleLineKitchenNoteDialog } from '@/features/ventas/components/sale-lin
 import { ServiceLineDialog } from '@/features/ventas/components/service-line-dialog'
 import {
   createCartLineId,
-  getBaseFormulaMaterialIds,
-  hasAddedMaterialsBeyondBase,
-  resolveCartLineUnitPriceUsd,
   type SaleLineFormulaMaterial,
   type SaleLineFormulaMaterialRef,
 } from '@/features/ventas/utils/sale-line-formula'
@@ -104,6 +92,16 @@ import {
   normalizeDraftCartLine,
   type CartLine,
 } from '@/features/ventas/utils/ventas-cart-lines'
+import {
+  removeCartLine,
+  setCartLineFormulaMaterials,
+  setCartLineKitchenNote,
+  setCartLineQuantity,
+  setCartLineUnitPrice,
+  toggleCartLineWholesale,
+  updateServiceCartLine,
+} from '@/features/ventas/utils/ventas-cart-edit'
+import { buildVentasCartLines } from '@/features/ventas/utils/ventas-cart-view'
 import {
   DEFAULT_VENTAS_CATALOG_FILTERS,
   defaultSortForSource,
@@ -548,75 +546,13 @@ function VentasCreateView() {
   const payableTotal = invoiceTotalAfterDiscount(cartTotal, invoiceDiscountUsd)
   const stockBlocked = cartHasStockIssues(cart)
 
-  const cartLines = useMemo<VentasCartLine[]>(
+  const cartLines = useMemo(
     () =>
-      cart.map((line) => {
-        if (line.kind === 'material') {
-          return {
-            key: line.id,
-            name: line.material.name,
-            code: line.material.code,
-            quantity: line.quantity,
-            unitPriceUsd: cartLineUnitPrice(line),
-            listPriceUsd: materialSaleUnitPriceUsd(line.material),
-            saleUnit: line.material.unit,
-            imageUrl: line.material.imagePath ? materialImageUrl(line.material.id) : null,
-            imageTone: catalogImageTone(line.material.id),
-            metaLabel: UNIT_ABREV[line.material.unit] ?? line.material.unit,
-            canWholesale: Boolean(line.material.wholesaleEnabled),
-            isWholesale: Boolean(line.isWholesale),
-            wholesaleHint: line.isWholesale
-              ? `× ${wholesaleUnitsPerPack(line.material) ?? 0} und`
-              : null,
-            onToggleWholesale: line.material.wholesaleEnabled
-              ? (checked) => toggleCartWholesale(line.id, checked)
-              : undefined,
-          }
-        }
-
-        const productPackUnits = wholesaleUnitsPerPack(line.product)
-
-        return {
-          key: line.id,
-          name: line.product.name,
-          code: catalogProductCode(line.product.id),
-          quantity: line.quantity,
-          unitPriceUsd: cartLineUnitPrice(line),
-          listPriceUsd: line.isWholesale
-            ? Number(line.product.wholesale_sale_price_usd ?? line.product.sale_price_usd)
-            : Number(line.product.sale_price_usd),
-          saleUnit: line.product.sale_unit ?? 'UND',
-          imageUrl: line.product.image_path ? catalogImageUrl(line.product.id) : null,
-          imageTone: catalogImageTone(line.product.id),
-          metaLabel: line.size
-            ? `Talla ${line.size}`
-            : line.product.item_kind === 'SERVICE' || line.product.is_service
-              ? 'Servicio'
-              : undefined,
-          detail: line.detail ?? null,
-          isService: line.product.item_kind === 'SERVICE' || Boolean(line.product.is_service),
-          hasFormula: Boolean(line.product.formula_id),
-          hasCustomFormula: line.formulaMaterials != null && line.formulaMaterials.length > 0,
-          kitchenNote: line.kitchenNote ?? null,
-          onAdjustFormula: line.product.formula_id
-            ? () => setFormulaDialogLineId(line.id)
-            : undefined,
-          onEditKitchenNote:
-            line.product.item_kind === 'SERVICE' || line.product.is_service
-              ? undefined
-              : () => setKitchenNoteDialogLineId(line.id),
-          onEditDetail:
-            line.product.item_kind === 'SERVICE' || line.product.is_service
-              ? () => setServiceEditLineId(line.id)
-              : undefined,
-          canWholesale: Boolean(line.product.wholesale_enabled),
-          isWholesale: Boolean(line.isWholesale),
-          wholesaleHint:
-            line.isWholesale && productPackUnits != null ? `× ${productPackUnits} und` : null,
-          onToggleWholesale: line.product.wholesale_enabled
-            ? (checked) => toggleCartWholesale(line.id, checked)
-            : undefined,
-        }
+      buildVentasCartLines(cart, {
+        onToggleWholesale: toggleCartWholesale,
+        onAdjustFormula: setFormulaDialogLineId,
+        onEditKitchenNote: setKitchenNoteDialogLineId,
+        onEditDetail: setServiceEditLineId,
       }),
     [cart]
   )
@@ -719,18 +655,7 @@ function VentasCreateView() {
   }) {
     if (!serviceEditLineId) return
     setSuccessMessage(null)
-    setCart((prev) =>
-      prev.map((line) =>
-        line.id === serviceEditLineId && line.kind === 'catalog'
-          ? {
-              ...line,
-              quantity: values.quantity,
-              unitPriceUsd: values.unitPriceUsd,
-              detail: values.detail,
-            }
-          : line
-      )
-    )
+    setCart((prev) => updateServiceCartLine(prev, serviceEditLineId, values))
   }
 
   function addMaterialToCart(material: Material) {
@@ -815,26 +740,12 @@ function VentasCreateView() {
 
   function removeFromCart(lineId: string) {
     setSuccessMessage(null)
-    setCart((prev) => prev.filter((item) => item.id !== lineId))
+    setCart((prev) => removeCartLine(prev, lineId))
   }
 
   function updateCartQty(lineId: string, quantity: number) {
     setSuccessMessage(null)
-    const line = cart.find((item) => item.id === lineId)
-    if (!line) return
-
-    const unit = line.kind === 'material' ? line.material.unit : (line.product.sale_unit ?? 'UND')
-
-    if (quantity <= 0) {
-      removeFromCart(lineId)
-      return
-    }
-
-    const normalized = normalizeInventoryQuantity(quantity, unit)
-
-    setCart((prev) =>
-      prev.map((item) => (item.id === lineId ? { ...item, quantity: normalized } : item))
-    )
+    setCart((prev) => setCartLineQuantity(prev, lineId, quantity))
   }
 
   function saveLineFormulaMaterials(
@@ -843,76 +754,22 @@ function VentasCreateView() {
     materialRefs: SaleLineFormulaMaterialRef[] = []
   ) {
     setSuccessMessage(null)
-    setCart((prev) =>
-      prev.map((line) => {
-        if (line.id !== lineId || line.kind !== 'catalog') {
-          return line
-        }
-
-        if (materials === null) {
-          return {
-            ...line,
-            formulaMaterials: null,
-          }
-        }
-
-        const baseIds = getBaseFormulaMaterialIds(line.product)
-        const hasAdded = hasAddedMaterialsBeyondBase(baseIds, materials)
-
-        return {
-          ...line,
-          formulaMaterials: materials,
-          unitPriceUsd: hasAdded
-            ? resolveCartLineUnitPriceUsd(line.product, materials, materialRefs)
-            : line.unitPriceUsd,
-        }
-      })
-    )
+    setCart((prev) => setCartLineFormulaMaterials(prev, lineId, materials, materialRefs))
   }
 
   function toggleCartWholesale(lineId: string, checked: boolean) {
     setSuccessMessage(null)
-    setCart((prev) =>
-      prev.map((line) => {
-        if (line.id !== lineId) return line
-        if (line.kind === 'material') {
-          const packSale = Number(line.material.wholesaleSalePriceUsd)
-          const retail = materialSaleUnitPriceUsd(line.material)
-          return {
-            ...line,
-            isWholesale: checked,
-            unitPriceUsd: checked && Number.isFinite(packSale) && packSale > 0 ? packSale : retail,
-          }
-        }
-        const packSale = Number(line.product.wholesale_sale_price_usd)
-        const retail = Number(line.product.sale_price_usd)
-        return {
-          ...line,
-          isWholesale: checked,
-          unitPriceUsd: checked && Number.isFinite(packSale) && packSale > 0 ? packSale : retail,
-        }
-      })
-    )
+    setCart((prev) => toggleCartLineWholesale(prev, lineId, checked))
   }
 
   function updateCartUnitPrice(lineId: string, unitPriceUsd: number) {
     setSuccessMessage(null)
-    setCart((prev) =>
-      prev.map((line) =>
-        line.id === lineId ? { ...line, unitPriceUsd: Math.max(0, unitPriceUsd) } : line
-      )
-    )
+    setCart((prev) => setCartLineUnitPrice(prev, lineId, unitPriceUsd))
   }
 
   function saveLineKitchenNote(lineId: string, note: string | null) {
     setSuccessMessage(null)
-    setCart((prev) =>
-      prev.map((line) =>
-        line.id === lineId && line.kind === 'catalog'
-          ? { ...line, kitchenNote: note?.trim() ? note.trim() : null }
-          : line
-      )
-    )
+    setCart((prev) => setCartLineKitchenNote(prev, lineId, note))
   }
 
   function linkRegisteredCustomer(
