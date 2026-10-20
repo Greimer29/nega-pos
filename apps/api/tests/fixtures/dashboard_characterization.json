@@ -1,0 +1,719 @@
+{
+  "summary": {
+    "bajoStock": [
+      {
+        "code": "BOLSA-1",
+        "name": "Bolsas",
+        "category": "Empaque",
+        "unit": "UND",
+        "minimumStock": "10.000",
+        "stockActual": 2
+      }
+    ],
+    "purchasesMonth": {
+      "quantity": 1,
+      "totalUsd": "19.00"
+    },
+    "machineExpensesMonth": {
+      "quantity": 1,
+      "totalAmount": "1.00"
+    }
+  },
+  "overviewDaily": {
+    "bajoStock": [
+      {
+        "code": "BOLSA-1",
+        "name": "Bolsas",
+        "category": "Empaque",
+        "unit": "UND",
+        "minimumStock": "10.000",
+        "stockActual": 2
+      }
+    ],
+    "bajoStockProductos": [
+      {
+        "name": "Aceite",
+        "stock": "1.000",
+        "minimumStock": "5.000",
+        "saleUnit": "UND"
+      }
+    ],
+    "purchasesMonth": {
+      "quantity": 1,
+      "totalUsd": "19.00"
+    },
+    "machineExpensesMonth": {
+      "quantity": 1,
+      "totalAmount": "1.00"
+    },
+    "ventasDelDia": {
+      "productosVendidos": 16,
+      "montoProductosUsd": "35.0000",
+      "montoCreditoUsd": "15.0000",
+      "pedidosCredito": 1,
+      "gastosCantidad": 3,
+      "gastosMontoUsd": "1.7500",
+      "pagosProveedoresCantidad": 1,
+      "pagosProveedoresMontoUsd": "7.0000"
+    },
+    "gananciaDelDia": {
+      "montoUsd": "6.2500",
+      "gananciaCreditoUsd": "7.0000",
+      "porcentajeSobreVentas": 31.25
+    },
+    "ventasSeries": [
+      {
+        "label": "lun",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "mar",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "mié",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "jue",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "vie",
+        "totalUsd": "20.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "sáb",
+        "totalUsd": "5.0000",
+        "variacionPct": -75
+      },
+      {
+        "label": "dom",
+        "totalUsd": "30.0000",
+        "variacionPct": 500
+      }
+    ],
+    "clientesCredito": [
+      {
+        "name": "Bodega Crédito",
+        "pedidosConSaldo": 2,
+        "saldoPendienteUsd": "24.0000",
+        "estado": "vencida"
+      }
+    ],
+    "proveedoresCredito": [
+      {
+        "name": "Distribuidora",
+        "saldoPendienteUsd": "30.0000",
+        "estado": "vencida"
+      }
+    ]
+  },
+  "overviewWeekly": {
+    "bajoStock": [
+      {
+        "code": "BOLSA-1",
+        "name": "Bolsas",
+        "category": "Empaque",
+        "unit": "UND",
+        "minimumStock": "10.000",
+        "stockActual": 2
+      }
+    ],
+    "bajoStockProductos": [
+      {
+        "name": "Aceite",
+        "stock": "1.000",
+        "minimumStock": "5.000",
+        "saleUnit": "UND"
+      }
+    ],
+    "purchasesMonth": {
+      "quantity": 1,
+      "totalUsd": "19.00"
+    },
+    "machineExpensesMonth": {
+      "quantity": 1,
+      "totalAmount": "1.00"
+    },
+    "ventasDelDia": {
+      "productosVendidos": 16,
+      "montoProductosUsd": "35.0000",
+      "montoCreditoUsd": "15.0000",
+      "pedidosCredito": 1,
+      "gastosCantidad": 3,
+      "gastosMontoUsd": "1.7500",
+      "pagosProveedoresCantidad": 1,
+      "pagosProveedoresMontoUsd": "7.0000"
+    },
+    "gananciaDelDia": {
+      "montoUsd": "6.2500",
+      "gananciaCreditoUsd": "7.0000",
+      "porcentajeSobreVentas": 31.25
+    },
+    "ventasSeries": [
+      {
+        "label": "1",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "2",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "3",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "4",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "5",
+        "totalUsd": "9.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "6",
+        "totalUsd": "0.0000",
+        "variacionPct": -100
+      },
+      {
+        "label": "7",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "8",
+        "totalUsd": "55.0000",
+        "variacionPct": null
+      }
+    ],
+    "clientesCredito": [
+      {
+        "name": "Bodega Crédito",
+        "pedidosConSaldo": 2,
+        "saldoPendienteUsd": "24.0000",
+        "estado": "vencida"
+      }
+    ],
+    "proveedoresCredito": [
+      {
+        "name": "Distribuidora",
+        "saldoPendienteUsd": "30.0000",
+        "estado": "vencida"
+      }
+    ]
+  },
+  "overviewMonthly": {
+    "bajoStock": [
+      {
+        "code": "BOLSA-1",
+        "name": "Bolsas",
+        "category": "Empaque",
+        "unit": "UND",
+        "minimumStock": "10.000",
+        "stockActual": 2
+      }
+    ],
+    "bajoStockProductos": [
+      {
+        "name": "Aceite",
+        "stock": "1.000",
+        "minimumStock": "5.000",
+        "saleUnit": "UND"
+      }
+    ],
+    "purchasesMonth": {
+      "quantity": 1,
+      "totalUsd": "19.00"
+    },
+    "machineExpensesMonth": {
+      "quantity": 1,
+      "totalAmount": "1.00"
+    },
+    "ventasDelDia": {
+      "productosVendidos": 16,
+      "montoProductosUsd": "35.0000",
+      "montoCreditoUsd": "15.0000",
+      "pedidosCredito": 1,
+      "gastosCantidad": 3,
+      "gastosMontoUsd": "1.7500",
+      "pagosProveedoresCantidad": 1,
+      "pagosProveedoresMontoUsd": "7.0000"
+    },
+    "gananciaDelDia": {
+      "montoUsd": "6.2500",
+      "gananciaCreditoUsd": "7.0000",
+      "porcentajeSobreVentas": 31.25
+    },
+    "ventasSeries": [
+      {
+        "label": "marzo",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "abril",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "mayo",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "junio",
+        "totalUsd": "0.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "julio",
+        "totalUsd": "9.0000",
+        "variacionPct": null
+      },
+      {
+        "label": "agosto",
+        "totalUsd": "55.0000",
+        "variacionPct": 511.11
+      }
+    ],
+    "clientesCredito": [
+      {
+        "name": "Bodega Crédito",
+        "pedidosConSaldo": 2,
+        "saldoPendienteUsd": "24.0000",
+        "estado": "vencida"
+      }
+    ],
+    "proveedoresCredito": [
+      {
+        "name": "Distribuidora",
+        "saldoPendienteUsd": "30.0000",
+        "estado": "vencida"
+      }
+    ]
+  },
+  "dailyProductSales": {
+    "date": "2026-08-15",
+    "products": [
+      {
+        "name": "Arroz",
+        "category": "Víveres",
+        "sale_unit": "UND",
+        "image_path": null,
+        "stock_quantity": "50.000",
+        "quantity_sold": 13,
+        "unit_price_usd": "1.5385",
+        "total_usd": "20.0000"
+      },
+      {
+        "name": "Aceite",
+        "category": "Víveres",
+        "sale_unit": "UND",
+        "image_path": null,
+        "stock_quantity": "1.000",
+        "quantity_sold": 3,
+        "unit_price_usd": "5.0000",
+        "total_usd": "15.0000"
+      }
+    ],
+    "summary": {
+      "productos_vendidos": 16,
+      "monto_productos_usd": "35.0000"
+    }
+  },
+  "dailyExpenses": {
+    "date": "2026-08-15",
+    "items": [
+      {
+        "kind": "machine_expense",
+        "description": "Mantenimiento",
+        "amount_usd": "1.0000",
+        "machine_name": "Selladora",
+        "category": "MAINTENANCE"
+      },
+      {
+        "kind": "expense",
+        "description": "Hielo",
+        "amount_usd": "0.5000",
+        "machine_name": null,
+        "category": null
+      },
+      {
+        "kind": "expense",
+        "description": "Bolsas",
+        "amount_usd": "0.2500",
+        "machine_name": null,
+        "category": null
+      }
+    ],
+    "summary": {
+      "gastos_cantidad": 3,
+      "gastos_monto_usd": "1.7500"
+    }
+  },
+  "closingToday": {
+    "date": "2026-08-16",
+    "summary": {
+      "invoices_count": 3,
+      "returns_count": 1,
+      "cash_total_usd": "15.0000",
+      "credit_total_usd": "15.0000",
+      "products_sold": 13,
+      "products_amount_usd": "30.0000",
+      "discounts_total_usd": "0.0000",
+      "expenses_count": 2,
+      "expenses_total_usd": "1.2500",
+      "net_cash_usd": "13.7500",
+      "supplier_payments_count": 1,
+      "supplier_payments_total_usd": "7.0000",
+      "cash_purchases_count": 1,
+      "cash_purchases_total_usd": "12.0000",
+      "drawer_cash_usd": "-5.2500"
+    },
+    "by_payment_method": [
+      {
+        "code": "cash_usd",
+        "name": "Efectivo USD",
+        "currency_code": "USD",
+        "sales_count": 2,
+        "total_usd": "19.0000",
+        "total_in_currency": "19.0000"
+      },
+      {
+        "code": "mobile_payment",
+        "name": "Pago móvil",
+        "currency_code": "VES",
+        "sales_count": 1,
+        "total_usd": "6.0000",
+        "total_in_currency": "600.00"
+      }
+    ],
+    "products": [
+      {
+        "name": "Arroz",
+        "category": "Víveres",
+        "sale_unit": "UND",
+        "image_path": null,
+        "stock_quantity": "50.000",
+        "quantity_sold": 10,
+        "unit_price_usd": "1.5000",
+        "total_usd": "15.0000"
+      },
+      {
+        "name": "Aceite",
+        "category": "Víveres",
+        "sale_unit": "UND",
+        "image_path": null,
+        "stock_quantity": "1.000",
+        "quantity_sold": 3,
+        "unit_price_usd": "5.0000",
+        "total_usd": "15.0000"
+      }
+    ],
+    "invoices": [
+      {
+        "code": "0000090002",
+        "customer_name": "Cliente general",
+        "payment_type": "CASH",
+        "payment_method_code": "cash_usd",
+        "payment_method_name": "Efectivo USD + Efectivo USD + Pago móvil",
+        "discount_usd": "0.0000",
+        "total_usd": "10.0000",
+        "original_total_usd": "10.0000",
+        "returned_total_usd": "0.0000",
+        "total_bs": null,
+        "status": "COMPLETED",
+        "returned_at": null
+      },
+      {
+        "code": "0000090003",
+        "customer_name": "Bodega Crédito",
+        "payment_type": "CREDIT",
+        "payment_method_code": null,
+        "payment_method_name": null,
+        "discount_usd": "0.0000",
+        "total_usd": "15.0000",
+        "original_total_usd": "15.0000",
+        "returned_total_usd": "0.0000",
+        "total_bs": null,
+        "status": "COMPLETED",
+        "returned_at": null
+      },
+      {
+        "code": "0000090004",
+        "customer_name": "Cliente general",
+        "payment_type": "CASH",
+        "payment_method_code": "cash_usd",
+        "payment_method_name": "Efectivo USD",
+        "discount_usd": "0.0000",
+        "total_usd": "5.0000",
+        "original_total_usd": "10.0000",
+        "returned_total_usd": "5.0000",
+        "total_bs": null,
+        "status": "COMPLETED",
+        "returned_at": null
+      }
+    ],
+    "returns": [
+      {
+        "sale_code": "0000090004",
+        "returned_at": null,
+        "total_returned_usd": "5.0000"
+      }
+    ],
+    "expenses": {
+      "items": [
+        {
+          "kind": "machine_expense",
+          "description": "Mantenimiento",
+          "amount_usd": "1.0000",
+          "machine_name": "Selladora",
+          "category": "MAINTENANCE"
+        },
+        {
+          "kind": "expense",
+          "description": "Bolsas",
+          "amount_usd": "0.2500",
+          "machine_name": null,
+          "category": null
+        }
+      ],
+      "summary": {
+        "gastos_cantidad": 2,
+        "gastos_monto_usd": "1.2500"
+      }
+    }
+  },
+  "closingShift": {
+    "date": "2026-08-15",
+    "summary": {
+      "invoices_count": 4,
+      "returns_count": 1,
+      "cash_total_usd": "20.0000",
+      "credit_total_usd": "15.0000",
+      "products_sold": 16,
+      "products_amount_usd": "35.0000",
+      "discounts_total_usd": "1.0000",
+      "expenses_count": 3,
+      "expenses_total_usd": "1.7500",
+      "net_cash_usd": "18.2500",
+      "supplier_payments_count": 1,
+      "supplier_payments_total_usd": "7.0000",
+      "cash_purchases_count": 1,
+      "cash_purchases_total_usd": "12.0000",
+      "drawer_cash_usd": "-0.7500"
+    },
+    "by_payment_method": [
+      {
+        "code": "cash_usd",
+        "name": "Efectivo USD",
+        "currency_code": "USD",
+        "sales_count": 3,
+        "total_usd": "24.0000",
+        "total_in_currency": "24.0000"
+      },
+      {
+        "code": "mobile_payment",
+        "name": "Pago móvil",
+        "currency_code": "VES",
+        "sales_count": 1,
+        "total_usd": "6.0000",
+        "total_in_currency": "600.00"
+      }
+    ],
+    "products": [
+      {
+        "name": "Arroz",
+        "category": "Víveres",
+        "sale_unit": "UND",
+        "image_path": null,
+        "stock_quantity": "50.000",
+        "quantity_sold": 13,
+        "unit_price_usd": "1.5385",
+        "total_usd": "20.0000"
+      },
+      {
+        "name": "Aceite",
+        "category": "Víveres",
+        "sale_unit": "UND",
+        "image_path": null,
+        "stock_quantity": "1.000",
+        "quantity_sold": 3,
+        "unit_price_usd": "5.0000",
+        "total_usd": "15.0000"
+      }
+    ],
+    "invoices": [
+      {
+        "code": "0000090001",
+        "customer_name": "Cliente general",
+        "payment_type": "CASH",
+        "payment_method_code": "cash_usd",
+        "payment_method_name": "Efectivo USD",
+        "discount_usd": "1.0000",
+        "total_usd": "5.0000",
+        "original_total_usd": "5.0000",
+        "returned_total_usd": "0.0000",
+        "total_bs": null,
+        "status": "COMPLETED",
+        "returned_at": null
+      },
+      {
+        "code": "0000090002",
+        "customer_name": "Cliente general",
+        "payment_type": "CASH",
+        "payment_method_code": "cash_usd",
+        "payment_method_name": "Efectivo USD + Efectivo USD + Pago móvil",
+        "discount_usd": "0.0000",
+        "total_usd": "10.0000",
+        "original_total_usd": "10.0000",
+        "returned_total_usd": "0.0000",
+        "total_bs": null,
+        "status": "COMPLETED",
+        "returned_at": null
+      },
+      {
+        "code": "0000090003",
+        "customer_name": "Bodega Crédito",
+        "payment_type": "CREDIT",
+        "payment_method_code": null,
+        "payment_method_name": null,
+        "discount_usd": "0.0000",
+        "total_usd": "15.0000",
+        "original_total_usd": "15.0000",
+        "returned_total_usd": "0.0000",
+        "total_bs": null,
+        "status": "COMPLETED",
+        "returned_at": null
+      },
+      {
+        "code": "0000090004",
+        "customer_name": "Cliente general",
+        "payment_type": "CASH",
+        "payment_method_code": "cash_usd",
+        "payment_method_name": "Efectivo USD",
+        "discount_usd": "0.0000",
+        "total_usd": "5.0000",
+        "original_total_usd": "10.0000",
+        "returned_total_usd": "5.0000",
+        "total_bs": null,
+        "status": "COMPLETED",
+        "returned_at": null
+      }
+    ],
+    "returns": [
+      {
+        "sale_code": "0000090004",
+        "returned_at": null,
+        "total_returned_usd": "5.0000"
+      }
+    ],
+    "expenses": {
+      "items": [
+        {
+          "kind": "machine_expense",
+          "description": "Mantenimiento",
+          "amount_usd": "1.0000",
+          "machine_name": "Selladora",
+          "category": "MAINTENANCE"
+        },
+        {
+          "kind": "expense",
+          "description": "Hielo",
+          "amount_usd": "0.5000",
+          "machine_name": null,
+          "category": null
+        },
+        {
+          "kind": "expense",
+          "description": "Bolsas",
+          "amount_usd": "0.2500",
+          "machine_name": null,
+          "category": null
+        }
+      ],
+      "summary": {
+        "gastos_cantidad": 3,
+        "gastos_monto_usd": "1.7500"
+      }
+    }
+  },
+  "closingPreviousDay": {
+    "date": "2026-08-14",
+    "summary": {
+      "invoices_count": 1,
+      "returns_count": 0,
+      "cash_total_usd": "20.0000",
+      "credit_total_usd": "0.0000",
+      "products_sold": 10,
+      "products_amount_usd": "20.0000",
+      "discounts_total_usd": "0.0000",
+      "expenses_count": 0,
+      "expenses_total_usd": "0.0000",
+      "net_cash_usd": "20.0000",
+      "supplier_payments_count": 0,
+      "supplier_payments_total_usd": "0.0000",
+      "cash_purchases_count": 0,
+      "cash_purchases_total_usd": "0.0000",
+      "drawer_cash_usd": "20.0000"
+    },
+    "by_payment_method": [
+      {
+        "code": "cash_usd",
+        "name": "Efectivo USD",
+        "currency_code": "USD",
+        "sales_count": 1,
+        "total_usd": "20.0000",
+        "total_in_currency": "20.0000"
+      }
+    ],
+    "products": [
+      {
+        "name": "Arroz",
+        "category": "Víveres",
+        "sale_unit": "UND",
+        "image_path": null,
+        "stock_quantity": "50.000",
+        "quantity_sold": 10,
+        "unit_price_usd": "2.0000",
+        "total_usd": "20.0000"
+      }
+    ],
+    "invoices": [
+      {
+        "code": "0000090005",
+        "customer_name": "Cliente general",
+        "payment_type": "CASH",
+        "payment_method_code": "cash_usd",
+        "payment_method_name": "Efectivo USD",
+        "discount_usd": "0.0000",
+        "total_usd": "20.0000",
+        "original_total_usd": "20.0000",
+        "returned_total_usd": "0.0000",
+        "total_bs": null,
+        "status": "COMPLETED",
+        "returned_at": null
+      }
+    ],
+    "returns": [],
+    "expenses": {
+      "items": [],
+      "summary": {
+        "gastos_cantidad": 0,
+        "gastos_monto_usd": "0.0000"
+      }
+    }
+  }
+}
