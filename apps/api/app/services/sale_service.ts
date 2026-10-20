@@ -10,23 +10,20 @@ import VentaNoEncontradaException from '#exceptions/venta_no_encontrada_exceptio
 import { isCatalogService } from '#constants/catalog_item_kind'
 import CatalogProduct from '#models/catalog_product'
 import Customer from '#models/customer'
-import InventoryMovement from '#models/inventory_movement'
 import Material from '#models/material'
-import ProductInventoryMovement from '#models/product_inventory_movement'
 import Sale from '#models/sale'
 import SaleLine from '#models/sale_line'
 import SalesShift from '#models/sales_shift'
 import CatalogProductSizeService from '#services/catalog_product_size_service'
 import SaleCodigoService from '#services/sale_code_service'
 import SalesShiftService from '#services/sales_shift_service'
-import ProductInventoryService from '#services/product_inventory_service'
 import SaleLineService, { type ResolvedSaleLine } from '#services/sale_line_service'
 import SalePaymentService from '#services/sale_payment_service'
+import SaleReturnService from '#services/sale_return_service'
 import SaleStockService from '#services/sale_stock_service'
 import {
   assertFormulaMaterialsAllowed,
   normalizeFormulaMaterialsInput,
-  resolveEffectiveFormulaMaterials,
   type SaleLineFormulaMaterialInput,
 } from '#services/sale_line_formula'
 import {
@@ -35,15 +32,13 @@ import {
 } from '#constants/inventory_units'
 import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
-import { calculateSaleReturnAmounts } from '#utils/sale_return_amounts'
 import type { SalePaymentLineInput } from '#utils/sale_payment_lines'
 import { resolveSaleReturnRequests, type SaleReturnLineInput } from '#utils/sale_return_requests'
-import { calculateProductReturnStockQuantity } from '#utils/sale_return_stock'
 import { resolveMaterialSaleLineCost, resolveProductSaleLineCost } from '#utils/sale_line_cost'
 import { calculateSaleLineAmounts, normalizeSaleLineKitchenNote } from '#utils/sale_line_values'
 import { datetimeRangeUtcSql, dayStartUtcSql } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
-import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
+import { resolveWholesaleLineSnapshot } from '#utils/wholesale'
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
@@ -147,11 +142,11 @@ const ORDER_STATUS_TRANSITIONS: Record<SaleOrderStatus, SaleOrderStatus[]> = {
 
 export default class SaleService {
   private codeService = new SaleCodigoService()
-  private productInventoryService = new ProductInventoryService()
   private sizeService = new CatalogProductSizeService()
   private salesShiftService = new SalesShiftService()
   private saleLineService = new SaleLineService()
   private salePaymentService = new SalePaymentService()
+  private saleReturnService = new SaleReturnService()
   private saleStockService = new SaleStockService()
 
   previewNextCode(): Promise<string> {
@@ -726,58 +721,10 @@ export default class SaleService {
         line.useTransaction(trx)
         await line.save()
 
-        if (line.catalogProductId) {
-          const product =
-            line.catalogProduct ??
-            (await CatalogProduct.query({ client: trx })
-              .where('id', Number(line.catalogProductId))
-              .first())
-
-          if (product && isCatalogService(product)) {
-            continue
-          }
-
-          const inventoryReturnQty = lineInventoryQuantity(
-            returnQty,
-            Boolean(line.isWholesale),
-            line.unitsPerPack
-          )
-          await this.revertirStockProductoParcial(
-            Number(sale.id),
-            Number(line.catalogProductId),
-            inventoryReturnQty,
-            trx,
-            note
-          )
-          if (line.catalogProductSizeId) {
-            await this.sizeService.restoreSizeStock(
-              Number(line.catalogProductSizeId),
-              inventoryReturnQty,
-              trx
-            )
-          }
-          await this.revertirMaterialesLineaParcial(sale, line, inventoryReturnQty, trx, note)
-        }
-
-        if (line.materialId) {
-          const inventoryReturnQty = lineInventoryQuantity(
-            returnQty,
-            Boolean(line.isWholesale),
-            line.unitsPerPack
-          )
-          await InventoryMovement.create(
-            {
-              materialId: Number(line.materialId),
-              type: 'REVERSAL_ADJUSTMENT',
-              quantity: formatInventoryQuantityForStorage(inventoryReturnQty, unit),
-              note,
-            },
-            { client: trx }
-          )
-        }
+        await this.saleReturnService.restoreLineInventory(sale, line, returnQty, unit, trx, note)
       }
 
-      await this.actualizarMontosTrasDevolucion(sale, trx)
+      await this.saleReturnService.recalculateAmounts(sale, trx)
 
       const refreshedLines = await SaleLine.query({ client: trx }).where('saleId', Number(sale.id))
       const allReturned = refreshedLines.every(
@@ -950,109 +897,5 @@ export default class SaleService {
         formulaMaterials: null,
       },
     }
-  }
-
-  private async revertirStockProductoParcial(
-    saleId: number,
-    catalogProductId: number,
-    quantity: number,
-    trx: TransactionClientContract,
-    note: string
-  ) {
-    const salidas = await ProductInventoryMovement.query({ client: trx })
-      .where('saleId', saleId)
-      .where('catalogProductId', catalogProductId)
-      .where('type', 'SALE_OUT')
-
-    const reversiones = await ProductInventoryMovement.query({ client: trx })
-      .where('saleId', saleId)
-      .where('catalogProductId', catalogProductId)
-      .where('type', 'REVERSAL_ADJUSTMENT')
-
-    const toRevert = calculateProductReturnStockQuantity(
-      salidas.map((movement) => movement.quantity),
-      reversiones.map((movement) => movement.quantity),
-      quantity
-    )
-
-    if (toRevert <= 0) {
-      return
-    }
-
-    await this.productInventoryService.registrarMovimiento(
-      {
-        catalogProductId,
-        type: 'REVERSAL_ADJUSTMENT',
-        quantity: toRevert,
-        saleId,
-        note,
-      },
-      trx
-    )
-  }
-
-  private async revertirMaterialesLineaParcial(
-    _sale: Sale,
-    line: SaleLine,
-    quantity: number,
-    trx: TransactionClientContract,
-    note: string
-  ) {
-    const product =
-      line.catalogProduct ??
-      (line.catalogProductId
-        ? await CatalogProduct.query({ client: trx })
-            .where('id', Number(line.catalogProductId))
-            .preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
-            .first()
-        : null)
-
-    if (!product?.formulaId) {
-      return
-    }
-
-    if (!line.saleLineMaterials) {
-      await line.load('saleLineMaterials', (q) => q.preload('material'))
-    }
-
-    for (const formulaItem of resolveEffectiveFormulaMaterials(line, product)) {
-      const consumo = quantity * formulaItem.quantityPerUnit
-      if (consumo <= 0) {
-        continue
-      }
-
-      await InventoryMovement.create(
-        {
-          materialId: formulaItem.materialId,
-          type: 'REVERSAL_ADJUSTMENT',
-          quantity: consumo.toFixed(3),
-          note,
-        },
-        { client: trx }
-      )
-    }
-  }
-
-  private async actualizarMontosTrasDevolucion(sale: Sale, trx: TransactionClientContract) {
-    const lines = await SaleLine.query({ client: trx }).where('saleId', Number(sale.id))
-    const amounts = calculateSaleReturnAmounts({
-      lines: lines.map((line) => ({
-        quantity: Number(line.quantity),
-        returnedQuantity: Number(line.returnedQuantity ?? 0),
-        unitPriceUsd: Number(line.unitPriceUsd),
-      })),
-      discountUsd: sale.discountUsd,
-      totalUsd: sale.totalUsd,
-      paymentType: sale.paymentType === 'CREDIT' ? 'CREDIT' : 'CASH',
-      amountPaidUsd: sale.amountPaidUsd,
-    })
-
-    sale.discountUsd = amounts.discountUsd
-    sale.totalUsd = amounts.totalUsd
-    sale.amountPaidUsd = amounts.amountPaidUsd
-    sale.balanceUsd = amounts.balanceUsd
-
-    sale.useTransaction(trx)
-    await sale.save()
   }
 }

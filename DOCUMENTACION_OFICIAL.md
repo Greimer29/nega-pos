@@ -569,6 +569,7 @@ El servicio reutiliza cálculos de `utils/wholesale.ts` para convertir líneas m
 Las reglas de costo para líneas de producto, material y fórmula están en `utils/sale_line_cost.ts`; `sale_line_service.ts` persiste las líneas y congela sus costos dentro de la transacción.
 `sale_payment_service.ts` resuelve y persiste pagos al confirmar una venta, además de actualizar el saldo y vencimiento para ventas de contado o crédito.
 `sale_stock_service.ts` aplica las salidas de inventario al confirmar una venta, respetando productos, tallas, fórmulas y materiales, además del modo de sincronización offline.
+`sale_return_service.ts` repone el inventario de cada línea devuelta y recalcula importes y saldos tras una devolución, dentro de la misma transacción.
 `utils/sale_line_values.ts` centraliza el subtotal y formato monetario de las líneas, además de normalizar sus notas de cocina.
 La resolución de entradas de venta está separada en `resolveCatalogLine` y `resolveMaterialLine`; `resolveLines` valida el tipo de cada entrada, acumula los subtotales sin redondear y coordina el resultado.
 
@@ -581,8 +582,10 @@ La resolución de entradas de venta está separada en `resolveCatalogLine` y `re
    - `utils/sale_payment_lines.ts` normaliza y valida el reparto de pagos contado; `sale_service.ts` conserva la resolución de moneda/método y la persistencia transaccional.
 3. **Transición de pedido de venta** (`billing_mode ORDER`): `PENDING → IN_PROCESS → DELIVERED` (solo ventas completadas).
 4. **Devolución** (`POST .../return`): parcial o total; revierte stock de productos/materiales (no de servicios) y actualiza `RETURNED`. **Facturas sin ítems** (monto desde ficha de cliente): la devolución anula `total_usd` / `balance_usd` / `amount_paid_usd`, marca `RETURNED` y no mueve inventario. En UI el diálogo muestra confirmación de monto en lugar de selección de productos.
-   - El recálculo de descuento proporcional, total y saldo tras una devolución vive en `utils/sale_return_amounts.ts`; `sale_service.ts` conserva la consulta de líneas y el guardado dentro de la transacción.
-   - `utils/sale_return_stock.ts` limita la reposición de productos a la cantidad vendida que aún no se haya revertido; las consultas y el registro del movimiento siguen dentro de `sale_service.ts`.
+   - `sale_service.ts` conserva la orquestación: bloqueo de la venta (`forUpdate`), validaciones (`ORDER_NOT_RETURNABLE`, `DEVOLUCION_CANTIDAD_INVALIDA`), actualización de `returned_quantity` por línea, anulación de facturas sin ítems y paso a `RETURNED` cuando todas las líneas quedan devueltas.
+   - `sale_return_service.ts` (`restoreLineInventory`) repone por línea con el mismo cliente transaccional: productos (`REVERSAL_ADJUSTMENT`, nunca más de lo vendido aún no revertido), stock de talla, materiales de fórmula (receta efectiva de la línea) y materiales directos; servicios no mueven inventario. Las líneas mayoristas reponen `paquetes × units_per_pack`.
+   - `sale_return_service.ts` (`recalculateAmounts`) aplica el descuento proporcional, total y saldo (contado: pagado = total; crédito: saldo = total − pagado).
+   - El cálculo de importes vive en `utils/sale_return_amounts.ts`; el tope de reposición de productos en `utils/sale_return_stock.ts`.
    - `utils/sale_return_requests.ts` resuelve las líneas solicitadas o, si no se especifican, todas las cantidades pendientes de devolver.
 5. **Eliminar borrador** (`DELETE /sales/:id`): solo `DRAFT`. Borra el documento en espera y sus líneas (no hay stock que revertir). En el POS: **Cargar factura** → papelera en cada ítem (icono). La papelera del carrito **vacía líneas locales** y no borra el documento guardado. Una factura confirmada no se elimina por esta vía.
 
