@@ -3,19 +3,15 @@ import {
   CheckCircle2,
   Download,
   Loader2,
-  Pencil,
   Plus,
   Trash2,
   Upload,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { BarcodeScanButton } from '@/components/barcode-scan-button'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { useFormatMoney } from '@/features/currencies/context/display-currency-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { DecimalInput, MoneyInput } from '@/components/decimal-input'
+import { DecimalInput } from '@/components/decimal-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -31,6 +27,9 @@ import {
 } from '@/features/currencies/hooks/use-currencies'
 import { currencySymbol } from '@/features/currencies/utils/convert-currency'
 import { PrecioEnMonedaIngreso } from '@/features/purchases/components/purchase-entry-price'
+import { PurchaseConfirmedItemRow } from '@/features/purchases/components/purchase-detail/purchase-confirmed-item-row'
+import { PurchaseDraftItemRow } from '@/features/purchases/components/purchase-detail/purchase-draft-item-row'
+import { PurchaseItemAddToolbar } from '@/features/purchases/components/purchase-detail/purchase-item-add-toolbar'
 import { PurchaseEntryCurrencyToggle } from '@/features/purchases/components/purchase-entry-currency-toggle'
 import {
   buildPurchaseItemPayload,
@@ -57,20 +56,14 @@ import {
 } from '@/features/purchases/hooks/use-purchases'
 import { useExchangeRateQuery } from '@/features/purchases/hooks/use-settings'
 import { downloadFactura } from '@/features/purchases/services/purchase-service'
-import type { LocalPurchaseItem, PurchaseItem, PurchaseItemMaterial } from '@/features/purchases/types'
-import { CatalogProductSearchPicker } from '@/components/search-picker/catalog-product-search-picker'
-import { MachineSearchPicker } from '@/components/search-picker/machine-search-picker'
-import { MaterialSearchPicker } from '@/components/search-picker/material-search-picker'
+import type { LocalPurchaseItem } from '@/features/purchases/types'
 import { PurchaseMachineFormDialog } from '@/features/purchases/components/purchase-machine-form-dialog'
-import { formatMachineTypeLabel } from '@/features/machines/constants'
 import type { Machine } from '@/features/machines/types'
-import { UNIT_ABREV } from '@/features/materials/constants'
 import { MaterialFormDialog } from '@/features/materials/components/material-form-dialog'
 import type { Material } from '@/features/materials/types'
 import type { CatalogProduct } from '@/features/ventas/types'
 import { CatalogFormDialog } from '@/features/ventas/components/catalog-form-dialog'
-import { catalogProductCode } from '@/features/ventas/components/ventas-order-cart'
-import { productSaleUnitAbrev, type ProductSaleUnit } from '@/features/ventas/constants'
+import type { ProductSaleUnit } from '@/features/ventas/constants'
 import { getCatalogProduct } from '@/features/ventas/services/catalog-service'
 import { useSuppliersQuery } from '@/features/suppliers/hooks/use-suppliers'
 import { supplierImageUrl } from '@/features/suppliers/constants'
@@ -84,160 +77,17 @@ import {
 import { detailPageErrorMessage } from '@/lib/detail-page-messages'
 import { addLocalDaysIsoDate, todayLocalIsoDate } from '@/lib/format-date'
 import { parsePositiveIntRouteParam } from '@/lib/route-id'
-import { parseDecimalInput } from '@/lib/numeric-input'
-import {
-  inventoryQuantityDecimals,
-  normalizeInventoryQuantity,
-} from '@/lib/inventory-units'
 import { cn } from '@/lib/utils'
-import { wholesalePackCostUsd, wholesaleUnitsPerPack } from '@/lib/wholesale'
+import {
+  formatRateInput,
+  localItemCanWholesale,
+  materialToSummary,
+  parseDbItemId,
+  purchaseItemToLocal,
+  resolveEntryRateInput,
+  wholesaleTogglePriceUsd,
+} from '@/features/purchases/utils/purchase-local-items'
 import { pageHeaderClass, toolbarHeaderClass } from '@/components/layout/responsive-toolbar'
-
-function materialToSummary(material: Material): PurchaseItemMaterial {
-  return {
-    id: material.id,
-    code: material.code,
-    name: material.name,
-    category: material.category,
-    unit: material.unit,
-  }
-}
-
-function purchaseItemToLocal(item: PurchaseItem): LocalPurchaseItem {
-  if (item.itemType === 'machine' || item.machineId) {
-    return {
-      localId: `db-${item.id}`,
-      itemType: 'machine',
-      machineId: item.machineId ?? undefined,
-      machine: item.machine ?? {
-        id: item.machineId ?? 0,
-        name: 'Máquina',
-        type: 'OTHER',
-      },
-      quantity: Number(item.quantity),
-      unitPriceUsd: Number(item.unitPriceUsd ?? 0),
-      isWholesale: false,
-    }
-  }
-
-  if (item.itemType === 'product' || item.catalogProductId) {
-    return {
-      localId: `db-${item.id}`,
-      itemType: 'product',
-      catalogProductId: item.catalogProductId ?? undefined,
-      catalogProduct: item.catalogProduct ?? {
-        id: item.catalogProductId ?? 0,
-        name: 'Producto',
-        category: 'OTHER',
-        saleUnit: 'UND',
-      },
-      quantity: Number(item.quantity),
-      unitPriceUsd: Number(item.unitPriceUsd ?? 0),
-      isWholesale: Boolean(item.isWholesale),
-    }
-  }
-
-  return {
-    localId: `db-${item.id}`,
-    itemType: 'material',
-    materialId: item.materialId ?? undefined,
-    material: item.material ?? {
-      id: item.materialId ?? 0,
-      code: `#${item.materialId}`,
-      name: 'Material',
-      category: 'Otro',
-      unit: 'UND',
-    },
-    quantity: Number(item.quantity),
-    unitPriceUsd: Number(item.unitPriceUsd ?? 0),
-    isWholesale: Boolean(item.isWholesale),
-  }
-}
-
-function localItemCode(item: LocalPurchaseItem) {
-  if (item.itemType === 'machine') {
-    return formatMachineTypeLabel(item.machine?.type ?? 'OTHER')
-  }
-  if (item.itemType === 'product') {
-    return catalogProductCode(item.catalogProduct?.id ?? item.catalogProductId ?? 0)
-  }
-  return item.material?.code ?? '—'
-}
-
-function localItemName(item: LocalPurchaseItem) {
-  if (item.itemType === 'machine') return item.machine?.name ?? 'Máquina'
-  return item.itemType === 'product' ? item.catalogProduct?.name ?? 'Producto' : item.material?.name ?? 'Material'
-}
-
-function localItemCanWholesale(item: LocalPurchaseItem) {
-  if (item.itemType === 'machine') return false
-  if (item.itemType === 'product') {
-    return Boolean(item.catalogProduct?.wholesaleEnabled)
-  }
-  return Boolean(item.material?.wholesaleEnabled)
-}
-
-function localItemUnit(item: LocalPurchaseItem) {
-  if (item.itemType === 'machine') return 'Und'
-  if (item.isWholesale) {
-    return 'Paq.'
-  }
-  if (item.itemType === 'product') {
-    return productSaleUnitAbrev(item.catalogProduct?.saleUnit ?? 'UND')
-  }
-  return UNIT_ABREV[item.material?.unit ?? 'UND']
-}
-
-function localItemUnitCode(item: LocalPurchaseItem) {
-  if (item.itemType === 'machine') return 'UND'
-  if (item.itemType === 'product') {
-    return item.catalogProduct?.saleUnit ?? 'UND'
-  }
-  return item.material?.unit ?? 'UND'
-}
-
-function addDaysIso(baseIso: string, days: number) {
-  return addLocalDaysIsoDate(days, baseIso)
-}
-
-function parseDbItemId(localId: string): number | null {
-  if (!localId.startsWith('db-')) return null
-  const id = Number(localId.slice(3))
-  return Number.isFinite(id) ? id : null
-}
-
-function resolveEntryRateInput(
-  currencyCode: string,
-  currencies: Array<{ code: string; ratePerUsd: string }>,
-  purchaseRate?: string | null,
-  legacyGlobalRate?: string | number | null,
-  baseCurrencyCode = 'XAU'
-): string {
-  if (currencyCode.toUpperCase() === baseCurrencyCode.toUpperCase()) {
-    return ''
-  }
-
-  if (purchaseRate) {
-    return formatRateInput(purchaseRate)
-  }
-
-  const currency = currencies.find((row) => row.code === currencyCode)
-  if (currency) {
-    return formatRateInput(currency.ratePerUsd)
-  }
-
-  if (currencyCode === 'VES' && legacyGlobalRate) {
-    return formatRateInput(legacyGlobalRate)
-  }
-
-  return ''
-}
-
-function formatRateInput(value: string | number | null | undefined) {
-  if (value === null || value === undefined || value === '') return ''
-  const n = Number(value)
-  return Number.isFinite(n) ? n.toFixed(2) : ''
-}
 
 export function PurchaseDetallePage() {
   const { id } = useParams<{ id: string }>()
@@ -282,7 +132,6 @@ export function PurchaseDetallePage() {
   const createItemMutation = useCreatePurchaseItemMutation()
   const updateItemMutation = useUpdatePurchaseItemMutation()
   const deleteItemMutation = useDeletePurchaseItemMutation()
-  const { formatFromUsd, formatNative } = useFormatMoney()
 
   entryCurrencyRef.current = entryCurrency
   usdRateRef.current = usdRate
@@ -701,16 +550,9 @@ export function PurchaseDetallePage() {
     const current = localItems.find((item) => item.localId === localId)
     if (!current || !localItemCanWholesale(current)) return
 
-    const source = current.itemType === 'product' ? current.catalogProduct : current.material
-    const packCost = wholesalePackCostUsd(source)
-    const units = wholesaleUnitsPerPack(source)
-    const derivedUnit = packCost != null && units ? packCost / units : null
-
     updateLocalItem(localId, {
       isWholesale: checked,
-      unitPriceUsd: checked
-        ? (packCost ?? current.unitPriceUsd)
-        : (derivedUnit ?? current.unitPriceUsd),
+      unitPriceUsd: wholesaleTogglePriceUsd(current, checked),
     })
   }
 
@@ -1153,7 +995,7 @@ export function PurchaseDetallePage() {
                               if (checked) {
                                 const days = supplier?.creditDays ?? 30
                                 const base = purchase?.date ?? todayLocalIsoDate()
-                                setCreditDueDate(addDaysIso(base, days))
+                                setCreditDueDate(addLocalDaysIsoDate(days, base))
                               } else {
                                 setCreditDueDate('')
                               }
@@ -1266,113 +1108,26 @@ export function PurchaseDetallePage() {
             <div className={pageHeaderClass}>
               <h3 className="font-medium">Ítems</h3>
               {isBorrador && canEditPurchase ? (
-                <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
-                  <div className="bg-muted inline-flex rounded-lg p-1">
-                    <button
-                      type="button"
-                      className={cn(
-                        'rounded-md px-3 py-1.5 text-xs font-medium',
-                        itemAddMode === 'material'
-                          ? 'bg-background shadow-sm'
-                          : 'text-muted-foreground'
-                      )}
-                      onClick={() => setItemAddMode('material')}
-                    >
-                      Materiales
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(
-                        'rounded-md px-3 py-1.5 text-xs font-medium',
-                        itemAddMode === 'product'
-                          ? 'bg-background shadow-sm'
-                          : 'text-muted-foreground'
-                      )}
-                      onClick={() => setItemAddMode('product')}
-                    >
-                      Productos
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(
-                        'rounded-md px-3 py-1.5 text-xs font-medium',
-                        itemAddMode === 'machine'
-                          ? 'bg-background shadow-sm'
-                          : 'text-muted-foreground'
-                      )}
-                      onClick={() => setItemAddMode('machine')}
-                    >
-                      Máquinas
-                    </button>
-                  </div>
-
-                  <div className="flex min-w-[260px] flex-1 items-end gap-2 sm:max-w-lg">
-                    <div className="min-w-0 flex-1">
-                      {itemAddMode === 'material' ? (
-                        <MaterialSearchPicker
-                          variant="dropdown"
-                          label=""
-                          placeholder="Buscar material por código, referencia o nombre…"
-                          onSelect={(material) => void addMaterialToItems(material)}
-                        />
-                      ) : itemAddMode === 'product' ? (
-                        <CatalogProductSearchPicker
-                          variant="dropdown"
-                          label=""
-                          placeholder="Buscar producto por nombre o referencia…"
-                          onSelect={(product) => void addProductToItems(product)}
-                        />
-                      ) : (
-                        <MachineSearchPicker
-                          variant="dropdown"
-                          label=""
-                          placeholder="Buscar máquina existente…"
-                          excludeIds={localItems
-                            .filter((i) => i.itemType === 'machine' && i.machineId)
-                            .map((i) => i.machineId!)}
-                          onSelect={(machine) => void addMachineToItems(machine)}
-                        />
-                      )}
-                    </div>
-                    {itemAddMode !== 'machine' ? (
-                      <BarcodeScanButton
-                        className="shrink-0"
-                        onScan={(code) => void addItemByBarcode(code)}
-                      />
-                    ) : null}
-                  </div>
-
-                  {itemAddMode === 'material' ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingMaterial(null)
-                        setMaterialDialogOpen(true)
-                      }}
-                    >
-                      <Plus />
-                      Nuevo material
-                    </Button>
-                  ) : itemAddMode === 'product' ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingProduct(null)
-                        setProductDialogOpen(true)
-                      }}
-                    >
-                      <Plus />
-                      Nuevo producto
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={() => setMachineDialogOpen(true)}>
-                      <Plus />
-                      Nueva máquina
-                    </Button>
-                  )}
-                </div>
+                <PurchaseItemAddToolbar
+                  mode={itemAddMode}
+                  onModeChange={setItemAddMode}
+                  excludeMachineIds={localItems
+                    .filter((i) => i.itemType === 'machine' && i.machineId)
+                    .map((i) => i.machineId!)}
+                  onSelectMaterial={(material) => void addMaterialToItems(material)}
+                  onSelectProduct={(product) => void addProductToItems(product)}
+                  onSelectMachine={(machine) => void addMachineToItems(machine)}
+                  onScan={(code) => void addItemByBarcode(code)}
+                  onNewMaterial={() => {
+                    setEditingMaterial(null)
+                    setMaterialDialogOpen(true)
+                  }}
+                  onNewProduct={() => {
+                    setEditingProduct(null)
+                    setProductDialogOpen(true)
+                  }}
+                  onNewMachine={() => setMachineDialogOpen(true)}
+                />
               ) : null}
             </div>
 
@@ -1402,180 +1157,38 @@ export function PurchaseDetallePage() {
                   <tbody>
                     {isBorrador
                       ? localItems.map((item) => (
-                          <tr key={item.localId} className="border-b last:border-b-0">
-                            <td className="px-3 py-2">{localItemCode(item)}</td>
-                            <td className="px-3 py-2">{localItemName(item)}</td>
-                            <td className="px-3 py-2">
-                              {localItemCanWholesale(item) ? (
-                                <label className="flex items-center gap-2 text-xs">
-                                  <Checkbox
-                                    checked={Boolean(item.isWholesale)}
-                                    onChange={(e) =>
-                                      toggleLocalItemWholesale(item.localId, e.target.checked)
-                                    }
-                                  />
-                                  Paq.
-                                </label>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2">
-                              {item.itemType === 'machine' ? (
-                                <span className="tabular-nums">{item.quantity}</span>
-                              ) : (
-                                (() => {
-                                  const unit = localItemUnitCode(item)
-                                  const decimals = inventoryQuantityDecimals(unit)
-                                  return (
-                                    <DecimalInput
-                                      min="0"
-                                      decimals={decimals}
-                                      className="h-8 w-24"
-                                      value={item.quantity}
-                                      onChange={(e) =>
-                                        updateLocalItem(item.localId, {
-                                          quantity: normalizeInventoryQuantity(
-                                            parseDecimalInput(e.target.value, decimals) ?? 0,
-                                            unit
-                                          ),
-                                        })
-                                      }
-                                    />
-                                  )
-                                })()
-                              )}
-                            </td>
-                            <td className="px-3 py-2">{localItemUnit(item)}</td>
-                            <td className="px-3 py-2">
-                              {entryInNative ? (
-                                <MoneyInput
-                                  min="0"
-                                  decimals={entryPriceDecimals}
-                                  className="h-8 w-28"
-                                  disabled={!canEnterPriceInNative}
-                                  value={nativeUnitPriceDisplay(item)}
-                                  onChange={(e) => {
-                                    const native =
-                                      parseDecimalInput(e.target.value, entryPriceDecimals) ?? 0
-                                    if (isValidPurchaseRate(rateNum)) {
-                                      updateLocalItemPriceNative(item.localId, native, rateNum)
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <MoneyInput
-                                  min="0"
-                                  decimals={entryPriceDecimals}
-                                  className="h-8 w-28"
-                                  value={item.unitPriceUsd}
-                                  onChange={(e) =>
-                                    updateLocalItemPriceUsd(
-                                      item.localId,
-                                      parseDecimalInput(e.target.value, entryPriceDecimals) ?? 0
-                                    )
-                                  }
-                                />
-                              )}
-                            </td>
-                            <td className="px-3 py-2 tabular-nums">
-                              {entryInNative && isValidPurchaseRate(rateNum) ? (
-                                formatNative(
-                                  item.quantity * nativeUnitPriceDisplay(item),
-                                  displayEntryCurrency
-                                )
-                              ) : (
-                                formatFromUsd(item.quantity * item.unitPriceUsd)
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                {item.itemType === 'material' ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    title="Editar material"
-                                    aria-label="Editar material"
-                                    onClick={() => openEditMaterial(item)}
-                                  >
-                                    <Pencil />
-                                  </Button>
-                                ) : null}
-                                {item.itemType === 'product' ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    title="Editar producto"
-                                    aria-label="Editar producto"
-                                    onClick={() => openEditProduct(item)}
-                                  >
-                                    <Pencil />
-                                  </Button>
-                                ) : null}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  title="Eliminar ítem"
-                                  aria-label="Eliminar ítem"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => void removeLocalItem(item.localId)}
-                                >
-                                  <Trash2 />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
+                          <PurchaseDraftItemRow
+                            key={item.localId}
+                            item={item}
+                            entryInNative={entryInNative}
+                            entryPriceDecimals={entryPriceDecimals}
+                            canEnterPriceInNative={canEnterPriceInNative}
+                            rateNum={rateNum}
+                            displayEntryCurrency={displayEntryCurrency}
+                            nativeUnitPrice={nativeUnitPriceDisplay(item)}
+                            onQuantityChange={(quantity) =>
+                              updateLocalItem(item.localId, { quantity })
+                            }
+                            onToggleWholesale={(checked) =>
+                              toggleLocalItemWholesale(item.localId, checked)
+                            }
+                            onPriceUsdChange={(price) => updateLocalItemPriceUsd(item.localId, price)}
+                            onPriceNativeChange={(native, rate) =>
+                              updateLocalItemPriceNative(item.localId, native, rate)
+                            }
+                            onEditMaterial={() => openEditMaterial(item)}
+                            onEditProduct={() => openEditProduct(item)}
+                            onRemove={() => void removeLocalItem(item.localId)}
+                          />
                         ))
                       : (purchase.items ?? []).map((item) => (
-                          <tr key={item.id} className="border-b last:border-b-0">
-                            <td className="px-3 py-2">
-                              {item.itemType === 'machine'
-                                ? formatMachineTypeLabel(item.machine?.type ?? 'OTHER')
-                                : item.itemType === 'product'
-                                  ? catalogProductCode(item.catalogProduct?.id ?? item.catalogProductId ?? 0)
-                                  : (item.material?.code ?? '—')}
-                            </td>
-                            <td className="px-3 py-2">
-                              {item.itemType === 'machine'
-                                ? item.machine?.name ?? '—'
-                                : item.itemType === 'product'
-                                  ? item.catalogProduct?.name ?? '—'
-                                  : (item.material?.name ?? '—')}
-                            </td>
-                            <td className="px-3 py-2">{item.isWholesale ? 'Paq.' : '—'}</td>
-                            <td className="px-3 py-2 tabular-nums">{item.quantity}</td>
-                            <td className="px-3 py-2">
-                              {item.itemType === 'machine'
-                                ? 'Und'
-                                : item.isWholesale
-                                  ? 'Paq.'
-                                  : item.itemType === 'product'
-                                    ? productSaleUnitAbrev(item.catalogProduct?.saleUnit ?? 'UND')
-                                    : item.material
-                                      ? UNIT_ABREV[item.material.unit]
-                                      : '—'}
-                            </td>
-                            <td className="px-3 py-2">
-                              <PrecioEnMonedaIngreso
-                                precioUsd={item.unitPriceUsd}
-                                precioNativo={item.unitPriceBs}
-                                entryCurrency={displayEntryCurrency}
-                                baseCurrencyCode={baseCurrencyCode}
-                                rate={rateNum}
-                                size="sm"
-                              />
-                            </td>
-                            <td className="px-3 py-2">
-                              <PrecioEnMonedaIngreso
-                                precioUsd={item.subtotalUsd}
-                                precioNativo={item.subtotalBs}
-                                entryCurrency={displayEntryCurrency}
-                                baseCurrencyCode={baseCurrencyCode}
-                                rate={rateNum}
-                                size="sm"
-                              />
-                            </td>
-                          </tr>
+                          <PurchaseConfirmedItemRow
+                            key={item.id}
+                            item={item}
+                            displayEntryCurrency={displayEntryCurrency}
+                            baseCurrencyCode={baseCurrencyCode}
+                            rateNum={rateNum}
+                          />
                         ))}
                   </tbody>
                 </table>
