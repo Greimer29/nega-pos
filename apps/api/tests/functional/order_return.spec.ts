@@ -1,4 +1,5 @@
 import CatalogProduct from '#models/catalog_product'
+import CatalogProductSize from '#models/catalog_product_size'
 import Customer from '#models/customer'
 import Formula from '#models/formula'
 import FormulaMaterial from '#models/formula_material'
@@ -8,6 +9,7 @@ import Order from '#models/order'
 import OrderLine from '#models/order_line'
 import ProductInventoryMovement from '#models/product_inventory_movement'
 import User from '#models/user'
+import { resetTestDatabase } from '#tests/helpers/reset_test_database'
 import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
@@ -15,22 +17,6 @@ import { test } from '@japa/runner'
 
 const TEST_EMAIL = 'test-order-return@negapos.local'
 const TEST_PASSWORD = 'password123'
-
-async function resetDatabase() {
-  await db.from('product_inventory_movements').delete()
-  await db.from('inventory_movements').delete()
-  await db.from('order_lines').delete()
-  await db.from('order_materials').delete()
-  await db.from('orders').delete()
-  await db.from('formula_materials').delete()
-  await db.from('formulas').delete()
-  await db.from('catalog_products').delete()
-  await db.from('materials').delete()
-  await db.from('customers').delete()
-  await db.from('counters').delete()
-  await db.from('sales_shifts').delete()
-  await db.from('users').delete()
-}
 
 async function seedAdminUser() {
   await User.updateOrCreate(
@@ -50,7 +36,7 @@ test.group('Order devolución venta API', (group) => {
   })
 
   group.each.setup(async () => {
-    await resetDatabase()
+    await resetTestDatabase()
     await seedAdminUser()
   })
 
@@ -383,5 +369,219 @@ test.group('Order devolución venta API', (group) => {
       .first()
 
     assert.equal(Number(materialStock?.total), 100)
+  })
+
+  async function seedProductOrder(options: {
+    code: string
+    status: 'CONFIRMED' | 'IN_PRODUCTION' | 'DELIVERED'
+    paymentType?: 'CASH' | 'CREDIT'
+    quantity: number
+    unitPriceUsd: number
+    sizeStock?: number
+  }) {
+    const customer = await Customer.create({
+      name: `Cliente ${options.code}`,
+      type: 'CORPORATE',
+      creditDays: options.paymentType === 'CREDIT' ? 30 : 0,
+      active: true,
+    })
+    const product = await CatalogProduct.create({
+      name: `Producto ${options.code}`,
+      category: 'UNIFORM',
+      salePriceUsd: options.unitPriceUsd.toFixed(4),
+      costUsd: '5.0000',
+      stockQuantity: '0.000',
+      active: true,
+    })
+    const size =
+      options.sizeStock !== undefined
+        ? await CatalogProductSize.create({
+            catalogProductId: Number(product.id),
+            size: 'M',
+            stockQuantity: options.sizeStock.toFixed(3),
+          })
+        : null
+
+    const total = options.quantity * options.unitPriceUsd
+    const isCredit = options.paymentType === 'CREDIT'
+    const order = await Order.create({
+      code: options.code,
+      customerId: Number(customer.id),
+      modality: 'CORPORATE',
+      description: `Pedido ${options.code}`,
+      totalQuantity: options.quantity,
+      totalPrice: total.toFixed(4),
+      paymentType: options.paymentType ?? 'CASH',
+      amountPaidUsd: isCredit ? '0.0000' : total.toFixed(4),
+      balanceUsd: isCredit ? total.toFixed(4) : '0.0000',
+      orderDate: DateTime.fromISO('2026-06-01'),
+      status: options.status,
+    })
+    const line = await OrderLine.create({
+      orderId: Number(order.id),
+      catalogProductId: Number(product.id),
+      catalogProductSizeId: size ? Number(size.id) : null,
+      size: size ? 'M' : null,
+      quantity: options.quantity.toFixed(3),
+      unitPriceUsd: options.unitPriceUsd.toFixed(4),
+      subtotalUsd: total.toFixed(4),
+    })
+    await ProductInventoryMovement.create({
+      catalogProductId: Number(product.id),
+      type: 'SALE_OUT',
+      quantity: (-options.quantity).toFixed(3),
+      orderId: Number(order.id),
+    })
+
+    return { order, line, product, size }
+  }
+
+  test('partial cash return updates totals and stock; excess quantity rolls back', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const { order, line, product } = await seedProductOrder({
+      code: 'PED-202606-0300',
+      status: 'DELIVERED',
+      quantity: 5,
+      unitPriceUsd: 20,
+    })
+
+    const partial = await client
+      .post(`/api/v1/orders/${order.id}/return`)
+      .loginAs(user)
+      .json({ lines: [{ line_id: Number(line.id), quantity: 2 }] })
+    partial.assertStatus(200)
+
+    await order.refresh()
+    assert.equal(order.status, 'DELIVERED')
+    assert.equal(Number(order.totalPrice), 60)
+    assert.equal(order.totalQuantity, 3)
+    assert.equal(order.amountPaidUsd, '60.0000')
+    assert.equal(order.balanceUsd, '0.0000')
+
+    await product.refresh()
+    assert.equal(product.stockQuantity, '2.000')
+
+    const excess = await client
+      .post(`/api/v1/orders/${order.id}/return`)
+      .loginAs(user)
+      .json({ lines: [{ line_id: Number(line.id), quantity: 4 }] })
+    excess.assertStatus(422)
+
+    await line.refresh()
+    assert.equal(Number(line.returnedQuantity), 2)
+    await product.refresh()
+    assert.equal(product.stockQuantity, '2.000')
+
+    const reversals = await ProductInventoryMovement.query()
+      .where('orderId', Number(order.id))
+      .where('type', 'REVERSAL_ADJUSTMENT')
+    assert.lengthOf(reversals, 1)
+    assert.equal(reversals[0].note, `Devolución venta ${order.code}`)
+  })
+
+  test('partial return on a credit order lowers the outstanding balance', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const { order, line } = await seedProductOrder({
+      code: 'PED-202606-0301',
+      status: 'DELIVERED',
+      paymentType: 'CREDIT',
+      quantity: 5,
+      unitPriceUsd: 20,
+    })
+
+    const partial = await client
+      .post(`/api/v1/orders/${order.id}/return`)
+      .loginAs(user)
+      .json({ lines: [{ line_id: Number(line.id), quantity: 2 }] })
+    partial.assertStatus(200)
+
+    await order.refresh()
+    assert.equal(Number(order.totalPrice), 60)
+    assert.equal(order.balanceUsd, '60.0000')
+    assert.equal(order.amountPaidUsd, '0.0000')
+  })
+
+  test('sized product return restores size stock and caps product stock at what was sold', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const { order, line, product, size } = await seedProductOrder({
+      code: 'PED-202606-0302',
+      status: 'DELIVERED',
+      quantity: 3,
+      unitPriceUsd: 30,
+      sizeStock: 1,
+    })
+
+    const partial = await client
+      .post(`/api/v1/orders/${order.id}/return`)
+      .loginAs(user)
+      .json({ lines: [{ line_id: Number(line.id), quantity: 1 }] })
+    partial.assertStatus(200)
+
+    await size!.refresh()
+    assert.equal(Number(size!.stockQuantity), 2)
+
+    const full = await client.post(`/api/v1/orders/${order.id}/return`).loginAs(user)
+    full.assertStatus(200)
+
+    await order.refresh()
+    assert.equal(order.status, 'RETURNED')
+    assert.equal(Number(order.totalPrice), 0)
+    assert.equal(order.totalQuantity, 0)
+
+    await size!.refresh()
+    assert.equal(Number(size!.stockQuantity), 4)
+
+    const reversals = await ProductInventoryMovement.query()
+      .where('orderId', Number(order.id))
+      .where('type', 'REVERSAL_ADJUSTMENT')
+    assert.equal(
+      reversals.reduce((sum, movement) => sum + Number(movement.quantity), 0),
+      3
+    )
+    await product.refresh()
+    assert.equal(product.stockQuantity, '3.000')
+  })
+
+  test('cancelling a confirmed order puts back product and size stock', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const { order, product, size } = await seedProductOrder({
+      code: 'PED-202606-0303',
+      status: 'CONFIRMED',
+      quantity: 2,
+      unitPriceUsd: 15,
+      sizeStock: 0,
+    })
+
+    const cancel = await client
+      .post(`/api/v1/orders/${order.id}/transition`)
+      .loginAs(user)
+      .json({ new_status: 'CANCELLED' })
+    cancel.assertStatus(200)
+
+    await order.refresh()
+    assert.equal(order.status, 'CANCELLED')
+
+    await product.refresh()
+    assert.equal(product.stockQuantity, '2.000')
+    await size!.refresh()
+    assert.equal(Number(size!.stockQuantity), 2)
+
+    const reversal = await ProductInventoryMovement.query()
+      .where('orderId', Number(order.id))
+      .where('type', 'REVERSAL_ADJUSTMENT')
+      .firstOrFail()
+    assert.equal(reversal.note, `Cancelación pedido ${order.code}`)
   })
 })

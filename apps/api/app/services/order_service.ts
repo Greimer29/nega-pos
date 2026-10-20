@@ -20,15 +20,15 @@ import CatalogProduct from '#models/catalog_product'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
 import CatalogProductSizeService from '#services/catalog_product_size_service'
 import ProductInventoryService from '#services/product_inventory_service'
-import ProductInventoryMovement from '#models/product_inventory_movement'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
 import PedidoLineaNoEncontradaException from '#exceptions/pedido_linea_no_encontrada_exception'
 import DevolucionCantidadInvalidaException from '#exceptions/devolucion_cantidad_invalida_exception'
 import OrderCodigoService from '#services/order_code_service'
+import OrderReturnService from '#services/order_return_service'
+import { resolveSaleReturnRequests } from '#utils/sale_return_requests'
 import {
   evaluarConsumoVsStock,
   formatCantidadMovimiento,
-  formatCantidadReversion,
   NOTA_FORZADO_SIN_STOCK,
   RECETA_VACIA_WARNING,
   buildOrderConsumoMap,
@@ -160,6 +160,7 @@ export default class OrderService {
   private productInventoryService = new ProductInventoryService()
   private catalogProductStockService = new CatalogProductStockService()
   private sizeService = new CatalogProductSizeService()
+  private orderReturnService = new OrderReturnService()
 
   async listar(filters: ListOrdersFilters = {}): Promise<ModelPaginatorContract<Order>> {
     const page = filters.page ?? 1
@@ -600,7 +601,11 @@ export default class OrderService {
       }
 
       if (statusActual === 'CONFIRMED' && nuevoEstado === 'CANCELLED') {
-        await this.revertirStockProductos(order, trx, `Cancelación pedido ${order.code}`)
+        await this.orderReturnService.revertProductStock(
+          order,
+          trx,
+          `Cancelación pedido ${order.code}`
+        )
       }
 
       if (statusActual === 'CONFIRMED' && nuevoEstado === 'IN_PRODUCTION') {
@@ -608,12 +613,16 @@ export default class OrderService {
       }
 
       if (nuevoEstado === 'CANCELLED' && statusActual === 'IN_PRODUCTION') {
-        await this.revertirMovimientosOrder(
+        await this.orderReturnService.revertMaterialMovements(
           Number(order.id),
           trx,
           `Reversión cancelación order #${order.id}`
         )
-        await this.revertirStockProductos(order, trx, `Cancelación pedido ${order.code}`)
+        await this.orderReturnService.revertProductStock(
+          order,
+          trx,
+          `Cancelación pedido ${order.code}`
+        )
       }
 
       order.status = nuevoEstado
@@ -655,7 +664,7 @@ export default class OrderService {
         throw new OrderNoDevolvableException()
       }
 
-      const returnRequests = this.resolveReturnRequests(order.orderLines, lines)
+      const returnRequests = resolveSaleReturnRequests(order.orderLines, lines)
 
       if (returnRequests.length === 0) {
         if (order.orderLines.length === 0) {
@@ -691,69 +700,14 @@ export default class OrderService {
         line.useTransaction(trx)
         await line.save()
 
-        await this.revertirStockProductoParcial(
-          Number(order.id),
-          Number(line.catalogProductId),
-          request.quantity,
-          trx,
-          note
-        )
-
-        if (line.catalogProductSizeId) {
-          await this.sizeService.restoreSizeStock(
-            Number(line.catalogProductSizeId),
-            request.quantity,
-            trx
-          )
-        }
-
-        await this.revertirMaterialesLineaParcial(order, line, request.quantity, trx, note)
+        await this.orderReturnService.restoreLineInventory(order, line, request.quantity, trx, note)
       }
 
       if (!lines || lines.length === 0) {
-        const salidas = await InventoryMovement.query({ client: trx })
-          .where('orderId', Number(order.id))
-          .where('type', 'ORDER_OUT')
-
-        if (salidas.length > 0) {
-          const reversiones = await InventoryMovement.query({ client: trx })
-            .where('orderId', Number(order.id))
-            .where('type', 'REVERSAL_ADJUSTMENT')
-
-          const consumedByMaterial = new Map<number, number>()
-          for (const salida of salidas) {
-            const materialId = Number(salida.materialId)
-            consumedByMaterial.set(
-              materialId,
-              (consumedByMaterial.get(materialId) ?? 0) + Math.abs(Number(salida.quantity))
-            )
-          }
-
-          const revertedByMaterial = new Map<number, number>()
-          for (const reversion of reversiones) {
-            const materialId = Number(reversion.materialId)
-            revertedByMaterial.set(
-              materialId,
-              (revertedByMaterial.get(materialId) ?? 0) + Math.abs(Number(reversion.quantity))
-            )
-          }
-
-          let needsFullRevert = false
-          for (const [materialId, consumed] of consumedByMaterial) {
-            const reverted = revertedByMaterial.get(materialId) ?? 0
-            if (reverted + 0.0005 < consumed) {
-              needsFullRevert = true
-              break
-            }
-          }
-
-          if (needsFullRevert) {
-            await this.revertirMovimientosOrder(Number(order.id), trx, note)
-          }
-        }
+        await this.orderReturnService.restoreUnreversedMaterials(order, trx, note)
       }
 
-      await this.actualizarMontosTrasDevolucion(order, trx)
+      await this.orderReturnService.recalculateAmounts(order, trx)
 
       const refreshedLines = await OrderLine.query({ client: trx }).where(
         'orderId',
@@ -1047,29 +1001,6 @@ export default class OrderService {
           type: 'ORDER_OUT',
           quantity: formatCantidadMovimiento(data.cantidadTotal),
           orderId: Number(order.id),
-          note,
-        },
-        { client: trx }
-      )
-    }
-  }
-
-  private async revertirMovimientosOrder(
-    orderId: number,
-    trx: TransactionClientContract,
-    note: string
-  ) {
-    const salidas = await InventoryMovement.query({ client: trx })
-      .where('orderId', orderId)
-      .where('type', 'ORDER_OUT')
-
-    for (const salida of salidas) {
-      await InventoryMovement.create(
-        {
-          materialId: Number(salida.materialId),
-          type: 'REVERSAL_ADJUSTMENT',
-          quantity: formatCantidadReversion(salida.quantity),
-          orderId,
           note,
         },
         { client: trx }
@@ -1442,175 +1373,6 @@ export default class OrderService {
       order.balanceUsd = '0.0000'
       order.amountPaidUsd = totalUsd.toFixed(4)
       order.creditDueDate = null
-    }
-  }
-
-  private async revertirStockProductos(order: Order, trx: TransactionClientContract, note: string) {
-    const salidas = await ProductInventoryMovement.query({ client: trx })
-      .where('orderId', Number(order.id))
-      .where('type', 'SALE_OUT')
-
-    for (const movimiento of salidas) {
-      const qty = Math.abs(Number(movimiento.quantity))
-      await this.productInventoryService.registrarMovimiento(
-        {
-          catalogProductId: Number(movimiento.catalogProductId),
-          type: 'REVERSAL_ADJUSTMENT',
-          quantity: qty,
-          orderId: Number(order.id),
-          note,
-        },
-        trx
-      )
-    }
-
-    const lines =
-      order.orderLines ??
-      (await OrderLine.query({ client: trx }).where('orderId', Number(order.id)))
-
-    for (const line of lines) {
-      if (!line.catalogProductSizeId) continue
-      const remaining = Number(line.quantity) - Number(line.returnedQuantity ?? 0)
-      if (remaining <= 0) continue
-      await this.sizeService.restoreSizeStock(Number(line.catalogProductSizeId), remaining, trx)
-    }
-  }
-
-  private resolveReturnRequests(
-    lines: OrderLine[],
-    input?: OrderReturnLineInput[]
-  ): { lineId: number; quantity: number }[] {
-    if (!input || input.length === 0) {
-      return lines
-        .map((line) => {
-          const remaining = Number(line.quantity) - Number(line.returnedQuantity ?? 0)
-          return remaining > 0 ? { lineId: Number(line.id), quantity: remaining } : null
-        })
-        .filter((item): item is { lineId: number; quantity: number } => item !== null)
-    }
-
-    return input.map((item) => ({
-      lineId: item.line_id,
-      quantity: item.quantity,
-    }))
-  }
-
-  private async revertirStockProductoParcial(
-    orderId: number,
-    catalogProductId: number,
-    quantity: number,
-    trx: TransactionClientContract,
-    note: string
-  ) {
-    const salidas = await ProductInventoryMovement.query({ client: trx })
-      .where('orderId', orderId)
-      .where('catalogProductId', catalogProductId)
-      .where('type', 'SALE_OUT')
-
-    let soldTotal = 0
-    for (const salida of salidas) {
-      soldTotal += Math.abs(Number(salida.quantity))
-    }
-
-    const reversiones = await ProductInventoryMovement.query({ client: trx })
-      .where('orderId', orderId)
-      .where('catalogProductId', catalogProductId)
-      .where('type', 'REVERSAL_ADJUSTMENT')
-
-    let reversedTotal = 0
-    for (const reversion of reversiones) {
-      reversedTotal += Number(reversion.quantity)
-    }
-
-    const toReverse = Math.min(quantity, Math.max(0, soldTotal - reversedTotal))
-    if (toReverse <= 0) {
-      return
-    }
-
-    await this.productInventoryService.registrarMovimiento(
-      {
-        catalogProductId,
-        type: 'REVERSAL_ADJUSTMENT',
-        quantity: toReverse,
-        orderId,
-        note,
-      },
-      trx
-    )
-  }
-
-  private async revertirMaterialesLineaParcial(
-    order: Order,
-    line: OrderLine,
-    returnQty: number,
-    trx: TransactionClientContract,
-    note: string
-  ) {
-    const salidas = await InventoryMovement.query({ client: trx })
-      .where('orderId', Number(order.id))
-      .where('type', 'ORDER_OUT')
-
-    if (salidas.length === 0) {
-      return
-    }
-
-    const product =
-      line.catalogProduct ??
-      (await CatalogProduct.query({ client: trx })
-        .where('id', Number(line.catalogProductId))
-        .preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
-        .first())
-
-    const formulaMaterials = product?.formula?.materials
-    if (!formulaMaterials?.length) {
-      return
-    }
-
-    for (const formulaItem of formulaMaterials) {
-      const materialId = Number(formulaItem.materialId)
-      const consumoDevuelto = returnQty * Number(formulaItem.quantity)
-      if (consumoDevuelto <= 0) {
-        continue
-      }
-
-      await InventoryMovement.create(
-        {
-          materialId,
-          type: 'REVERSAL_ADJUSTMENT',
-          quantity: consumoDevuelto.toFixed(3),
-          orderId: Number(order.id),
-          note,
-        },
-        { client: trx }
-      )
-    }
-  }
-
-  private async actualizarMontosTrasDevolucion(order: Order, trx: TransactionClientContract) {
-    const lines = await OrderLine.query({ client: trx }).where('orderId', Number(order.id))
-
-    let activeTotal = 0
-    let activeQty = 0
-
-    for (const line of lines) {
-      const active = Number(line.quantity) - Number(line.returnedQuantity ?? 0)
-      if (active <= 0) {
-        continue
-      }
-      activeTotal += active * Number(line.unitPriceUsd)
-      activeQty += active
-    }
-
-    order.totalPrice = activeTotal.toFixed(4)
-    order.totalQuantity = Math.max(0, Math.ceil(activeQty))
-
-    const paid = Number(order.amountPaidUsd ?? 0)
-
-    if (order.paymentType === 'CREDIT') {
-      order.balanceUsd = Math.max(0, activeTotal - paid).toFixed(4)
-    } else {
-      order.amountPaidUsd = activeTotal.toFixed(4)
-      order.balanceUsd = '0.0000'
     }
   }
 }

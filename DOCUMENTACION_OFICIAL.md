@@ -567,6 +567,8 @@ En multi-caja, las mutaciones relevantes emiten eventos SSE por empresa para inv
 - **CONFIRMED → IN_PRODUCTION**: descuenta materiales (`ORDER_OUT`); puede advertir si falta stock (`force` opcional).
 - **→ CANCELLED** desde CONFIRMED/IN_PRODUCTION: revierte movimientos y stock de productos.
 
+**Devolución** (`POST /orders/:id/return`, desde CONFIRMED/IN_PRODUCTION/DELIVERED): parcial o total por línea (`DEVOLUCION_CANTIDAD_INVALIDA` si supera lo pendiente). `order_service.ts` bloquea el pedido, valida, actualiza `returned_quantity` y pasa a `RETURNED` cuando no queda nada activo. `order_return_service.ts` (mismo cliente transaccional) repone por línea el producto (`REVERSAL_ADJUSTMENT`, nunca más de lo vendido aún no revertido), el stock de talla y los materiales de la **receta base** del producto si hubo producción (`ORDER_OUT`); en devolución total sin líneas revierte todo `ORDER_OUT` si algún material quedó sin revertir. También recalcula `total_price`, `total_quantity` y saldo (contado: pagado = activo; crédito: saldo = activo − pagado) y aporta las reversiones de stock que usa la cancelación. La resolución de líneas pendientes reutiliza `utils/sale_return_requests.ts`.
+
 ### Ventas (`sale_service.ts`)
 
 El servicio reutiliza cálculos de `utils/wholesale.ts` para convertir líneas mayoristas a unidades de inventario y escalar el consumo de materiales de fórmula con esa misma cantidad.
