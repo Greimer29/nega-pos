@@ -38,6 +38,7 @@ import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
 import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import { resolvePurchaseTotalUsd } from '#utils/purchase_totals'
 import { resolveWholesaleLineSnapshot } from '#utils/wholesale'
 
 export type PurchaseInput = {
@@ -168,7 +169,7 @@ export default class PurchaseService {
       count += 1
       if (row.status === 'CONFIRMED') {
         confirmedCount += 1
-        totalUsd += this.resolveTotalUsd(row)
+        totalUsd += resolvePurchaseTotalUsd(row)
       }
     }
 
@@ -770,17 +771,6 @@ export default class PurchaseService {
       subtotalUsd: subtotalUsd.toFixed(4),
       subtotalBs: (quantity * unitPriceBs).toFixed(2),
     }
-  }
-
-  private resolveTotalUsd(purchase: Purchase): number {
-    if (purchase.totalUsd) {
-      return Number(purchase.totalUsd)
-    }
-    const rate = purchase.usdRate ? Number(purchase.usdRate) : null
-    if (rate && rate > 0) {
-      return Number(purchase.totalBs) / rate
-    }
-    return 0
   }
 
   private async preparePurchaseInput(input: PurchaseInput, baseCurrencyCode?: string) {

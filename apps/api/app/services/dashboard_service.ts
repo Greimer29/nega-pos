@@ -11,6 +11,7 @@ import {
   currentMonthRange,
   datetimeRangeUtcSql,
   nowInAppZone,
+  sqlDateToIsoDate,
   todayIsoDate,
   toAppIsoDate,
 } from '#utils/app_timezone'
@@ -21,6 +22,7 @@ import {
   type CreditPurchaseReportContext,
 } from '#utils/credit_purchase_report'
 import { sumMachineExpenseRowsUsd } from '#utils/machine_expense_totals'
+import { resolvePurchaseTotalUsd } from '#utils/purchase_totals'
 import {
   buildDailyVentasBuckets,
   buildMonthlyVentasBuckets,
@@ -361,15 +363,8 @@ export default class DashboardService {
     let totalUsd = 0
 
     for (const purchase of purchases) {
-      const purchaseDate =
-        purchase.date instanceof Date
-          ? DateTime.fromJSDate(purchase.date).toISODate()!
-          : String(purchase.date).slice(0, 10)
-      const creditDueDate = purchase.credit_due_date
-        ? purchase.credit_due_date instanceof Date
-          ? DateTime.fromJSDate(purchase.credit_due_date).toISODate()!
-          : String(purchase.credit_due_date).slice(0, 10)
-        : null
+      const purchaseDate = sqlDateToIsoDate(purchase.date)!
+      const creditDueDate = sqlDateToIsoDate(purchase.credit_due_date)
 
       const reportContext: CreditPurchaseReportContext = {
         isCredit: Boolean(purchase.is_credit),
@@ -384,7 +379,11 @@ export default class DashboardService {
 
       const balanceUsdAmount = reportContext.isCredit
         ? creditPurchaseReportAmountUsd(reportContext)
-        : this.resolvePurchaseTotalUsd(purchase)
+        : resolvePurchaseTotalUsd({
+            totalUsd: purchase.total_usd,
+            totalBs: purchase.total_bs,
+            usdRate: purchase.usd_rate,
+          })
 
       const countsTowardTotal = reportContext.isCredit
         ? creditPurchaseCountsTowardPeriodTotal(reportContext, period)
@@ -415,21 +414,6 @@ export default class DashboardService {
       quantity,
       totalUsd: totalUsd.toFixed(2),
     }
-  }
-
-  private resolvePurchaseTotalUsd(purchase: {
-    total_usd?: string | null
-    total_bs?: string | null
-    usd_rate?: string | null
-  }): number {
-    if (purchase.total_usd) {
-      return Number(purchase.total_usd)
-    }
-    const rate = purchase.usd_rate ? Number(purchase.usd_rate) : null
-    if (rate && rate > 0) {
-      return Number(purchase.total_bs ?? 0) / rate
-    }
-    return 0
   }
 
   private async gastosMaquinasDelMes(): Promise<MachineExpensesMonthSummary> {

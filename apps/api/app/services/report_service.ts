@@ -8,6 +8,7 @@ import {
   creditPurchaseVisibleInReport,
 } from '#utils/credit_purchase_report'
 import { creditSaleReportAmountUsd, creditSaleReportStatus } from '#utils/credit_sale_report'
+import { machineExpenseRowUsd, sumMachineExpenseRowsUsd } from '#utils/machine_expense_totals'
 import { nativeAmountFromBase } from '#utils/monetary_entry'
 import CustomerPayment from '#models/customer_payment'
 import Expense from '#models/expense'
@@ -544,12 +545,14 @@ export default class ReportService {
       .where('date', '>=', period.from)
       .where('date', '<=', period.to)
 
-    let machineExpensesUsd = 0
-    for (const expense of machineExpenses) {
-      const currencyCode = expense.currencyCode ?? 'USD'
-      const native = Number(expense.amount ?? 0)
-      machineExpensesUsd += this.currencyService.toUsd(native, currencyCode, rates)
-    }
+    const machineExpensesUsd = sumMachineExpenseRowsUsd(
+      machineExpenses.map((expense) => ({
+        amount: expense.amount,
+        currency_code: expense.currencyCode,
+      })),
+      rates,
+      this.currencyService
+    )
 
     const salesRevenueUsd = Number(revenueRow?.revenue ?? 0)
     const cogsUsd = Number(cogsRow?.cogs ?? 0)
@@ -1077,7 +1080,11 @@ export default class ReportService {
 
         const native = Number(expense.amount ?? 0)
 
-        const usd = this.currencyService.toUsd(native, currencyCode, rates)
+        const usd = machineExpenseRowUsd(
+          { amount: native, currency_code: currencyCode },
+          rates,
+          this.currencyService
+        )
 
         machineExpensesUsd += usd
 
@@ -1360,10 +1367,7 @@ export default class ReportService {
         .select('amount', 'currency_code')
       machineQuery = this.applyAccountFilterToKnex(machineQuery, filters)
       const machineRows = await machineQuery
-      for (const row of machineRows) {
-        const currencyCode = row.currency_code ? String(row.currency_code) : 'USD'
-        outflows += this.currencyService.toUsd(Number(row.amount ?? 0), currencyCode, rates)
-      }
+      outflows += sumMachineExpenseRowsUsd(machineRows, rates, this.currencyService)
     }
 
     return inflows - outflows
