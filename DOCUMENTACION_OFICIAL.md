@@ -604,7 +604,7 @@ La resolución de entradas de venta está separada en `resolveCatalogLine` y `re
 - **Dashboard — entradas / ganancia:** UI «Entradas netas del turno» = ventas − crédito − **gastos operativos del turno**. «Ganancia del turno» = margen contado − esos mismos gastos. Pagos/facturas a proveedor no entran en gastos del turno.
 - **Dashboard / entradas del turno:** `ventasDelDia.montoProductosUsd` y series del gráfico suman `sales.total_usd` (lo cobrado/facturado), no el bruto de líneas. La ganancia del turno resta los descuentos de factura de contado.
 - **Descuentos de venta:** (1) por línea = precio unitario editado en el POS; (2) general de factura = `sales.discount_usd` (`total_usd = subtotal líneas − descuento`). Reportes financieros (`account-statement`) usan `total_usd`. El detalle «productos vendidos» / cierre reparte el descuento general **proporcional** a cada producto para que la suma de totales de producto coincida con lo facturado/neto. En **devoluciones**, el monto a devolver y el recálculo de `total_usd`/`discount_usd` usan la misma proporción (no se devuelve el bruto de líneas).
-- **Gastos del día** aceptan fecha opcional en servicio; el endpoint público sigue usando hoy salvo extensión futura.
+- **Gastos del día** (`GET /dashboard/daily-expenses`): con turno abierto lista los gastos operativos de **todas las fechas calendario del turno** (America/Caracas), las mismas que suma el KPI «Gastos del turno» y el cierre; un gasto cargado hoy con fecha de ayer aparece si el turno abrió ayer. Sin turno abierto lista los de hoy. El servicio también acepta una fecha opcional (`gastosDelDiaDetalle(date)`).
 - Alertas de bajo stock en materiales y productos.
 
 ---
