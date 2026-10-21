@@ -506,6 +506,7 @@ En multi-caja, las mutaciones relevantes emiten eventos SSE por empresa para inv
 3. **Confirmar** (`POST .../confirm`):
    - Requiere `invoice_number` y al menos un ítem (salvo `affects_inventory = false`).
    - Si `affects_inventory` es true (default): por cada ítem material → movimiento `PURCHASE_IN` + actualización de `last_purchase_price_usd`; por cada ítem producto sin fórmula → `PURCHASE_IN` en `product_inventory_movements` + `cost_usd`. Si la línea es mayorista, el movimiento usa `cantidad × units_per_pack` y el costo unitario queda `precio_paquete / units_per_pack` (también actualiza `wholesale_cost_usd`). **No actualiza** `sale_price_usd`.
+   - Los productos con fórmula que usan un material comprado recalculan `cost_usd` dentro de la misma transacción con el **nuevo** `last_purchase_price_usd` (Σ precio material × cantidad de receta) y devuelven `cost_warnings` si el precio de venta queda por debajo del costo.
    - Ítems de máquina: al confirmar se setea `machines.acquisition_cost` = precio unitario de la línea (entra a patrimonio). No mueven inventario.
    - **Multimoneda:** los `unit_price_usd` de ítem ya van en **moneda base** (el front convierte `nativo ÷ tasa` al editar). La tasa del documento (`usd_rate`) se guarda solo si la moneda de ingreso ≠ base; al confirmar no se anula por estar en `USD` (antes un hardcode borraba la tasa cuando la base era p. ej. XAU y el ingreso era USD).
    - Si `affects_inventory` es false: no mueve stock (factura financiera / deuda sin mercadería); las máquinas igual reciben `acquisition_cost`.

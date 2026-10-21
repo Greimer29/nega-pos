@@ -238,13 +238,10 @@ export default class FormulaService {
     formulaId: number,
     trx?: TransactionClientContract
   ): Promise<number> {
-    const query = FormulaMaterial.query().where('formulaId', formulaId).preload('material')
-
-    if (trx) {
-      query.useTransaction(trx)
-    }
-
-    const items = await query
+    // Preloads only join the transaction when it is passed as the query client.
+    const items = await FormulaMaterial.query({ client: trx })
+      .where('formulaId', formulaId)
+      .preload('material')
 
     let total = 0
     for (const item of items) {
