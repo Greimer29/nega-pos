@@ -1,72 +1,34 @@
-import { PublicImage } from '@/components/public-image'
-import type { ProductSaleUnit } from '@/features/ventas/constants'
 import type { BillingMethod } from '@/features/ventas/constants'
-import { useEffect, useState, type ReactNode } from 'react'
-import {
-  DollarSign,
-  LayoutGrid,
-  MessageSquareText,
-  Minus,
-  Package,
-  Percent,
-  Plus,
-  SlidersHorizontal,
-  Trash2,
-  X,
-} from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { LayoutGrid, Percent, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { MoneyInput } from '@/components/decimal-input'
-import { Input } from '@/components/ui/input'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 import { DisplayMoney, DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import {
   useDisplayCurrency,
   useFormatMoney,
 } from '@/features/currencies/context/display-currency-context'
 import { VentasBillingMethodToggle } from '@/features/ventas/components/ventas-billing-method-toggle'
+import {
+  VentasCartLineItem,
+  type VentasCartLine,
+} from '@/features/ventas/components/ventas-cart-line-item'
+import {
+  CartLinePriceDialog,
+  InvoiceDiscountDialog,
+} from '@/features/ventas/components/ventas-cart-price-dialogs'
 import { clampInvoiceDiscountUsd } from '@/features/ventas/utils/invoice-discount'
 import {
-  inventoryQuantityDecimals,
-  inventoryQuantityStep,
-  isMeasuredSaleUnit,
-  normalizeInventoryQuantity,
-} from '@/lib/inventory-units'
+  cartLineListPrice,
+  cartPriceDecimals,
+  percentOffPriceUsd,
+  percentOfSubtotalUsd,
+  priceDraftToUsd,
+  usdToPriceDraft,
+} from '@/features/ventas/utils/ventas-cart-pricing'
 import { cn } from '@/lib/utils'
-import { parseDecimalInput, sanitizeDecimalInput } from '@/lib/numeric-input'
 import { MeasuredQtyDialog } from '@/features/ventas/components/measured-qty-dialog'
 
-export type VentasCartLine = {
-  key: string
-  name: string
-  code: string
-  quantity: number
-  unitPriceUsd: number
-  listPriceUsd?: number
-  saleUnit?: ProductSaleUnit
-  imageUrl?: string | null
-  imageTone?: 'orange' | 'violet' | 'amber' | 'sky'
-  metaLabel?: string
-  detail?: string | null
-  isService?: boolean
-  hasFormula?: boolean
-  hasCustomFormula?: boolean
-  kitchenNote?: string | null
-  canWholesale?: boolean
-  isWholesale?: boolean
-  wholesaleHint?: string | null
-  onToggleWholesale?: (checked: boolean) => void
-  onAdjustFormula?: () => void
-  onEditKitchenNote?: () => void
-  onEditDetail?: () => void
-}
+export type { VentasCartLine }
 
 type VentasOrderCartProps = {
   orderLabel: string
@@ -87,306 +49,6 @@ type VentasOrderCartProps = {
   billingMethod?: BillingMethod
   onBillingMethodChange?: (method: BillingMethod) => void
   onClose?: () => void
-}
-
-const IMAGE_TONE_CLASS: Record<NonNullable<VentasCartLine['imageTone']>, string> = {
-  orange: 'bg-orange-100',
-  violet: 'bg-violet-100',
-  amber: 'bg-amber-100',
-  sky: 'bg-sky-100',
-}
-
-function lineSubtotal(line: VentasCartLine) {
-  return line.quantity * line.unitPriceUsd
-}
-
-function lineHasPriceAdjustment(line: VentasCartLine) {
-  const listPrice = line.listPriceUsd ?? line.unitPriceUsd
-  return Math.abs(listPrice - line.unitPriceUsd) > 0.0001
-}
-
-function CartLineSubtotal({ line }: { line: VentasCartLine }) {
-  const { formatFromUsd } = useFormatMoney()
-  return <span className="text-sm font-bold">{formatFromUsd(lineSubtotal(line))}</span>
-}
-
-function CartLineItem({
-  line,
-  onRemoveLine,
-  onUpdateQuantity,
-  onUpdateUnitPrice,
-  onOpenPriceModal,
-  onOpenMeasuredQtyModal,
-  formatFromUsd,
-}: {
-  line: VentasCartLine
-  onRemoveLine: (key: string) => void
-  onUpdateQuantity?: (key: string, quantity: number) => void
-  onUpdateUnitPrice?: (key: string, unitPriceUsd: number) => void
-  onOpenPriceModal: (line: VentasCartLine) => void
-  onOpenMeasuredQtyModal?: (line: VentasCartLine) => void
-  formatFromUsd: (amountUsd: number) => string
-}) {
-  const unit = line.saleUnit ?? 'UND'
-  const decimals = inventoryQuantityDecimals(unit)
-  const step = inventoryQuantityStep(unit)
-  const isIntegerUnit = decimals === 0
-  const usesMeasuredModal =
-    Boolean(onUpdateQuantity) &&
-    Boolean(onOpenMeasuredQtyModal) &&
-    isMeasuredSaleUnit(unit) &&
-    !line.isWholesale
-  const [qtyDraft, setQtyDraft] = useState(() => String(line.quantity))
-  const [qtyFocused, setQtyFocused] = useState(false)
-
-  useEffect(() => {
-    if (!qtyFocused) {
-      setQtyDraft(String(line.quantity))
-    }
-  }, [line.quantity, qtyFocused])
-
-  function commitQuantity(raw: string) {
-    const parsed = parseDecimalInput(raw, decimals)
-    setQtyFocused(false)
-    if (parsed == null) {
-      setQtyDraft(String(line.quantity))
-      return
-    }
-    setQtyDraft(String(parsed))
-    onUpdateQuantity?.(line.key, parsed)
-  }
-
-  function adjustQuantity(direction: 1 | -1) {
-    const live = parseDecimalInput(qtyDraft, decimals)
-    const base = live ?? line.quantity
-    const next = normalizeInventoryQuantity(base + direction * step, unit)
-    setQtyDraft(String(Math.max(next, 0)))
-    onUpdateQuantity?.(line.key, next)
-  }
-
-  return (
-    <div className="relative rounded-xl border bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="text-muted-foreground absolute top-2 right-2 size-7 rounded-full"
-        onClick={() => onRemoveLine(line.key)}
-        aria-label={`Quitar ${line.name}`}
-      >
-        <X className="size-3.5" />
-      </Button>
-
-      <div className="flex items-stretch gap-3 pr-8">
-        <div className="flex w-16 shrink-0 flex-col">
-          <div
-            className={cn(
-              'flex size-16 items-center justify-center overflow-hidden rounded-xl',
-              line.imageUrl ? 'bg-muted' : IMAGE_TONE_CLASS[line.imageTone ?? 'violet']
-            )}
-          >
-            {line.imageUrl ? (
-              <PublicImage
-                src={line.imageUrl}
-                alt={line.name}
-                className="size-full object-cover"
-                showFallbackIcon
-                fallbackClassName="size-full"
-              />
-            ) : (
-              <Package className="text-muted-foreground/70 size-7" />
-            )}
-          </div>
-          {onUpdateQuantity ? (
-            <div className="mt-auto flex items-center justify-between pt-2">
-              <Button
-                type="button"
-                variant="default"
-                size="icon"
-                className="size-7 bg-rose-500 hover:bg-rose-600"
-                aria-label="Disminuir cantidad"
-                onClick={() => adjustQuantity(-1)}
-              >
-                <Minus className="size-3.5" />
-              </Button>
-              <Button
-                type="button"
-                variant="default"
-                size="icon"
-                className="size-7 bg-emerald-500 hover:bg-emerald-600"
-                aria-label="Aumentar cantidad"
-                onClick={() => adjustQuantity(1)}
-              >
-                <Plus className="size-3.5" />
-              </Button>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="flex min-w-0 flex-1 flex-col space-y-1">
-          <p className="line-clamp-2 text-sm leading-snug font-semibold">{line.name}</p>
-          <p className="text-muted-foreground text-xs">Código: {line.code}</p>
-          {line.canWholesale && line.onToggleWholesale ? (
-            <label className="flex items-center gap-2 text-xs">
-              <Checkbox
-                checked={Boolean(line.isWholesale)}
-                onChange={(e) => line.onToggleWholesale?.(e.target.checked)}
-              />
-              Mayorista
-              {line.isWholesale && line.wholesaleHint ? (
-                <span className="text-muted-foreground">{line.wholesaleHint}</span>
-              ) : null}
-            </label>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            {line.metaLabel ? <span>{line.metaLabel}</span> : null}
-            {onUpdateQuantity ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <span>Cantidad:</span>
-                  {usesMeasuredModal ? (
-                    <button
-                      type="button"
-                      className={cn(
-                        'border-input bg-background hover:bg-muted h-7 min-w-16 rounded-md border px-2',
-                        'text-left text-xs font-medium tabular-nums transition-colors'
-                      )}
-                      onClick={() => onOpenMeasuredQtyModal?.(line)}
-                      aria-label={`Editar cantidad o monto de ${line.name}`}
-                      title="Cantidad o monto (kg/mts)"
-                    >
-                      {line.quantity}
-                    </button>
-                  ) : (
-                    <Input
-                      type="text"
-                      inputMode={isIntegerUnit ? 'numeric' : 'decimal'}
-                      aria-label={`Cantidad de ${line.name}`}
-                      className={cn(
-                        'h-7 px-2 text-xs tabular-nums',
-                        isIntegerUnit ? 'w-12' : 'w-16'
-                      )}
-                      value={qtyDraft}
-                      onFocus={(e) => {
-                        setQtyFocused(true)
-                        const current = String(line.quantity)
-                        setQtyDraft(current)
-                        e.target.select()
-                      }}
-                      onChange={(e) => {
-                        setQtyDraft(sanitizeDecimalInput(e.target.value, decimals))
-                      }}
-                      onBlur={(e) => commitQuantity(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          e.currentTarget.blur()
-                        }
-                      }}
-                    />
-                  )}
-                </div>
-                {line.hasFormula && line.onAdjustFormula ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      'size-7',
-                      line.hasCustomFormula && 'text-violet-600 hover:text-violet-700'
-                    )}
-                    title="Ajustar materiales de esta venta"
-                    onClick={line.onAdjustFormula}
-                    aria-label="Ajustar materiales de esta venta"
-                  >
-                    <SlidersHorizontal className="size-3.5" />
-                  </Button>
-                ) : null}
-                {onUpdateUnitPrice ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      'size-7',
-                      lineHasPriceAdjustment(line)
-                        ? 'text-violet-700 hover:text-violet-800'
-                        : 'text-muted-foreground'
-                    )}
-                    title="Precio, descuento o aumento"
-                    aria-label="Precio, descuento o aumento"
-                    onClick={() => onOpenPriceModal(line)}
-                  >
-                    <DollarSign className="size-3.5" />
-                  </Button>
-                ) : null}
-                {line.onEditKitchenNote ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      'size-7',
-                      line.kitchenNote?.trim() && 'text-amber-700 hover:text-amber-800'
-                    )}
-                    title="Indicación para cocina"
-                    onClick={line.onEditKitchenNote}
-                    aria-label="Indicación para cocina"
-                  >
-                    <MessageSquareText className="size-3.5" />
-                  </Button>
-                ) : null}
-                {line.onEditDetail ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      'size-7',
-                      line.detail?.trim() && 'text-sky-700 hover:text-sky-800'
-                    )}
-                    title="Editar servicio (cantidad, precio, detalle)"
-                    onClick={line.onEditDetail}
-                    aria-label="Editar servicio"
-                  >
-                    <MessageSquareText className="size-3.5" />
-                  </Button>
-                ) : null}
-              </div>
-            ) : (
-              <span>Cantidad: {line.quantity}</span>
-            )}
-          </div>
-          {line.kitchenNote?.trim() ? (
-            <p className="line-clamp-2 text-xs text-amber-800/90 whitespace-pre-line">
-              {line.kitchenNote.trim()}
-            </p>
-          ) : null}
-          {line.detail?.trim() ? (
-            <p className="line-clamp-2 text-xs text-sky-800/90 whitespace-pre-line">
-              {line.detail.trim()}
-            </p>
-          ) : null}
-          <div className="mt-auto flex items-end justify-end gap-2 pt-1">
-            <div className="flex min-w-0 flex-col items-end gap-0.5">
-              {lineHasPriceAdjustment(line) && (line.listPriceUsd ?? 0) > line.unitPriceUsd ? (
-                <p className="text-muted-foreground text-[11px] leading-none line-through">
-                  {formatFromUsd(line.listPriceUsd ?? line.unitPriceUsd)} c/u
-                </p>
-              ) : lineHasPriceAdjustment(line) ? (
-                <p className="text-muted-foreground text-[11px] leading-none">
-                  Lista {formatFromUsd(line.listPriceUsd ?? line.unitPriceUsd)} c/u
-                </p>
-              ) : null}
-              <p className="tabular-nums leading-none">
-                <CartLineSubtotal line={line} />
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 export function VentasOrderCart({
@@ -416,19 +78,22 @@ export function VentasOrderCart({
   const [draftPrice, setDraftPrice] = useState('')
   const [discountOpen, setDiscountOpen] = useState(false)
   const [draftDiscount, setDraftDiscount] = useState('')
-  const priceDecimals = displayCurrency === 'USD' ? 4 : 6
+  const priceDecimals = cartPriceDecimals(displayCurrency)
   const priceLine = lines.find((line) => line.key === priceLineKey) ?? null
   const measuredLine = lines.find((line) => line.key === measuredLineKey) ?? null
   const appliedDiscount = clampInvoiceDiscountUsd(subtotalUsd, discountUsd)
   const hasInvoiceDiscount = appliedDiscount > 0.0001
 
   function formatDraftFromUsd(amountUsd: number) {
-    return Number(fromUsdAmount(amountUsd, displayCurrency).toFixed(priceDecimals)).toString()
+    return usdToPriceDraft(
+      amountUsd,
+      (usd) => fromUsdAmount(usd, displayCurrency),
+      priceDecimals
+    )
   }
 
   function parseDraftToUsd(value: string) {
-    const parsedDisplay = parseDecimalInput(value, priceDecimals) ?? 0
-    return Math.max(0, Number(toUsdAmount(parsedDisplay, displayCurrency).toFixed(4)))
+    return priceDraftToUsd(value, (amount) => toUsdAmount(amount, displayCurrency), priceDecimals)
   }
 
   function openPriceModal(line: VentasCartLine) {
@@ -452,8 +117,7 @@ export function VentasOrderCart({
     if (!priceLine) {
       return
     }
-    const listPrice = priceLine.listPriceUsd ?? priceLine.unitPriceUsd
-    setDraftPrice(formatDraftFromUsd(Math.max(0, listPrice * (1 - pct / 100))))
+    setDraftPrice(formatDraftFromUsd(percentOffPriceUsd(cartLineListPrice(priceLine), pct)))
   }
 
   function openDiscountModal() {
@@ -467,7 +131,7 @@ export function VentasOrderCart({
   }
 
   function applyInvoicePercentOff(pct: number) {
-    setDraftDiscount(formatDraftFromUsd(Math.max(0, subtotalUsd * (pct / 100))))
+    setDraftDiscount(formatDraftFromUsd(percentOfSubtotalUsd(subtotalUsd, pct)))
   }
 
   return (
@@ -521,7 +185,7 @@ export function VentasOrderCart({
           <p className="text-muted-foreground py-6 text-center text-sm">{emptyMessage}</p>
         ) : (
           lines.map((line) => (
-            <CartLineItem
+            <VentasCartLineItem
               key={line.key}
               line={line}
               onRemoveLine={onRemoveLine}
@@ -601,119 +265,34 @@ export function VentasOrderCart({
         }}
       />
 
-      <Dialog open={priceLine != null} onOpenChange={(open) => !open && setPriceLineKey(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Precio de venta</DialogTitle>
-          </DialogHeader>
-          {priceLine ? (
-            <div className="space-y-3">
-              <p className="text-muted-foreground text-sm">{priceLine.name}</p>
-              <div className="space-y-1.5">
-                <Label htmlFor={`cart-price-${priceLine.key}`}>
-                  Precio unitario ({symbol(displayCurrency)})
-                </Label>
-                <MoneyInput
-                  id={`cart-price-${priceLine.key}`}
-                  min={0}
-                  decimals={priceDecimals}
-                  value={draftPrice}
-                  onChange={(e) => setDraftPrice(e.target.value)}
-                />
-                <p className="text-muted-foreground text-xs">
-                  Precio de lista: {formatFromUsd(priceLine.listPriceUsd ?? priceLine.unitPriceUsd)}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {[5, 10, 20].map((pct) => (
-                  <Button
-                    key={pct}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyLinePercentOff(pct)}
-                  >
-                    -{pct}%
-                  </Button>
-                ))}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    setDraftPrice(
-                      formatDraftFromUsd(priceLine.listPriceUsd ?? priceLine.unitPriceUsd)
-                    )
-                  }
-                >
-                  Precio lista
-                </Button>
-              </div>
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setPriceLineKey(null)}>
-              Cancelar
-            </Button>
-            <Button type="button" onClick={applyLinePrice}>
-              Aplicar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CartLinePriceDialog
+        line={priceLine}
+        currencySymbol={symbol(displayCurrency)}
+        decimals={priceDecimals}
+        draftPrice={draftPrice}
+        listPriceLabel={priceLine ? formatFromUsd(cartLineListPrice(priceLine)) : ''}
+        onDraftPriceChange={setDraftPrice}
+        onPercentOff={applyLinePercentOff}
+        onUseListPrice={() => {
+          if (priceLine) setDraftPrice(formatDraftFromUsd(cartLineListPrice(priceLine)))
+        }}
+        onApply={applyLinePrice}
+        onClose={() => setPriceLineKey(null)}
+      />
 
-      <Dialog open={discountOpen} onOpenChange={setDiscountOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Descuento de factura</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-muted-foreground text-sm">Subtotal: {formatFromUsd(subtotalUsd)}</p>
-            <div className="space-y-1.5">
-              <Label htmlFor="invoice-discount">Descuento ({symbol(displayCurrency)})</Label>
-              <MoneyInput
-                id="invoice-discount"
-                min={0}
-                decimals={priceDecimals}
-                value={draftDiscount}
-                onChange={(e) => setDraftDiscount(e.target.value)}
-              />
-              <p className="text-muted-foreground text-xs">
-                Total: {formatFromUsd(Math.max(0, subtotalUsd - parseDraftToUsd(draftDiscount)))}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {[5, 10, 20].map((pct) => (
-                <Button
-                  key={pct}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => applyInvoicePercentOff(pct)}
-                >
-                  -{pct}%
-                </Button>
-              ))}
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setDraftDiscount(formatDraftFromUsd(0))}
-              >
-                Quitar
-              </Button>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setDiscountOpen(false)}>
-              Cancelar
-            </Button>
-            <Button type="button" onClick={applyInvoiceDiscountAmount}>
-              Aplicar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <InvoiceDiscountDialog
+        open={discountOpen}
+        onOpenChange={setDiscountOpen}
+        currencySymbol={symbol(displayCurrency)}
+        decimals={priceDecimals}
+        draftDiscount={draftDiscount}
+        subtotalLabel={formatFromUsd(subtotalUsd)}
+        totalLabel={formatFromUsd(Math.max(0, subtotalUsd - parseDraftToUsd(draftDiscount)))}
+        onDraftDiscountChange={setDraftDiscount}
+        onPercentOff={applyInvoicePercentOff}
+        onRemove={() => setDraftDiscount(formatDraftFromUsd(0))}
+        onApply={applyInvoiceDiscountAmount}
+      />
     </div>
   )
 }
