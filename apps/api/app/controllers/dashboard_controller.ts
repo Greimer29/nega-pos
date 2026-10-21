@@ -56,7 +56,7 @@ export default class DashboardControleler {
   }
 
   async dailyExpenses({ serialize }: HttpContext) {
-    const data = await this.service.gastosDelDiaDetalle()
+    const data = await this.service.gastosDelTurnoDetalle()
 
     return serialize({
       date: data.date,

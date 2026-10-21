@@ -13,6 +13,7 @@ import Formula from '#models/formula'
 import FormulaMaterial from '#models/formula_material'
 import Currency from '#models/currency'
 import SalePayment from '#models/sale_payment'
+import SalesShift from '#models/sales_shift'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
 import {
@@ -538,6 +539,61 @@ test.group('Dashboard API', (group) => {
     assert.equal(body.data.summary.gastos_cantidad, 2)
     assert.equal(body.data.summary.gastos_monto_usd, '10.0000')
     assert.lengthOf(body.data.items, 2)
+  })
+
+  test('GET /api/v1/dashboard/daily-expenses lists every date of the open shift like the KPI', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const hoy = DateTime.fromISO(todayIsoDate())
+
+    const shift = await SalesShift.findOrFail(openShiftId)
+    shift.openedAt = DateTime.now().minus({ days: 1 })
+    await shift.save()
+
+    await Expense.create({
+      date: hoy,
+      description: 'Gasto de hoy',
+      amountUsd: '4.0000',
+      currencyCode: 'XAU',
+    })
+    await Expense.create({
+      date: hoy.minus({ days: 1 }),
+      description: 'Gasto de ayer en el turno',
+      amountUsd: '3.0000',
+      currencyCode: 'XAU',
+    })
+    await Expense.create({
+      date: hoy.minus({ days: 2 }),
+      description: 'Gasto anterior al turno',
+      amountUsd: '50.0000',
+      currencyCode: 'XAU',
+    })
+
+    const response = await client.get('/api/v1/dashboard/daily-expenses').loginAs(user)
+    const overview = await client.get('/api/v1/dashboard/overview').loginAs(user)
+
+    response.assertStatus(200)
+    overview.assertStatus(200)
+    const body = response.body() as {
+      data: {
+        items: Array<{ description: string; amount_usd: string }>
+        summary: { gastos_cantidad: number; gastos_monto_usd: string }
+      }
+    }
+    const kpi = overview.body() as {
+      data: { ventasDelDia: { gastosCantidad: number; gastosMontoUsd: string } }
+    }
+
+    assert.sameMembers(
+      body.data.items.map((item) => item.description),
+      ['Gasto de hoy', 'Gasto de ayer en el turno']
+    )
+    assert.equal(body.data.summary.gastos_cantidad, 2)
+    assert.equal(body.data.summary.gastos_monto_usd, '7.0000')
+    assert.equal(kpi.data.ventasDelDia.gastosCantidad, body.data.summary.gastos_cantidad)
+    assert.equal(kpi.data.ventasDelDia.gastosMontoUsd, body.data.summary.gastos_monto_usd)
   })
 
   test('GET /api/v1/dashboard/overview converts machine expenses in VES to USD', async ({

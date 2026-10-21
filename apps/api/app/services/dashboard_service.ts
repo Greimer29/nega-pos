@@ -890,6 +890,16 @@ export default class DashboardService {
     }
   }
 
+  /** Same dates as the open-shift KPI (`ventasDelDia.gastos*`); today when no shift is open. */
+  async gastosDelTurnoDetalle(): Promise<DailyExpensesResult> {
+    const shift = await this.salesShiftService.current()
+    if (!shift) {
+      return this.gastosDelDiaDetalle()
+    }
+
+    return this.gastosDelDiaDetalleForDates(this.salesShiftService.calendarDatesForShift(shift))
+  }
+
   async gastosDelDiaDetalle(dateInput?: string): Promise<DailyExpensesResult> {
     const date = this.resolveDashboardDate(dateInput)
     const rates = await this.currencyService.getActiveRates()
