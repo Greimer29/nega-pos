@@ -14,7 +14,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
-import { seedOpenSalesShift } from '#tests/helpers/seed_test_sale'
+import { seedOpenSalesShift, seedTestSale } from '#tests/helpers/seed_test_sale'
 import { seedReferenceData } from '#tests/helpers/seed_reference_data'
 import { nowInAppZone } from '#utils/app_timezone'
 
@@ -1381,6 +1381,75 @@ test.group('Ventas API — catálogo y ventas', (group) => {
     assert.equal(catalog.stockQuantity, '2.000')
   })
 
+  test('POST /sales/:id/transition rejects FAST, backwards and returned sales with 409', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const catalog = await CatalogProduct.create({
+      name: 'Producto transiciones',
+      category: 'Uniforme',
+      salePriceUsd: '15.0000',
+      costUsd: '5.0000',
+      stockQuantity: '10.000',
+      active: true,
+    })
+
+    async function createSale(billingMode: 'FAST' | 'ORDER') {
+      const response = await client
+        .post('/api/v1/sales')
+        .loginAs(user)
+        .json({
+          confirm: true,
+          guest_name: `Pedido ${billingMode}`,
+          payment_method_code: 'cash_usd',
+          billing_mode: billingMode,
+          payment_type: 'CASH',
+          lines: [{ catalog_product_id: Number(catalog.id), quantity: 1, unit_price_usd: 15 }],
+        })
+      response.assertStatus(200)
+      return response.body().data.sale.id as number
+    }
+
+    const fastSaleId = await createSale('FAST')
+    const fastTransition = await client
+      .post(`/api/v1/sales/${fastSaleId}/transition`)
+      .loginAs(user)
+      .json({ order_status: 'IN_PROCESS' })
+    fastTransition.assertStatus(409)
+    assert.equal(fastTransition.body().error.code, 'TRANSICION_INVALIDA')
+
+    const orderSaleId = await createSale('ORDER')
+    await client
+      .post(`/api/v1/sales/${orderSaleId}/transition`)
+      .loginAs(user)
+      .json({ order_status: 'DELIVERED' })
+      .then((response) => response.assertStatus(200))
+
+    const backwards = await client
+      .post(`/api/v1/sales/${orderSaleId}/transition`)
+      .loginAs(user)
+      .json({ order_status: 'IN_PROCESS' })
+    backwards.assertStatus(409)
+    assert.equal(backwards.body().error.code, 'TRANSICION_INVALIDA')
+
+    const returnedSaleId = await createSale('ORDER')
+    await client
+      .post(`/api/v1/sales/${returnedSaleId}/return`)
+      .loginAs(user)
+      .then((response) => response.assertStatus(200))
+
+    const afterReturn = await client
+      .post(`/api/v1/sales/${returnedSaleId}/transition`)
+      .loginAs(user)
+      .json({ order_status: 'IN_PROCESS' })
+    afterReturn.assertStatus(409)
+    assert.equal(afterReturn.body().error.code, 'TRANSICION_INVALIDA')
+
+    const stillPending = await client.get(`/api/v1/sales/${returnedSaleId}`).loginAs(user)
+    assert.equal(stillPending.body().data.sale.order_status, 'PENDING')
+  })
+
   test('POST sale CREDIT leaves balance_usd pending', async ({ client, assert }) => {
     const user = await User.findByOrFail('email', TEST_EMAIL)
     const customer = await seedCustomer()
@@ -1752,6 +1821,68 @@ test.group('Ventas API — catálogo y ventas', (group) => {
     const februaryIds = februaryOnly.body().data.sales.map((sale: { id: number }) => sale.id)
     assert.include(februaryIds, secondId)
     assert.notInclude(februaryIds, firstId)
+  })
+
+  test('GET /sales filters by search, status, customer and Caracas calendar day', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const customer = await Customer.create({
+      name: 'Bodega Tía Rosa',
+      type: 'CORPORATE',
+      active: true,
+    })
+
+    // 22:30 del 15/10 en Caracas = 02:30 UTC del 16/10.
+    const lateNight = await seedTestSale({
+      code: '0000009001',
+      customerId: Number(customer.id),
+      soldAt: DateTime.fromISO('2026-10-16T02:30:00Z'),
+      totalUsd: '10.0000',
+      lines: [{ quantity: '1', unitPriceUsd: '10.0000' }],
+    })
+    // 00:30 del 16/10 en Caracas = 04:30 UTC del 16/10.
+    const earlyMorning = await seedTestSale({
+      code: '0000009002',
+      guestName: 'Walk-in Mañana',
+      soldAt: DateTime.fromISO('2026-10-16T04:30:00Z'),
+      totalUsd: '5.0000',
+      lines: [{ quantity: '1', unitPriceUsd: '5.0000' }],
+    })
+    const returned = await seedTestSale({
+      code: '0000009003',
+      guestName: 'Cliente devuelto',
+      status: 'RETURNED',
+      soldAt: DateTime.fromISO('2026-10-16T15:00:00Z'),
+      totalUsd: '0.0000',
+      lines: [{ quantity: '1', unitPriceUsd: '7.0000', returnedQuantity: '1' }],
+    })
+
+    async function listIds(qs: Record<string, string | number>) {
+      const response = await client.get('/api/v1/sales').loginAs(user).qs(qs)
+      response.assertStatus(200)
+      return response.body().data.sales.map((sale: { id: number }) => sale.id) as number[]
+    }
+
+    const day15 = await listIds({ date_from: '2026-10-15', date_to: '2026-10-15' })
+    assert.deepEqual(day15, [Number(lateNight.id)])
+
+    const day16 = await listIds({ date_from: '2026-10-16', date_to: '2026-10-16' })
+    assert.sameMembers(day16, [Number(earlyMorning.id), Number(returned.id)])
+
+    assert.deepEqual(await listIds({ search: '9002' }), [Number(earlyMorning.id)])
+    assert.deepEqual(await listIds({ search: 'mañana' }), [Number(earlyMorning.id)])
+    assert.deepEqual(await listIds({ search: 'Tía Rosa' }), [Number(lateNight.id)])
+    assert.deepEqual(await listIds({ customer_id: Number(customer.id) }), [Number(lateNight.id)])
+    assert.deepEqual(await listIds({ status: 'RETURNED' }), [Number(returned.id)])
+    assert.sameMembers(await listIds({ exclude_status: 'RETURNED' }), [
+      Number(lateNight.id),
+      Number(earlyMorning.id),
+    ])
+
+    const ordered = await listIds({})
+    assert.deepEqual(ordered, [Number(returned.id), Number(earlyMorning.id), Number(lateNight.id)])
   })
 
   test('POST /sales/:id/confirm accepts split payments that sum to the total', async ({

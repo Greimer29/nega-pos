@@ -4,29 +4,27 @@ import LineaVentaInvalidaException from '#exceptions/linea_venta_invalida_except
 import MaterialNoEncontradoException from '#exceptions/material_no_encontrado_exception'
 import OrderNoDevolvableException from '#exceptions/pedido_no_devolvable_exception'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
-import TransicionInvalidaException from '#exceptions/transicion_invalida_exception'
 import VentaNoEditableException from '#exceptions/venta_no_editable_exception'
 import VentaNoEncontradaException from '#exceptions/venta_no_encontrada_exception'
 import { isCatalogService } from '#constants/catalog_item_kind'
 import CatalogProduct from '#models/catalog_product'
 import Customer from '#models/customer'
-import InventoryMovement from '#models/inventory_movement'
 import Material from '#models/material'
-import ProductInventoryMovement from '#models/product_inventory_movement'
 import Sale from '#models/sale'
 import SaleLine from '#models/sale_line'
 import SalesShift from '#models/sales_shift'
 import CatalogProductSizeService from '#services/catalog_product_size_service'
 import SaleCodigoService from '#services/sale_code_service'
 import SalesShiftService from '#services/sales_shift_service'
-import ProductInventoryService from '#services/product_inventory_service'
 import SaleLineService, { type ResolvedSaleLine } from '#services/sale_line_service'
+import { assertSaleOrderTransition, type SaleOrderStatus } from '#services/sale_order_state_machine'
 import SalePaymentService from '#services/sale_payment_service'
+import SaleQueryService from '#services/sale_query_service'
+import SaleReturnService from '#services/sale_return_service'
 import SaleStockService from '#services/sale_stock_service'
 import {
   assertFormulaMaterialsAllowed,
   normalizeFormulaMaterialsInput,
-  resolveEffectiveFormulaMaterials,
   type SaleLineFormulaMaterialInput,
 } from '#services/sale_line_formula'
 import {
@@ -35,23 +33,19 @@ import {
 } from '#constants/inventory_units'
 import { formatSaleNativeTotal } from '#utils/currency_amount'
 import { applyInvoiceDiscount } from '#utils/invoice_discount'
-import { calculateSaleReturnAmounts } from '#utils/sale_return_amounts'
 import type { SalePaymentLineInput } from '#utils/sale_payment_lines'
 import { resolveSaleReturnRequests, type SaleReturnLineInput } from '#utils/sale_return_requests'
-import { calculateProductReturnStockQuantity } from '#utils/sale_return_stock'
 import { resolveMaterialSaleLineCost, resolveProductSaleLineCost } from '#utils/sale_line_cost'
 import { calculateSaleLineAmounts, normalizeSaleLineKitchenNote } from '#utils/sale_line_values'
-import { datetimeRangeUtcSql, dayStartUtcSql } from '#utils/app_timezone'
 import ConfiguracionMayoristaInvalidaException from '#exceptions/configuracion_mayorista_invalida_exception'
-import { lineInventoryQuantity, resolveWholesaleLineSnapshot } from '#utils/wholesale'
+import { resolveWholesaleLineSnapshot } from '#utils/wholesale'
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
-import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 export type SaleBillingMode = 'FAST' | 'ORDER'
-export type SaleOrderStatus = 'PENDING' | 'IN_PROCESS' | 'DELIVERED'
+export type { SaleOrderStatus }
 export type SalePaymentType = 'CASH' | 'CREDIT'
 export type SaleStatus = 'DRAFT' | 'COMPLETED' | 'RETURNED'
 
@@ -123,111 +117,23 @@ export type OfflineSyncSaleInput = {
   sold_by_user_id?: number | null
 }
 
-export type ListSalesFilters = {
-  page?: number
-  perPage?: number
-  customer_id?: number
-  status?: SaleStatus
-  exclude_status?: SaleStatus
-  search?: string
-  date_from?: string
-  date_to?: string
-}
-
 type ResolvedLineResult = {
   line: ResolvedSaleLine
   subtotalUsd: number
 }
 
-const ORDER_STATUS_TRANSITIONS: Record<SaleOrderStatus, SaleOrderStatus[]> = {
-  PENDING: ['IN_PROCESS', 'DELIVERED'],
-  IN_PROCESS: ['DELIVERED'],
-  DELIVERED: [],
-}
-
 export default class SaleService {
   private codeService = new SaleCodigoService()
-  private productInventoryService = new ProductInventoryService()
   private sizeService = new CatalogProductSizeService()
   private salesShiftService = new SalesShiftService()
   private saleLineService = new SaleLineService()
   private salePaymentService = new SalePaymentService()
+  private saleQueryService = new SaleQueryService()
+  private saleReturnService = new SaleReturnService()
   private saleStockService = new SaleStockService()
 
   previewNextCode(): Promise<string> {
     return this.codeService.preview()
-  }
-
-  async listar(filters: ListSalesFilters = {}): Promise<ModelPaginatorContract<Sale>> {
-    const page = filters.page ?? 1
-    const perPage = filters.perPage ?? 20
-
-    const query = Sale.query()
-      .preload('customer')
-      .preload('paymentMethod')
-      .orderBy('soldAt', 'desc')
-      .orderBy('id', 'desc')
-
-    if (filters.customer_id) {
-      query.where('customerId', filters.customer_id)
-    }
-
-    if (filters.status) {
-      query.where('status', filters.status)
-    }
-
-    if (filters.exclude_status) {
-      query.whereNot('status', filters.exclude_status)
-    }
-
-    if (filters.search?.trim()) {
-      const term = `%${filters.search.trim()}%`
-      query.where((builder) => {
-        builder
-          .whereILike('code', term)
-          .orWhereILike('guestName', term)
-          .orWhereHas('customer', (customerQuery) => {
-            customerQuery.whereILike('name', term)
-          })
-      })
-    }
-
-    if (filters.date_from) {
-      query.where('soldAt', '>=', dayStartUtcSql(filters.date_from))
-    }
-
-    if (filters.date_to) {
-      const { toExclusiveSql } = datetimeRangeUtcSql(filters.date_to, filters.date_to)
-      query.where('soldAt', '<', toExclusiveSql)
-    }
-
-    return query.paginate(page, perPage)
-  }
-
-  async obtenerDetalle(id: number): Promise<Sale> {
-    const sale = await Sale.query()
-      .where('id', id)
-      .preload('customer')
-      .preload('paymentMethod')
-      .preload('soldBy')
-      .preload('salePayments', (q) => {
-        q.preload('paymentMethod').orderBy('sortOrder', 'asc').orderBy('id', 'asc')
-      })
-      .preload('saleLines', (q) => {
-        q.preload('catalogProduct', (cp) =>
-          cp.preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
-        )
-          .preload('material')
-          .preload('saleLineMaterials', (slm) => slm.preload('material'))
-          .orderBy('id', 'asc')
-      })
-      .first()
-
-    if (!sale) {
-      throw new VentaNoEncontradaException()
-    }
-
-    return sale
   }
 
   async crear(input: CreateSaleInput): Promise<Sale> {
@@ -302,7 +208,7 @@ export default class SaleService {
   }
 
   async actualizar(id: number, input: UpdateSaleInput): Promise<Sale> {
-    const sale = await this.obtenerDetalle(id)
+    const sale = await this.saleQueryService.obtenerDetalle(id)
 
     if (sale.status !== 'DRAFT') {
       throw new VentaNoEditableException()
@@ -382,7 +288,7 @@ export default class SaleService {
   }
 
   async eliminar(id: number): Promise<{ id: number; eliminado: true }> {
-    const sale = await this.obtenerDetalle(id)
+    const sale = await this.saleQueryService.obtenerDetalle(id)
 
     if (sale.status !== 'DRAFT') {
       throw new VentaNoEditableException()
@@ -483,7 +389,10 @@ export default class SaleService {
 
     const existing = await Sale.query().where('offlineClientId', offlineClientId).first()
     if (existing) {
-      return { sale: await this.obtenerDetalle(Number(existing.id)), alreadySynced: true }
+      return {
+        sale: await this.saleQueryService.obtenerDetalle(Number(existing.id)),
+        alreadySynced: true,
+      }
     }
 
     if (input.lines.length === 0) {
@@ -597,7 +506,7 @@ export default class SaleService {
       return { saleId: Number(hydrated.id), alreadySynced: false as const }
     })
 
-    const sale = await this.obtenerDetalle(result.saleId)
+    const sale = await this.saleQueryService.obtenerDetalle(result.saleId)
     if (!result.alreadySynced) {
       broadcastCompanyEvent('sale.changed')
     }
@@ -616,20 +525,7 @@ export default class SaleService {
         throw new VentaNoEncontradaException()
       }
 
-      if (sale.status !== 'COMPLETED') {
-        throw new TransicionInvalidaException(sale.status, orderStatus)
-      }
-
-      if (sale.billingMode !== 'ORDER') {
-        throw new TransicionInvalidaException(sale.orderStatus, orderStatus)
-      }
-
-      const current = sale.orderStatus as SaleOrderStatus
-      const allowed = ORDER_STATUS_TRANSITIONS[current] ?? []
-
-      if (!allowed.includes(orderStatus)) {
-        throw new TransicionInvalidaException(current, orderStatus)
-      }
+      assertSaleOrderTransition(sale, orderStatus)
 
       sale.orderStatus = orderStatus
       sale.useTransaction(trx)
@@ -726,58 +622,10 @@ export default class SaleService {
         line.useTransaction(trx)
         await line.save()
 
-        if (line.catalogProductId) {
-          const product =
-            line.catalogProduct ??
-            (await CatalogProduct.query({ client: trx })
-              .where('id', Number(line.catalogProductId))
-              .first())
-
-          if (product && isCatalogService(product)) {
-            continue
-          }
-
-          const inventoryReturnQty = lineInventoryQuantity(
-            returnQty,
-            Boolean(line.isWholesale),
-            line.unitsPerPack
-          )
-          await this.revertirStockProductoParcial(
-            Number(sale.id),
-            Number(line.catalogProductId),
-            inventoryReturnQty,
-            trx,
-            note
-          )
-          if (line.catalogProductSizeId) {
-            await this.sizeService.restoreSizeStock(
-              Number(line.catalogProductSizeId),
-              inventoryReturnQty,
-              trx
-            )
-          }
-          await this.revertirMaterialesLineaParcial(sale, line, inventoryReturnQty, trx, note)
-        }
-
-        if (line.materialId) {
-          const inventoryReturnQty = lineInventoryQuantity(
-            returnQty,
-            Boolean(line.isWholesale),
-            line.unitsPerPack
-          )
-          await InventoryMovement.create(
-            {
-              materialId: Number(line.materialId),
-              type: 'REVERSAL_ADJUSTMENT',
-              quantity: formatInventoryQuantityForStorage(inventoryReturnQty, unit),
-              note,
-            },
-            { client: trx }
-          )
-        }
+        await this.saleReturnService.restoreLineInventory(sale, line, returnQty, unit, trx, note)
       }
 
-      await this.actualizarMontosTrasDevolucion(sale, trx)
+      await this.saleReturnService.recalculateAmounts(sale, trx)
 
       const refreshedLines = await SaleLine.query({ client: trx }).where('saleId', Number(sale.id))
       const allReturned = refreshedLines.every(
@@ -950,109 +798,5 @@ export default class SaleService {
         formulaMaterials: null,
       },
     }
-  }
-
-  private async revertirStockProductoParcial(
-    saleId: number,
-    catalogProductId: number,
-    quantity: number,
-    trx: TransactionClientContract,
-    note: string
-  ) {
-    const salidas = await ProductInventoryMovement.query({ client: trx })
-      .where('saleId', saleId)
-      .where('catalogProductId', catalogProductId)
-      .where('type', 'SALE_OUT')
-
-    const reversiones = await ProductInventoryMovement.query({ client: trx })
-      .where('saleId', saleId)
-      .where('catalogProductId', catalogProductId)
-      .where('type', 'REVERSAL_ADJUSTMENT')
-
-    const toRevert = calculateProductReturnStockQuantity(
-      salidas.map((movement) => movement.quantity),
-      reversiones.map((movement) => movement.quantity),
-      quantity
-    )
-
-    if (toRevert <= 0) {
-      return
-    }
-
-    await this.productInventoryService.registrarMovimiento(
-      {
-        catalogProductId,
-        type: 'REVERSAL_ADJUSTMENT',
-        quantity: toRevert,
-        saleId,
-        note,
-      },
-      trx
-    )
-  }
-
-  private async revertirMaterialesLineaParcial(
-    _sale: Sale,
-    line: SaleLine,
-    quantity: number,
-    trx: TransactionClientContract,
-    note: string
-  ) {
-    const product =
-      line.catalogProduct ??
-      (line.catalogProductId
-        ? await CatalogProduct.query({ client: trx })
-            .where('id', Number(line.catalogProductId))
-            .preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
-            .first()
-        : null)
-
-    if (!product?.formulaId) {
-      return
-    }
-
-    if (!line.saleLineMaterials) {
-      await line.load('saleLineMaterials', (q) => q.preload('material'))
-    }
-
-    for (const formulaItem of resolveEffectiveFormulaMaterials(line, product)) {
-      const consumo = quantity * formulaItem.quantityPerUnit
-      if (consumo <= 0) {
-        continue
-      }
-
-      await InventoryMovement.create(
-        {
-          materialId: formulaItem.materialId,
-          type: 'REVERSAL_ADJUSTMENT',
-          quantity: consumo.toFixed(3),
-          note,
-        },
-        { client: trx }
-      )
-    }
-  }
-
-  private async actualizarMontosTrasDevolucion(sale: Sale, trx: TransactionClientContract) {
-    const lines = await SaleLine.query({ client: trx }).where('saleId', Number(sale.id))
-    const amounts = calculateSaleReturnAmounts({
-      lines: lines.map((line) => ({
-        quantity: Number(line.quantity),
-        returnedQuantity: Number(line.returnedQuantity ?? 0),
-        unitPriceUsd: Number(line.unitPriceUsd),
-      })),
-      discountUsd: sale.discountUsd,
-      totalUsd: sale.totalUsd,
-      paymentType: sale.paymentType === 'CREDIT' ? 'CREDIT' : 'CASH',
-      amountPaidUsd: sale.amountPaidUsd,
-    })
-
-    sale.discountUsd = amounts.discountUsd
-    sale.totalUsd = amounts.totalUsd
-    sale.amountPaidUsd = amounts.amountPaidUsd
-    sale.balanceUsd = amounts.balanceUsd
-
-    sale.useTransaction(trx)
-    await sale.save()
   }
 }
