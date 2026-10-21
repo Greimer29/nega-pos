@@ -2,6 +2,8 @@ import Purchase from '#models/purchase'
 import PurchaseItem from '#models/purchase_item'
 import CatalogProduct from '#models/catalog_product'
 import Currency from '#models/currency'
+import Formula from '#models/formula'
+import FormulaMaterial from '#models/formula_material'
 import Material from '#models/material'
 import InventoryMovement from '#models/inventory_movement'
 import AppSetting from '#models/app_setting'
@@ -593,5 +595,43 @@ test.group('Purchases confirmar API', (group) => {
       .loginAs(user)
 
     missing.assertStatus(404)
+  })
+
+  test('POST /api/v1/purchases/:id/confirm recalculates formula costs with the purchased price', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const supplier = await seedSupplier()
+    const material = await seedMaterial({ lastPurchasePriceUsd: '1.0000' })
+    const formula = await Formula.create({ name: 'Receta compra', active: true })
+    await FormulaMaterial.create({
+      formulaId: Number(formula.id),
+      materialId: Number(material.id),
+      quantity: '2.000',
+    })
+    const product = await CatalogProduct.create({
+      name: 'Producto con receta',
+      category: 'UNIFORM',
+      salePriceUsd: '30.0000',
+      costUsd: '2.0000',
+      formulaId: Number(formula.id),
+      stockQuantity: '0.000',
+      active: true,
+    })
+    const purchase = await seedPurchaseBorrador({ supplier, material, usdRate: '36.5000' })
+
+    const response = await client.post(`/api/v1/purchases/${purchase.id}/confirm`).loginAs(user)
+
+    response.assertStatus(200)
+    await product.refresh()
+    assert.equal(product.costUsd, '44.2904')
+    const body = response.body() as {
+      data: { cost_warnings: Array<{ product_id: number; cost_usd: string }> }
+    }
+    assert.deepEqual(
+      body.data.cost_warnings.map((warning) => [warning.product_id, warning.cost_usd]),
+      [[Number(product.id), '44.2904']]
+    )
   })
 })
