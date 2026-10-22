@@ -24,17 +24,17 @@ export function DashboardDailyExpensesPage() {
             Dashboard
           </Link>
         </Button>
-        <h1 className="text-2xl font-semibold tracking-tight">Gastos del día</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Gastos del turno</h1>
         <p className="text-muted-foreground text-sm capitalize">{todayLabel()}</p>
       </div>
 
       {isLoading ? (
         <div className="text-muted-foreground flex items-center justify-center gap-2 py-24 text-sm">
           <Loader2 className="size-4 animate-spin" />
-          Cargando gastos del día…
+          Cargando gastos del turno…
         </div>
       ) : isError ? (
-        <QueryErrorState isError error={error} title="No se pudieron cargar los gastos del día" />
+        <QueryErrorState isError error={error} title="No se pudieron cargar los gastos del turno" />
       ) : !data ? (
         <p className="text-muted-foreground py-24 text-center text-sm">
           No se recibió información del reporte. Intentá actualizar la página.
