@@ -402,16 +402,6 @@
     ],
     "products": [
       {
-        "name": "Arroz",
-        "category": "Víveres",
-        "sale_unit": "UND",
-        "image_path": null,
-        "stock_quantity": "50.000",
-        "quantity_sold": 10,
-        "unit_price_usd": "1.5000",
-        "total_usd": "15.0000"
-      },
-      {
         "name": "Aceite",
         "category": "Víveres",
         "sale_unit": "UND",
@@ -419,6 +409,16 @@
         "stock_quantity": "1.000",
         "quantity_sold": 3,
         "unit_price_usd": "5.0000",
+        "total_usd": "15.0000"
+      },
+      {
+        "name": "Arroz",
+        "category": "Víveres",
+        "sale_unit": "UND",
+        "image_path": null,
+        "stock_quantity": "50.000",
+        "quantity_sold": 10,
+        "unit_price_usd": "1.5000",
         "total_usd": "15.0000"
       }
     ],

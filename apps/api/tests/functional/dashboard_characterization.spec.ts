@@ -263,6 +263,19 @@ async function seedDataset(userId: number) {
   return { shiftId }
 }
 
+/**
+ * Products are sorted by total only; MySQL returns tied rows in no fixed order,
+ * so ties are broken by name to keep the snapshot stable across machines.
+ */
+function sortProductsByTotalThenName(products: unknown[]): unknown[] {
+  return [...products].sort((a, b) => {
+    const left = a as { total_usd?: string; name?: string }
+    const right = b as { total_usd?: string; name?: string }
+    const byTotal = Number(right.total_usd ?? 0) - Number(left.total_usd ?? 0)
+    return byTotal !== 0 ? byTotal : String(left.name ?? '').localeCompare(String(right.name ?? ''))
+  })
+}
+
 /** Database ids change on every run; the snapshot keeps everything else. */
 function normalize(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -271,7 +284,12 @@ function normalize(value: unknown): unknown {
   if (value && typeof value === 'object') {
     const entries = Object.entries(value as Record<string, unknown>)
       .filter(([key]) => !['id', 'sale_id'].includes(key))
-      .map(([key, entry]) => [key, normalize(entry)])
+      .map(([key, entry]) => [
+        key,
+        key === 'products' && Array.isArray(entry)
+          ? normalize(sortProductsByTotalThenName(entry))
+          : normalize(entry),
+      ])
     return Object.fromEntries(entries)
   }
   return value
