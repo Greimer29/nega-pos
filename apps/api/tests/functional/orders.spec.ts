@@ -7,6 +7,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
 import { DateTime } from 'luxon'
 import { test } from '@japa/runner'
+import { nowInAppZone } from '#utils/app_timezone'
 
 const TEST_EMAIL = 'test-orders@negapos.local'
 const TEST_PASSWORD = 'password123'
@@ -326,6 +327,202 @@ test.group('Orders API', (group) => {
         },
       },
     })
+  })
+
+  test('POST /api/v1/orders/:id/transition sets cash or credit balance on confirm', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const product = await CatalogProduct.create({
+      name: 'Camisa pedido',
+      category: 'UNIFORM',
+      salePriceUsd: '15.0000',
+      stockQuantity: '20.000',
+      active: true,
+    })
+
+    async function seedDraft(code: string, creditDays: number) {
+      const customer = await Customer.create({
+        name: `Cliente ${code}`,
+        type: 'CORPORATE',
+        creditDays,
+        active: true,
+      })
+      const order = await Order.create({
+        code,
+        customerId: customer.id,
+        modality: 'CORPORATE',
+        description: 'Camisas',
+        totalQuantity: 3,
+        orderDate: DateTime.fromISO('2026-05-01'),
+        status: 'DRAFT',
+      })
+      await OrderLine.create({
+        orderId: Number(order.id),
+        catalogProductId: Number(product.id),
+        quantity: '3.000',
+        unitPriceUsd: '15.0000',
+        subtotalUsd: '45.0000',
+      })
+      return order
+    }
+
+    const cashOrder = await seedDraft('PED-202605-0300', 0)
+    const cash = await client
+      .post(`/api/v1/orders/${cashOrder.id}/transition`)
+      .loginAs(user)
+      .json({ new_status: 'CONFIRMED', payment_type: 'CASH' })
+    cash.assertStatus(200)
+    await cashOrder.refresh()
+    assert.equal(cashOrder.paymentType, 'CASH')
+    assert.equal(cashOrder.amountPaidUsd, '45.0000')
+    assert.equal(cashOrder.balanceUsd, '0.0000')
+    assert.isNull(cashOrder.creditDueDate)
+
+    const creditOrder = await seedDraft('PED-202605-0301', 10)
+    const credit = await client
+      .post(`/api/v1/orders/${creditOrder.id}/transition`)
+      .loginAs(user)
+      .json({ new_status: 'CONFIRMED', payment_type: 'CREDIT' })
+    credit.assertStatus(200)
+    await creditOrder.refresh()
+    assert.equal(creditOrder.paymentType, 'CREDIT')
+    assert.equal(creditOrder.amountPaidUsd, '0.0000')
+    assert.equal(creditOrder.balanceUsd, '45.0000')
+    assert.equal(
+      creditOrder.creditDueDate?.toISODate(),
+      nowInAppZone().plus({ days: 10 }).toISODate()
+    )
+
+    const noCreditOrder = await seedDraft('PED-202605-0302', 0)
+    const rejected = await client
+      .post(`/api/v1/orders/${noCreditOrder.id}/transition`)
+      .loginAs(user)
+      .json({ new_status: 'CONFIRMED', payment_type: 'CREDIT' })
+    rejected.assertStatus(422)
+    assert.equal(rejected.body().error.code, 'E_CLIENTE_SIN_CREDITO')
+    await noCreditOrder.refresh()
+    assert.equal(noCreditOrder.status, 'DRAFT')
+
+    await product.refresh()
+    assert.equal(product.stockQuantity, '14.000')
+  })
+
+  test('GET /api/v1/orders filters by Caracas day, draft order_date, product search and sort', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const customer = await seedCustomer()
+    const product = await CatalogProduct.create({
+      name: 'Chemise bordada',
+      category: 'UNIFORM',
+      salePriceUsd: '10.0000',
+      stockQuantity: '0.000',
+      active: true,
+    })
+
+    // 22:30 del 15/10 en Caracas = 02:30 UTC del 16/10.
+    const lateNight = await Order.create({
+      code: 'PED-202610-0001',
+      customerId: customer.id,
+      modality: 'CORPORATE',
+      description: 'Confirmado de noche',
+      totalQuantity: 1,
+      orderDate: DateTime.fromISO('2026-10-15'),
+      confirmedAt: DateTime.fromISO('2026-10-16T02:30:00Z'),
+      status: 'CONFIRMED',
+    })
+    await OrderLine.create({
+      orderId: Number(lateNight.id),
+      catalogProductId: Number(product.id),
+      quantity: '1.000',
+      unitPriceUsd: '10.0000',
+      subtotalUsd: '10.0000',
+    })
+    const draft = await Order.create({
+      code: 'PED-202610-0002',
+      customerId: customer.id,
+      modality: 'CORPORATE',
+      description: 'Borrador sin confirmar',
+      totalQuantity: 1,
+      orderDate: DateTime.fromISO('2026-10-16'),
+      status: 'DRAFT',
+    })
+
+    async function listCodes(qs: Record<string, string>) {
+      const response = await client.get('/api/v1/orders').loginAs(user).qs(qs)
+      response.assertStatus(200)
+      return response.body().data.orders.map((order: { code: string }) => order.code) as string[]
+    }
+
+    assert.deepEqual(await listCodes({ date_from: '2026-10-15', date_to: '2026-10-15' }), [
+      lateNight.code,
+    ])
+    assert.deepEqual(await listCodes({ date_from: '2026-10-16', date_to: '2026-10-16' }), [
+      draft.code,
+    ])
+    assert.deepEqual(await listCodes({ search: 'bordada' }), [lateNight.code])
+    assert.deepEqual(await listCodes({ sort_by: 'code', direction: 'asc' }), [
+      lateNight.code,
+      draft.code,
+    ])
+    assert.deepEqual(await listCodes({ sort_by: 'code', direction: 'desc' }), [
+      draft.code,
+      lateNight.code,
+    ])
+  })
+
+  test('GET /api/v1/orders/:id/budget sums line subtotals and 404s for missing orders', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    const customer = await seedCustomer()
+    const product = await CatalogProduct.create({
+      name: 'Pantalón',
+      category: 'UNIFORM',
+      salePriceUsd: '12.0000',
+      stockQuantity: '0.000',
+      active: true,
+    })
+    const order = await Order.create({
+      code: 'PED-202610-0010',
+      customerId: customer.id,
+      modality: 'CORPORATE',
+      description: 'Presupuesto',
+      totalQuantity: 5,
+      orderDate: DateTime.fromISO('2026-10-15'),
+      status: 'DRAFT',
+    })
+    await OrderLine.create({
+      orderId: Number(order.id),
+      catalogProductId: Number(product.id),
+      quantity: '2.000',
+      unitPriceUsd: '12.0000',
+      subtotalUsd: '24.0000',
+    })
+    await OrderLine.create({
+      orderId: Number(order.id),
+      catalogProductId: Number(product.id),
+      quantity: '3.000',
+      unitPriceUsd: '11.5000',
+      subtotalUsd: '34.5000',
+    })
+
+    const response = await client.get(`/api/v1/orders/${order.id}/budget`).loginAs(user)
+    response.assertStatus(200)
+    const budget = response.body().data.budget as {
+      total_usd: string
+      lines: Array<{ product_name: string; subtotal_usd: string }>
+    }
+    assert.equal(budget.total_usd, '58.5000')
+    assert.lengthOf(budget.lines, 2)
+    assert.equal(budget.lines[0].product_name, 'Pantalón')
+
+    const missing = await client.get('/api/v1/orders/999999/budget').loginAs(user)
+    missing.assertStatus(404)
   })
 
   test('POST /api/v1/orders/:id/transition rejects invalid transition', async ({ client }) => {

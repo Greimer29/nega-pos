@@ -562,10 +562,14 @@ En multi-caja, las mutaciones relevantes emiten eventos SSE por empresa para inv
 
 **Efectos por transición:**
 
-- **DRAFT → CONFIRMED**: valida cliente/invitado y descripción; congela costos; descuenta stock de productos de líneas; aplica pago si contado.
+- **DRAFT → CONFIRMED**: valida cliente/invitado y descripción; congela costos; descuenta stock de productos de líneas; aplica pago si contado. El saldo lo fija `order_balance_service.ts` sobre la suma de `subtotal_usd` de las líneas: contado → pagado = total; crédito → saldo = total y vencimiento `hoy (America/Caracas) + credit_days` (cliente sin días de crédito → `422 E_CLIENTE_SIN_CREDITO`).
 - **DRAFT → DELIVERED**: igual que confirmar + pasa a producción (descuento de materiales vía fórmulas/`order_materials`).
 - **CONFIRMED → IN_PRODUCTION**: descuenta materiales (`ORDER_OUT`); puede advertir si falta stock (`force` opcional).
 - **→ CANCELLED** desde CONFIRMED/IN_PRODUCTION: revierte movimientos y stock de productos.
+
+**Consultas:** `order_query_service.ts` concentra `listar` (filtros `customer_id`, `status`, `exclude_status`, `modality`, `search` por código / descripción / cliente / nombre de producto; `date_from` / `date_to` por día `America/Caracas` sobre `confirmed_at`, y por `order_date` en pedidos sin confirmar; orden `sort_by` + `direction`), `obtener`, `obtenerDetalle` y `obtenerPresupuesto` (suma de `subtotal_usd`). `OrdersController` las usa directo y `order_service.ts` queda para los flujos que escriben.
+
+**Devolución** (`POST /orders/:id/return`, desde CONFIRMED/IN_PRODUCTION/DELIVERED): parcial o total por línea (`DEVOLUCION_CANTIDAD_INVALIDA` si supera lo pendiente). `order_service.ts` bloquea el pedido, valida, actualiza `returned_quantity` y pasa a `RETURNED` cuando no queda nada activo. `order_return_service.ts` (mismo cliente transaccional) repone por línea el producto (`REVERSAL_ADJUSTMENT`, nunca más de lo vendido aún no revertido), el stock de talla y los materiales de la **receta base** del producto si hubo producción (`ORDER_OUT`); en devolución total sin líneas revierte todo `ORDER_OUT` si algún material quedó sin revertir. También recalcula `total_price`, `total_quantity` y saldo (contado: pagado = activo; crédito: saldo = activo − pagado) y aporta las reversiones de stock que usa la cancelación. La resolución de líneas pendientes reutiliza `utils/sale_return_requests.ts`.
 
 ### Ventas (`sale_service.ts`)
 

@@ -1,3 +1,4 @@
+import OrderQueryService from '#services/order_query_service'
 import OrderService from '#services/order_service'
 import { assertPermission } from '#permissions/check'
 import { serializeOrder, serializeOrderListItem } from '#transformers/order_transformer'
@@ -20,13 +21,14 @@ import { broadcastCompanyEvent } from '#services/company_realtime_service'
 
 export default class OrdersController {
   private service = new OrderService()
+  private queryService = new OrderQueryService()
 
   /**
    * GET /api/v1/orders
    */
   async index({ request, serialize }: HttpContext) {
     const filters = await request.validateUsing(listOrdersValidator)
-    const paginator = await this.service.listar({
+    const paginator = await this.queryService.listar({
       page: filters.page,
       perPage: filters.per_page,
       customer_id: filters.customer_id,
@@ -50,7 +52,7 @@ export default class OrdersController {
    * GET /api/v1/orders/:id
    */
   async show({ params, serialize }: HttpContext) {
-    const order = await this.service.obtenerDetalle(Number(params.id))
+    const order = await this.queryService.obtenerDetalle(Number(params.id))
 
     return serialize({
       order: serializeOrder(order, {
@@ -118,7 +120,7 @@ export default class OrdersController {
     const payload = await request.validateUsing(createOrderMaterialValidator)
     const orderMaterial = await this.service.agregarMaterial(Number(params.id), payload)
 
-    const order = await this.service.obtener(Number(params.id))
+    const order = await this.queryService.obtener(Number(params.id))
 
     broadcastCompanyEvent('order.changed')
     return serialize({
@@ -137,7 +139,7 @@ export default class OrdersController {
       payload
     )
 
-    const order = await this.service.obtener(Number(params.id))
+    const order = await this.queryService.obtener(Number(params.id))
 
     broadcastCompanyEvent('order.changed')
     return serialize({
@@ -221,7 +223,7 @@ export default class OrdersController {
   }
 
   async budget({ params, serialize }: HttpContext) {
-    const budget = await this.service.obtenerPresupuesto(Number(params.id))
+    const budget = await this.queryService.obtenerPresupuesto(Number(params.id))
 
     return serialize({ budget })
   }

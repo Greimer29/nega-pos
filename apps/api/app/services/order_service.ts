@@ -20,15 +20,17 @@ import CatalogProduct from '#models/catalog_product'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
 import CatalogProductSizeService from '#services/catalog_product_size_service'
 import ProductInventoryService from '#services/product_inventory_service'
-import ProductInventoryMovement from '#models/product_inventory_movement'
 import ProductoCatalogoNoEncontradoException from '#exceptions/producto_catalogo_no_encontrado_exception'
 import PedidoLineaNoEncontradaException from '#exceptions/pedido_linea_no_encontrada_exception'
 import DevolucionCantidadInvalidaException from '#exceptions/devolucion_cantidad_invalida_exception'
 import OrderCodigoService from '#services/order_code_service'
+import OrderBalanceService from '#services/order_balance_service'
+import OrderQueryService from '#services/order_query_service'
+import OrderReturnService from '#services/order_return_service'
+import { resolveSaleReturnRequests } from '#utils/sale_return_requests'
 import {
   evaluarConsumoVsStock,
   formatCantidadMovimiento,
-  formatCantidadReversion,
   NOTA_FORZADO_SIN_STOCK,
   RECETA_VACIA_WARNING,
   buildOrderConsumoMap,
@@ -43,11 +45,9 @@ import {
 import drive from '@adonisjs/drive/services/main'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
 import { tenantStorageKey } from '#utils/tenant_storage'
-import { datetimeRangeUtcSql, dayStartUtcSql, nowInAppZone } from '#utils/app_timezone'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
-import type { ModelPaginatorContract } from '@adonisjs/lucid/types/model'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 export type OrderReturnLineInput = {
@@ -80,18 +80,6 @@ export type OrderLineUpdateInput = {
   quantity: number
 }
 
-export type OrderBudget = {
-  lines: {
-    id: number
-    catalog_product_id: number
-    product_name: string
-    quantity: string
-    unit_price_usd: string
-    subtotal_usd: string
-  }[]
-  total_usd: string
-}
-
 export type OrderMaterialInput = {
   material_id: number
   quantity_per_garment: number
@@ -107,20 +95,6 @@ export type OrderMaterialUpdateInput = {
 export type TransicionOptions = {
   force?: boolean
   payment_type?: 'CASH' | 'CREDIT'
-}
-
-export type ListOrdersFilters = {
-  page?: number
-  perPage?: number
-  customer_id?: number
-  status?: string
-  exclude_status?: string
-  modality?: string
-  date_from?: string
-  date_to?: string
-  search?: string
-  sort_by?: 'order_date' | 'code' | 'created_at' | 'confirmed_at'
-  direction?: 'asc' | 'desc'
 }
 
 export type ReferenciaDownload = {
@@ -148,140 +122,14 @@ const REFERENCIA_MIME: Record<string, string> = {
   webp: 'image/webp',
 }
 
-const ORDER_COLUMN: Record<NonNullable<ListOrdersFilters['sort_by']>, string> = {
-  order_date: 'order_date',
-  code: 'code',
-  created_at: 'created_at',
-  confirmed_at: 'confirmed_at',
-}
-
 export default class OrderService {
   private codeService = new OrderCodigoService()
   private productInventoryService = new ProductInventoryService()
   private catalogProductStockService = new CatalogProductStockService()
   private sizeService = new CatalogProductSizeService()
-
-  async listar(filters: ListOrdersFilters = {}): Promise<ModelPaginatorContract<Order>> {
-    const page = filters.page ?? 1
-    const perPage = filters.perPage ?? 20
-    const sortBy = filters.sort_by ?? 'order_date'
-    const direction = filters.direction ?? 'desc'
-    const column = ORDER_COLUMN[sortBy]
-
-    const query = Order.query()
-      .preload('customer')
-      .preload('orderLines', (linesQuery) => linesQuery.preload('catalogProduct'))
-      .orderBy(column, direction)
-      .orderBy('id', 'desc')
-
-    if (filters.customer_id) {
-      query.where('customerId', filters.customer_id)
-    }
-
-    if (filters.status) {
-      query.where('status', filters.status)
-    }
-
-    if (filters.exclude_status) {
-      query.whereNot('status', filters.exclude_status)
-    }
-
-    if (filters.modality) {
-      query.where('modality', filters.modality)
-    }
-
-    if (filters.date_from) {
-      const fromSql = dayStartUtcSql(filters.date_from)
-      query.where((builder) => {
-        builder.where('confirmedAt', '>=', fromSql).orWhere((sub) => {
-          sub.whereNull('confirmedAt').where('orderDate', '>=', filters.date_from!)
-        })
-      })
-    }
-
-    if (filters.date_to) {
-      const { toExclusiveSql } = datetimeRangeUtcSql(filters.date_to, filters.date_to)
-      query.where((builder) => {
-        builder.where('confirmedAt', '<', toExclusiveSql).orWhere((sub) => {
-          sub.whereNull('confirmedAt').where('orderDate', '<=', filters.date_to!)
-        })
-      })
-    }
-
-    if (filters.search?.trim()) {
-      const term = `%${filters.search.trim()}%`
-      query.where((builder) => {
-        builder
-          .whereILike('code', term)
-          .orWhereILike('description', term)
-          .orWhereHas('customer', (customerQuery) => {
-            customerQuery.whereILike('name', term)
-          })
-          .orWhereHas('orderLines', (lineQuery) => {
-            lineQuery.whereHas('catalogProduct', (productQuery) => {
-              productQuery.whereILike('name', term)
-            })
-          })
-      })
-    }
-
-    return query.paginate(page, perPage)
-  }
-
-  async obtener(id: number): Promise<Order> {
-    const order = await Order.find(id)
-    if (!order) {
-      throw new OrderNoEncontradoException()
-    }
-    return order
-  }
-
-  async obtenerDetalle(id: number): Promise<Order> {
-    const order = await Order.query()
-      .where('id', id)
-      .preload('customer')
-      .preload('orderLines', (query) => {
-        query.preload('catalogProduct').orderBy('id', 'asc')
-      })
-      .preload('orderMaterials', (query) => {
-        query.preload('material').orderBy('id', 'asc')
-      })
-      .first()
-
-    if (!order) {
-      throw new OrderNoEncontradoException()
-    }
-
-    return order
-  }
-
-  async obtenerPresupuesto(orderId: number): Promise<OrderBudget> {
-    const order = await this.obtener(orderId)
-    const lines = await OrderLine.query()
-      .where('orderId', orderId)
-      .preload('catalogProduct')
-      .orderBy('id', 'asc')
-
-    let total = 0
-    const serialized = lines.map((line) => {
-      const subtotal = Number(line.subtotalUsd)
-      total += subtotal
-      return {
-        id: Number(line.id),
-        catalog_product_id: Number(line.catalogProductId),
-        product_name: line.catalogProduct?.name ?? '',
-        quantity: line.quantity,
-        unit_price_usd: line.unitPriceUsd,
-        subtotal_usd: line.subtotalUsd,
-      }
-    })
-
-    if (order.status === 'DRAFT' && lines.length > 0) {
-      return { lines: serialized, total_usd: total.toFixed(4) }
-    }
-
-    return { lines: serialized, total_usd: total.toFixed(4) }
-  }
+  private orderBalanceService = new OrderBalanceService()
+  private orderQueryService = new OrderQueryService()
+  private orderReturnService = new OrderReturnService()
 
   async agregarLinea(orderId: number, input: OrderLineInput): Promise<OrderLine> {
     return db.transaction(async (trx) => {
@@ -416,7 +264,7 @@ export default class OrderService {
       })
     }
 
-    const order = await this.obtener(id)
+    const order = await this.orderQueryService.obtener(id)
     this.assertBorrador(order)
     this.assertClienteOInvitado(input)
     if (input.customer_id) {
@@ -444,7 +292,7 @@ export default class OrderService {
   }
 
   async eliminar(id: number): Promise<{ id: number; eliminado: true }> {
-    const order = await this.obtener(id)
+    const order = await this.orderQueryService.obtener(id)
     this.assertBorrador(order)
 
     if (order.referenceFile) {
@@ -587,7 +435,11 @@ export default class OrderService {
         await this.congelarCostoLineas(order, trx)
         await this.procesarDescuentoStockProductos(order, trx)
         order.confirmedAt = DateTime.now()
-        await this.aplicarPagoAlConfirmar(order, options.payment_type ?? 'CASH', trx)
+        await this.orderBalanceService.applyConfirmationBalance(
+          order,
+          options.payment_type ?? 'CASH',
+          trx
+        )
       }
 
       if (statusActual === 'DRAFT' && nuevoEstado === 'DELIVERED') {
@@ -595,12 +447,20 @@ export default class OrderService {
         await this.congelarCostoLineas(order, trx)
         await this.procesarDescuentoStockProductos(order, trx)
         order.confirmedAt = DateTime.now()
-        await this.aplicarPagoAlConfirmar(order, options.payment_type ?? 'CASH', trx)
+        await this.orderBalanceService.applyConfirmationBalance(
+          order,
+          options.payment_type ?? 'CASH',
+          trx
+        )
         await this.procesarTransicionAProduccion(order, warnings, options.force ?? false, trx)
       }
 
       if (statusActual === 'CONFIRMED' && nuevoEstado === 'CANCELLED') {
-        await this.revertirStockProductos(order, trx, `Cancelación pedido ${order.code}`)
+        await this.orderReturnService.revertProductStock(
+          order,
+          trx,
+          `Cancelación pedido ${order.code}`
+        )
       }
 
       if (statusActual === 'CONFIRMED' && nuevoEstado === 'IN_PRODUCTION') {
@@ -608,12 +468,16 @@ export default class OrderService {
       }
 
       if (nuevoEstado === 'CANCELLED' && statusActual === 'IN_PRODUCTION') {
-        await this.revertirMovimientosOrder(
+        await this.orderReturnService.revertMaterialMovements(
           Number(order.id),
           trx,
           `Reversión cancelación order #${order.id}`
         )
-        await this.revertirStockProductos(order, trx, `Cancelación pedido ${order.code}`)
+        await this.orderReturnService.revertProductStock(
+          order,
+          trx,
+          `Cancelación pedido ${order.code}`
+        )
       }
 
       order.status = nuevoEstado
@@ -655,7 +519,7 @@ export default class OrderService {
         throw new OrderNoDevolvableException()
       }
 
-      const returnRequests = this.resolveReturnRequests(order.orderLines, lines)
+      const returnRequests = resolveSaleReturnRequests(order.orderLines, lines)
 
       if (returnRequests.length === 0) {
         if (order.orderLines.length === 0) {
@@ -691,69 +555,14 @@ export default class OrderService {
         line.useTransaction(trx)
         await line.save()
 
-        await this.revertirStockProductoParcial(
-          Number(order.id),
-          Number(line.catalogProductId),
-          request.quantity,
-          trx,
-          note
-        )
-
-        if (line.catalogProductSizeId) {
-          await this.sizeService.restoreSizeStock(
-            Number(line.catalogProductSizeId),
-            request.quantity,
-            trx
-          )
-        }
-
-        await this.revertirMaterialesLineaParcial(order, line, request.quantity, trx, note)
+        await this.orderReturnService.restoreLineInventory(order, line, request.quantity, trx, note)
       }
 
       if (!lines || lines.length === 0) {
-        const salidas = await InventoryMovement.query({ client: trx })
-          .where('orderId', Number(order.id))
-          .where('type', 'ORDER_OUT')
-
-        if (salidas.length > 0) {
-          const reversiones = await InventoryMovement.query({ client: trx })
-            .where('orderId', Number(order.id))
-            .where('type', 'REVERSAL_ADJUSTMENT')
-
-          const consumedByMaterial = new Map<number, number>()
-          for (const salida of salidas) {
-            const materialId = Number(salida.materialId)
-            consumedByMaterial.set(
-              materialId,
-              (consumedByMaterial.get(materialId) ?? 0) + Math.abs(Number(salida.quantity))
-            )
-          }
-
-          const revertedByMaterial = new Map<number, number>()
-          for (const reversion of reversiones) {
-            const materialId = Number(reversion.materialId)
-            revertedByMaterial.set(
-              materialId,
-              (revertedByMaterial.get(materialId) ?? 0) + Math.abs(Number(reversion.quantity))
-            )
-          }
-
-          let needsFullRevert = false
-          for (const [materialId, consumed] of consumedByMaterial) {
-            const reverted = revertedByMaterial.get(materialId) ?? 0
-            if (reverted + 0.0005 < consumed) {
-              needsFullRevert = true
-              break
-            }
-          }
-
-          if (needsFullRevert) {
-            await this.revertirMovimientosOrder(Number(order.id), trx, note)
-          }
-        }
+        await this.orderReturnService.restoreUnreversedMaterials(order, trx, note)
       }
 
-      await this.actualizarMontosTrasDevolucion(order, trx)
+      await this.orderReturnService.recalculateAmounts(order, trx)
 
       const refreshedLines = await OrderLine.query({ client: trx }).where(
         'orderId',
@@ -784,7 +593,7 @@ export default class OrderService {
   }
 
   async guardarReferencia(orderId: number, file: MultipartFile): Promise<Order> {
-    const order = await this.obtener(orderId)
+    const order = await this.orderQueryService.obtener(orderId)
 
     const extension = file.extname?.toLowerCase() ?? 'bin'
     const key = tenantStorageKey(`orders/${orderId}/${randomUUID()}.${extension}`)
@@ -804,7 +613,7 @@ export default class OrderService {
   }
 
   async obtenerReferencia(orderId: number): Promise<ReferenciaDownload> {
-    const order = await this.obtener(orderId)
+    const order = await this.orderQueryService.obtener(orderId)
 
     if (!order.referenceFile) {
       throw new ArchivoReferenciaNoAdjuntoException()
@@ -921,7 +730,7 @@ export default class OrderService {
             locked.confirmedAt = DateTime.now()
             const paymentType: 'CASH' | 'CREDIT' =
               locked.paymentType === 'CREDIT' ? 'CREDIT' : 'CASH'
-            await this.aplicarPagoAlConfirmar(locked, paymentType, trx)
+            await this.orderBalanceService.applyConfirmationBalance(locked, paymentType, trx)
             locked.useTransaction(trx)
             await locked.save()
           }
@@ -1047,29 +856,6 @@ export default class OrderService {
           type: 'ORDER_OUT',
           quantity: formatCantidadMovimiento(data.cantidadTotal),
           orderId: Number(order.id),
-          note,
-        },
-        { client: trx }
-      )
-    }
-  }
-
-  private async revertirMovimientosOrder(
-    orderId: number,
-    trx: TransactionClientContract,
-    note: string
-  ) {
-    const salidas = await InventoryMovement.query({ client: trx })
-      .where('orderId', orderId)
-      .where('type', 'ORDER_OUT')
-
-    for (const salida of salidas) {
-      await InventoryMovement.create(
-        {
-          materialId: Number(salida.materialId),
-          type: 'REVERSAL_ADJUSTMENT',
-          quantity: formatCantidadReversion(salida.quantity),
-          orderId,
           note,
         },
         { client: trx }
@@ -1414,203 +1200,6 @@ export default class OrderService {
         },
         trx
       )
-    }
-  }
-
-  private async aplicarPagoAlConfirmar(
-    order: Order,
-    paymentType: 'CASH' | 'CREDIT',
-    trx: TransactionClientContract
-  ) {
-    const lines = await OrderLine.query({ client: trx }).where('orderId', Number(order.id))
-    const totalUsd = lines.reduce((sum, line) => sum + Number(line.subtotalUsd), 0)
-
-    order.paymentType = paymentType
-
-    if (paymentType === 'CREDIT') {
-      if (!order.customerId) {
-        throw new ClienteSinCreditoException()
-      }
-      const customer = order.customer ?? (await Customer.find(order.customerId))
-      if (!customer?.creditDays || customer.creditDays <= 0) {
-        throw new ClienteSinCreditoException()
-      }
-      order.balanceUsd = totalUsd.toFixed(4)
-      order.amountPaidUsd = '0.0000'
-      order.creditDueDate = nowInAppZone().plus({ days: customer.creditDays }).startOf('day')
-    } else {
-      order.balanceUsd = '0.0000'
-      order.amountPaidUsd = totalUsd.toFixed(4)
-      order.creditDueDate = null
-    }
-  }
-
-  private async revertirStockProductos(order: Order, trx: TransactionClientContract, note: string) {
-    const salidas = await ProductInventoryMovement.query({ client: trx })
-      .where('orderId', Number(order.id))
-      .where('type', 'SALE_OUT')
-
-    for (const movimiento of salidas) {
-      const qty = Math.abs(Number(movimiento.quantity))
-      await this.productInventoryService.registrarMovimiento(
-        {
-          catalogProductId: Number(movimiento.catalogProductId),
-          type: 'REVERSAL_ADJUSTMENT',
-          quantity: qty,
-          orderId: Number(order.id),
-          note,
-        },
-        trx
-      )
-    }
-
-    const lines =
-      order.orderLines ??
-      (await OrderLine.query({ client: trx }).where('orderId', Number(order.id)))
-
-    for (const line of lines) {
-      if (!line.catalogProductSizeId) continue
-      const remaining = Number(line.quantity) - Number(line.returnedQuantity ?? 0)
-      if (remaining <= 0) continue
-      await this.sizeService.restoreSizeStock(Number(line.catalogProductSizeId), remaining, trx)
-    }
-  }
-
-  private resolveReturnRequests(
-    lines: OrderLine[],
-    input?: OrderReturnLineInput[]
-  ): { lineId: number; quantity: number }[] {
-    if (!input || input.length === 0) {
-      return lines
-        .map((line) => {
-          const remaining = Number(line.quantity) - Number(line.returnedQuantity ?? 0)
-          return remaining > 0 ? { lineId: Number(line.id), quantity: remaining } : null
-        })
-        .filter((item): item is { lineId: number; quantity: number } => item !== null)
-    }
-
-    return input.map((item) => ({
-      lineId: item.line_id,
-      quantity: item.quantity,
-    }))
-  }
-
-  private async revertirStockProductoParcial(
-    orderId: number,
-    catalogProductId: number,
-    quantity: number,
-    trx: TransactionClientContract,
-    note: string
-  ) {
-    const salidas = await ProductInventoryMovement.query({ client: trx })
-      .where('orderId', orderId)
-      .where('catalogProductId', catalogProductId)
-      .where('type', 'SALE_OUT')
-
-    let soldTotal = 0
-    for (const salida of salidas) {
-      soldTotal += Math.abs(Number(salida.quantity))
-    }
-
-    const reversiones = await ProductInventoryMovement.query({ client: trx })
-      .where('orderId', orderId)
-      .where('catalogProductId', catalogProductId)
-      .where('type', 'REVERSAL_ADJUSTMENT')
-
-    let reversedTotal = 0
-    for (const reversion of reversiones) {
-      reversedTotal += Number(reversion.quantity)
-    }
-
-    const toReverse = Math.min(quantity, Math.max(0, soldTotal - reversedTotal))
-    if (toReverse <= 0) {
-      return
-    }
-
-    await this.productInventoryService.registrarMovimiento(
-      {
-        catalogProductId,
-        type: 'REVERSAL_ADJUSTMENT',
-        quantity: toReverse,
-        orderId,
-        note,
-      },
-      trx
-    )
-  }
-
-  private async revertirMaterialesLineaParcial(
-    order: Order,
-    line: OrderLine,
-    returnQty: number,
-    trx: TransactionClientContract,
-    note: string
-  ) {
-    const salidas = await InventoryMovement.query({ client: trx })
-      .where('orderId', Number(order.id))
-      .where('type', 'ORDER_OUT')
-
-    if (salidas.length === 0) {
-      return
-    }
-
-    const product =
-      line.catalogProduct ??
-      (await CatalogProduct.query({ client: trx })
-        .where('id', Number(line.catalogProductId))
-        .preload('formula', (f) => f.preload('materials', (fm) => fm.preload('material')))
-        .first())
-
-    const formulaMaterials = product?.formula?.materials
-    if (!formulaMaterials?.length) {
-      return
-    }
-
-    for (const formulaItem of formulaMaterials) {
-      const materialId = Number(formulaItem.materialId)
-      const consumoDevuelto = returnQty * Number(formulaItem.quantity)
-      if (consumoDevuelto <= 0) {
-        continue
-      }
-
-      await InventoryMovement.create(
-        {
-          materialId,
-          type: 'REVERSAL_ADJUSTMENT',
-          quantity: consumoDevuelto.toFixed(3),
-          orderId: Number(order.id),
-          note,
-        },
-        { client: trx }
-      )
-    }
-  }
-
-  private async actualizarMontosTrasDevolucion(order: Order, trx: TransactionClientContract) {
-    const lines = await OrderLine.query({ client: trx }).where('orderId', Number(order.id))
-
-    let activeTotal = 0
-    let activeQty = 0
-
-    for (const line of lines) {
-      const active = Number(line.quantity) - Number(line.returnedQuantity ?? 0)
-      if (active <= 0) {
-        continue
-      }
-      activeTotal += active * Number(line.unitPriceUsd)
-      activeQty += active
-    }
-
-    order.totalPrice = activeTotal.toFixed(4)
-    order.totalQuantity = Math.max(0, Math.ceil(activeQty))
-
-    const paid = Number(order.amountPaidUsd ?? 0)
-
-    if (order.paymentType === 'CREDIT') {
-      order.balanceUsd = Math.max(0, activeTotal - paid).toFixed(4)
-    } else {
-      order.amountPaidUsd = activeTotal.toFixed(4)
-      order.balanceUsd = '0.0000'
     }
   }
 }
