@@ -4,6 +4,7 @@ import {
   dayEndInAppZone,
   dayStartInAppZone,
   dayStartUtcSql,
+  sqlDateToIsoDate,
   toAppIsoDate,
 } from '#utils/app_timezone'
 import { DateTime } from 'luxon'
@@ -40,5 +41,16 @@ test.group('app_timezone', () => {
 
     const nextDay = datetimeRangeUtcSql('2026-10-15', '2026-10-15')
     assert.isFalse(utcSql >= nextDay.fromSql && utcSql < nextDay.toExclusiveSql)
+  })
+
+  test('sqlDateToIsoDate keeps the DATE calendar day without shifting to Caracas', ({ assert }) => {
+    // mysql2 returns DATE columns as a JS Date at process-local midnight.
+    assert.equal(sqlDateToIsoDate(new Date(2026, 9, 15)), '2026-10-15')
+    assert.equal(sqlDateToIsoDate(new Date(2026, 0, 1)), '2026-01-01')
+    assert.equal(sqlDateToIsoDate('2026-10-15'), '2026-10-15')
+    assert.equal(sqlDateToIsoDate('2026-10-15 00:00:00'), '2026-10-15')
+    assert.isNull(sqlDateToIsoDate(null))
+    assert.isNull(sqlDateToIsoDate(undefined))
+    assert.isNull(sqlDateToIsoDate(''))
   })
 })

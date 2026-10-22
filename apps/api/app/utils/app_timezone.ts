@@ -32,6 +32,20 @@ export function toAppIsoDate(dt: DateTime): string {
   return dt.setZone(APP_TIMEZONE).toISODate()!
 }
 
+/**
+ * `YYYY-MM-DD` of a DATE column read through raw knex. DATE has no zone: the driver
+ * returns it as a JS Date at process-local midnight, so it is read in the process zone.
+ * Shifting it to America/Caracas would move UTC midnight to the previous day.
+ */
+export function sqlDateToIsoDate(value: Date | string | null | undefined): string | null {
+  if (!value) {
+    return null
+  }
+  return value instanceof Date
+    ? DateTime.fromJSDate(value).toISODate()!
+    : String(value).slice(0, 10)
+}
+
 /** UTC SQL DATETIME for the start of a shop calendar day (00:00:00 America/Caracas). */
 export function dayStartUtcSql(isoDate: string): string {
   return dayStartInAppZone(isoDate).toUTC().toFormat('yyyy-MM-dd HH:mm:ss')
