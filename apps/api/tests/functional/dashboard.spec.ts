@@ -13,6 +13,7 @@ import Formula from '#models/formula'
 import FormulaMaterial from '#models/formula_material'
 import Currency from '#models/currency'
 import SalePayment from '#models/sale_payment'
+import PaymentMethod from '#models/payment_method'
 import SalesShift from '#models/sales_shift'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { resetTestDatabase } from '#tests/helpers/reset_test_database'
@@ -1401,5 +1402,64 @@ test.group('Dashboard API', (group) => {
     assert.equal(body.returns[0].total_returned_usd, '20.0000')
     assert.isString(body.returns[0].returned_at)
     assert.isFalse(Number.isNaN(Date.parse(String(body.returns[0].returned_at))))
+  })
+
+  test('GET /api/v1/dashboard/daily-closing leaves fully returned invoices out of total in currency', async ({
+    client,
+    assert,
+  }) => {
+    const user = await User.findByOrFail('email', TEST_EMAIL)
+    await PaymentMethod.updateOrCreate(
+      { code: 'transfer' },
+      { name: 'Transferencia', currencyCode: 'VES', isActive: true, sortOrder: 3 }
+    )
+
+    async function seedVesSale(input: {
+      status: 'COMPLETED' | 'RETURNED'
+      usd: string
+      ves: string
+    }) {
+      const returned = input.status === 'RETURNED'
+      const sale = await seedDashboardSale({
+        totalUsd: returned ? '0.0000' : input.usd,
+        status: input.status,
+        paymentMethodCode: 'transfer',
+        lines: [
+          {
+            quantity: '1',
+            unitPriceUsd: input.usd,
+            subtotalUsd: input.usd,
+            returnedQuantity: returned ? '1' : '0',
+          },
+        ],
+      })
+      await SalePayment.query().where('saleId', Number(sale.id)).delete()
+      await SalePayment.create({
+        saleId: Number(sale.id),
+        paymentMethodCode: 'transfer',
+        amountUsd: input.usd,
+        currencyCode: 'VES',
+        usdRate: '100.0000',
+        amountNative: input.ves,
+        sortOrder: 0,
+      })
+    }
+
+    await seedVesSale({ status: 'COMPLETED', usd: '10.0000', ves: '1000.00' })
+    await seedVesSale({ status: 'RETURNED', usd: '5.0000', ves: '500.00' })
+
+    const response = await client
+      .get('/api/v1/dashboard/daily-closing')
+      .qs({ sales_shift_id: openShiftId })
+      .loginAs(user)
+
+    response.assertStatus(200)
+
+    const transfer = response
+      .body()
+      .data.by_payment_method.find((item: { code: string }) => item.code === 'transfer')
+    assert.equal(transfer.sales_count, 1)
+    assert.equal(transfer.total_usd, '10.0000')
+    assert.equal(transfer.total_in_currency, '1000.00')
   })
 })
