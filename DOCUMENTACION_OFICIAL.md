@@ -247,6 +247,7 @@ Tests API: `cd apps/api; node ace test` contra **`nega_pos_test`** (nunca produc
 - **Android:** build de release `$env:VITE_API_URL="https://tu-api"; pnpm build:mobile` luego `pnpm --filter mobile build:apk:release`
 - **iOS:** dependencia `@capacitor/ios` + esqueleto `apps/mobile/ios` (Capacitor). Archive **solo en macOS + Xcode**. En Mac: `export VITE_API_URL=…` + `bash scripts/prepare-ios.sh` + `pnpm --filter mobile open:ios`. Guía: [`apps/mobile/README.md`](apps/mobile/README.md)
 - Actualizaciones Android: card **Aplicación** descarga el APK; el usuario confirma la instalación. (iOS: TestFlight / App Store — no hay silent replace.)
+- **Compartir presupuestos PDF:** `@capacitor/filesystem` ^7.1.9 + `@capacitor/share` ^7.0.4 en `apps/web` y `apps/mobile`. El PDF se escribe en `Directory.Cache` (cubierto por `cache-path` de `res/xml/file_paths.xml`, sin permisos extra) y se comparte con el menú nativo. Al agregar plugins nativos hay que correr `pnpm build:mobile` (sync) y publicar APK nuevo; en iOS, `sync:ios` en Mac.
 - **Escáner de código de barras:** `@capacitor/barcode-scanner` ^2.2.6 (oficial Ionic, compatible con Capacitor 7) + `@capacitor/core` en `apps/web` y `apps/mobile`. Abre la cámara en Android nativo (permiso `CAMERA`) y también en el navegador/desktop vía la UI web del plugin. El lector USB sigue escribiendo en el input de búsqueda y confirma con Enter.
 - Detalle: [`apps/mobile/README.md`](apps/mobile/README.md)
 - Impresión térmica es **exclusiva del desktop**; la config de impresión se ve/edita también desde el navegador vía API
@@ -392,7 +393,7 @@ Al provisionar una empresa: migraciones tenant + seed mínimo (USD como moneda b
 | `accounts` | `name`, `description`, `is_active` |
 | `currencies` | `code` (PK), `name`, `rate_per_usd` (unidades por 1 unidad de moneda base), `is_active` |
 | `payment_methods` | `code`, `name`, `is_active`, `sort_order` |
-| `app_settings` | `key` (PK); incluye `base_currency_code` (**por empresa**; en alta nueva default `USD`), tasa VES, margen, `business_profile`, `print_config` |
+| `app_settings` | `key` (PK); incluye `base_currency_code` (**por empresa**; en alta nueva default `USD`), tasa VES, margen, `business_profile` (JSON con datos del negocio, logo, paleta, `quote_validity_days` 0–365, default 3, y `quote_terms` hasta 1000 caracteres para el presupuesto PDF), `print_config` |
 | `customer_payments` | `customer_id`, `order_id?`, `sale_id?`, `account_id?`, `amount_usd` (canónico en moneda base), `currency_code?`, `entry_rate?`, `amount_native?` |
 | `supplier_payments` | `supplier_id`, `purchase_id?`, `account_id?`, `amount_usd` (canónico en moneda base), `currency_code?`, `entry_rate?`, `amount_native?` |
 | `expenses` | `account_id`, `supplier_id?`, `machine_id?` (FK opcional a `machines`; gasto vinculado a máquina), `date`, `description`, `invoice_number?`, `amount_usd` (monto canónico en moneda base), `currency_code` (moneda de ingreso), `entry_rate` (unidades de moneda de ingreso por 1 de base; `null` si es base) |
@@ -599,6 +600,10 @@ La resolución de entradas de venta está separada en `resolveCatalogLine` y `re
    - El cálculo de importes vive en `utils/sale_return_amounts.ts`; el tope de reposición de productos en `utils/sale_return_stock.ts`.
    - `utils/sale_return_requests.ts` resuelve las líneas solicitadas o, si no se especifican, todas las cantidades pendientes de devolver.
 5. **Eliminar borrador** (`DELETE /sales/:id`): solo `DRAFT`. Borra el documento en espera y sus líneas (no hay stock que revertir). En el POS: **Cargar factura** → papelera en cada ítem (icono). La papelera del carrito **vacía líneas locales** y no borra el documento guardado. Una factura confirmada no se elimina por esta vía.
+6. **Presupuesto en PDF** (`GET /sales/:id/quote-pdf?currency=XXX`, `ventas.view`): solo `DRAFT` (si no, `409 VENTA_NO_EDITABLE`). En el POS, **Generar presupuesto** guarda el borrador y abre el diálogo del presupuesto; también se abre desde **Cargar factura** (icono de documento en cada borrador). El número es el id del borrador (`Presupuesto N° 25`).
+   - `sale_quote_service.ts` carga el borrador, el `business_profile` (logo PNG/JPG; WEBP se omite porque pdfkit no lo soporta) y las tasas activas; `currency` debe ser la moneda base o una moneda activa (si no, `404 MONEDA_NO_ENCONTRADA`; sin `currency` usa la base).
+   - `utils/sale_quote_document.ts` arma el contenido sin dependencias (montos convertidos con la tasa del día, formato `es-VE` de 2 a 4 decimales, cantidades con unidad, paquetes mayoristas `x N`, talla, fechas en `America/Caracas`, `Válido hasta` = emisión + `quote_validity_days`). `utils/sale_quote_pdf.ts` dibuja la hoja carta con **pdfkit** (encabezado con datos de empresa, cliente, tabla con salto de página y encabezado repetido, totales, `Tasa usada` si no es la moneda base, condiciones `quote_terms` y aviso de que no es factura). Color de acento: `palette.primary` si `use_custom_palette`.
+   - Entrega en la SPA (`features/ventas/utils/quote-pdf-delivery.ts`): **Android** escribe el PDF en la caché (`@capacitor/filesystem`) y abre el menú nativo (`@capacitor/share`) para WhatsApp/Telegram; **desktop** lo guarda vía IPC `files:saveQuotePdf` en `Descargas\Presupuestos` y abre la carpeta; **navegador** lo descarga. La moneda por defecto del diálogo es la elegida en la barra superior.
 
 ### Reportes (`report_service.ts` / `inventory_report_service.ts`)
 
@@ -727,6 +732,7 @@ Carrito y líneas en moneda base. `POST/PUT /sales` acepta `discount_usd` (descu
 | POST | `/api/v1/sales/offline/close-shift` | `ventas.confirm` | `SalesController.syncOfflineCloseShift` |
 | GET | `/api/v1/sales` | `ventas.view` | `SalesController.index` |
 | GET | `/api/v1/sales/:id` | `ventas.view` | `SalesController.show` |
+| GET | `/api/v1/sales/:id/quote-pdf` | `ventas.view` | `SalesController.quotePdf` (PDF del presupuesto, solo borradores; query `currency`) |
 | POST | `/api/v1/sales` | `ventas.confirm` | `SalesController.store` |
 | PUT | `/api/v1/sales/:id` | `ventas.confirm` | `SalesController.update` |
 | DELETE | `/api/v1/sales/:id` | `ventas.confirm` | `SalesController.destroy` |
@@ -1089,7 +1095,7 @@ En el detalle de compra (`pages/purchase-detail-page.tsx`), la barra para agrega
 ### Electron (`apps/desktop/electron/`)
 
 - **main.ts**: servidor HTTP local en `127.0.0.1:51740` sirve `web/dist` con `Cache-Control: no-store`; proxy de API configurable. Tras un update, limpia la caché HTTP de Chromium si cambió la versión.
-- **preload.ts**: expone `window.negaPos.printing` al renderer.
+- **preload.ts**: expone `window.negaPos.printing`, `updates`, `offline` y `files` (guardar presupuestos PDF) al renderer.
 - **print-service.ts**: lista impresoras, lee JSON local (solo migración), imprime HTML con dimensiones térmicas (ancho ~78 mm, altura dinámica, DPI ajustado). La config operativa vive en la API.
 
 ### IPC
@@ -1102,6 +1108,7 @@ En el detalle de compra (`pages/purchase-detail-page.tsx`), la barra para agrega
 | `printing:getConfigPath` | Ruta del JSON legacy en userData |
 | `printing:isMigrated` / `printing:markMigrated` | Flag local `print-config-migrated` |
 | `printing:getConfig` / `printing:saveConfig` | **Deprecated** — solo legado; el flujo normal usa la API |
+| `files:saveQuotePdf` | Guarda el PDF del presupuesto en `Descargas\Presupuestos` (nombre saneado, valida cabecera `%PDF-`, máx. 20 MB) y lo muestra en el Explorador (`quote-files.ts`) |
 
 ### Render de documentos (`apps/web/src/features/printing/`)
 

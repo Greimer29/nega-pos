@@ -1,4 +1,4 @@
-import { Loader2, Search, Trash2 } from 'lucide-react'
+import { FileText, Loader2, Search, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,6 +13,10 @@ import { Input } from '@/components/ui/input'
 import { DisplayMoneyFromUsd } from '@/features/currencies/components/display-money'
 import { getMaterial } from '@/features/materials/services/material-service'
 import type { Material } from '@/features/materials/types'
+import {
+  SaleQuoteDialog,
+  type SaleQuoteTarget,
+} from '@/features/ventas/components/sale-quote-dialog'
 import { useDeleteSaleMutation, useSalesQuery } from '@/features/ventas/hooks/use-sales'
 import { getCatalogProduct } from '@/features/ventas/services/catalog-service'
 import { getSale } from '@/features/ventas/services/sales-service'
@@ -78,6 +82,7 @@ export function VentasLoadDraftDialog({
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Sale | null>(null)
+  const [quoteTarget, setQuoteTarget] = useState<SaleQuoteTarget | null>(null)
   const deleteDraftMutation = useDeleteSaleMutation()
 
   useEffect(() => {
@@ -257,6 +262,23 @@ export function VentasLoadDraftDialog({
                     type="button"
                     variant="ghost"
                     size="icon"
+                    className="size-8 shrink-0"
+                    title="Presupuesto en PDF"
+                    aria-label={`Presupuesto en PDF de ${sale.code ?? `borrador #${sale.id}`}`}
+                    disabled={busy}
+                    onClick={() =>
+                      setQuoteTarget({
+                        saleId: sale.id,
+                        customerName: sale.customer?.name ?? sale.guest_name ?? null,
+                      })
+                    }
+                  >
+                    <FileText className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
                     className="text-destructive hover:text-destructive size-8 shrink-0"
                     title="Eliminar borrador"
                     aria-label={`Eliminar ${sale.code ?? `borrador #${sale.id}`}`}
@@ -325,6 +347,13 @@ export function VentasLoadDraftDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SaleQuoteDialog
+        quote={quoteTarget}
+        onOpenChange={(next) => {
+          if (!next) setQuoteTarget(null)
+        }}
+      />
     </>
   )
 }

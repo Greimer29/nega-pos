@@ -22,6 +22,10 @@ import {
   type LoadedDraft,
 } from '@/features/ventas/components/ventas-load-draft-dialog'
 import { VentasCheckoutPanel } from '@/features/ventas/components/ventas-checkout-panel'
+import {
+  SaleQuoteDialog,
+  type SaleQuoteTarget,
+} from '@/features/ventas/components/sale-quote-dialog'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { useMaterialsQuery } from '@/features/materials/hooks/use-materials'
 import type { Material } from '@/features/materials/types'
@@ -152,6 +156,7 @@ function VentasCreateView() {
   const sortBy = catalogFilters.sortBy ?? defaultSortForSource(catalogSource)
   const [sizePickProduct, setSizePickProduct] = useState<CatalogProduct | null>(null)
   const [sizePickOpen, setSizePickOpen] = useState(false)
+  const [quoteTarget, setQuoteTarget] = useState<SaleQuoteTarget | null>(null)
   const [customerId, setCustomerId] = useState<number | ''>(() => initialDraft?.customerId ?? '')
   const [clientName, setClientName] = useState(() =>
     initialDraft?.clientName?.trim() ? initialDraft.clientName : 'Generico'
@@ -864,6 +869,7 @@ function VentasCreateView() {
     try {
       const saleId = await persistDraftSale()
       setSuccessMessage(`Borrador guardado (#${saleId}). No se descontó stock.`)
+      setQuoteTarget({ saleId, customerName: clientName.trim() || null })
     } catch (error) {
       notifyApiError(error)
     } finally {
@@ -1197,6 +1203,12 @@ function VentasCreateView() {
         open={customerPickOpen}
         onOpenChange={setCustomerPickOpen}
         onSelected={linkRegisteredCustomer}
+      />
+      <SaleQuoteDialog
+        quote={quoteTarget}
+        onOpenChange={(open) => {
+          if (!open) setQuoteTarget(null)
+        }}
       />
       <VentasLoadDraftDialog
         open={loadDraftOpen}

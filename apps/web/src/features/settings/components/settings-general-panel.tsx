@@ -1,14 +1,33 @@
-import { Download, ImageIcon, Loader2, Palette, RefreshCw, Save, Trash2 } from 'lucide-react'
+import {
+  Download,
+  FileText,
+  ImageIcon,
+  Loader2,
+  Palette,
+  RefreshCw,
+  Save,
+  Trash2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { UpdateAvailableDot } from '@/features/settings/components/update-available-dot'
 import { businessLogoUrl } from '@/features/settings/services/general-settings-service'
 import { useGeneralSettingsPanel } from '@/features/settings/hooks/use-general-settings-panel'
 import { useAppUpdates } from '@/features/settings/hooks/use-app-updates'
-import { DEFAULT_BUSINESS_PALETTE } from '@/features/settings/types/general-settings'
+import {
+  DEFAULT_BUSINESS_PALETTE,
+  MAX_QUOTE_VALIDITY_DAYS,
+} from '@/features/settings/types/general-settings'
+
+function clampValidityDays(raw: string): number {
+  const days = Math.trunc(Number(raw))
+  if (!Number.isFinite(days) || days < 0) return 0
+  return Math.min(days, MAX_QUOTE_VALIDITY_DAYS)
+}
 
 export function SettingsGeneralPanel() {
   const {
@@ -319,6 +338,27 @@ export function SettingsGeneralPanel() {
                 }
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Correo</Label>
+              <Input
+                id="email"
+                type="email"
+                value={profile.email}
+                onChange={(event) =>
+                  setProfile((current) => ({ ...current, email: event.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="website">Sitio web</Label>
+              <Input
+                id="website"
+                value={profile.website}
+                onChange={(event) =>
+                  setProfile((current) => ({ ...current, website: event.target.value }))
+                }
+              />
+            </div>
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="ticket-footer">Pie de ticket</Label>
               <Input
@@ -387,6 +427,53 @@ export function SettingsGeneralPanel() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FileText className="size-4" />
+            Presupuestos (PDF)
+          </CardTitle>
+          <CardDescription>
+            Se aplican al PDF que se genera desde Ventas con «Generar presupuesto». Usa el nombre,
+            el logo y los datos de empresa de esta página.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid max-w-3xl gap-4 md:grid-cols-[12rem_1fr]">
+          <div className="space-y-2">
+            <Label htmlFor="quote-validity-days">Validez (días)</Label>
+            <Input
+              id="quote-validity-days"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={MAX_QUOTE_VALIDITY_DAYS}
+              step={1}
+              value={profile.quote_validity_days}
+              onChange={(event) =>
+                setProfile((current) => ({
+                  ...current,
+                  quote_validity_days: clampValidityDays(event.target.value),
+                }))
+              }
+            />
+            <p className="text-muted-foreground text-xs">0 = sin fecha de vencimiento.</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="quote-terms">Condiciones al pie</Label>
+            <Textarea
+              id="quote-terms"
+              rows={4}
+              maxLength={1000}
+              value={profile.quote_terms}
+              placeholder="Ej. Precios sujetos a disponibilidad. Forma de pago: efectivo o transferencia."
+              onChange={(event) =>
+                setProfile((current) => ({ ...current, quote_terms: event.target.value }))
+              }
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {canEdit ? (
         <Button type="button" disabled={saving || uploadingLogo} onClick={() => void handleSave()}>

@@ -163,9 +163,15 @@ importers:
       '@capacitor/core':
         specifier: ^7.6.8
         version: 7.6.8
+      '@capacitor/filesystem':
+        specifier: ^7.1.9
+        version: 7.1.9(@capacitor/core@7.6.8)
       '@capacitor/ios':
         specifier: ^7.4.3
         version: 7.6.9(@capacitor/core@7.6.8)
+      '@capacitor/share':
+        specifier: ^7.0.4
+        version: 7.0.4(@capacitor/core@7.6.8)
     devDependencies:
       '@capacitor/cli':
         specifier: ^7.6.8
@@ -185,6 +191,12 @@ importers:
       '@capacitor/core':
         specifier: ^7.4.3
         version: 7.6.8
+      '@capacitor/filesystem':
+        specifier: ^7.1.9
+        version: 7.1.9(@capacitor/core@7.6.8)
+      '@capacitor/share':
+        specifier: ^7.0.4
+        version: 7.0.4(@capacitor/core@7.6.8)
       '@hookform/resolvers':
         specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.76.1(react@19.2.6))
@@ -674,10 +686,23 @@ packages:
   '@capacitor/core@7.6.8':
     resolution: {integrity: sha512-x1xfxvNcTSnj6OoYaAB0n0a0HRvi5f2YjcVnMLxpMhbHDgGDAzzN9z8cnPCYV+SKTvqGF1hezHm82Op32XaAGg==}
 
+  '@capacitor/filesystem@7.1.9':
+    resolution: {integrity: sha512-HBr3NwENo/Fm7Cmm6Cvps255OIdgQ2VXtSNZK+2Nkw0Y7EMid9y5AS9XfEzGmsC7MXbC6Hx2yXV/hvnuifsSXA==}
+    peerDependencies:
+      '@capacitor/core': '>=7.0.0'
+
   '@capacitor/ios@7.6.9':
     resolution: {integrity: sha512-LANP81TfwuJk1zq9EuF+J5AJK71rKDgXB5XD+VFJQHC7BxSH4Dsma6DSMyrjFT03jtqc/0JTMEfSMBE7go3ZjA==}
     peerDependencies:
       '@capacitor/core': ^7.6.0
+
+  '@capacitor/share@7.0.4':
+    resolution: {integrity: sha512-wNXxmXUcChrtbZ5jQv8scFIbIGKo3rk6B7qpWySxfUhYJP5NANgAqQ9Z69m0k/zYsucdh66SBU7XW1ykd9aUug==}
+    peerDependencies:
+      '@capacitor/core': '>=7.0.0'
+
+  '@capacitor/synapse@1.0.4':
+    resolution: {integrity: sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==}
 
   '@chevrotain/cst-dts-gen@11.2.0':
     resolution: {integrity: sha512-ssJFvn/UXhQQeICw3SR/fZPmYVj+JM2mP+Lx7bZ51cOeHaMWOKp3AUMuyM3QR82aFFXTfcAp67P5GpPjGmbZWQ==}
@@ -5416,9 +5441,20 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  '@capacitor/filesystem@7.1.9(@capacitor/core@7.6.8)':
+    dependencies:
+      '@capacitor/core': 7.6.8
+      '@capacitor/synapse': 1.0.4
+
   '@capacitor/ios@7.6.9(@capacitor/core@7.6.8)':
     dependencies:
       '@capacitor/core': 7.6.8
+
+  '@capacitor/share@7.0.4(@capacitor/core@7.6.8)':
+    dependencies:
+      '@capacitor/core': 7.6.8
+
+  '@capacitor/synapse@1.0.4': {}
 
   '@chevrotain/cst-dts-gen@11.2.0':
     dependencies:

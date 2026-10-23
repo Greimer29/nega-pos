@@ -17,6 +17,7 @@ vi.mock('@/lib/api', () => ({
 import {
   confirmSale,
   createSale,
+  fetchSaleQuotePdf,
   getSale,
   returnSale,
   transitionSale,
@@ -83,5 +84,38 @@ describe('sales-service id validation', () => {
         lines: [],
       })
     ).rejects.toThrow(/sin ID válido/)
+  })
+})
+describe('fetchSaleQuotePdf', () => {
+  beforeEach(() => {
+    apiGet.mockReset()
+  })
+
+  it('requests the PDF in the chosen currency as a blob', async () => {
+    const pdf = new Blob(['%PDF-'], { type: 'application/pdf' })
+    apiGet.mockResolvedValueOnce({ data: pdf })
+
+    await expect(fetchSaleQuotePdf(25, 'USD')).resolves.toBe(pdf)
+    expect(apiGet).toHaveBeenCalledWith('/sales/25/quote-pdf', {
+      params: { currency: 'USD' },
+      responseType: 'blob',
+    })
+  })
+
+  it('turns blob error bodies back into JSON so the message can be shown', async () => {
+    const body = { error: { code: 'VENTA_NO_EDITABLE', message: 'Solo borradores.' } }
+    const error = Object.assign(new Error('Request failed'), {
+      response: { status: 409, data: new Blob([JSON.stringify(body)]) },
+    })
+    apiGet.mockRejectedValueOnce(error)
+
+    await expect(fetchSaleQuotePdf(25, 'USD')).rejects.toMatchObject({
+      response: { status: 409, data: body },
+    })
+  })
+
+  it('validates the sale id', async () => {
+    await expect(fetchSaleQuotePdf(0, 'USD')).rejects.toThrow(/ID de factura inválido/)
+    expect(apiGet).not.toHaveBeenCalled()
   })
 })
