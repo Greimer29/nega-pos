@@ -125,6 +125,8 @@ export default class DashboardDailyClosingService {
     >()
 
     const invoices: DailyClosingInvoiceItem[] = []
+    /** Cash sales not fully returned: the only ones that feed the payment method totals. */
+    const countedSaleIds = new Set<number>()
     const saleIds = sales.map((sale) => Number(sale.id))
     const paymentRows =
       saleIds.length === 0
@@ -244,6 +246,7 @@ export default class DashboardDailyClosingService {
       })
 
       if (paymentType === 'CASH' && !isFullyReturned) {
+        countedSaleIds.add(saleId)
         const methodLines =
           salePayments.length > 0
             ? salePayments.map((row) => ({
@@ -317,7 +320,12 @@ export default class DashboardDailyClosingService {
       }
 
       const nativeTotal = paymentRows
-        .filter((row) => String(row.paymentMethodCode) === method.code && row.amountNative)
+        .filter(
+          (row) =>
+            countedSaleIds.has(Number(row.saleId)) &&
+            String(row.paymentMethodCode) === method.code &&
+            row.amountNative
+        )
         .reduce((sum, row) => sum + Number(row.amountNative ?? 0), 0)
 
       if (nativeTotal > 0) {
@@ -327,7 +335,7 @@ export default class DashboardDailyClosingService {
 
       const methodSales = sales.filter(
         (sale) =>
-          String(sale.paymentType) === 'CASH' &&
+          countedSaleIds.has(Number(sale.id)) &&
           String(sale.paymentMethodCode) === method.code &&
           sale.totalBs
       )
