@@ -1,3 +1,7 @@
+import CatalogProductImageService from '#services/catalog_product_image_service'
+import CatalogProductImportService from '#services/catalog_product_import_service'
+import CatalogProductPricingService from '#services/catalog_product_pricing_service'
+import CatalogProductQueryService from '#services/catalog_product_query_service'
 import CatalogProductService from '#services/catalog_product_service'
 import CatalogProductStockService from '#services/catalog_product_stock_service'
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
@@ -24,18 +28,22 @@ import type { HttpContext } from '@adonisjs/core/http'
 
 export default class CatalogProductsController {
   private service = new CatalogProductService()
+  private queryService = new CatalogProductQueryService()
+  private pricingService = new CatalogProductPricingService()
+  private imageService = new CatalogProductImageService()
+  private importService = new CatalogProductImportService()
   private inventoryService = new ProductInventoryService()
   private stockService = new CatalogProductStockService()
 
   private async serializeWithStock(product: CatalogProduct) {
     const stock = await this.stockService.calcularStockDisponible(product)
-    const costUsd = await this.service.resolverCostoUsd(product)
+    const costUsd = await this.pricingService.resolverCostoUsd(product)
     return serializeCatalogProduct(product, { stock, costUsd })
   }
 
   private async serializeManyWithStock(products: CatalogProduct[]) {
     const stockById = await this.stockService.calcularStockForProducts(products)
-    const costById = await this.service.resolverCostosUsdEnLote(products)
+    const costById = await this.pricingService.resolverCostosUsdEnLote(products)
 
     return products.map((product) =>
       serializeCatalogProduct(product, {
@@ -47,7 +55,7 @@ export default class CatalogProductsController {
 
   async index({ request, serialize }: HttpContext) {
     const filters = await request.validateUsing(listCatalogProductsValidator)
-    const paginator = await this.service.listar({
+    const paginator = await this.queryService.listar({
       page: filters.page,
       perPage: filters.per_page,
       search: filters.search,
@@ -70,11 +78,11 @@ export default class CatalogProductsController {
   }
 
   async show({ params, serialize }: HttpContext) {
-    const product = await this.service.obtenerDetalle(Number(params.id))
+    const product = await this.queryService.obtenerDetalle(Number(params.id))
     const movimientos = await this.inventoryService.listarMovimientos(Number(params.id))
     const stock = await this.stockService.calcularStockDisponible(product)
 
-    const costUsd = await this.service.resolverCostoUsd(product)
+    const costUsd = await this.pricingService.resolverCostoUsd(product)
 
     return serialize({
       catalog_product: serializeCatalogProductDetail(product, { movimientos, stock, costUsd }),
@@ -83,7 +91,7 @@ export default class CatalogProductsController {
 
   async historialCompras({ params, request, serialize }: HttpContext) {
     const filters = await request.validateUsing(catalogProductPurchaseHistoryValidator)
-    const historial = await this.service.historialCompras(Number(params.id), {
+    const historial = await this.queryService.historialCompras(Number(params.id), {
       month: filters.month,
       from: filters.from,
       to: filters.to,
@@ -158,7 +166,7 @@ export default class CatalogProductsController {
 
   async applyProfitMargin({ request, auth, serialize }: HttpContext) {
     const payload = await request.validateUsing(applyCatalogProfitMarginValidator)
-    const result = await this.service.aplicarMargenGanancia({
+    const result = await this.pricingService.aplicarMargenGanancia({
       catalog_product_ids: payload.catalog_product_ids,
       profit_margin_percent: payload.profit_margin_percent,
       userId: Number(auth.getUserOrFail().id),
@@ -173,7 +181,7 @@ export default class CatalogProductsController {
 
   async importar({ request, serialize }: HttpContext) {
     const payload = await request.validateUsing(importCatalogProductsValidator)
-    const result = await this.service.importar(payload.item_kind, payload.rows)
+    const result = await this.importService.importar(payload.item_kind, payload.rows)
     broadcastCompanyEvent('catalog.changed')
 
     return serialize(result)
@@ -196,7 +204,7 @@ export default class CatalogProductsController {
       return serialize({ error: 'No image provided' })
     }
 
-    const product = await this.service.guardarImagen(Number(params.id), file)
+    const product = await this.imageService.guardarImagen(Number(params.id), file)
 
     return serialize({
       catalog_product: await this.serializeWithStock(product),
@@ -204,7 +212,7 @@ export default class CatalogProductsController {
   }
 
   async downloadImage({ params, response }: HttpContext) {
-    const image = await this.service.obtenerImagen(Number(params.id))
+    const image = await this.imageService.obtenerImagen(Number(params.id))
 
     response.header('Content-Type', image.contentType)
     response.header('Content-Disposition', `inline; filename="${image.filename}"`)
@@ -213,7 +221,7 @@ export default class CatalogProductsController {
   }
 
   async deleteImage({ params, serialize }: HttpContext) {
-    const product = await this.service.eliminarImagen(Number(params.id))
+    const product = await this.imageService.eliminarImagen(Number(params.id))
 
     return serialize({
       catalog_product: await this.serializeWithStock(product),
