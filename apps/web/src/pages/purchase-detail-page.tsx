@@ -111,6 +111,8 @@ export function PurchaseDetallePage() {
   const itemNativeEntryRef = useRef<Map<string, number>>(new Map())
   const entryCurrencyRef = useRef<PurchaseEntryCurrency>('XAU')
   const usdRateRef = useRef('')
+  const localItemsRef = useRef<LocalPurchaseItem[]>([])
+  const persistItemNowRef = useRef<(purchaseId: number, localId: string) => void>(() => {})
 
   const [itemAddMode, setItemAddMode] = useState<'material' | 'product' | 'machine'>('material')
 
@@ -135,6 +137,7 @@ export function PurchaseDetallePage() {
 
   entryCurrencyRef.current = entryCurrency
   usdRateRef.current = usdRate
+  localItemsRef.current = localItems
 
   const isBorrador = purchase?.status === 'DRAFT'
   const supplierNombre = purchase?.supplierId
@@ -228,11 +231,13 @@ export function PurchaseDetallePage() {
   ])
 
   useEffect(() => {
+    const timers = itemSaveTimers.current
     return () => {
-      for (const timer of itemSaveTimers.current.values()) {
+      for (const [localId, timer] of timers) {
         window.clearTimeout(timer)
+        persistItemNowRef.current(purchaseId, localId)
       }
-      itemSaveTimers.current.clear()
+      timers.clear()
     }
   }, [purchaseId])
 
@@ -302,23 +307,38 @@ export function PurchaseDetallePage() {
     )
   }
 
-  function scheduleItemPersist(localId: string, item: LocalPurchaseItem) {
+  function persistItemNow(targetPurchaseId: number, localId: string) {
     const itemId = parseDbItemId(localId)
-    if (!itemId) return
+    const item = localItemsRef.current.find((row) => row.localId === localId)
+    if (!itemId || !item) return
+
+    const payload = buildItemPayload(item, itemNativeEntryRef.current.get(localId))
+    void updateItemMutation
+      .mutateAsync({ purchaseId: targetPurchaseId, itemId, payload })
+      .catch((err) => notifyApiError(err))
+  }
+  persistItemNowRef.current = persistItemNow
+
+  function scheduleItemPersist(localId: string) {
+    if (!parseDbItemId(localId)) return
 
     const existing = itemSaveTimers.current.get(localId)
     if (existing) window.clearTimeout(existing)
 
     const timer = window.setTimeout(() => {
       itemSaveTimers.current.delete(localId)
-      const payload = buildItemPayload(item, itemNativeEntryRef.current.get(localId))
-
-      void updateItemMutation
-        .mutateAsync({ purchaseId, itemId, payload })
-        .catch((err) => notifyApiError(err))
+      persistItemNow(purchaseId, localId)
     }, 500)
 
     itemSaveTimers.current.set(localId, timer)
+  }
+
+  /** Confirming sends every row and deleting drops them, so pending row saves would only fail. */
+  function discardPendingItemSaves() {
+    for (const timer of itemSaveTimers.current.values()) {
+      window.clearTimeout(timer)
+    }
+    itemSaveTimers.current.clear()
   }
 
   async function addMaterialToItems(material: Material) {
@@ -532,17 +552,11 @@ export function PurchaseDetallePage() {
     localId: string,
     patch: Partial<Pick<LocalPurchaseItem, 'quantity' | 'unitPriceUsd' | 'isWholesale'>>
   ) {
-    let persistedItem: LocalPurchaseItem | null = null
-
     setLocalItems((prev) =>
-      prev.map((item) => {
-        if (item.localId !== localId) return item
-        persistedItem = { ...item, ...patch }
-        return persistedItem
-      })
+      prev.map((item) => (item.localId === localId ? { ...item, ...patch } : item))
     )
 
-    if (persistedItem) scheduleItemPersist(localId, persistedItem)
+    scheduleItemPersist(localId)
     markDirty()
   }
 
@@ -754,6 +768,7 @@ export function PurchaseDetallePage() {
 
   async function handleDeletePurchase() {
     if (!window.confirm('¿Eliminar esta compra en borrador?')) return
+    discardPendingItemSaves()
     try {
       await deleteMutation.mutateAsync(purchaseId)
       void navigate('/purchases')
@@ -1256,6 +1271,7 @@ export function PurchaseDetallePage() {
             sinItems={localItems.length === 0}
             sinTasa={entryInNative && !isValidPurchaseRate(rateNum)}
             onSuccess={() => {
+              discardPendingItemSaves()
               setHasLocalChanges(false)
               void navigate('/purchases')
             }}
