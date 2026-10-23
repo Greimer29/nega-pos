@@ -36,6 +36,7 @@ type EditableRow = SaleLineFormulaMaterial & {
 type SaleLineFormulaSaveResult = {
   materials: SaleLineFormulaMaterial[] | null
   materialRefs: SaleLineFormulaMaterialRef[]
+  baseMaterialIds: number[]
 }
 
 type SaleLineFormulaDialogProps = {
@@ -56,13 +57,18 @@ function buildRowsFromProduct(
   initialMaterials: SaleLineFormulaMaterialRef[] | null | undefined
 ): EditableRow[] {
   if (initialMaterials && initialMaterials.length > 0) {
-    return initialMaterials.map((item) => ({
-      material_id: item.material_id,
-      quantity_per_unit: item.quantity_per_unit,
-      materialName: item.material?.name ?? `Material #${item.material_id}`,
-      materialUnit: item.material?.unit ?? 'UND',
-      lastPurchasePriceUsd: item.material?.last_purchase_price_usd ?? null,
-    }))
+    return initialMaterials.map((item) => {
+      const base = formulaMaterials.find((row) => row.material_id === item.material_id)?.material
+      const material = item.material ?? base
+      return {
+        material_id: item.material_id,
+        quantity_per_unit: item.quantity_per_unit,
+        materialName: material?.name ?? `Material #${item.material_id}`,
+        materialUnit: material?.unit ?? base?.unit ?? 'UND',
+        lastPurchasePriceUsd:
+          material?.last_purchase_price_usd ?? base?.last_purchase_price_usd ?? null,
+      }
+    })
   }
 
   return formulaMaterials.map((item) => ({
@@ -93,6 +99,11 @@ export function SaleLineFormulaDialog({
     }
     return fetchedFormulaMaterials ?? []
   }, [product?.formula?.materials, fetchedFormulaMaterials])
+  const baseMaterialIds = useMemo(
+    () => baseFormulaMaterials.map((item) => item.material_id),
+    [baseFormulaMaterials]
+  )
+  const baseFormulaPending = Boolean(formulaId) && !product?.formula?.materials?.length && isLoading
 
   useEffect(() => {
     if (!open || !product) {
@@ -138,7 +149,7 @@ export function SaleLineFormulaDialog({
     if (!product) {
       return
     }
-    onSave({ materials: null, materialRefs: [] })
+    onSave({ materials: null, materialRefs: [], baseMaterialIds })
     onOpenChange(false)
   }
 
@@ -167,6 +178,7 @@ export function SaleLineFormulaDialog({
         quantity_per_unit: row.quantity_per_unit,
       })),
       materialRefs,
+      baseMaterialIds,
     })
     onOpenChange(false)
   }
@@ -251,7 +263,7 @@ export function SaleLineFormulaDialog({
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="button" onClick={handleSave}>
+            <Button type="button" onClick={handleSave} disabled={baseFormulaPending}>
               Guardar
             </Button>
           </div>

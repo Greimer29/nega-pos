@@ -144,6 +144,32 @@ describe('setCartLineFormulaMaterials', () => {
     expect(line.unitPriceUsd).toBe(16)
   })
 
+  it('uses the given base materials when the product comes without its formula', () => {
+    const listed: CartLine[] = [
+      {
+        id: 'm',
+        kind: 'catalog',
+        product: { ...meat, formula: undefined } as unknown as CatalogProduct,
+        quantity: 1,
+        unitPriceUsd: 12,
+      },
+    ]
+    const res = { id: 7, code: 'M7', name: 'Res', unit: 'KG', last_purchase_price_usd: '5.00' }
+
+    const line = setCartLineFormulaMaterials(
+      listed,
+      'm',
+      [{ material_id: 7, quantity_per_unit: 1.2 }],
+      [{ material_id: 7, quantity_per_unit: 1.2, material: res }],
+      [7]
+    )[0]
+
+    expect(line.unitPriceUsd).toBe(12)
+    expect(line.kind === 'catalog' && line.formulaMaterials).toEqual([
+      { material_id: 7, quantity_per_unit: 1.2, material: res },
+    ])
+  })
+
   it('leaves material lines untouched', () => {
     expect(setCartLineFormulaMaterials(lines(), 'c', null)[2]).toEqual(lines()[2])
   })

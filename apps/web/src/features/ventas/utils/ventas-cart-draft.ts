@@ -4,6 +4,7 @@ import type { CatalogProduct } from '@/features/ventas/types'
 import {
   createCartLineId,
   type SaleLineFormulaMaterial,
+  type SaleLineFormulaMaterialRef,
 } from '@/features/ventas/utils/sale-line-formula'
 
 const STORAGE_KEY = 'nega-pos:ventas-cart-draft'
@@ -56,10 +57,18 @@ function normalizeFormulaMaterials(value: unknown): SaleLineFormulaMaterial[] | 
         typeof item.material_id === 'number' &&
         typeof item.quantity_per_unit === 'number'
     )
-    .map((item) => ({
-      material_id: item.material_id,
-      quantity_per_unit: item.quantity_per_unit,
-    }))
+    .map((item): SaleLineFormulaMaterialRef => {
+      const material = (item as { material?: unknown }).material
+      return {
+        material_id: item.material_id,
+        quantity_per_unit: item.quantity_per_unit,
+        ...(isRecord(material) &&
+        typeof material.id === 'number' &&
+        typeof material.name === 'string'
+          ? { material: material as SaleLineFormulaMaterialRef['material'] }
+          : {}),
+      }
+    })
 
   return materials.length > 0 ? materials : null
 }

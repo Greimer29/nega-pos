@@ -751,10 +751,13 @@ function VentasCreateView() {
   function saveLineFormulaMaterials(
     lineId: string,
     materials: SaleLineFormulaMaterial[] | null,
-    materialRefs: SaleLineFormulaMaterialRef[] = []
+    materialRefs: SaleLineFormulaMaterialRef[],
+    baseMaterialIds: number[]
   ) {
     setSuccessMessage(null)
-    setCart((prev) => setCartLineFormulaMaterials(prev, lineId, materials, materialRefs))
+    setCart((prev) =>
+      setCartLineFormulaMaterials(prev, lineId, materials, materialRefs, baseMaterialIds)
+    )
   }
 
   function toggleCartWholesale(lineId: string, checked: boolean) {
@@ -1228,7 +1231,12 @@ function VentasCreateView() {
         initialMaterials={formulaDialogLine?.formulaMaterials}
         onSave={(result) => {
           if (formulaDialogLineId) {
-            saveLineFormulaMaterials(formulaDialogLineId, result.materials, result.materialRefs)
+            saveLineFormulaMaterials(
+              formulaDialogLineId,
+              result.materials,
+              result.materialRefs,
+              result.baseMaterialIds
+            )
           }
           setFormulaDialogLineId(null)
         }}

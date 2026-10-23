@@ -32,7 +32,8 @@ export function hasAddedMaterialsBeyondBase(
 export function resolveCartLineUnitPriceUsd(
   product: CatalogProduct,
   customMaterials: SaleLineFormulaMaterial[] | null,
-  materialRefs: SaleLineFormulaMaterialRef[]
+  materialRefs: SaleLineFormulaMaterialRef[],
+  baseIds: Set<number> = getBaseFormulaMaterialIds(product)
 ): number {
   const catalogPrice = Number(product.sale_price_usd)
 
@@ -40,7 +41,6 @@ export function resolveCartLineUnitPriceUsd(
     return catalogPrice
   }
 
-  const baseIds = getBaseFormulaMaterialIds(product)
   if (!hasAddedMaterialsBeyondBase(baseIds, customMaterials)) {
     return catalogPrice
   }

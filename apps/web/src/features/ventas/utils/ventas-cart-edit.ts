@@ -106,13 +106,16 @@ export function updateServiceCartLine(
 
 /**
  * `null` restores the base recipe. Adding materials beyond the base recipe reprices the line;
- * only changing quantities of base materials keeps the current price.
+ * only changing quantities of base materials keeps the current price. Catalog list products
+ * do not include their formula, so callers pass the base material ids they loaded.
+ * The line keeps the material refs so the recipe can be shown again with names and units.
  */
 export function setCartLineFormulaMaterials(
   lines: CartLine[],
   lineId: string,
   materials: SaleLineFormulaMaterial[] | null,
-  materialRefs: SaleLineFormulaMaterialRef[] = []
+  materialRefs: SaleLineFormulaMaterialRef[] = [],
+  baseMaterialIds?: number[]
 ): CartLine[] {
   return lines.map((line) => {
     if (line.id !== lineId || line.kind !== 'catalog') {
@@ -126,14 +129,18 @@ export function setCartLineFormulaMaterials(
       }
     }
 
-    const baseIds = getBaseFormulaMaterialIds(line.product)
+    const baseIds = baseMaterialIds
+      ? new Set(baseMaterialIds)
+      : getBaseFormulaMaterialIds(line.product)
     const hasAdded = hasAddedMaterialsBeyondBase(baseIds, materials)
 
     return {
       ...line,
-      formulaMaterials: materials,
+      formulaMaterials: materials.map(
+        (item) => materialRefs.find((ref) => ref.material_id === item.material_id) ?? item
+      ),
       unitPriceUsd: hasAdded
-        ? resolveCartLineUnitPriceUsd(line.product, materials, materialRefs)
+        ? resolveCartLineUnitPriceUsd(line.product, materials, materialRefs, baseIds)
         : line.unitPriceUsd,
     }
   })
