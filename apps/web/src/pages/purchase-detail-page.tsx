@@ -113,6 +113,7 @@ export function PurchaseDetallePage() {
   const usdRateRef = useRef('')
   const localItemsRef = useRef<LocalPurchaseItem[]>([])
   const persistItemNowRef = useRef<(purchaseId: number, localId: string) => void>(() => {})
+  const savedHeaderRef = useRef<{ purchaseId: number; key: string } | null>(null)
 
   const [itemAddMode, setItemAddMode] = useState<'material' | 'product' | 'machine'>('material')
 
@@ -127,7 +128,11 @@ export function PurchaseDetallePage() {
   const { data: globalRate } = useExchangeRateQuery()
   const { data: activeCurrencies = [] } = useActiveCurrenciesQuery()
   const { data: baseCurrencyCode = 'XAU' } = useBaseCurrencyQuery()
-  const { data: suppliersData } = useSuppliersQuery({ page: 1, perPage: 100, active: true })
+  const { data: suppliersData, isPending: suppliersPending } = useSuppliersQuery({
+    page: 1,
+    perPage: 100,
+    active: true,
+  })
   const deleteMutation = useDeletePurchaseMutation()
   const uploadMutation = useUploadFacturaMutation()
   const updateMutation = useUpdatePurchaseMutation()
@@ -166,6 +171,8 @@ export function PurchaseDetallePage() {
   useEffect(() => {
     if (!purchase || !isBorrador) return
     if (syncedPurchaseId === purchase.id) return
+    // Without the supplier the credit flag would load as off and autosave would persist it.
+    if (purchase.supplierId && suppliersPending) return
 
     setLocalItems((purchase.items ?? []).map(purchaseItemToLocal))
     setInvoiceNumber(purchase.invoiceNumber ?? '')
@@ -185,7 +192,7 @@ export function PurchaseDetallePage() {
     setIsCredit(supplierOffersCredit ? purchase.isCredit : false)
     setCreditDueDate(purchase.creditDueDate ?? '')
     setSyncedPurchaseId(purchase.id)
-  }, [purchase, isBorrador, syncedPurchaseId, globalRate, supplierOffersCredit, activeCurrencies, baseCurrencyCode])
+  }, [purchase, isBorrador, syncedPurchaseId, globalRate, supplierOffersCredit, suppliersPending, activeCurrencies, baseCurrencyCode])
 
   useEffect(() => {
     if (!supplierOffersCredit && isCredit) {
@@ -197,22 +204,31 @@ export function PurchaseDetallePage() {
   useEffect(() => {
     if (!purchase || !isBorrador || syncedPurchaseId !== purchase.id) return
 
+    const payload = {
+      ...(purchase.supplierId ? { supplier_id: purchase.supplierId } : {}),
+      date: purchase.date,
+      invoice_number: invoiceNumber.trim() || undefined,
+      entry_currency_code: entryCurrency,
+      usd_rate: usdRate ? Number(usdRate) : undefined,
+      notes: notes.trim() || undefined,
+      account_id: accountId,
+      is_credit: supplierOffersCredit ? isCredit : false,
+      credit_due_date:
+        supplierOffersCredit && isCredit ? creditDueDate || undefined : undefined,
+    }
+    // Saving refetches the purchase, which reruns this effect: only save real header changes.
+    const key = JSON.stringify(payload)
+    const saved = savedHeaderRef.current
+    if (saved?.purchaseId !== purchase.id) {
+      savedHeaderRef.current = { purchaseId: purchase.id, key }
+      return
+    }
+    if (saved.key === key) return
+
+    const purchaseIdToSave = purchase.id
     const timer = window.setTimeout(() => {
-      void updateMutation.mutateAsync({
-        id: purchase.id,
-        payload: {
-          ...(purchase.supplierId ? { supplier_id: purchase.supplierId } : {}),
-          date: purchase.date,
-          invoice_number: invoiceNumber.trim() || undefined,
-          entry_currency_code: entryCurrency,
-          usd_rate: usdRate ? Number(usdRate) : undefined,
-          notes: notes.trim() || undefined,
-          account_id: accountId,
-          is_credit: supplierOffersCredit ? isCredit : false,
-          credit_due_date:
-            supplierOffersCredit && isCredit ? creditDueDate || undefined : undefined,
-        },
-      })
+      savedHeaderRef.current = { purchaseId: purchaseIdToSave, key }
+      void updateMutation.mutateAsync({ id: purchaseIdToSave, payload })
     }, 600)
 
     return () => window.clearTimeout(timer)
