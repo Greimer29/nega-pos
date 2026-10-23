@@ -1064,7 +1064,15 @@ En el POS de ventas, `ventas-panel.tsx` coordina estado y flujo entre los compon
 - `ventas-catalog-results.tsx`: estados de carga/error/vacío, resultados en tabla o tarjetas y paginación.
 - `ventas-checkout-panel.tsx`: presentación del carrito y checkout.
 
-La lógica reutilizable sin UI vive en `utils/`: `ventas-catalog.ts` prepara filtros y datos del catálogo; `ventas-cart-lines.ts` normaliza líneas y resuelve precios; `sales-checkout.ts` construye payloads, persiste borradores y coordina la confirmación online. El flujo offline permanece en el coordinador porque depende del estado local y la copia del catálogo.
+La lógica reutilizable sin UI vive en `utils/`: `ventas-catalog.ts` prepara filtros y datos del catálogo; `ventas-cart-lines.ts` normaliza líneas y resuelve precios; `ventas-cart-edit.ts` aplica las ediciones del carrito (cantidad, mayorista, precio, nota de cocina, detalle de servicio, materiales de fórmula y quitar línea); `ventas-cart-view.ts` arma las filas que muestra el carrito; `sales-checkout.ts` construye payloads, persiste borradores y coordina la confirmación online. El flujo offline permanece en el coordinador porque depende del estado local y la copia del catálogo.
+
+El carrito (`ventas-order-cart.tsx`) conserva estado y totales; cada línea se dibuja en `ventas-cart-line-item.tsx`, los diálogos de precio de línea y descuento de factura viven en `ventas-cart-price-dialogs.tsx`, y `utils/ventas-cart-pricing.ts` calcula subtotales, ajustes de precio, porcentajes y la conversión del monto escrito a moneda base.
+
+En el detalle de pedido (`pages/order-detail-page.tsx`), el formulario de cabecera, el resumen de solo lectura, la tabla de productos, el selector de forma de pago y el diálogo de stock insuficiente viven en `features/orders/components/order-detail/`. `features/orders/utils/order-detail-form.ts` valida la cabecera, arma su payload, filtra las transiciones disponibles y valida el pago a crédito.
+
+El diálogo de producto (`catalog-form-dialog.tsx`) conserva estado, carga inicial, imagen y guardado. Las secciones de tallas, fórmula y precios (detal y mayorista) viven en `components/catalog-form/`. `utils/catalog-product-form.ts` valida el formulario, arma el payload y calcula el stock por tallas, el costo de la fórmula y el costo unitario derivado del paquete.
+
+En el detalle de compra (`pages/purchase-detail-page.tsx`), la barra para agregar ítems y las filas de borrador y confirmadas viven en `features/purchases/components/purchase-detail/`. `features/purchases/utils/purchase-local-items.ts` convierte los ítems de la compra al formato local, resuelve código, nombre, unidad y mayorista de cada ítem e interpreta la tasa de entrada.
 
 ### Estado y borradores locales
 
