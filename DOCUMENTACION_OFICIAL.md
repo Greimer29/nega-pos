@@ -135,7 +135,7 @@ No se empujan filas completas por SSE. Vite y Electron proxyan `/__transmit` hac
 |---------|---------|
 | Electron | ^34.2.0 |
 | electron-builder | ^25.1.8 |
-| Versión app | 1.5.2 (paquetes desktop y mobile) |
+| Versión app | 1.5.3 (paquetes desktop y mobile) |
 
 ### Base de datos
 
