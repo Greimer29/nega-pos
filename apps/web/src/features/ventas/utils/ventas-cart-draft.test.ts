@@ -101,6 +101,32 @@ describe('ventas-cart-draft', () => {
     ])
   })
 
+  it('keeps material names of custom formula materials in cart draft', () => {
+    const tela = { id: 9, code: 'M9', name: 'Tela', unit: 'MTS', last_purchase_price_usd: '1.20' }
+    saveVentasCartDraft({
+      cart: [
+        {
+          id: 'line-named',
+          kind: 'catalog',
+          product: sampleProduct,
+          quantity: 1,
+          formulaMaterials: [{ material_id: 9, quantity_per_unit: 2.5, material: tela }],
+        },
+      ],
+      customerId: '',
+      clientName: '',
+      customerCreditDays: null,
+      paymentType: 'CASH',
+      billingMethod: 'FAST',
+      sourceSaleId: null,
+      sourceSaleLabel: null,
+    })
+
+    expect(loadVentasCartDraft()?.cart[0]?.formulaMaterials).toEqual([
+      { material_id: 9, quantity_per_unit: 2.5, material: tela },
+    ])
+  })
+
   it('persists custom unit price when formula adds materials', () => {
     saveVentasCartDraft({
       cart: [
