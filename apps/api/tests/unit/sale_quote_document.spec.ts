@@ -1,5 +1,5 @@
 import { buildSaleQuoteDocument, type SaleQuoteInput } from '#utils/sale_quote_document'
-import { isSupportedLogo } from '#utils/sale_quote_pdf'
+import { isSupportedLogo, renderSaleQuotePdf, toPdfText } from '#utils/sale_quote_pdf'
 import { test } from '@japa/runner'
 import { DateTime } from 'luxon'
 
@@ -120,5 +120,55 @@ test.group('isSupportedLogo', () => {
     assert.isTrue(isSupportedLogo(png))
     assert.isTrue(isSupportedLogo(jpeg))
     assert.isFalse(isSupportedLogo(webp))
+  })
+})
+
+test.group('toPdfText', () => {
+  test('keeps Spanish text and WinAnsi symbols, drops emoji and other scripts', ({ assert }) => {
+    assert.equal(
+      toPdfText('Señora María 😀 — «Panadería» 100% (½ kg) € 🔥 中文'),
+      'Señora María — «Panadería» 100% (½ kg) €'
+    )
+    assert.equal(toPdfText('Línea 1\nLínea 2'), 'Línea 1\nLínea 2')
+    assert.equal(toPdfText('😀'), '')
+  })
+})
+
+test.group('renderSaleQuotePdf', () => {
+  test('renders emoji names and huge amounts without failing', async ({ assert }) => {
+    const quote = buildSaleQuoteDocument(
+      input({
+        customerName: 'Cliente 😀 con nombre muy largo para que el texto tenga que ajustarse',
+        currencyCode: 'VES',
+        rate: 90000,
+        lines: Array.from({ length: 60 }, (_, index) => ({
+          description: `Producto ${index} 🔥 con descripción larga para ajustar el texto`,
+          size: null,
+          unit: 'UND',
+          quantity: 99,
+          unitPriceBase: 12345.6789,
+          subtotalBase: 1222222.2111,
+          isWholesale: false,
+          unitsPerPack: null,
+        })),
+        totalBase: 73333332.666,
+      })
+    )
+
+    const pdf = await renderSaleQuotePdf(quote, {
+      tradeName: 'Negocio 😀',
+      legalName: '',
+      rif: '',
+      address: '',
+      phone: '',
+      email: '',
+      website: '',
+      terms: 'Condiciones ✅',
+      accentColor: '#0f4c3a',
+      logo: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]),
+    })
+
+    assert.equal(pdf.subarray(0, 5).toString('latin1'), '%PDF-')
+    assert.isAbove(pdf.length, 2000)
   })
 })

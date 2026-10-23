@@ -25,17 +25,70 @@ const COLUMNS = [
   { key: 'subtotal', label: 'Subtotal', width: 100, align: 'right' },
 ] as const
 
+/** Characters above Latin-1 that the WinAnsi encoding of the standard PDF fonts still includes. */
+const WIN_ANSI_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ')
+
+/**
+ * The built-in Helvetica only encodes WinAnsi: anything else (emoji, CJK…) prints as garbage,
+ * so it is dropped before drawing.
+ */
+export function toPdfText(value: string): string {
+  let result = ''
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0
+    const supported =
+      char === '\n' ||
+      (code >= 0x20 && code <= 0x7e) ||
+      (code >= 0xa0 && code <= 0xff) ||
+      WIN_ANSI_EXTRA.has(char)
+    if (supported) {
+      result += char
+    }
+  }
+  return result.replace(/[ \t]{2,}/g, ' ').trim()
+}
+
 export function isSupportedLogo(bytes: Buffer): boolean {
   const isPng = bytes.length > 8 && bytes.readUInt32BE(0) === 0x89504e47
   const isJpeg = bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
   return isPng || isJpeg
 }
 
+function printableQuote(quote: SaleQuoteDocument): SaleQuoteDocument {
+  return {
+    ...quote,
+    customerName: toPdfText(quote.customerName) || 'Cliente',
+    customerDocument: quote.customerDocument ? toPdfText(quote.customerDocument) : null,
+    customerPhone: quote.customerPhone ? toPdfText(quote.customerPhone) : null,
+    lines: quote.lines.map((line) => ({
+      ...line,
+      description: toPdfText(line.description) || 'Producto',
+      quantity: toPdfText(line.quantity),
+    })),
+  }
+}
+
+function printableBusiness(business: SaleQuoteBusiness): SaleQuoteBusiness {
+  return {
+    ...business,
+    tradeName: toPdfText(business.tradeName),
+    legalName: toPdfText(business.legalName),
+    rif: toPdfText(business.rif),
+    address: toPdfText(business.address),
+    phone: toPdfText(business.phone),
+    email: toPdfText(business.email),
+    website: toPdfText(business.website),
+    terms: toPdfText(business.terms),
+  }
+}
+
 /** Letter-size PDF of a sales quote. */
 export function renderSaleQuotePdf(
-  quote: SaleQuoteDocument,
-  business: SaleQuoteBusiness
+  rawQuote: SaleQuoteDocument,
+  rawBusiness: SaleQuoteBusiness
 ): Promise<Buffer> {
+  const quote = printableQuote(rawQuote)
+  const business = printableBusiness(rawBusiness)
   const doc = new PDFDocument({
     size: 'LETTER',
     margin: MARGIN,
@@ -159,10 +212,10 @@ function drawLines(doc: PDFKit.PDFDocument, quote: SaleQuoteDocument, accent: st
 
   quote.lines.forEach((line, index) => {
     doc.font('Helvetica').fontSize(9)
-    const descriptionHeight = doc.heightOfString(line.description, {
-      width: COLUMNS[0].width - 12,
-    })
-    const rowHeight = Math.max(20, descriptionHeight + 10)
+    const contentHeight = Math.max(
+      ...COLUMNS.map((column) => doc.heightOfString(line[column.key], { width: column.width - 12 }))
+    )
+    const rowHeight = Math.max(20, contentHeight + 10)
 
     if (doc.y + rowHeight > bottomLimit) {
       doc.addPage()
@@ -205,26 +258,35 @@ function drawTotals(
   }
   rows.push({ label: 'TOTAL', value: quote.total, strong: true })
 
-  const needed = rows.length * 18 + 30
+  const blockWidth = 300
+  const labelWidth = 100
+  const valueWidth = blockWidth - labelWidth - 10
+  const labelX = MARGIN + pageWidth - blockWidth
+  const valueX = labelX + labelWidth + 10
+
+  const needed = rows.length * 34 + 30
   if (doc.y + needed > doc.page.height - MARGIN) {
     doc.addPage()
   }
 
-  const labelX = MARGIN + pageWidth - 240
   let y = doc.y + 10
   for (const row of rows) {
     doc
       .font(row.strong ? 'Helvetica-Bold' : 'Helvetica')
       .fontSize(row.strong ? 12 : 10)
       .fillColor(row.strong ? accent : '#111111')
-    doc.text(row.label, labelX, y, { width: 110, align: 'right' })
-    doc.text(row.value, labelX + 120, y, { width: 120, align: 'right' })
-    y += row.strong ? 20 : 16
+    const height = Math.max(
+      doc.heightOfString(row.label, { width: labelWidth }),
+      doc.heightOfString(row.value, { width: valueWidth })
+    )
+    doc.text(row.label, labelX, y, { width: labelWidth, align: 'right' })
+    doc.text(row.value, valueX, y, { width: valueWidth, align: 'right' })
+    y += height + (row.strong ? 6 : 4)
   }
 
   if (quote.rateLabel) {
     doc.font('Helvetica').fontSize(8).fillColor(MUTED)
-    doc.text(`Tasa usada: ${quote.rateLabel}`, labelX, y + 2, { width: 240, align: 'right' })
+    doc.text(`Tasa usada: ${quote.rateLabel}`, labelX, y + 2, { width: blockWidth, align: 'right' })
     y = doc.y
   }
   doc.y = y + 16
