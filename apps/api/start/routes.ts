@@ -276,6 +276,7 @@ router
         router.post('sales/offline/close-shift', [SalesController, 'syncOfflineCloseShift'])
         router.get('sales', [SalesController, 'index'])
         router.get('sales/:id', [SalesController, 'show'])
+        router.get('sales/:id/quote-pdf', [SalesController, 'quotePdf'])
         router.post('sales', [SalesController, 'store'])
         router.put('sales/:id', [SalesController, 'update'])
         router.delete('sales/:id', [SalesController, 'destroy'])

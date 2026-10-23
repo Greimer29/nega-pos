@@ -88,6 +88,10 @@ export const listSalesValidator = vine.create({
   date_to: vine.string().trim().optional(),
 })
 
+export const saleQuotePdfValidator = vine.create({
+  currency: vine.string().trim().toUpperCase().fixedLength(3).optional(),
+})
+
 export const offlineSyncSaleValidator = vine.create({
   offline_client_id: vine.string().trim().minLength(8).maxLength(64),
   sold_at: vine.string().trim().minLength(10).maxLength(40),

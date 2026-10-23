@@ -1,5 +1,6 @@
 import { broadcastCompanyEvent } from '#services/company_realtime_service'
 import SaleQueryService from '#services/sale_query_service'
+import SaleQuoteService from '#services/sale_quote_service'
 import SaleService from '#services/sale_service'
 import OfflineCatalogService from '#services/offline_catalog_service'
 import SalesShiftService from '#services/sales_shift_service'
@@ -14,6 +15,7 @@ import {
   offlineSyncSaleValidator,
   offlineSyncTransitionValidator,
   returnSaleValidator,
+  saleQuotePdfValidator,
   transitionSaleValidator,
   updateSaleValidator,
 } from '#validators/sale'
@@ -22,6 +24,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 export default class SalesController {
   private service = new SaleService()
   private queryService = new SaleQueryService()
+  private quoteService = new SaleQuoteService()
   private offlineCatalogService = new OfflineCatalogService()
   private salesShiftService = new SalesShiftService()
 
@@ -58,6 +61,16 @@ export default class SalesController {
     return serialize({
       sale: serializeSale(sale),
     })
+  }
+
+  async quotePdf({ params, request, response }: HttpContext) {
+    const { currency } = await request.validateUsing(saleQuotePdfValidator)
+    const pdf = await this.quoteService.generarPdf(parseRouteId(params.id, 'factura'), currency)
+
+    response.header('Content-Type', 'application/pdf')
+    response.header('Content-Disposition', `attachment; filename="${pdf.filename}"`)
+    response.header('Cache-Control', 'no-store')
+    return response.send(pdf.bytes)
   }
 
   async store({ request, auth, serialize }: HttpContext) {

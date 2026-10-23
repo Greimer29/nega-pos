@@ -17,7 +17,14 @@ export type BusinessProfile = {
   logo_path: string | null
   use_custom_palette: boolean
   palette: BusinessPalette
+  /** Days a PDF quote stays valid; 0 hides the expiry date. */
+  quote_validity_days: number
+  /** Conditions printed at the bottom of PDF quotes. */
+  quote_terms: string
 }
+
+export const DEFAULT_QUOTE_VALIDITY_DAYS = 3
+export const MAX_QUOTE_VALIDITY_DAYS = 365
 
 export const DEFAULT_BUSINESS_PALETTE: BusinessPalette = {
   primary: '#1a1a1a',
@@ -38,4 +45,6 @@ export const DEFAULT_BUSINESS_PROFILE: BusinessProfile = {
   logo_path: null,
   use_custom_palette: false,
   palette: { ...DEFAULT_BUSINESS_PALETTE },
+  quote_validity_days: DEFAULT_QUOTE_VALIDITY_DAYS,
+  quote_terms: '',
 }

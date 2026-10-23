@@ -2,6 +2,8 @@ import ArchivoImagenNoDisponibleException from '#exceptions/archivo_imagen_no_di
 import AppSetting from '#models/app_setting'
 import {
   DEFAULT_BUSINESS_PROFILE,
+  DEFAULT_QUOTE_VALIDITY_DAYS,
+  MAX_QUOTE_VALIDITY_DAYS,
   type BusinessPalette,
   type BusinessProfile,
 } from '#types/business_profile'
@@ -142,7 +144,17 @@ export default class BusinessProfileService {
       logo_path: input.logo_path ?? null,
       use_custom_palette: input.use_custom_palette ?? false,
       palette,
+      quote_validity_days: this.normalizeValidityDays(input.quote_validity_days),
+      quote_terms: input.quote_terms?.trim() ?? '',
     }
+  }
+
+  private normalizeValidityDays(value: unknown): number {
+    const days = Number(value)
+    if (!Number.isInteger(days) || days < 0) {
+      return DEFAULT_QUOTE_VALIDITY_DAYS
+    }
+    return Math.min(days, MAX_QUOTE_VALIDITY_DAYS)
   }
 
   private normalizePalette(palette?: Partial<BusinessPalette>): BusinessPalette {
