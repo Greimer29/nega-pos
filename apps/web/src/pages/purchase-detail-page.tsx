@@ -60,10 +60,10 @@ import type { LocalPurchaseItem } from '@/features/purchases/types'
 import { PurchaseMachineFormDialog } from '@/features/purchases/components/purchase-machine-form-dialog'
 import type { Machine } from '@/features/machines/types'
 import { MaterialFormDialog } from '@/features/materials/components/material-form-dialog'
+import { getMaterial } from '@/features/materials/services/material-service'
 import type { Material } from '@/features/materials/types'
 import type { CatalogProduct } from '@/features/ventas/types'
 import { CatalogFormDialog } from '@/features/ventas/components/catalog-form-dialog'
-import type { ProductSaleUnit } from '@/features/ventas/constants'
 import { getCatalogProduct } from '@/features/ventas/services/catalog-service'
 import { useSuppliersQuery } from '@/features/suppliers/hooks/use-suppliers'
 import { supplierImageUrl } from '@/features/suppliers/constants'
@@ -635,51 +635,27 @@ export function PurchaseDetallePage() {
     markDirty()
   }
 
-  function openEditMaterial(item: LocalPurchaseItem) {
-    if (item.itemType !== 'material' || !item.material) return
-    setEditingMaterial({
-      id: item.material.id,
-      code: item.material.code,
-      name: item.material.name,
-      description: null,
-      category: item.material.category ?? 'Otro',
-      unit: item.material.unit,
-      minimumStock: '0',
-      location: null,
-      defaultSupplierId: null,
-      lastPurchasePrice: null,
-      lastPurchasePriceUsd: null,
-      previousPurchasePriceUsd: null,
-      lastPurchaseDate: null,
-      imagePath: null,
-      active: true,
-      createdAt: '',
-      updatedAt: '',
-    })
-    setMaterialDialogOpen(true)
+  // The edit forms seed their fields once from the record they receive, so a partial
+  // summary from the purchase row would be saved back over the real values.
+  async function openEditMaterial(item: LocalPurchaseItem) {
+    const materialId = item.itemType === 'material' ? (item.materialId ?? item.material?.id) : null
+    if (!materialId) return
+    try {
+      setEditingMaterial(await getMaterial(materialId))
+      setMaterialDialogOpen(true)
+    } catch (err) {
+      notifyApiError(err, 'No se pudo cargar el material')
+    }
   }
 
-  function openEditProduct(item: LocalPurchaseItem) {
+  async function openEditProduct(item: LocalPurchaseItem) {
     if (item.itemType !== 'product' || !item.catalogProductId) return
-    const saleUnit = (item.catalogProduct?.saleUnit as ProductSaleUnit | undefined) ?? 'UND'
-    // Stub mínimo: CatalogFormDialog recarga el producto completo por id.
-    setEditingProduct({
-      id: item.catalogProductId,
-      name: item.catalogProduct?.name ?? 'Producto',
-      description: null,
-      category: item.catalogProduct?.category ?? 'OTHER',
-      sale_unit: saleUnit,
-      formula_id: null,
-      image_path: null,
-      sale_price_usd: '0',
-      previous_sale_price_usd: null,
-      cost_usd: '0',
-      stock_quantity: '0',
-      active: true,
-      created_at: '',
-      updated_at: '',
-    })
-    setProductDialogOpen(true)
+    try {
+      setEditingProduct(await getCatalogProduct(item.catalogProductId))
+      setProductDialogOpen(true)
+    } catch (err) {
+      notifyApiError(err, 'No se pudo cargar el producto')
+    }
   }
 
   const confirmPayload = useMemo(
@@ -1176,8 +1152,8 @@ export function PurchaseDetallePage() {
                             onPriceNativeChange={(native, rate) =>
                               updateLocalItemPriceNative(item.localId, native, rate)
                             }
-                            onEditMaterial={() => openEditMaterial(item)}
-                            onEditProduct={() => openEditProduct(item)}
+                            onEditMaterial={() => void openEditMaterial(item)}
+                            onEditProduct={() => void openEditProduct(item)}
                             onRemove={() => void removeLocalItem(item.localId)}
                           />
                         ))
