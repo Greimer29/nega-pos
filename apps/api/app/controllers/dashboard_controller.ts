@@ -1,9 +1,13 @@
+import DashboardDailyClosingService from '#services/dashboard_daily_closing_service'
 import DashboardService from '#services/dashboard_service'
+import DashboardShiftSalesService from '#services/dashboard_shift_sales_service'
 import { dashboardDailyClosingValidator, dashboardOverviewValidator } from '#validators/dashboard'
 import type { HttpContext } from '@adonisjs/core/http'
 
 export default class DashboardControleler {
   private service = new DashboardService()
+  private shiftSalesService = new DashboardShiftSalesService()
+  private dailyClosingService = new DashboardDailyClosingService()
 
   async resumen({ serialize }: HttpContext) {
     const resumen = await this.service.resumen()
@@ -33,7 +37,7 @@ export default class DashboardControleler {
   }
 
   async dailyProductSales({ serialize }: HttpContext) {
-    const data = await this.service.productosVendidosDelDia()
+    const data = await this.shiftSalesService.productosVendidosDelDia()
 
     return serialize({
       date: data.date,
@@ -56,7 +60,7 @@ export default class DashboardControleler {
   }
 
   async dailyExpenses({ serialize }: HttpContext) {
-    const data = await this.service.gastosDelTurnoDetalle()
+    const data = await this.shiftSalesService.gastosDelTurnoDetalle()
 
     return serialize({
       date: data.date,
@@ -77,7 +81,7 @@ export default class DashboardControleler {
 
   async dailyClosing({ request, serialize }: HttpContext) {
     const filters = await request.validateUsing(dashboardDailyClosingValidator)
-    const data = await this.service.cierreDiario({
+    const data = await this.dailyClosingService.cierreDiario({
       salesShiftId: filters.sales_shift_id,
       date: filters.date,
     })
