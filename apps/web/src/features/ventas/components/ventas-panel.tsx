@@ -841,6 +841,15 @@ function VentasCreateView() {
     clearVentasCartDraft()
   }
 
+  /** Leaves the POS ready for the next customer (keeps the Rápido / Pedido mode). */
+  function startNewInvoice() {
+    clearLocalCart()
+    setCustomerId('')
+    setCustomerCreditDays(null)
+    setClientName('Generico')
+    setPaymentType('CASH')
+  }
+
   async function persistDraftSale(): Promise<number> {
     const payload = buildSaleDraftPayload({
       cart,
@@ -868,8 +877,11 @@ function VentasCreateView() {
 
     try {
       const saleId = await persistDraftSale()
-      setSuccessMessage(`Borrador guardado (#${saleId}). No se descontó stock.`)
       setQuoteTarget({ saleId, customerName: clientName.trim() || null })
+      startNewInvoice()
+      setSuccessMessage(
+        `Presupuesto N° ${saleId} guardado. No se descontó stock; podés retomarlo desde Cargar factura.`
+      )
     } catch (error) {
       notifyApiError(error)
     } finally {
