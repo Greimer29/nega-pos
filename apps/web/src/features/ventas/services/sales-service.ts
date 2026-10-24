@@ -90,4 +90,34 @@ export async function returnSale(id: number, payload: SaleReturnInput = {}) {
   return parseSaleResponse(data)
 }
 
+/** With `responseType: 'blob'` API errors arrive as a Blob; parse them back so messages show. */
+async function rethrowBlobError(error: unknown): Promise<never> {
+  const response = (error as { response?: { data?: unknown } } | null)?.response
+  if (response?.data instanceof Blob) {
+    try {
+      response.data = JSON.parse(await response.data.text())
+    } catch {
+      response.data = undefined
+    }
+  }
+  throw error
+}
+
+export async function fetchSaleQuotePdf(id: number, currency: string): Promise<Blob> {
+  assertValidSaleId(id, 'generar el presupuesto')
+  try {
+    const { data } = await api.get<Blob>(`/sales/${id}/quote-pdf`, {
+      params: { currency },
+      responseType: 'blob',
+    })
+    return data
+  } catch (error) {
+    return rethrowBlobError(error)
+  }
+}
+
+export function saleQuoteFileName(id: number): string {
+  return `Presupuesto-${id}.pdf`
+}
+
 export type { Sale }

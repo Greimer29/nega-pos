@@ -18,5 +18,7 @@ export function serializeBusinessProfile(profile: BusinessProfile) {
       secondary: profile.palette.secondary,
       accent: profile.palette.accent,
     },
+    quote_validity_days: profile.quote_validity_days,
+    quote_terms: profile.quote_terms,
   }
 }

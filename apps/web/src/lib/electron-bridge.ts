@@ -51,12 +51,20 @@ export type ElectronOfflineApi = {
   hasPending: () => Promise<boolean>
 }
 
+export type ElectronFilesApi = {
+  isAvailable: true
+  /** Saves the PDF in Downloads/Presupuestos and shows it in the file explorer. */
+  saveQuotePdf: (fileName: string, data: Uint8Array) => Promise<{ path: string; fileName: string }>
+}
+
 export type ElectronBridge = {
   /** Versión del paquete Electron (`app.getVersion()`), fuente de verdad en desktop. */
   appVersion?: string
   printing: ElectronPrintingApi
   updates?: ElectronUpdatesApi
   offline?: ElectronOfflineApi
+  /** Missing in installers older than the PDF quote feature. */
+  files?: ElectronFilesApi
 }
 
 export function getElectronAppVersion(): string | null {
@@ -95,4 +103,11 @@ export function getElectronOfflineApi(): ElectronOfflineApi | null {
     return null
   }
   return window.negaPos!.offline!
+}
+
+export function getElectronFilesApi(): ElectronFilesApi | null {
+  if (typeof window === 'undefined' || window.negaPos?.files?.isAvailable !== true) {
+    return null
+  }
+  return window.negaPos.files
 }

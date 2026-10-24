@@ -49,6 +49,12 @@ const offlineApi = {
   hasPending: (): Promise<boolean> => ipcRenderer.invoke('offline:hasPending'),
 }
 
+const filesApi = {
+  isAvailable: true as const,
+  saveQuotePdf: (fileName: string, data: Uint8Array): Promise<{ path: string; fileName: string }> =>
+    ipcRenderer.invoke('files:saveQuotePdf', fileName, data),
+}
+
 const appVersion = String(ipcRenderer.sendSync('app:getVersion') ?? '')
 
 contextBridge.exposeInMainWorld('negaPos', {
@@ -56,4 +62,5 @@ contextBridge.exposeInMainWorld('negaPos', {
   printing: printingApi,
   updates: updatesApi,
   offline: offlineApi,
+  files: filesApi,
 })

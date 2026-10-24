@@ -17,6 +17,8 @@ export type BusinessProfile = {
   has_logo: boolean
   use_custom_palette: boolean
   palette: BusinessPalette
+  quote_validity_days: number
+  quote_terms: string
 }
 
 export type BusinessProfileInput = {
@@ -31,7 +33,12 @@ export type BusinessProfileInput = {
   website?: string
   use_custom_palette?: boolean
   palette?: BusinessPalette
+  quote_validity_days?: number
+  quote_terms?: string
 }
+
+export const DEFAULT_QUOTE_VALIDITY_DAYS = 3
+export const MAX_QUOTE_VALIDITY_DAYS = 365
 
 export const DEFAULT_BUSINESS_PALETTE: BusinessPalette = {
   primary: '#1a1a1a',
@@ -52,4 +59,6 @@ export const DEFAULT_BUSINESS_PROFILE: BusinessProfile = {
   has_logo: false,
   use_custom_palette: false,
   palette: { ...DEFAULT_BUSINESS_PALETTE },
+  quote_validity_days: DEFAULT_QUOTE_VALIDITY_DAYS,
+  quote_terms: '',
 }

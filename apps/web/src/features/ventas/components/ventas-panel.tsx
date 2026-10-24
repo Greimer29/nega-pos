@@ -22,6 +22,10 @@ import {
   type LoadedDraft,
 } from '@/features/ventas/components/ventas-load-draft-dialog'
 import { VentasCheckoutPanel } from '@/features/ventas/components/ventas-checkout-panel'
+import {
+  SaleQuoteDialog,
+  type SaleQuoteTarget,
+} from '@/features/ventas/components/sale-quote-dialog'
 import { useActiveCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { useMaterialsQuery } from '@/features/materials/hooks/use-materials'
 import type { Material } from '@/features/materials/types'
@@ -152,6 +156,7 @@ function VentasCreateView() {
   const sortBy = catalogFilters.sortBy ?? defaultSortForSource(catalogSource)
   const [sizePickProduct, setSizePickProduct] = useState<CatalogProduct | null>(null)
   const [sizePickOpen, setSizePickOpen] = useState(false)
+  const [quoteTarget, setQuoteTarget] = useState<SaleQuoteTarget | null>(null)
   const [customerId, setCustomerId] = useState<number | ''>(() => initialDraft?.customerId ?? '')
   const [clientName, setClientName] = useState(() =>
     initialDraft?.clientName?.trim() ? initialDraft.clientName : 'Generico'
@@ -193,7 +198,6 @@ function VentasCreateView() {
   )
   const [editProduct, setEditProduct] = useState<CatalogProduct | null>(null)
   const [editProductOpen, setEditProductOpen] = useState(false)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const createSaleMutation = useCreateSaleMutation()
@@ -344,7 +348,7 @@ function VentasCreateView() {
 
   useEffect(() => {
     if (initialDraft && !isVentasCartDraftEmpty(initialDraft)) {
-      setSuccessMessage('Se restauró el borrador de venta de esta sesión.')
+      toast.info('Se restauró el borrador de venta de esta sesión.')
     }
   }, [initialDraft])
 
@@ -444,7 +448,7 @@ function VentasCreateView() {
 
   useEffect(() => {
     if (syncMessage) {
-      setSuccessMessage(syncMessage)
+      toast.success(syncMessage)
       clearSyncMessage()
     }
   }, [syncMessage, clearSyncMessage])
@@ -579,7 +583,6 @@ function VentasCreateView() {
       : 'Factura nueva'
 
   function addSizedProductToCart(product: CatalogProduct, size: CatalogProductSize) {
-    setSuccessMessage(null)
     setCart((prev) =>
       addSizedCatalogProductToCart(prev, product, size, () => ({
         id: createCartLineId(),
@@ -611,7 +614,6 @@ function VentasCreateView() {
       return
     }
 
-    setSuccessMessage(null)
     setCart((prev) =>
       addSimpleCatalogProductToCart(prev, product, () => ({
         id: createCartLineId(),
@@ -631,7 +633,6 @@ function VentasCreateView() {
     detail: string | null
   }) {
     if (!servicePickProduct) return
-    setSuccessMessage(null)
     setCart((prev) => [
       ...prev,
       {
@@ -654,12 +655,10 @@ function VentasCreateView() {
     detail: string | null
   }) {
     if (!serviceEditLineId) return
-    setSuccessMessage(null)
     setCart((prev) => updateServiceCartLine(prev, serviceEditLineId, values))
   }
 
   function addMaterialToCart(material: Material) {
-    setSuccessMessage(null)
     setCart((prev) =>
       addMaterialToCartLines(prev, material, () => ({
         id: createCartLineId(),
@@ -739,12 +738,10 @@ function VentasCreateView() {
   }
 
   function removeFromCart(lineId: string) {
-    setSuccessMessage(null)
     setCart((prev) => removeCartLine(prev, lineId))
   }
 
   function updateCartQty(lineId: string, quantity: number) {
-    setSuccessMessage(null)
     setCart((prev) => setCartLineQuantity(prev, lineId, quantity))
   }
 
@@ -754,24 +751,20 @@ function VentasCreateView() {
     materialRefs: SaleLineFormulaMaterialRef[],
     baseMaterialIds: number[]
   ) {
-    setSuccessMessage(null)
     setCart((prev) =>
       setCartLineFormulaMaterials(prev, lineId, materials, materialRefs, baseMaterialIds)
     )
   }
 
   function toggleCartWholesale(lineId: string, checked: boolean) {
-    setSuccessMessage(null)
     setCart((prev) => toggleCartLineWholesale(prev, lineId, checked))
   }
 
   function updateCartUnitPrice(lineId: string, unitPriceUsd: number) {
-    setSuccessMessage(null)
     setCart((prev) => setCartLineUnitPrice(prev, lineId, unitPriceUsd))
   }
 
   function saveLineKitchenNote(lineId: string, note: string | null) {
-    setSuccessMessage(null)
     setCart((prev) => setCartLineKitchenNote(prev, lineId, note))
   }
 
@@ -821,7 +814,7 @@ function VentasCreateView() {
     setSourceSaleId(draft.saleId)
     setSourceSaleLabel(draft.saleLabel)
     setInvoiceDiscountUsd(draft.invoiceDiscountUsd ?? 0)
-    setSuccessMessage(`Cargaste ${draft.saleLabel} para editar.`)
+    toast.info(`Cargaste ${draft.saleLabel} para editar.`)
   }
 
   function resetLoadedDraft() {
@@ -834,6 +827,15 @@ function VentasCreateView() {
     setInvoiceDiscountUsd(0)
     resetLoadedDraft()
     clearVentasCartDraft()
+  }
+
+  /** Leaves the POS ready for the next customer (keeps the Rápido / Pedido mode). */
+  function startNewInvoice() {
+    clearLocalCart()
+    setCustomerId('')
+    setCustomerCreditDays(null)
+    setClientName('Generico')
+    setPaymentType('CASH')
   }
 
   async function persistDraftSale(): Promise<number> {
@@ -858,12 +860,16 @@ function VentasCreateView() {
   }
 
   async function saveBudget() {
-    setSuccessMessage(null)
     setIsSubmitting(true)
 
     try {
       const saleId = await persistDraftSale()
-      setSuccessMessage(`Borrador guardado (#${saleId}). No se descontó stock.`)
+      setQuoteTarget({ saleId, customerName: clientName.trim() || null })
+      startNewInvoice()
+      toast.success(
+        'No se descontó stock. Podés retomarlo desde Cargar factura.',
+        `Presupuesto N° ${saleId} guardado`
+      )
     } catch (error) {
       notifyApiError(error)
     } finally {
@@ -948,7 +954,7 @@ function VentasCreateView() {
     }
 
     clearLocalCart()
-    setSuccessMessage(`Venta guardada sin conexión (${localRef}). Se subirá al recuperar la red.`)
+    toast.success(`Venta guardada sin conexión (${localRef}). Se subirá al recuperar la red.`)
     await printOfflineTicket(localRef, payableTotal)
   }
 
@@ -973,7 +979,6 @@ function VentasCreateView() {
       }
     }
 
-    setSuccessMessage(null)
     setIsSubmitting(true)
 
     try {
@@ -1059,7 +1064,6 @@ function VentasCreateView() {
         canConfirmSale={canConfirmSale}
         isSubmitting={isSubmitting}
         stockBlocked={stockBlocked}
-        successMessage={successMessage}
         shiftOpen={shiftOpen}
         shiftLoading={shiftLoading}
         confirmButtonLabel={confirmButtonLabel}
@@ -1197,6 +1201,12 @@ function VentasCreateView() {
         open={customerPickOpen}
         onOpenChange={setCustomerPickOpen}
         onSelected={linkRegisteredCustomer}
+      />
+      <SaleQuoteDialog
+        quote={quoteTarget}
+        onOpenChange={(open) => {
+          if (!open) setQuoteTarget(null)
+        }}
       />
       <VentasLoadDraftDialog
         open={loadDraftOpen}

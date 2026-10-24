@@ -15,8 +15,14 @@ export type NegaPosPrintingApi = {
   printHtml: (options: PrintHtmlOptions) => Promise<void>
 }
 
+export type NegaPosFilesApi = {
+  isAvailable: true
+  saveQuotePdf: (fileName: string, data: Uint8Array) => Promise<{ path: string; fileName: string }>
+}
+
 export type NegaPosBridge = {
   printing: NegaPosPrintingApi
+  files?: NegaPosFilesApi
 }
 
 declare global {

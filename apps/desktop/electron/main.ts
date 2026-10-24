@@ -12,6 +12,7 @@ import path from 'node:path'
 import serveHandler from 'serve-handler'
 import type { PrintConfig } from './print-config'
 import { downloadAndLaunchDesktopUpdater } from './app-updates'
+import { saveQuotePdf } from './quote-files'
 import {
   getPrintConfigPath,
   isPrintConfigMigrated,
@@ -313,6 +314,12 @@ function registerOfflineHandlers(): void {
   ipcMain.handle('offline:hasPending', async () => hasPendingOfflineOperations())
 }
 
+function registerFileHandlers(): void {
+  ipcMain.handle('files:saveQuotePdf', async (_event, fileName: string, data: Uint8Array) =>
+    saveQuotePdf(fileName, data)
+  )
+}
+
 function getLoadedVersionPath(): string {
   return path.join(app.getPath('userData'), LOADED_VERSION_FILE)
 }
@@ -378,6 +385,7 @@ if (!gotSingleInstanceLock) {
       registerPrintingHandlers()
       registerUpdateHandlers()
       registerOfflineHandlers()
+      registerFileHandlers()
       await startStaticServer()
       warmupApiConnection(runtimeApiUrl)
       await createWindow()

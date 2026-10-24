@@ -28,7 +28,6 @@ type VentasCheckoutPanelProps = {
   canConfirmSale: boolean
   isSubmitting: boolean
   stockBlocked: boolean
-  successMessage: string | null
   shiftOpen: boolean
   shiftLoading: boolean
   confirmButtonLabel: string
@@ -64,7 +63,6 @@ export function VentasCheckoutPanel({
   canConfirmSale,
   isSubmitting,
   stockBlocked,
-  successMessage,
   shiftOpen,
   shiftLoading,
   confirmButtonLabel,
@@ -214,8 +212,6 @@ export function VentasCheckoutPanel({
             Hay productos sin stock o por debajo del mínimo en el carrito.
           </p>
         ) : null}
-
-        {successMessage ? <p className="text-emerald-700 text-sm">{successMessage}</p> : null}
 
         {canConfirmSale ? (
           <Button

@@ -1,4 +1,5 @@
 import vine from '@vinejs/vine'
+import { MAX_QUOTE_VALIDITY_DAYS } from '#types/business_profile'
 
 const hexColor = vine
   .string()
@@ -35,6 +36,13 @@ export const updateBusinessProfileValidator = vine.create({
       accent: hexColor,
     })
     .optional(),
+  quote_validity_days: vine
+    .number()
+    .withoutDecimals()
+    .min(0)
+    .max(MAX_QUOTE_VALIDITY_DAYS)
+    .optional(),
+  quote_terms: vine.string().trim().maxLength(1000).optional(),
 })
 
 const printDocumentKind = vine.enum(['invoice', 'deliveryNote', 'comanda'] as const)

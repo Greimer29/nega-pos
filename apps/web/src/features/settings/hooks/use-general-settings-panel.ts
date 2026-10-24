@@ -38,7 +38,7 @@ export function useGeneralSettingsPanel() {
 
   useEffect(() => {
     if (remoteProfile) {
-      setProfile(remoteProfile)
+      setProfile({ ...DEFAULT_BUSINESS_PROFILE, ...remoteProfile })
       applyBusinessPalette(remoteProfile)
     }
   }, [remoteProfile])
@@ -65,11 +65,13 @@ export function useGeneralSettingsPanel() {
       website: profile.website.trim(),
       use_custom_palette: profile.use_custom_palette,
       palette: profile.palette,
+      quote_validity_days: profile.quote_validity_days,
+      quote_terms: profile.quote_terms.trim(),
     }
 
     try {
       const saved = await saveBusinessProfile(payload)
-      setProfile(saved)
+      setProfile({ ...DEFAULT_BUSINESS_PROFILE, ...saved })
       applyBusinessPalette(saved)
       queryClient.setQueryData(businessProfileQueryKey, saved)
       setMessage('Configuración general guardada.')
@@ -86,7 +88,7 @@ export function useGeneralSettingsPanel() {
 
     try {
       const saved = await uploadBusinessLogo(file)
-      setProfile(saved)
+      setProfile({ ...DEFAULT_BUSINESS_PROFILE, ...saved })
       setLogoVersion(Date.now())
       queryClient.setQueryData(businessProfileQueryKey, saved)
       setMessage('Logo actualizado.')
@@ -106,7 +108,7 @@ export function useGeneralSettingsPanel() {
 
     try {
       const saved = await deleteBusinessLogo()
-      setProfile(saved)
+      setProfile({ ...DEFAULT_BUSINESS_PROFILE, ...saved })
       setLogoVersion(Date.now())
       queryClient.setQueryData(businessProfileQueryKey, saved)
       setMessage('Logo eliminado.')
